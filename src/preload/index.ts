@@ -1,0 +1,37 @@
+import { contextBridge, ipcRenderer } from 'electron'
+
+const electronAPI = {
+  spawnSession: (cwd: string) => ipcRenderer.invoke('pty:spawn', cwd),
+
+  writeSession: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),
+
+  resizeSession: (id: string, cols: number, rows: number) =>
+    ipcRenderer.send('pty:resize', id, cols, rows),
+
+  killSession: (id: string) => ipcRenderer.invoke('pty:kill', id),
+
+  listSessions: () => ipcRenderer.invoke('pty:list'),
+
+  onSessionData: (id: string, callback: (data: string) => void) => {
+    const channel = `pty:data:${id}`
+    const listener = (_event: Electron.IpcRendererEvent, data: string): void => callback(data)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  },
+
+  onSessionExit: (id: string, callback: (exitCode: number) => void) => {
+    const channel = `pty:exit:${id}`
+    const listener = (_event: Electron.IpcRendererEvent, exitCode: number): void =>
+      callback(exitCode)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  },
+
+  openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder')
+}
+
+contextBridge.exposeInMainWorld('electronAPI', electronAPI)

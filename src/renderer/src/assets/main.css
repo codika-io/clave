@@ -1,0 +1,135 @@
+@import "tailwindcss";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+
+@theme {
+  --color-surface-0: var(--surface-0);
+  --color-surface-50: var(--surface-50);
+  --color-surface-100: var(--surface-100);
+  --color-surface-200: var(--surface-200);
+  --color-surface-300: var(--surface-300);
+  --color-surface-400: var(--surface-400);
+
+  --color-border: var(--border-color);
+  --color-border-subtle: var(--border-subtle-color);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-accent: oklch(0.65 0.2 265);
+  --color-accent-hover: oklch(0.7 0.22 265);
+
+  --color-status-active: #22c55e;
+  --color-status-inactive: #6b7280;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  --ease-out-expo: cubic-bezier(0.2, 0, 0, 1);
+
+  --animate-fade-in: fade-in 150ms var(--ease-out-expo);
+}
+
+/* Dark theme (default) */
+:root {
+  --surface-0: #000000;
+  --surface-50: #0a0a0a;
+  --surface-100: #111111;
+  --surface-200: #1a1a1a;
+  --surface-300: #222222;
+  --surface-400: #2a2a2a;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-subtle-color: rgba(255, 255, 255, 0.06);
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.4);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --surface-0: #ffffff;
+  --surface-50: #f9f9f9;
+  --surface-100: #f0f0f0;
+  --surface-200: #e6e6e6;
+  --surface-300: #d9d9d9;
+  --surface-400: #cccccc;
+  --border-color: rgba(0, 0, 0, 0.12);
+  --border-subtle-color: rgba(0, 0, 0, 0.06);
+  --text-primary: rgba(0, 0, 0, 0.9);
+  --text-secondary: rgba(0, 0, 0, 0.55);
+  --text-tertiary: rgba(0, 0, 0, 0.35);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--surface-0);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* xterm.js overrides */
+.xterm {
+  padding: 8px 12px;
+}
+
+.xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
