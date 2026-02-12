@@ -1,6 +1,23 @@
+# Dependencies
 node_modules
 dist
 out
-.DS_Store
 .eslintcache
 *.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Claude + MCP
+.claude/
+.playwright-mcp/
+.mcp.json

@@ -119,6 +119,11 @@ body,
 /* xterm.js overrides */
 .xterm {
   padding: 8px 12px;
+  background-color: var(--surface-50);
+}
+
+.xterm .xterm-viewport {
+  background-color: var(--surface-50) !important;
 }
 
 .xterm-viewport::-webkit-scrollbar {

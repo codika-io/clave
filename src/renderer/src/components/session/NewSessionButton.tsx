@@ -16,6 +16,7 @@ export function NewSessionButton() {
         id: sessionInfo.id,
         cwd: sessionInfo.cwd,
         folderName: sessionInfo.folderName,
+        name: sessionInfo.folderName,
         alive: sessionInfo.alive
       })
     } catch (err) {

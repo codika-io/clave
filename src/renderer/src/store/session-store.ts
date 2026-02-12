@@ -7,6 +7,7 @@ export interface Session {
   id: string
   cwd: string
   folderName: string
+  name: string
   alive: boolean
 }
 
@@ -16,15 +17,20 @@ interface SessionState {
   visibleSessionIds: string[]
   layoutMode: LayoutMode
   sidebarOpen: boolean
+  sidebarWidth: number
   theme: Theme
+  searchQuery: string
 
   addSession: (session: Session) => void
   removeSession: (id: string) => void
   setActiveSession: (id: string) => void
   setLayoutMode: (mode: LayoutMode) => void
   toggleSidebar: () => void
+  setSidebarWidth: (width: number) => void
   toggleTheme: () => void
   updateSessionAlive: (id: string, alive: boolean) => void
+  renameSession: (id: string, name: string) => void
+  setSearchQuery: (query: string) => void
 }
 
 function computeVisibleSessions(
@@ -69,7 +75,9 @@ export const useSessionStore = create<SessionState>((set) => ({
   visibleSessionIds: [],
   layoutMode: 'single',
   sidebarOpen: true,
+  sidebarWidth: 260,
   theme: 'dark',
+  searchQuery: '',
 
   addSession: (session) =>
     set((state) => {
@@ -113,10 +121,21 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
+  setSidebarWidth: (width) => set({ sidebarWidth: Math.max(180, Math.min(480, width)) }),
+
   toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
 
   updateSessionAlive: (id, alive) =>
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, alive } : s))
-    }))
+    })),
+
+  renameSession: (id, name) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === id ? { ...s, name: name.trim() || s.folderName } : s
+      )
+    })),
+
+  setSearchQuery: (query) => set({ searchQuery: query })
 }))

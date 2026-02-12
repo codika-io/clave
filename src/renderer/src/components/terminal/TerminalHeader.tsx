@@ -26,9 +26,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
             session.alive ? 'bg-status-active' : 'bg-status-inactive'
           )}
         />
-        <span className="text-xs font-medium text-text-secondary truncate">
-          {session.folderName}
-        </span>
+        <span className="text-xs font-medium text-text-secondary truncate">{session.name}</span>
       </div>
 
       <button
