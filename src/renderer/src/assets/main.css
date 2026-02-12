@@ -47,6 +47,9 @@
   --text-tertiary: rgba(255, 255, 255, 0.4);
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  --danger-toggle-bg: rgba(255, 255, 255, 0.08);
+  --danger-toggle-active: #e54040;
+  --danger-toggle-glow: rgba(229, 64, 64, 0.25);
 }
 
 /* Light theme */
@@ -64,6 +67,9 @@
   --text-tertiary: rgba(0, 0, 0, 0.35);
   --scrollbar-thumb: rgba(0, 0, 0, 0.15);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+  --danger-toggle-bg: rgba(0, 0, 0, 0.06);
+  --danger-toggle-active: #dc3545;
+  --danger-toggle-glow: rgba(220, 53, 69, 0.18);
 }
 
 @keyframes fade-in {

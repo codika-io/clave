@@ -6,7 +6,7 @@ export interface SessionInfo {
 }
 
 export interface ElectronAPI {
-  spawnSession: (cwd: string) => Promise<SessionInfo>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
   resizeSession: (id: string, cols: number, rows: number) => void
   killSession: (id: string) => Promise<void>

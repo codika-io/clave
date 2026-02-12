@@ -117,6 +117,9 @@ export function useTerminal(sessionId: string) {
     })
 
     // ResizeObserver for auto-fitting
+    // Double-fit: the first fit runs immediately in rAF, the second runs after
+    // a short delay to catch CSS grid reflows that settle over multiple frames.
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (!entry) return
@@ -129,6 +132,14 @@ export function useTerminal(sessionId: string) {
           // ignore fit errors during layout transitions
         }
       })
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        try {
+          fitAddon.fit()
+        } catch {
+          // ignore
+        }
+      }, 100)
     })
     resizeObserver.observe(container)
 
@@ -136,6 +147,7 @@ export function useTerminal(sessionId: string) {
     window.electronAPI.resizeSession(sessionId, terminal.cols, terminal.rows)
 
     return () => {
+      if (resizeTimer) clearTimeout(resizeTimer)
       inputDisposable.dispose()
       resizeDisposable.dispose()
       cleanupData()

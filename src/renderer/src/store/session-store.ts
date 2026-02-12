@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 
-export type LayoutMode = 'single' | 'split-2' | 'grid-4'
 export type Theme = 'dark' | 'light'
 
 export interface Session {
@@ -11,112 +10,142 @@ export interface Session {
   alive: boolean
 }
 
+export interface SessionGroup {
+  id: string
+  name: string
+  sessionIds: string[]
+  collapsed: boolean
+}
+
 interface SessionState {
   sessions: Session[]
-  activeSessionId: string | null
-  visibleSessionIds: string[]
-  layoutMode: LayoutMode
+  focusedSessionId: string | null
+  selectedSessionIds: string[]
+  groups: SessionGroup[]
   sidebarOpen: boolean
   sidebarWidth: number
   theme: Theme
   searchQuery: string
+  dangerousMode: boolean
 
   addSession: (session: Session) => void
   removeSession: (id: string) => void
-  setActiveSession: (id: string) => void
-  setLayoutMode: (mode: LayoutMode) => void
+  selectSession: (id: string, addToSelection: boolean) => void
+  selectSessions: (ids: string[]) => void
+  setFocusedSession: (id: string) => void
+  createGroup: (sessionIds: string[], name?: string) => void
+  ungroupSessions: (groupId: string) => void
+  renameGroup: (groupId: string, name: string) => void
+  toggleGroupCollapsed: (groupId: string) => void
   toggleSidebar: () => void
   setSidebarWidth: (width: number) => void
   toggleTheme: () => void
   updateSessionAlive: (id: string, alive: boolean) => void
   renameSession: (id: string, name: string) => void
   setSearchQuery: (query: string) => void
+  toggleDangerousMode: () => void
 }
 
-function computeVisibleSessions(
-  sessions: Session[],
-  activeId: string | null,
-  mode: LayoutMode
-): string[] {
-  const maxSlots = mode === 'single' ? 1 : mode === 'split-2' ? 2 : 4
-  if (sessions.length === 0 || !activeId) return []
-
-  if (mode === 'single') {
-    return [activeId]
-  }
-
-  // For multi-panel modes, maintain session creation order (stable DOM positions).
-  // Ensure the active session is included; if there are more sessions than slots,
-  // pick the window of sessions that contains the active one.
-  const ids = sessions.map((s) => s.id)
-  const activeIndex = ids.indexOf(activeId)
-  if (activeIndex === -1) return ids.slice(0, maxSlots)
-
-  // If all sessions fit, show them all in creation order
-  if (ids.length <= maxSlots) return ids
-
-  // Otherwise, pick a window that includes the active session
-  let start = Math.max(0, activeIndex - maxSlots + 1)
-  if (start + maxSlots > ids.length) start = ids.length - maxSlots
-  return ids.slice(start, start + maxSlots)
-}
-
-function arraysEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
-}
+let groupCounter = 0
 
 export const useSessionStore = create<SessionState>((set) => ({
   sessions: [],
-  activeSessionId: null,
-  visibleSessionIds: [],
-  layoutMode: 'single',
+  focusedSessionId: null,
+  selectedSessionIds: [],
+  groups: [],
   sidebarOpen: true,
   sidebarWidth: 260,
   theme: 'dark',
   searchQuery: '',
+  dangerousMode: false,
 
   addSession: (session) =>
-    set((state) => {
-      const sessions = [...state.sessions, session]
-      const activeSessionId = session.id
-      const visibleSessionIds = computeVisibleSessions(sessions, activeSessionId, state.layoutMode)
-      return { sessions, activeSessionId, visibleSessionIds }
-    }),
+    set((state) => ({
+      sessions: [...state.sessions, session],
+      selectedSessionIds: [session.id],
+      focusedSessionId: session.id
+    })),
 
   removeSession: (id) =>
     set((state) => {
       const sessions = state.sessions.filter((s) => s.id !== id)
-      const activeSessionId =
-        state.activeSessionId === id
-          ? (sessions[sessions.length - 1]?.id ?? null)
-          : state.activeSessionId
-      return {
-        sessions,
-        activeSessionId,
-        visibleSessionIds: computeVisibleSessions(sessions, activeSessionId, state.layoutMode)
+      const selectedSessionIds = state.selectedSessionIds.filter((sid) => sid !== id)
+      const groups = state.groups.map((g) => ({
+        ...g,
+        sessionIds: g.sessionIds.filter((sid) => sid !== id)
+      }))
+
+      let focusedSessionId = state.focusedSessionId
+      if (focusedSessionId === id) {
+        focusedSessionId = selectedSessionIds[0] ?? sessions[sessions.length - 1]?.id ?? null
       }
+      if (selectedSessionIds.length === 0 && sessions.length > 0) {
+        const lastId = sessions[sessions.length - 1].id
+        return {
+          sessions,
+          selectedSessionIds: [lastId],
+          focusedSessionId: lastId,
+          groups
+        }
+      }
+
+      return { sessions, selectedSessionIds, focusedSessionId, groups }
     }),
 
-  setActiveSession: (id) =>
+  selectSession: (id, addToSelection) =>
     set((state) => {
-      if (state.activeSessionId === id) return state
-      const newVisible = computeVisibleSessions(state.sessions, id, state.layoutMode)
-      return {
-        activeSessionId: id,
-        visibleSessionIds: arraysEqual(state.visibleSessionIds, newVisible)
-          ? state.visibleSessionIds
-          : newVisible
+      if (addToSelection) {
+        const isSelected = state.selectedSessionIds.includes(id)
+        const newSelected = isSelected
+          ? state.selectedSessionIds.filter((sid) => sid !== id)
+          : [...state.selectedSessionIds, id]
+        const focusedSessionId = isSelected ? (newSelected[0] ?? null) : id
+        return { selectedSessionIds: newSelected, focusedSessionId }
       }
+      return { selectedSessionIds: [id], focusedSessionId: id }
     }),
 
-  setLayoutMode: (mode) =>
+  selectSessions: (ids) =>
+    set(() => ({
+      selectedSessionIds: ids,
+      focusedSessionId: ids[0] ?? null
+    })),
+
+  setFocusedSession: (id) => set(() => ({ focusedSessionId: id })),
+
+  createGroup: (sessionIds, name?) =>
+    set((state) => {
+      groupCounter++
+      const groupName = name || `Group ${groupCounter}`
+      const newGroup: SessionGroup = {
+        id: `group-${Date.now()}-${groupCounter}`,
+        name: groupName,
+        sessionIds: [...sessionIds],
+        collapsed: false
+      }
+      // Remove these sessions from any existing groups
+      const groups = state.groups.map((g) => ({
+        ...g,
+        sessionIds: g.sessionIds.filter((sid) => !sessionIds.includes(sid))
+      }))
+      return { groups: [...groups, newGroup] }
+    }),
+
+  ungroupSessions: (groupId) =>
     set((state) => ({
-      layoutMode: mode,
-      visibleSessionIds: computeVisibleSessions(state.sessions, state.activeSessionId, mode)
+      groups: state.groups.filter((g) => g.id !== groupId)
+    })),
+
+  renameGroup: (groupId, name) =>
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId ? { ...g, name: name.trim() || 'Group' } : g
+      )
+    })),
+
+  toggleGroupCollapsed: (groupId) =>
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === groupId ? { ...g, collapsed: !g.collapsed } : g))
     })),
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -137,5 +166,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       )
     })),
 
-  setSearchQuery: (query) => set({ searchQuery: query })
+  setSearchQuery: (query) => set({ searchQuery: query }),
+
+  toggleDangerousMode: () => set((state) => ({ dangerousMode: !state.dangerousMode }))
 }))

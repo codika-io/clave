@@ -1,31 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
-import { useSessionStore, type Session } from '../../store/session-store'
+import { useSessionStore, type SessionGroup } from '../../store/session-store'
 
-interface SessionItemProps {
-  session: Session
-  isSelected: boolean
+interface SessionGroupItemProps {
+  group: SessionGroup
   onClick: (shiftKey: boolean) => void
   onContextMenu: (e: React.MouseEvent) => void
-  grouped?: boolean
-  groupSelected?: boolean
+  allSelected?: boolean
   forceEditing?: boolean
   onEditingDone?: () => void
 }
 
-export function SessionItem({
-  session,
-  isSelected,
+export function SessionGroupItem({
+  group,
   onClick,
   onContextMenu,
-  grouped,
-  groupSelected,
+  allSelected,
   forceEditing,
   onEditingDone
-}: SessionItemProps) {
-  const renameSession = useSessionStore((s) => s.renameSession)
+}: SessionGroupItemProps) {
+  const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
+  const renameGroup = useSessionStore((s) => s.renameGroup)
+
   const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState(session.name)
+  const [editValue, setEditValue] = useState(group.name)
   const inputRef = useRef<HTMLInputElement>(null)
   const [prevForceEditing, setPrevForceEditing] = useState(false)
 
@@ -33,7 +31,7 @@ export function SessionItem({
   if (!!forceEditing !== prevForceEditing) {
     setPrevForceEditing(!!forceEditing)
     if (forceEditing && !editing) {
-      setEditValue(session.name)
+      setEditValue(group.name)
       setEditing(true)
     }
   }
@@ -46,21 +44,21 @@ export function SessionItem({
   }, [editing])
 
   const commitRename = useCallback(() => {
-    renameSession(session.id, editValue)
+    renameGroup(group.id, editValue)
     setEditing(false)
     onEditingDone?.()
-  }, [session.id, editValue, renameSession, onEditingDone])
+  }, [group.id, editValue, renameGroup, onEditingDone])
 
   const cancelRename = useCallback(() => {
-    setEditValue(session.name)
+    setEditValue(group.name)
     setEditing(false)
     onEditingDone?.()
-  }, [session.name, onEditingDone])
+  }, [group.name, onEditingDone])
 
   const startEditing = useCallback(() => {
-    setEditValue(session.name)
+    setEditValue(group.name)
     setEditing(true)
-  }, [session.name])
+  }, [group.name])
 
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -70,6 +68,14 @@ export function SessionItem({
     [startEditing]
   )
 
+  const handleToggleCollapse = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      toggleGroupCollapsed(group.id)
+    },
+    [group.id, toggleGroupCollapsed]
+  )
+
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       onClick(e.shiftKey)
@@ -77,7 +83,7 @@ export function SessionItem({
     [onClick]
   )
 
-  const handleButtonKeyDown = useCallback(
+  const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !editing) {
         e.preventDefault()
@@ -104,47 +110,44 @@ export function SessionItem({
     <button
       onClick={handleClick}
       onContextMenu={onContextMenu}
-      onKeyDown={handleButtonKeyDown}
+      onKeyDown={handleKeyDown}
       className={cn(
-        'w-full flex items-center gap-2.5 py-1.5 rounded-lg text-left transition-colors outline-none',
-        grouped ? 'pl-7 pr-3' : 'px-3',
-        groupSelected
-          ? 'text-text-primary'
-          : isSelected
-            ? 'bg-surface-200 text-text-primary'
-            : 'text-text-secondary hover:bg-surface-100'
+        'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-colors outline-none',
+        allSelected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-100'
       )}
     >
-      {/* Terminal icon with status badge */}
-      <span className="relative flex-shrink-0 w-4 h-4">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-text-tertiary">
-          <rect
-            x="1.5"
-            y="2.5"
-            width="13"
-            height="11"
-            rx="2"
-            stroke="currentColor"
-            strokeWidth="1.2"
-          />
-          <path
-            d="M4.5 6l2.5 2-2.5 2"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path d="M8.5 10h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      {/* Disclosure triangle */}
+      <span
+        onClick={handleToggleCollapse}
+        className="flex-shrink-0 w-3 h-3 flex items-center justify-center text-text-tertiary cursor-pointer"
+      >
+        <svg
+          width="8"
+          height="8"
+          viewBox="0 0 8 8"
+          fill="currentColor"
+          className={cn('transition-transform', group.collapsed ? '' : 'rotate-90')}
+        >
+          <path d="M2 1l4 3-4 3V1z" />
         </svg>
-        <span
-          className={cn(
-            'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-surface-50',
-            session.alive ? 'bg-status-active' : 'bg-status-inactive'
-          )}
-        />
       </span>
 
-      {/* Session name — double-click to rename */}
+      {/* Folder icon */}
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 14 14"
+        fill="none"
+        className="flex-shrink-0 text-text-tertiary"
+      >
+        <path
+          d="M1.5 3.5a1 1 0 011-1h3l1.5 1.5h4.5a1 1 0 011 1v5a1 1 0 01-1 1h-9a1 1 0 01-1-1v-6.5z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+      </svg>
+
+      {/* Group name */}
       {editing ? (
         <input
           ref={inputRef}
@@ -160,9 +163,14 @@ export function SessionItem({
           className="flex-1 min-w-0 text-sm font-medium truncate"
           onDoubleClick={handleDoubleClick}
         >
-          {session.name}
+          {group.name}
         </span>
       )}
+
+      {/* Session count badge */}
+      <span className="flex-shrink-0 text-[10px] text-text-tertiary bg-surface-100 px-1.5 py-0.5 rounded-full">
+        {group.sessionIds.length}
+      </span>
     </button>
   )
 }

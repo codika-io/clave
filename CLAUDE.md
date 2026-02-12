@@ -31,3 +31,7 @@ Mac desktop app for managing multiple Claude Code terminal sessions. Electron + 
 - macOS traffic lights: `trafficLightPosition: { x: 16, y: 16 }` with `hiddenInset` titlebar. Toolbar adds `pl-20` when sidebar is closed to avoid overlap.
 - Terminal fit: ResizeObserver guards against zero-size during animations; `FitAddon.fit()` wrapped in try/catch
 - Theme: CSS vars on `:root` (dark) / `[data-theme="light"]`, synced via `document.documentElement.setAttribute`. xterm has separate theme objects updated via `terminal.options.theme`.
+
+## Rules
+
+- When using the Playwright MCP server to take screenshots, always delete the screenshot files after you are done using them. Do not leave screenshot files in the repository.

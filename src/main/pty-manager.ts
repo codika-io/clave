@@ -12,11 +12,14 @@ export interface PtySession {
 class PtyManager {
   private sessions = new Map<string, PtySession>()
 
-  spawn(cwd: string): PtySession {
+  spawn(cwd: string, options?: { dangerousMode?: boolean }): PtySession {
     const id = randomUUID()
     const folderName = cwd.split('/').pop() || cwd
+    const claudeCmd = options?.dangerousMode
+      ? 'claude --dangerously-skip-permissions'
+      : 'claude'
 
-    const ptyProcess = pty.spawn('/bin/zsh', ['-l', '-c', 'claude'], {
+    const ptyProcess = pty.spawn('/bin/zsh', ['-l', '-c', claudeCmd], {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,

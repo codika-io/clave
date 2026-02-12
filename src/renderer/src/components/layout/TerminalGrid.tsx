@@ -1,42 +1,62 @@
-import { motion } from 'framer-motion'
 import { useSessionStore } from '../../store/session-store'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { TerminalErrorBoundary } from '../terminal/TerminalErrorBoundary'
 import { EmptyState } from '../ui/EmptyState'
 
-const transition = {
-  duration: 0.15,
-  ease: [0.2, 0, 0, 1] as const
+function computeGridLayout(count: number): { cols: number; rows: number } {
+  if (count <= 1) return { cols: 1, rows: 1 }
+  if (count === 2) return { cols: 2, rows: 1 }
+  const cols = Math.ceil(Math.sqrt(count))
+  const rows = Math.ceil(count / cols)
+  return { cols, rows }
 }
 
 export function TerminalGrid() {
-  const visibleSessionIds = useSessionStore((s) => s.visibleSessionIds)
-  const layoutMode = useSessionStore((s) => s.layoutMode)
+  const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   const sessions = useSessionStore((s) => s.sessions)
 
   if (sessions.length === 0) {
     return <EmptyState />
   }
 
-  const gridCols = layoutMode === 'single' ? 'grid-cols-1' : 'grid-cols-2'
-  const gridRows =
-    layoutMode === 'grid-4' && visibleSessionIds.length > 2 ? 'grid-rows-2' : 'grid-rows-1'
+  const hasSelection = selectedSessionIds.length > 0
+  const { cols, rows } = computeGridLayout(selectedSessionIds.length)
 
   return (
-    <div className={`flex-1 grid ${gridCols} ${gridRows} gap-px bg-border-subtle overflow-hidden`}>
-      {visibleSessionIds.map((id) => (
-        <motion.div
-          key={id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={transition}
-          className="min-h-0 min-w-0 h-full"
-        >
-          <TerminalErrorBoundary sessionId={id}>
-            <TerminalPanel sessionId={id} />
-          </TerminalErrorBoundary>
-        </motion.div>
-      ))}
+    <div className="flex-1 relative overflow-hidden">
+      {/* "Select a session" overlay when nothing is selected */}
+      {!hasSelection && (
+        <div className="absolute inset-0 flex items-center justify-center text-text-tertiary text-sm z-10">
+          Select a session
+        </div>
+      )}
+
+      {/* Grid always renders ALL terminals to keep them alive.
+          Non-selected ones are hidden via display:none so they
+          don't participate in the grid layout but stay mounted
+          (xterm instance + PTY listener preserved). */}
+      <div
+        className="h-full grid gap-px bg-border-subtle"
+        style={{
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          gridTemplateRows: `repeat(${rows}, 1fr)`
+        }}
+      >
+        {sessions.map((session) => {
+          const isSelected = selectedSessionIds.includes(session.id)
+          return (
+            <div
+              key={session.id}
+              className="min-h-0 min-w-0 h-full"
+              style={{ display: isSelected ? undefined : 'none' }}
+            >
+              <TerminalErrorBoundary sessionId={session.id}>
+                <TerminalPanel sessionId={session.id} />
+              </TerminalErrorBoundary>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

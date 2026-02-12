@@ -10,22 +10,22 @@ interface TerminalPanelProps {
 
 export function TerminalPanel({ sessionId }: TerminalPanelProps) {
   const { containerRef, focus } = useTerminal(sessionId)
-  const activeSessionId = useSessionStore((s) => s.activeSessionId)
-  const setActiveSession = useSessionStore((s) => s.setActiveSession)
-  const isActive = activeSessionId === sessionId
+  const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
+  const setFocusedSession = useSessionStore((s) => s.setFocusedSession)
+  const isFocused = focusedSessionId === sessionId
 
   const handleClick = useCallback(() => {
-    if (activeSessionId !== sessionId) {
-      setActiveSession(sessionId)
+    if (focusedSessionId !== sessionId) {
+      setFocusedSession(sessionId)
     }
     focus()
-  }, [sessionId, activeSessionId, setActiveSession, focus])
+  }, [sessionId, focusedSessionId, setFocusedSession, focus])
 
   return (
     <div
       className={cn(
         'flex flex-col h-full bg-surface-50 transition-shadow',
-        isActive ? 'ring-1 ring-accent/30' : ''
+        isFocused ? 'ring-1 ring-accent/30' : ''
       )}
       onMouseDown={handleClick}
     >

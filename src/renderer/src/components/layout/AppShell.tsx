@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useSessionStore } from '../../store/session-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
-import { LayoutSwitcher } from '../ui/LayoutSwitcher'
 import { ThemeToggle } from '../ui/ThemeToggle'
 
 const sidebarTransition = {
@@ -16,7 +15,6 @@ export function AppShell() {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const toggleSidebar = useSessionStore((s) => s.toggleSidebar)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
-  const sessions = useSessionStore((s) => s.sessions)
   const theme = useSessionStore((s) => s.theme)
 
   const isResizing = useRef(false)
@@ -100,14 +98,7 @@ export function AppShell() {
                   stroke="currentColor"
                   strokeWidth="1.5"
                 />
-                <line
-                  x1="5.5"
-                  y1="2"
-                  x2="5.5"
-                  y2="14"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                />
+                <line x1="5.5" y1="2" x2="5.5" y2="14" stroke="currentColor" strokeWidth="1.5" />
               </svg>
             </button>
           </div>
@@ -116,7 +107,6 @@ export function AppShell() {
             className="flex items-center gap-2"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            {sessions.length > 0 && <LayoutSwitcher />}
             <ThemeToggle />
           </div>
         </div>

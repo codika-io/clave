@@ -2,8 +2,8 @@ import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { ptyManager } from './pty-manager'
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle('pty:spawn', (_event, cwd: string) => {
-    const session = ptyManager.spawn(cwd)
+  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean }) => {
+    const session = ptyManager.spawn(cwd, options)
     const win = BrowserWindow.fromWebContents(_event.sender)
 
     session.ptyProcess.onData((data) => {
