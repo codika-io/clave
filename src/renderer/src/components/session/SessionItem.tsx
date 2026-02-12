@@ -11,6 +11,12 @@ interface SessionItemProps {
   groupSelected?: boolean
   forceEditing?: boolean
   onEditingDone?: () => void
+  onDragStart?: (e: React.DragEvent) => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent) => void
+  onDragEnd?: (e: React.DragEvent) => void
+  dropIndicator?: 'before' | 'after' | null
+  isDragging?: boolean
 }
 
 export function SessionItem({
@@ -21,7 +27,13 @@ export function SessionItem({
   grouped,
   groupSelected,
   forceEditing,
-  onEditingDone
+  onEditingDone,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  dropIndicator,
+  isDragging
 }: SessionItemProps) {
   const renameSession = useSessionStore((s) => s.renameSession)
   const [editing, setEditing] = useState(false)
@@ -101,68 +113,90 @@ export function SessionItem({
   )
 
   return (
-    <button
-      onClick={handleClick}
-      onContextMenu={onContextMenu}
-      onKeyDown={handleButtonKeyDown}
-      className={cn(
-        'w-full flex items-center gap-2.5 py-1.5 rounded-lg text-left transition-colors outline-none',
-        grouped ? 'pl-7 pr-3' : 'px-3',
-        groupSelected
-          ? 'text-text-primary'
-          : isSelected
-            ? 'bg-surface-200 text-text-primary'
-            : 'text-text-secondary hover:bg-surface-100'
-      )}
+    <div
+      className="relative"
+      draggable={!editing}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
     >
-      {/* Terminal icon with status badge */}
-      <span className="relative flex-shrink-0 w-4 h-4">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-text-tertiary">
-          <rect
-            x="1.5"
-            y="2.5"
-            width="13"
-            height="11"
-            rx="2"
-            stroke="currentColor"
-            strokeWidth="1.2"
-          />
-          <path
-            d="M4.5 6l2.5 2-2.5 2"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path d="M8.5 10h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-        <span
-          className={cn(
-            'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-surface-50',
-            session.alive ? 'bg-status-active' : 'bg-status-inactive'
-          )}
-        />
-      </span>
-
-      {/* Session name — double-click to rename */}
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={commitRename}
-          onKeyDown={handleInputKeyDown}
-          onClick={(e) => e.stopPropagation()}
-          className="flex-1 min-w-0 bg-transparent text-sm font-medium text-text-primary outline-none border-none"
-        />
-      ) : (
-        <span
-          className="flex-1 min-w-0 text-sm font-medium truncate"
-          onDoubleClick={handleDoubleClick}
-        >
-          {session.name}
-        </span>
+      {dropIndicator === 'before' && (
+        <div className="absolute top-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />
       )}
-    </button>
+      <button
+        onClick={handleClick}
+        onContextMenu={onContextMenu}
+        onKeyDown={handleButtonKeyDown}
+        className={cn(
+          'w-full flex items-center gap-2.5 py-1.5 rounded-lg text-left transition-colors outline-none',
+          grouped ? 'pl-7 pr-3' : 'px-3',
+          groupSelected
+            ? 'text-text-primary'
+            : isSelected
+              ? 'bg-surface-200 text-text-primary'
+              : 'text-text-secondary hover:bg-surface-100',
+          isDragging && 'opacity-30'
+        )}
+      >
+        {/* Terminal icon with status badge */}
+        <span className="relative flex-shrink-0 w-4 h-4">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            className="text-text-tertiary"
+          >
+            <rect
+              x="1.5"
+              y="2.5"
+              width="13"
+              height="11"
+              rx="2"
+              stroke="currentColor"
+              strokeWidth="1.2"
+            />
+            <path
+              d="M4.5 6l2.5 2-2.5 2"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path d="M8.5 10h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+          <span
+            className={cn(
+              'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-surface-50',
+              session.alive ? 'bg-status-active' : 'bg-status-inactive'
+            )}
+          />
+        </span>
+
+        {/* Session name — double-click to rename */}
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={handleInputKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            className="flex-1 min-w-0 bg-transparent text-sm font-medium text-text-primary outline-none border-none"
+          />
+        ) : (
+          <span
+            className="flex-1 min-w-0 text-sm font-medium truncate"
+            onDoubleClick={handleDoubleClick}
+          >
+            {session.name}
+          </span>
+        )}
+      </button>
+      {dropIndicator === 'after' && (
+        <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />
+      )}
+    </div>
   )
 }

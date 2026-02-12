@@ -22,6 +22,7 @@ interface SessionState {
   focusedSessionId: string | null
   selectedSessionIds: string[]
   groups: SessionGroup[]
+  displayOrder: string[]
   sidebarOpen: boolean
   sidebarWidth: number
   theme: Theme
@@ -37,6 +38,11 @@ interface SessionState {
   ungroupSessions: (groupId: string) => void
   renameGroup: (groupId: string, name: string) => void
   toggleGroupCollapsed: (groupId: string) => void
+  moveItems: (
+    itemIds: string[],
+    targetId: string,
+    position: 'before' | 'after' | 'inside'
+  ) => void
   toggleSidebar: () => void
   setSidebarWidth: (width: number) => void
   toggleTheme: () => void
@@ -48,11 +54,34 @@ interface SessionState {
 
 let groupCounter = 0
 
+function getDisplayOrder(state: {
+  sessions: Session[]
+  groups: SessionGroup[]
+  displayOrder: string[]
+}): string[] {
+  if (state.displayOrder.length > 0) return [...state.displayOrder]
+  const order: string[] = []
+  const placedGroups = new Set<string>()
+  for (const session of state.sessions) {
+    const group = state.groups.find((g) => g.sessionIds.includes(session.id))
+    if (group) {
+      if (!placedGroups.has(group.id)) {
+        placedGroups.add(group.id)
+        order.push(group.id)
+      }
+    } else {
+      order.push(session.id)
+    }
+  }
+  return order
+}
+
 export const useSessionStore = create<SessionState>((set) => ({
   sessions: [],
   focusedSessionId: null,
   selectedSessionIds: [],
   groups: [],
+  displayOrder: [],
   sidebarOpen: true,
   sidebarWidth: 260,
   theme: 'dark',
@@ -63,7 +92,8 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => ({
       sessions: [...state.sessions, session],
       selectedSessionIds: [session.id],
-      focusedSessionId: session.id
+      focusedSessionId: session.id,
+      displayOrder: [...getDisplayOrder(state), session.id]
     })),
 
   removeSession: (id) =>
@@ -74,6 +104,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         ...g,
         sessionIds: g.sessionIds.filter((sid) => sid !== id)
       }))
+      const displayOrder = getDisplayOrder(state).filter((did) => did !== id)
 
       let focusedSessionId = state.focusedSessionId
       if (focusedSessionId === id) {
@@ -85,11 +116,12 @@ export const useSessionStore = create<SessionState>((set) => ({
           sessions,
           selectedSessionIds: [lastId],
           focusedSessionId: lastId,
-          groups
+          groups,
+          displayOrder
         }
       }
 
-      return { sessions, selectedSessionIds, focusedSessionId, groups }
+      return { sessions, selectedSessionIds, focusedSessionId, groups, displayOrder }
     }),
 
   selectSession: (id, addToSelection) =>
@@ -128,13 +160,43 @@ export const useSessionStore = create<SessionState>((set) => ({
         ...g,
         sessionIds: g.sessionIds.filter((sid) => !sessionIds.includes(sid))
       }))
-      return { groups: [...groups, newGroup] }
+
+      // Update displayOrder: replace first session with group ID, remove rest
+      let displayOrder = getDisplayOrder(state)
+      let inserted = false
+      displayOrder = displayOrder.reduce<string[]>((acc, id) => {
+        if (sessionIds.includes(id)) {
+          if (!inserted) {
+            inserted = true
+            acc.push(newGroup.id)
+          }
+        } else {
+          acc.push(id)
+        }
+        return acc
+      }, [])
+      if (!inserted) displayOrder.push(newGroup.id)
+
+      return { groups: [...groups, newGroup], displayOrder }
     }),
 
   ungroupSessions: (groupId) =>
-    set((state) => ({
-      groups: state.groups.filter((g) => g.id !== groupId)
-    })),
+    set((state) => {
+      const group = state.groups.find((g) => g.id === groupId)
+      if (!group) return {}
+
+      // Replace group ID in displayOrder with its session IDs
+      const displayOrder = getDisplayOrder(state)
+      const idx = displayOrder.indexOf(groupId)
+      if (idx !== -1) {
+        displayOrder.splice(idx, 1, ...group.sessionIds)
+      }
+
+      return {
+        groups: state.groups.filter((g) => g.id !== groupId),
+        displayOrder
+      }
+    }),
 
   renameGroup: (groupId, name) =>
     set((state) => ({
@@ -147,6 +209,57 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => ({
       groups: state.groups.map((g) => (g.id === groupId ? { ...g, collapsed: !g.collapsed } : g))
     })),
+
+  moveItems: (itemIds, targetId, position) =>
+    set((state) => {
+      const displayOrder = getDisplayOrder(state)
+      const newGroups = state.groups.map((g) => ({
+        ...g,
+        sessionIds: [...g.sessionIds]
+      }))
+
+      const targetIsGroup = newGroups.some((g) => g.id === targetId)
+      const targetParentGroup = newGroups.find((g) => g.sessionIds.includes(targetId))
+
+      // Remove dragged items from current locations
+      for (const id of itemIds) {
+        const idx = displayOrder.indexOf(id)
+        if (idx !== -1) displayOrder.splice(idx, 1)
+        for (const g of newGroups) {
+          const sIdx = g.sessionIds.indexOf(id)
+          if (sIdx !== -1) g.sessionIds.splice(sIdx, 1)
+        }
+      }
+
+      if (position === 'inside' && targetIsGroup) {
+        // Drop into group
+        const group = newGroups.find((g) => g.id === targetId)!
+        group.sessionIds.push(...itemIds)
+      } else if (targetParentGroup && !targetIsGroup) {
+        // Target is inside a group → reorder within group
+        const idx = targetParentGroup.sessionIds.indexOf(targetId)
+        const insertIdx = position === 'after' ? idx + 1 : idx
+        targetParentGroup.sessionIds.splice(insertIdx, 0, ...itemIds)
+      } else {
+        // Target is top-level → reorder in displayOrder
+        const idx = displayOrder.indexOf(targetId)
+        if (idx === -1) {
+          displayOrder.push(...itemIds)
+        } else {
+          const insertIdx = position === 'after' ? idx + 1 : idx
+          displayOrder.splice(insertIdx, 0, ...itemIds)
+        }
+      }
+
+      // Remove empty groups
+      const emptyGroupIds = newGroups
+        .filter((g) => g.sessionIds.length === 0)
+        .map((g) => g.id)
+      const finalGroups = newGroups.filter((g) => g.sessionIds.length > 0)
+      const finalDisplayOrder = displayOrder.filter((id) => !emptyGroupIds.includes(id))
+
+      return { displayOrder: finalDisplayOrder, groups: finalGroups }
+    }),
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { SessionItem } from '../session/SessionItem'
 import { SessionGroupItem } from '../session/SessionGroupItem'
@@ -9,6 +9,11 @@ interface ContextMenuState {
   x: number
   y: number
   items: { label: string; onClick: () => void; shortcut?: string; disabled?: boolean; icon?: React.ReactNode; danger?: boolean }[]
+}
+
+interface DropIndicatorState {
+  targetId: string
+  position: 'before' | 'after' | 'inside'
 }
 
 function DangerousToggle() {
@@ -67,13 +72,21 @@ export function Sidebar() {
   const addSession = useSessionStore((s) => s.addSession)
   const removeSession = useSessionStore((s) => s.removeSession)
   const groups = useSessionStore((s) => s.groups)
+  const displayOrder = useSessionStore((s) => s.displayOrder)
   const createGroup = useSessionStore((s) => s.createGroup)
   const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
+  const moveItems = useSessionStore((s) => s.moveItems)
   const searchQuery = useSessionStore((s) => s.searchQuery)
   const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
   const [loading, setLoading] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+
+  // Drag-and-drop state
+  const [draggingIds, setDraggingIds] = useState<string[]>([])
+  const [dropIndicator, setDropIndicator] = useState<DropIndicatorState | null>(null)
+  const draggedIdsRef = useRef<string[]>([])
+  const dropIndicatorRef = useRef<DropIndicatorState | null>(null)
 
   const handleNewSession = useCallback(async () => {
     setLoading(true)
@@ -125,27 +138,44 @@ export function Sidebar() {
     )
   }, [sessions, searchQuery])
 
-  // Build display list: interleave groups and ungrouped sessions in creation order
+  // Build display list from displayOrder (or fall back to creation order)
   const displayItems = useMemo(() => {
-    if (filteredSessions) return null // search mode uses flat list
+    if (filteredSessions) return null
 
-    const items: ({ type: 'session'; sessionId: string } | { type: 'group'; groupId: string })[] =
-      []
-    const placedGroups = new Set<string>()
+    const order =
+      displayOrder.length > 0
+        ? displayOrder
+        : (() => {
+            const items: string[] = []
+            const placedGroups = new Set<string>()
+            for (const session of sessions) {
+              const group = groups.find((g) => g.sessionIds.includes(session.id))
+              if (group) {
+                if (!placedGroups.has(group.id)) {
+                  placedGroups.add(group.id)
+                  items.push(group.id)
+                }
+              } else {
+                items.push(session.id)
+              }
+            }
+            return items
+          })()
 
-    for (const session of sessions) {
-      const group = groups.find((g) => g.sessionIds.includes(session.id))
-      if (group) {
-        if (!placedGroups.has(group.id)) {
-          placedGroups.add(group.id)
-          items.push({ type: 'group', groupId: group.id })
-        }
-      } else {
-        items.push({ type: 'session', sessionId: session.id })
-      }
-    }
-    return items
-  }, [sessions, groups, filteredSessions])
+    return order
+      .map((id) => {
+        if (groups.some((g) => g.id === id)) return { type: 'group' as const, groupId: id }
+        if (sessions.some((s) => s.id === id)) return { type: 'session' as const, sessionId: id }
+        return null
+      })
+      .filter(
+        (item): item is NonNullable<typeof item> =>
+          item !== null &&
+          (item.type === 'session' ||
+            (item.type === 'group' &&
+              (groups.find((g) => g.id === item.groupId)?.sessionIds.length ?? 0) > 0))
+      )
+  }, [displayOrder, sessions, groups, filteredSessions])
 
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
@@ -264,21 +294,113 @@ export function Sidebar() {
 
   const clearRenaming = useCallback(() => setRenamingId(null), [])
 
-  const renderSession = useCallback(
-    (session: (typeof sessions)[0], grouped?: boolean, groupSelected?: boolean) => (
-      <SessionItem
-        key={session.id}
-        session={session}
-        isSelected={selectedSessionIds.includes(session.id)}
-        onClick={(shiftKey) => selectSession(session.id, shiftKey)}
-        onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
-        grouped={grouped}
-        groupSelected={groupSelected}
-        forceEditing={renamingId === session.id}
-        onEditingDone={clearRenaming}
-      />
-    ),
-    [selectedSessionIds, selectSession, handleSessionContextMenu, renamingId, clearRenaming]
+  // --- Drag-and-drop handlers ---
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent, itemId: string, isGroup: boolean) => {
+      const state = useSessionStore.getState()
+      let ids: string[]
+      if (isGroup) {
+        ids = [itemId]
+      } else if (state.selectedSessionIds.includes(itemId)) {
+        // Drag all selected sessions
+        ids = state.selectedSessionIds.filter(
+          (sid) => !state.groups.some((g) => g.id === sid)
+        )
+      } else {
+        ids = [itemId]
+      }
+
+      draggedIdsRef.current = ids
+      setDraggingIds(ids)
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', itemId)
+    },
+    []
+  )
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, targetId: string, isGroup: boolean) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+
+      // Don't allow dropping on self
+      if (draggedIdsRef.current.includes(targetId)) {
+        if (dropIndicatorRef.current) {
+          dropIndicatorRef.current = null
+          setDropIndicator(null)
+        }
+        return
+      }
+
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const y = e.clientY - rect.top
+      const height = rect.height
+
+      let position: 'before' | 'after' | 'inside'
+      if (isGroup) {
+        // For groups: top 25% = before, bottom 25% = after, middle 50% = inside
+        if (y < height * 0.25) position = 'before'
+        else if (y > height * 0.75) position = 'after'
+        else position = 'inside'
+
+        // Don't allow dropping a group inside another group
+        if (
+          position === 'inside' &&
+          draggedIdsRef.current.some((id) =>
+            useSessionStore.getState().groups.some((g) => g.id === id)
+          )
+        ) {
+          position = y < height / 2 ? 'before' : 'after'
+        }
+      } else {
+        position = y < height / 2 ? 'before' : 'after'
+      }
+
+      const newIndicator = { targetId, position }
+      if (
+        !dropIndicatorRef.current ||
+        dropIndicatorRef.current.targetId !== targetId ||
+        dropIndicatorRef.current.position !== position
+      ) {
+        dropIndicatorRef.current = newIndicator
+        setDropIndicator(newIndicator)
+      }
+    },
+    []
+  )
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      const indicator = dropIndicatorRef.current
+      const ids = draggedIdsRef.current
+      if (!indicator || ids.length === 0) return
+
+      moveItems(ids, indicator.targetId, indicator.position)
+
+      draggedIdsRef.current = []
+      dropIndicatorRef.current = null
+      setDraggingIds([])
+      setDropIndicator(null)
+    },
+    [moveItems]
+  )
+
+  const handleDragEnd = useCallback(() => {
+    draggedIdsRef.current = []
+    dropIndicatorRef.current = null
+    setDraggingIds([])
+    setDropIndicator(null)
+  }, [])
+
+  // Get the drop indicator for a specific item
+  const getDropIndicator = useCallback(
+    (itemId: string) => {
+      if (dropIndicator && dropIndicator.targetId === itemId) return dropIndicator.position
+      return null
+    },
+    [dropIndicator]
   )
 
   return (
@@ -335,14 +457,40 @@ export function Sidebar() {
               No matching sessions
             </div>
           ) : (
-            filteredSessions.map((session) => renderSession(session))
+            filteredSessions.map((session) => (
+              <SessionItem
+                key={session.id}
+                session={session}
+                isSelected={selectedSessionIds.includes(session.id)}
+                onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                forceEditing={renamingId === session.id}
+                onEditingDone={clearRenaming}
+              />
+            ))
           )
         ) : displayItems ? (
           displayItems.map((item) => {
             if (item.type === 'session') {
               const session = sessions.find((s) => s.id === item.sessionId)
               if (!session) return null
-              return renderSession(session)
+              return (
+                <SessionItem
+                  key={session.id}
+                  session={session}
+                  isSelected={selectedSessionIds.includes(session.id)}
+                  onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                  onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                  forceEditing={renamingId === session.id}
+                  onEditingDone={clearRenaming}
+                  onDragStart={(e) => handleDragStart(e, session.id, false)}
+                  onDragOver={(e) => handleDragOver(e, session.id, false)}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  dropIndicator={getDropIndicator(session.id) as 'before' | 'after' | null}
+                  isDragging={draggingIds.includes(session.id)}
+                />
+              )
             } else {
               const group = groups.find((g) => g.id === item.groupId)
               if (!group || group.sessionIds.length === 0) return null
@@ -364,13 +512,39 @@ export function Sidebar() {
                     allSelected={allGroupSelected}
                     forceEditing={renamingId === group.id}
                     onEditingDone={clearRenaming}
+                    onDragStart={(e) => handleDragStart(e, group.id, true)}
+                    onDragOver={(e) => handleDragOver(e, group.id, true)}
+                    onDrop={handleDrop}
+                    onDragEnd={handleDragEnd}
+                    dropIndicator={getDropIndicator(group.id)}
+                    isDragging={draggingIds.includes(group.id)}
                   />
                   {!group.collapsed && (
                     <div className="pl-4">
                       {group.sessionIds.map((sid) => {
                         const session = sessions.find((s) => s.id === sid)
                         if (!session) return null
-                        return renderSession(session, true, allGroupSelected)
+                        return (
+                          <SessionItem
+                            key={session.id}
+                            session={session}
+                            isSelected={selectedSessionIds.includes(session.id)}
+                            onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                            onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                            grouped
+                            groupSelected={allGroupSelected}
+                            forceEditing={renamingId === session.id}
+                            onEditingDone={clearRenaming}
+                            onDragStart={(e) => handleDragStart(e, session.id, false)}
+                            onDragOver={(e) => handleDragOver(e, session.id, false)}
+                            onDrop={handleDrop}
+                            onDragEnd={handleDragEnd}
+                            dropIndicator={
+                              getDropIndicator(session.id) as 'before' | 'after' | null
+                            }
+                            isDragging={draggingIds.includes(session.id)}
+                          />
+                        )
                       })}
                     </div>
                   )}
