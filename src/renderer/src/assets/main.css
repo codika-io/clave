@@ -48,8 +48,12 @@
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
   --danger-toggle-bg: rgba(255, 255, 255, 0.08);
-  --danger-toggle-active: #e54040;
+  --danger-toggle-active: rgba(229, 64, 64, 0.18);
   --danger-toggle-glow: rgba(229, 64, 64, 0.25);
+  --danger-toggle-icon: #e54040;
+  --claude-toggle-bg: rgba(255, 255, 255, 0.08);
+  --claude-toggle-active: rgba(217, 119, 87, 0.18);
+  --claude-toggle-glow: rgba(217, 119, 87, 0.25);
 }
 
 /* Light theme */
@@ -68,8 +72,12 @@
   --scrollbar-thumb: rgba(0, 0, 0, 0.15);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
   --danger-toggle-bg: rgba(0, 0, 0, 0.06);
-  --danger-toggle-active: #dc3545;
+  --danger-toggle-active: rgba(220, 53, 69, 0.15);
   --danger-toggle-glow: rgba(220, 53, 69, 0.18);
+  --danger-toggle-icon: #dc3545;
+  --claude-toggle-bg: rgba(0, 0, 0, 0.06);
+  --claude-toggle-active: rgba(217, 119, 87, 0.15);
+  --claude-toggle-glow: rgba(217, 119, 87, 0.18);
 }
 
 @keyframes fade-in {

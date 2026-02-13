@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 const electronAPI = {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean }) =>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) =>
     ipcRenderer.invoke('pty:spawn', cwd, options),
 
   writeSession: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),

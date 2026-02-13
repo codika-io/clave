@@ -27,6 +27,7 @@ interface SessionState {
   sidebarWidth: number
   theme: Theme
   searchQuery: string
+  claudeMode: boolean
   dangerousMode: boolean
 
   addSession: (session: Session) => void
@@ -49,6 +50,7 @@ interface SessionState {
   updateSessionAlive: (id: string, alive: boolean) => void
   renameSession: (id: string, name: string) => void
   setSearchQuery: (query: string) => void
+  toggleClaudeMode: () => void
   toggleDangerousMode: () => void
 }
 
@@ -86,6 +88,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidebarWidth: 260,
   theme: 'dark',
   searchQuery: '',
+  claudeMode: true,
   dangerousMode: false,
 
   addSession: (session) =>
@@ -280,6 +283,8 @@ export const useSessionStore = create<SessionState>((set) => ({
     })),
 
   setSearchQuery: (query) => set({ searchQuery: query }),
+
+  toggleClaudeMode: () => set((state) => ({ claudeMode: !state.claudeMode })),
 
   toggleDangerousMode: () => set((state) => ({ dangerousMode: !state.dangerousMode }))
 }))

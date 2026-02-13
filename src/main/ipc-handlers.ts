@@ -7,7 +7,7 @@ export function registerIpcHandlers(): void {
     installUpdate()
   })
 
-  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean }) => {
+  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) => {
     const session = ptyManager.spawn(cwd, options)
     const win = BrowserWindow.fromWebContents(_event.sender)
 

@@ -11,7 +11,10 @@ export function NewSessionButton() {
       const folderPath = await window.electronAPI.openFolderDialog()
       if (!folderPath) return
 
-      const sessionInfo = await window.electronAPI.spawnSession(folderPath)
+      const state = useSessionStore.getState()
+      const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
+        claudeMode: state.claudeMode
+      })
       addSession({
         id: sessionInfo.id,
         cwd: sessionInfo.cwd,

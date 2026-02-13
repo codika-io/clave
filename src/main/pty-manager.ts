@@ -27,14 +27,16 @@ export interface PtySession {
 class PtyManager {
   private sessions = new Map<string, PtySession>()
 
-  spawn(cwd: string, options?: { dangerousMode?: boolean }): PtySession {
+  spawn(cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }): PtySession {
     const id = randomUUID()
     const folderName = cwd.split('/').pop() || cwd
-    const claudeCmd = options?.dangerousMode
-      ? 'claude --dangerously-skip-permissions'
-      : 'claude'
+    const useClaudeMode = options?.claudeMode !== false
 
-    const ptyProcess = pty.spawn('/bin/zsh', ['-l', '-c', claudeCmd], {
+    const shellArgs: string[] = useClaudeMode
+      ? ['-l', '-c', options?.dangerousMode ? 'claude --dangerously-skip-permissions' : 'claude']
+      : ['-l']
+
+    const ptyProcess = pty.spawn('/bin/zsh', shellArgs, {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,
