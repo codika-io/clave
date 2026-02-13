@@ -1,5 +1,20 @@
 import * as pty from 'node-pty'
+import { execSync } from 'child_process'
 import { randomUUID } from 'crypto'
+
+let loginShellPath: string | null = null
+
+function getLoginShellPath(): string {
+  if (loginShellPath !== null) return loginShellPath
+  try {
+    const output = execSync('/bin/zsh -lic "echo __PATH__$PATH"', { encoding: 'utf-8' })
+    const marker = output.split('\n').find((l) => l.startsWith('__PATH__'))
+    loginShellPath = marker ? marker.slice('__PATH__'.length) : process.env.PATH || ''
+  } catch {
+    loginShellPath = process.env.PATH || ''
+  }
+  return loginShellPath
+}
 
 export interface PtySession {
   id: string
@@ -19,13 +34,14 @@ class PtyManager {
       ? 'claude --dangerously-skip-permissions'
       : 'claude'
 
-    const ptyProcess = pty.spawn('/bin/zsh', ['-lic', claudeCmd], {
+    const ptyProcess = pty.spawn('/bin/zsh', ['-l', '-c', claudeCmd], {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,
       cwd,
       env: {
         ...process.env,
+        PATH: getLoginShellPath(),
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor'
       }
