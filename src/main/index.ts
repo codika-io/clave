@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
@@ -6,12 +6,15 @@ import { ptyManager } from './pty-manager'
 import { initAutoUpdater } from './auto-updater'
 
 function createWindow(): void {
+  const icon = nativeImage.createFromPath(join(__dirname, '../../resources/icon.png'))
+
   const mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 600,
     show: false,
+    icon,
     backgroundColor: '#000000',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
@@ -21,6 +24,10 @@ function createWindow(): void {
       sandbox: false
     }
   })
+
+  if (is.dev && process.platform === 'darwin') {
+    app.dock?.setIcon(icon)
+  }
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -40,10 +47,6 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.clave.app')
-
-  if (process.platform === 'darwin') {
-    app.dock?.setIcon(join(__dirname, '../../resources/icon.png'))
-  }
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
