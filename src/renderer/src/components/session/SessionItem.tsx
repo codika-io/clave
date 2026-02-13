@@ -174,7 +174,7 @@ export function SessionItem({
           />
         </span>
 
-        {/* Session name — double-click to rename */}
+        {/* Session name + path — double-click to rename */}
         {editing ? (
           <input
             ref={inputRef}
@@ -186,12 +186,12 @@ export function SessionItem({
             className="flex-1 min-w-0 bg-transparent text-sm font-medium text-text-primary outline-none border-none"
           />
         ) : (
-          <span
-            className="flex-1 min-w-0 text-sm font-medium truncate"
-            onDoubleClick={handleDoubleClick}
-          >
-            {session.name}
-          </span>
+          <div className="flex-1 min-w-0" onDoubleClick={handleDoubleClick}>
+            <span className="block text-sm font-medium truncate">{session.name}</span>
+            <span className="block text-[11px] leading-tight text-text-tertiary truncate">
+              {session.cwd.replace(/^\/Users\/[^/]+/, '~')}
+            </span>
+          </div>
         )}
       </button>
       {dropIndicator === 'after' && (
