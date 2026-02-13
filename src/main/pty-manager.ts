@@ -2,18 +2,35 @@ import * as pty from 'node-pty'
 import { execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
 
-let loginShellPath: string | null = null
+let loginShellEnv: Record<string, string> | null = null
 
-function getLoginShellPath(): string {
-  if (loginShellPath !== null) return loginShellPath
+function getUserShell(): string {
+  return process.env.SHELL || '/bin/zsh'
+}
+
+function getLoginShellEnv(): Record<string, string> {
+  if (loginShellEnv !== null) return loginShellEnv
   try {
-    const output = execFileSync('/bin/zsh', ['-lic', 'echo __PATH__$PATH'], { encoding: 'utf-8' })
-    const marker = output.split('\n').find((l) => l.startsWith('__PATH__'))
-    loginShellPath = marker ? marker.slice('__PATH__'.length) : process.env.PATH || ''
+    const output = execFileSync(getUserShell(), ['-lic', 'env -0'], {
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024
+    })
+    const env: Record<string, string> = {}
+    for (const entry of output.split('\0')) {
+      const idx = entry.indexOf('=')
+      if (idx > 0) {
+        env[entry.slice(0, idx)] = entry.slice(idx + 1)
+      }
+    }
+    if (Object.keys(env).length > 0) {
+      loginShellEnv = env
+    } else {
+      loginShellEnv = { ...process.env } as Record<string, string>
+    }
   } catch {
-    loginShellPath = process.env.PATH || ''
+    loginShellEnv = { ...process.env } as Record<string, string>
   }
-  return loginShellPath
+  return loginShellEnv
 }
 
 export interface PtySession {
@@ -36,14 +53,13 @@ class PtyManager {
       ? ['-l', '-c', options?.dangerousMode ? 'claude --dangerously-skip-permissions' : 'claude']
       : ['-l']
 
-    const ptyProcess = pty.spawn('/bin/zsh', shellArgs, {
+    const ptyProcess = pty.spawn(getUserShell(), shellArgs, {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,
       cwd,
       env: {
-        ...process.env,
-        PATH: getLoginShellPath(),
+        ...getLoginShellEnv(),
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor'
       }
