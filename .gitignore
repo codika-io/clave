@@ -21,3 +21,7 @@ Thumbs.db
 .claude/
 .playwright-mcp/
 .mcp.json
+
+# Environment variables
+.env
+.certificates*
