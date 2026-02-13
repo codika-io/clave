@@ -58,9 +58,10 @@ npm run build:mac
 
 # ── Verify artifacts ────────────────────────────────────────────────
 DMG=$(ls dist/clave-"${NEW_VERSION}".dmg 2>/dev/null || true)
-ZIP=$(ls dist/clave-"${NEW_VERSION}"-mac.zip 2>/dev/null || true)
+ZIP=$(ls dist/Clave-"${NEW_VERSION}"-universal-mac.zip 2>/dev/null || true)
 YML=$(ls dist/latest-mac.yml 2>/dev/null || true)
 BLOCKMAP=$(ls dist/clave-"${NEW_VERSION}".dmg.blockmap 2>/dev/null || true)
+ZIP_BLOCKMAP=$(ls dist/Clave-"${NEW_VERSION}"-universal-mac.zip.blockmap 2>/dev/null || true)
 
 [[ -n "$DMG" ]] || error "DMG not found in dist/"
 [[ -n "$ZIP" ]] || error "ZIP not found in dist/"
@@ -83,6 +84,7 @@ git push origin main --follow-tags
 # ── Create GitHub Release ───────────────────────────────────────────
 ASSETS=("$DMG" "$ZIP" "$YML")
 [[ -n "$BLOCKMAP" ]] && ASSETS+=("$BLOCKMAP")
+[[ -n "$ZIP_BLOCKMAP" ]] && ASSETS+=("$ZIP_BLOCKMAP")
 
 gh release create "v${NEW_VERSION}" \
   --title "v${NEW_VERSION}" \
