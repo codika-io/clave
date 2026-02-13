@@ -1,6 +1,10 @@
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
+const CHECK_INTERVAL = 30 * 60 * 1000 // 30 minutes
+const INITIAL_DELAY = 5000
+const RETRY_DELAY = 60 * 1000 // 1 minute
+
 export function initAutoUpdater(): void {
   if (!app.isPackaged) return
 
@@ -35,7 +39,20 @@ export function initAutoUpdater(): void {
     console.error('[updater] Error:', err.message)
   })
 
-  setTimeout(() => autoUpdater.checkForUpdates(), 5000)
+  const check = (): void => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('[updater] Check failed:', err?.message)
+      // Retry once after a delay
+      setTimeout(() => {
+        autoUpdater.checkForUpdates().catch((retryErr) => {
+          console.error('[updater] Retry failed:', retryErr?.message)
+        })
+      }, RETRY_DELAY)
+    })
+  }
+
+  setTimeout(check, INITIAL_DELAY)
+  setInterval(check, CHECK_INTERVAL)
 }
 
 export function installUpdate(): void {
