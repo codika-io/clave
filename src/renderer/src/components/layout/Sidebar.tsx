@@ -19,23 +19,33 @@ interface DropIndicatorState {
 function DangerousToggle() {
   const dangerousMode = useSessionStore((s) => s.dangerousMode)
   const toggleDangerousMode = useSessionStore((s) => s.toggleDangerousMode)
+  const [hovered, setHovered] = useState(false)
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  const handleMouseEnter = useCallback(() => {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setTooltipPos({ x: rect.left + rect.width / 2, y: rect.bottom + 8 })
+    }
+    setHovered(true)
+  }, [])
 
   return (
-    <button
-      onClick={toggleDangerousMode}
-      className="relative w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 flex-shrink-0"
-      style={{
-        backgroundColor: dangerousMode
-          ? 'var(--danger-toggle-active)'
-          : 'var(--danger-toggle-bg)',
-        boxShadow: dangerousMode ? '0 0 12px var(--danger-toggle-glow)' : 'none'
-      }}
-      title={
-        dangerousMode
-          ? 'Skip permissions ON — new sessions use --dangerously-skip-permissions'
-          : 'Skip permissions OFF'
-      }
-    >
+    <div className="flex-shrink-0">
+      <button
+        ref={btnRef}
+        onClick={toggleDangerousMode}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setHovered(false)}
+        className="relative w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200"
+        style={{
+          backgroundColor: dangerousMode
+            ? 'var(--danger-toggle-active)'
+            : 'var(--danger-toggle-bg)',
+          boxShadow: dangerousMode ? '0 0 12px var(--danger-toggle-glow)' : 'none'
+        }}
+      >
       <svg
         width="14"
         height="14"
@@ -60,7 +70,22 @@ function DangerousToggle() {
           strokeLinecap="round"
         />
       </svg>
-    </button>
+      </button>
+      {hovered && (
+        <div
+          className="fixed pointer-events-none px-2.5 py-1.5 rounded-lg text-[11px] leading-tight whitespace-nowrap z-[9999] bg-surface-300 text-text-primary shadow-lg"
+          style={{
+            left: tooltipPos.x,
+            top: tooltipPos.y,
+            transform: 'translateX(-50%)'
+          }}
+        >
+          {dangerousMode
+            ? '--dangerously-skip-permissions ON'
+            : '--dangerously-skip-permissions OFF'}
+        </div>
+      )}
+    </div>
   )
 }
 

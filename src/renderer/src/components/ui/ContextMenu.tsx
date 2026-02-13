@@ -52,7 +52,7 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
             }
           }}
           disabled={item.disabled}
-          className={`w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-surface-200 disabled:opacity-40 disabled:cursor-default transition-colors ${item.danger ? 'text-red-400 hover:text-red-300' : 'text-text-primary'}`}
+          className={`w-full flex items-center justify-between px-3 py-1.5 text-sm font-medium hover:bg-surface-200 disabled:opacity-40 disabled:cursor-default transition-colors ${item.danger ? 'text-red-400 hover:text-red-300' : 'text-text-primary'}`}
         >
           <span className="flex items-center gap-2">
             {item.icon && <span className="w-4 h-4 flex items-center justify-center">{item.icon}</span>}
