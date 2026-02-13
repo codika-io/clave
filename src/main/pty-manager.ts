@@ -19,7 +19,7 @@ class PtyManager {
       ? 'claude --dangerously-skip-permissions'
       : 'claude'
 
-    const ptyProcess = pty.spawn('/bin/zsh', ['-l', '-c', claudeCmd], {
+    const ptyProcess = pty.spawn('/bin/zsh', ['-lic', claudeCmd], {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,
