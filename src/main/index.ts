@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
 import { ptyManager } from './pty-manager'
+import { initAutoUpdater } from './auto-updater'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -41,7 +42,7 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.clave.app')
 
   if (process.platform === 'darwin') {
-    app.dock.setIcon(join(__dirname, '../../resources/icon.png'))
+    app.dock?.setIcon(join(__dirname, '../../resources/icon.png'))
   }
 
   app.on('browser-window-created', (_, window) => {
@@ -50,6 +51,7 @@ app.whenReady().then(() => {
 
   registerIpcHandlers()
   createWindow()
+  initAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
