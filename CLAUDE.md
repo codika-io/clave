@@ -81,6 +81,7 @@ The build requires Apple code signing. Credentials are expected in `.env` (not c
 
 ## Gotchas
 
+- **PATH resolution in packaged app (CRITICAL)**: Packaged Electron apps have a minimal `process.env.PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`). The user's full PATH (with homebrew, npm globals, etc.) must be resolved by spawning a login shell. `getLoginShellPath()` in `pty-manager.ts` handles this. **NEVER use `execSync` for this** — it runs through `/bin/sh` which expands `$PATH` before zsh starts, giving the minimal PATH. Always use `execFileSync('/bin/zsh', ['-lic', 'echo __PATH__$PATH'])` to call zsh directly so `$PATH` is expanded after zsh sources `.zprofile`/`.zshrc`. This is the root cause of `command not found: claude` in packaged builds.
 - electron-updater requires both a `zip` and `dmg` target in `electron-builder.yml` — the zip is used for silent background updates, the dmg is for fresh installs.
 - The repo must be public for electron-updater to check GitHub Releases without an auth token.
 - node-pty's `spawn-helper` binary needs +x permissions — handled by `postinstall` script
