@@ -1,5 +1,5 @@
 import * as pty from 'node-pty'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
 
 let loginShellPath: string | null = null
@@ -7,7 +7,7 @@ let loginShellPath: string | null = null
 function getLoginShellPath(): string {
   if (loginShellPath !== null) return loginShellPath
   try {
-    const output = execSync('/bin/zsh -lic "echo __PATH__$PATH"', { encoding: 'utf-8' })
+    const output = execFileSync('/bin/zsh', ['-lic', 'echo __PATH__$PATH'], { encoding: 'utf-8' })
     const marker = output.split('\n').find((l) => l.startsWith('__PATH__'))
     loginShellPath = marker ? marker.slice('__PATH__'.length) : process.env.PATH || ''
   } catch {
