@@ -32,6 +32,8 @@ const electronAPI = {
     }
   },
 
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+
   openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
 
   onUpdateDownloaded: (callback: (version: string) => void) => {

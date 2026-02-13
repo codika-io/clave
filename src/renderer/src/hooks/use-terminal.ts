@@ -82,7 +82,12 @@ export function useTerminal(sessionId: string) {
       cursorStyle: 'bar',
       allowTransparency: true,
       scrollback: 10000,
-      convertEol: true
+      convertEol: true,
+      linkHandler: {
+        activate: (_event, text) => {
+          window.electronAPI.openExternal(text)
+        }
+      }
     })
 
     const fitAddon = new FitAddon()

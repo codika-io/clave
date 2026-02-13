@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import { ptyManager } from './pty-manager'
 import { installUpdate } from './auto-updater'
 
@@ -45,6 +45,10 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('pty:list', () => {
     return ptyManager.getAllSessions()
+  })
+
+  ipcMain.handle('shell:openExternal', (_event, url: string) => {
+    return shell.openExternal(url)
   })
 
   ipcMain.handle('dialog:openFolder', async () => {
