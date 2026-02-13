@@ -32,7 +32,19 @@ const electronAPI = {
     }
   },
 
-  openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder')
+  openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
+
+  onUpdateDownloaded: (callback: (version: string) => void) => {
+    const channel = 'updater:update-downloaded'
+    const listener = (_event: Electron.IpcRendererEvent, version: string): void =>
+      callback(version)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  },
+
+  installUpdate: () => ipcRenderer.invoke('updater:install')
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

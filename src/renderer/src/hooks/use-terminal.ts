@@ -146,7 +146,80 @@ export function useTerminal(sessionId: string) {
     // Initial resize sync
     window.electronAPI.resizeSession(sessionId, terminal.cols, terminal.rows)
 
+    // Drag-and-drop file path insertion
+    // Use capture phase so we intercept before xterm's internal elements
+    const handleDragOver = (e: DragEvent): void => {
+      e.preventDefault()
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy'
+      }
+    }
+
+    const handleDrop = (e: DragEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (!e.dataTransfer) return
+
+      let paths: string[] = []
+
+      // 1. Files from native file manager (Finder, etc.)
+      if (e.dataTransfer.files.length > 0) {
+        paths = Array.from(e.dataTransfer.files)
+          .map((f) => (f as File & { path: string }).path)
+          .filter(Boolean)
+      }
+
+      // 2. text/uri-list (VS Code, other apps)
+      if (paths.length === 0) {
+        const uriList = e.dataTransfer.getData('text/uri-list')
+        if (uriList) {
+          paths = uriList
+            .split(/\r?\n/)
+            .filter((line) => line.trim() && !line.startsWith('#'))
+            .map((uri) => {
+              try {
+                const url = new URL(uri.trim())
+                if (url.protocol === 'file:') {
+                  return decodeURIComponent(url.pathname)
+                }
+              } catch {
+                // not a valid URL
+              }
+              return ''
+            })
+            .filter(Boolean)
+        }
+      }
+
+      // 3. text/plain fallback (file paths as plain text)
+      if (paths.length === 0) {
+        const text = e.dataTransfer.getData('text/plain')
+        if (text) {
+          paths = text
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l.startsWith('/') || l.startsWith('~'))
+        }
+      }
+
+      // Shell-escape and write to PTY
+      const escaped = paths
+        .filter(Boolean)
+        .map((p) => `'${p.replace(/'/g, "'\\''")}'`)
+
+      if (escaped.length > 0) {
+        window.electronAPI.writeSession(sessionId, escaped.join(' '))
+        terminal.focus()
+      }
+    }
+
+    container.addEventListener('dragover', handleDragOver, true)
+    container.addEventListener('drop', handleDrop, true)
+
     return () => {
+      container.removeEventListener('dragover', handleDragOver, true)
+      container.removeEventListener('drop', handleDrop, true)
       if (resizeTimer) clearTimeout(resizeTimer)
       inputDisposable.dispose()
       resizeDisposable.dispose()

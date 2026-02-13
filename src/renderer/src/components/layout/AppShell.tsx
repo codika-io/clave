@@ -4,6 +4,7 @@ import { useSessionStore } from '../../store/session-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
 import { ThemeToggle } from '../ui/ThemeToggle'
+import { UpdateToast } from '../ui/UpdateToast'
 
 const sidebarTransition = {
   duration: 0.2,
@@ -114,6 +115,8 @@ export function AppShell() {
         {/* Terminal grid */}
         <TerminalGrid />
       </div>
+
+      <UpdateToast />
     </div>
   )
 }

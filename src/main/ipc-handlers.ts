@@ -1,7 +1,12 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { ptyManager } from './pty-manager'
+import { installUpdate } from './auto-updater'
 
 export function registerIpcHandlers(): void {
+  ipcMain.handle('updater:install', () => {
+    installUpdate()
+  })
+
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean }) => {
     const session = ptyManager.spawn(cwd, options)
     const win = BrowserWindow.fromWebContents(_event.sender)

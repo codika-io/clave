@@ -14,6 +14,8 @@ export interface ElectronAPI {
   onSessionData: (id: string, callback: (data: string) => void) => () => void
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   openFolderDialog: () => Promise<string | null>
+  onUpdateDownloaded: (callback: (version: string) => void) => () => void
+  installUpdate: () => Promise<void>
 }
 
 declare global {

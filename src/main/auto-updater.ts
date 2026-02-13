@@ -1,4 +1,4 @@
-import { app, Notification } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
 export function initAutoUpdater(): void {
@@ -25,10 +25,10 @@ export function initAutoUpdater(): void {
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log(`[updater] Update downloaded: ${info.version}`)
-    new Notification({
-      title: 'Clave Update Ready',
-      body: `Version ${info.version} will be installed on next restart.`
-    }).show()
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('updater:update-downloaded', info.version)
+    }
   })
 
   autoUpdater.on('error', (err) => {
@@ -36,4 +36,8 @@ export function initAutoUpdater(): void {
   })
 
   setTimeout(() => autoUpdater.checkForUpdates(), 5000)
+}
+
+export function installUpdate(): void {
+  autoUpdater.quitAndInstall()
 }
