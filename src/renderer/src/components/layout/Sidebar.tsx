@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSessionStore } from '../../store/session-store'
+import { useBoardStore } from '../../store/board-store'
 import { SessionItem } from '../session/SessionItem'
 import { SessionGroupItem } from '../session/SessionGroupItem'
 import { ContextMenu } from '../ui/ContextMenu'
@@ -150,6 +151,31 @@ function DangerousToggle() {
   )
 }
 
+function SectionHeading({ title, collapsed, onToggle }: { title: string; collapsed: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center gap-1 px-4 pt-2 pb-1 flex-shrink-0"
+    >
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 10 10"
+        fill="none"
+        className={cn(
+          'text-text-tertiary transition-transform duration-150',
+          collapsed ? 'rotate-0' : 'rotate-90'
+        )}
+      >
+        <path d="M3 2.5L6.5 5L3 7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-widest">
+        {title}
+      </span>
+    </button>
+  )
+}
+
 export function Sidebar() {
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
@@ -164,6 +190,12 @@ export function Sidebar() {
   const moveItems = useSessionStore((s) => s.moveItems)
   const searchQuery = useSessionStore((s) => s.searchQuery)
   const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
+  const activeView = useSessionStore((s) => s.activeView)
+  const setActiveView = useSessionStore((s) => s.setActiveView)
+  const tasks = useBoardStore((s) => s.tasks)
+  const nonDoneCount = tasks.filter((t) => t.status !== 'done').length
+  const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -494,7 +526,7 @@ export function Sidebar() {
   return (
     <div className="flex flex-col h-full bg-surface-50 border-r border-border-subtle">
       {/* Search row with traffic-light offset */}
-      <div className="pt-11 px-3 pb-2 flex items-center gap-2">
+      <div className="pt-11 px-3 pb-2 flex items-center gap-2 flex-shrink-0">
         <div className="flex-1 relative">
           <svg
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
@@ -538,110 +570,151 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Session list */}
-      <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
-        {filteredSessions ? (
-          filteredSessions.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-text-tertiary">
-              No matching sessions
-            </div>
-          ) : (
-            filteredSessions.map((session) => (
-              <SessionItem
-                key={session.id}
-                session={session}
-                isSelected={selectedSessionIds.includes(session.id)}
-                onClick={(shiftKey) => selectSession(session.id, shiftKey)}
-                onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
-                forceEditing={renamingId === session.id}
-                onEditingDone={clearRenaming}
-              />
-            ))
-          )
-        ) : displayItems ? (
-          displayItems.map((item) => {
-            if (item.type === 'session') {
-              const session = sessions.find((s) => s.id === item.sessionId)
-              if (!session) return null
-              return (
-                <SessionItem
-                  key={session.id}
-                  session={session}
-                  isSelected={selectedSessionIds.includes(session.id)}
-                  onClick={(shiftKey) => selectSession(session.id, shiftKey)}
-                  onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
-                  forceEditing={renamingId === session.id}
-                  onEditingDone={clearRenaming}
-                  onDragStart={(e) => handleDragStart(e, session.id, false)}
-                  onDragOver={(e) => handleDragOver(e, session.id, false)}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  dropIndicator={getDropIndicator(session.id) as 'before' | 'after' | null}
-                  isDragging={draggingIds.includes(session.id)}
-                />
-              )
-            } else {
-              const group = groups.find((g) => g.id === item.groupId)
-              if (!group || group.sessionIds.length === 0) return null
-              const allGroupSelected =
-                group.sessionIds.length > 0 &&
-                group.sessionIds.every((id) => selectedSessionIds.includes(id))
-              return (
-                <div
-                  key={group.id}
-                  className={cn(
-                    'rounded-lg transition-colors',
-                    allGroupSelected && 'bg-surface-200'
-                  )}
-                >
-                  <SessionGroupItem
-                    group={group}
-                    onClick={(shiftKey) => handleGroupClick(group.id, shiftKey)}
-                    onContextMenu={(e) => handleGroupContextMenu(e, group.id)}
-                    allSelected={allGroupSelected}
-                    forceEditing={renamingId === group.id}
-                    onEditingDone={clearRenaming}
-                    onDragStart={(e) => handleDragStart(e, group.id, true)}
-                    onDragOver={(e) => handleDragOver(e, group.id, true)}
-                    onDrop={handleDrop}
-                    onDragEnd={handleDragEnd}
-                    dropIndicator={getDropIndicator(group.id)}
-                    isDragging={draggingIds.includes(group.id)}
-                  />
-                  {!group.collapsed && (
-                    <div className="pl-4">
-                      {group.sessionIds.map((sid) => {
-                        const session = sessions.find((s) => s.id === sid)
-                        if (!session) return null
-                        return (
-                          <SessionItem
-                            key={session.id}
-                            session={session}
-                            isSelected={selectedSessionIds.includes(session.id)}
-                            onClick={(shiftKey) => selectSession(session.id, shiftKey)}
-                            onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
-                            grouped
-                            groupSelected={allGroupSelected}
-                            forceEditing={renamingId === session.id}
-                            onEditingDone={clearRenaming}
-                            onDragStart={(e) => handleDragStart(e, session.id, false)}
-                            onDragOver={(e) => handleDragOver(e, session.id, false)}
-                            onDrop={handleDrop}
-                            onDragEnd={handleDragEnd}
-                            dropIndicator={
-                              getDropIndicator(session.id) as 'before' | 'after' | null
-                            }
-                            isDragging={draggingIds.includes(session.id)}
-                          />
-                        )
-                      })}
-                    </div>
-                  )}
+      {/* Scrollable sections area */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Sessions section */}
+        <SectionHeading title="Sessions" collapsed={sessionsCollapsed} onToggle={() => setSessionsCollapsed((c) => !c)} />
+        {!sessionsCollapsed && (
+          <div
+            className="overflow-y-auto px-2 space-y-0.5"
+            style={{ maxHeight: 'calc(75vh - 140px)' }}
+          >
+            {filteredSessions ? (
+              filteredSessions.length === 0 ? (
+                <div className="px-3 py-6 text-center text-xs text-text-tertiary">
+                  No matching sessions
                 </div>
+              ) : (
+                filteredSessions.map((session) => (
+                  <SessionItem
+                    key={session.id}
+                    session={session}
+                    isSelected={selectedSessionIds.includes(session.id)}
+                    onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                    onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                    forceEditing={renamingId === session.id}
+                    onEditingDone={clearRenaming}
+                  />
+                ))
               )
-            }
-          })
-        ) : null}
+            ) : displayItems ? (
+              displayItems.map((item) => {
+                if (item.type === 'session') {
+                  const session = sessions.find((s) => s.id === item.sessionId)
+                  if (!session) return null
+                  return (
+                    <SessionItem
+                      key={session.id}
+                      session={session}
+                      isSelected={selectedSessionIds.includes(session.id)}
+                      onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                      onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                      forceEditing={renamingId === session.id}
+                      onEditingDone={clearRenaming}
+                      onDragStart={(e) => handleDragStart(e, session.id, false)}
+                      onDragOver={(e) => handleDragOver(e, session.id, false)}
+                      onDrop={handleDrop}
+                      onDragEnd={handleDragEnd}
+                      dropIndicator={getDropIndicator(session.id) as 'before' | 'after' | null}
+                      isDragging={draggingIds.includes(session.id)}
+                    />
+                  )
+                } else {
+                  const group = groups.find((g) => g.id === item.groupId)
+                  if (!group || group.sessionIds.length === 0) return null
+                  const allGroupSelected =
+                    group.sessionIds.length > 0 &&
+                    group.sessionIds.every((id) => selectedSessionIds.includes(id))
+                  return (
+                    <div
+                      key={group.id}
+                      className={cn(
+                        'rounded-lg transition-colors',
+                        allGroupSelected && 'bg-surface-200'
+                      )}
+                    >
+                      <SessionGroupItem
+                        group={group}
+                        onClick={(shiftKey) => handleGroupClick(group.id, shiftKey)}
+                        onContextMenu={(e) => handleGroupContextMenu(e, group.id)}
+                        allSelected={allGroupSelected}
+                        forceEditing={renamingId === group.id}
+                        onEditingDone={clearRenaming}
+                        onDragStart={(e) => handleDragStart(e, group.id, true)}
+                        onDragOver={(e) => handleDragOver(e, group.id, true)}
+                        onDrop={handleDrop}
+                        onDragEnd={handleDragEnd}
+                        dropIndicator={getDropIndicator(group.id)}
+                        isDragging={draggingIds.includes(group.id)}
+                      />
+                      {!group.collapsed && (
+                        <div className="pl-4">
+                          {group.sessionIds.map((sid) => {
+                            const session = sessions.find((s) => s.id === sid)
+                            if (!session) return null
+                            return (
+                              <SessionItem
+                                key={session.id}
+                                session={session}
+                                isSelected={selectedSessionIds.includes(session.id)}
+                                onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                                onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                                grouped
+                                groupSelected={allGroupSelected}
+                                forceEditing={renamingId === session.id}
+                                onEditingDone={clearRenaming}
+                                onDragStart={(e) => handleDragStart(e, session.id, false)}
+                                onDragOver={(e) => handleDragOver(e, session.id, false)}
+                                onDrop={handleDrop}
+                                onDragEnd={handleDragEnd}
+                                dropIndicator={
+                                  getDropIndicator(session.id) as 'before' | 'after' | null
+                                }
+                                isDragging={draggingIds.includes(session.id)}
+                              />
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+              })
+            ) : null}
+          </div>
+        )}
+
+        {/* Workspace section */}
+        <SectionHeading title="Workspace" collapsed={workspaceCollapsed} onToggle={() => setWorkspaceCollapsed((c) => !c)} />
+        {!workspaceCollapsed && (
+          <div className="px-2 pt-0.5 space-y-0.5 flex-shrink-0">
+            <button
+              onClick={() => setActiveView('board')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                activeView === 'board'
+                  ? 'bg-surface-200 text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
+              )}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="flex-shrink-0">
+                <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.2" />
+                <line x1="5" y1="1.5" x2="5" y2="12.5" stroke="currentColor" strokeWidth="1.2" />
+                <line x1="9" y1="1.5" x2="9" y2="12.5" stroke="currentColor" strokeWidth="1.2" />
+                <line x1="1.5" y1="5" x2="12.5" y2="5" stroke="currentColor" strokeWidth="1.2" />
+              </svg>
+              <span>Board</span>
+              {nonDoneCount > 0 && (
+                <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/15 text-accent">
+                  {nonDoneCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Fills remaining space */}
+        <div className="flex-1" />
       </div>
 
       {/* Context menu */}

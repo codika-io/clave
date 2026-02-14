@@ -20,6 +20,8 @@ export interface SessionGroup {
   collapsed: boolean
 }
 
+export type ActiveView = 'terminals' | 'board'
+
 interface SessionState {
   sessions: Session[]
   focusedSessionId: string | null
@@ -32,6 +34,12 @@ interface SessionState {
   searchQuery: string
   claudeMode: boolean
   dangerousMode: boolean
+  filePaletteOpen: boolean
+  fileTreeOpen: boolean
+  fileTreeWidth: number
+  previewFile: string | null
+  previewSource: 'palette' | 'tree' | null
+  activeView: ActiveView
 
   addSession: (session: Session) => void
   removeSession: (id: string) => void
@@ -56,6 +64,12 @@ interface SessionState {
   setSearchQuery: (query: string) => void
   toggleClaudeMode: () => void
   toggleDangerousMode: () => void
+  toggleFilePalette: () => void
+  setFilePaletteOpen: (open: boolean) => void
+  toggleFileTree: () => void
+  setFileTreeWidth: (width: number) => void
+  setActiveView: (view: ActiveView) => void
+  setPreviewFile: (path: string | null, source?: 'palette' | 'tree') => void
 }
 
 let groupCounter = 0
@@ -94,6 +108,12 @@ export const useSessionStore = create<SessionState>((set) => ({
   searchQuery: '',
   claudeMode: true,
   dangerousMode: false,
+  filePaletteOpen: false,
+  fileTreeOpen: false,
+  fileTreeWidth: 240,
+  previewFile: null,
+  previewSource: null,
+  activeView: 'terminals' as ActiveView,
 
   addSession: (session) =>
     set((state) => ({
@@ -139,9 +159,9 @@ export const useSessionStore = create<SessionState>((set) => ({
           ? state.selectedSessionIds.filter((sid) => sid !== id)
           : [...state.selectedSessionIds, id]
         const focusedSessionId = isSelected ? (newSelected[0] ?? null) : id
-        return { selectedSessionIds: newSelected, focusedSessionId }
+        return { selectedSessionIds: newSelected, focusedSessionId, activeView: 'terminals' as ActiveView }
       }
-      return { selectedSessionIds: [id], focusedSessionId: id }
+      return { selectedSessionIds: [id], focusedSessionId: id, activeView: 'terminals' as ActiveView }
     }),
 
   selectSessions: (ids) =>
@@ -301,5 +321,18 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   toggleClaudeMode: () => set((state) => ({ claudeMode: !state.claudeMode })),
 
-  toggleDangerousMode: () => set((state) => ({ dangerousMode: !state.dangerousMode }))
+  toggleDangerousMode: () => set((state) => ({ dangerousMode: !state.dangerousMode })),
+
+  toggleFilePalette: () => set((state) => ({ filePaletteOpen: !state.filePaletteOpen })),
+
+  setFilePaletteOpen: (open) => set({ filePaletteOpen: open }),
+
+  toggleFileTree: () => set((state) => ({ fileTreeOpen: !state.fileTreeOpen })),
+
+  setFileTreeWidth: (width) => set({ fileTreeWidth: Math.max(180, Math.min(400, width)) }),
+
+  setActiveView: (view) => set({ activeView: view }),
+
+  setPreviewFile: (path, source) =>
+    set({ previewFile: path, previewSource: source ?? (path ? null : null) })
 }))

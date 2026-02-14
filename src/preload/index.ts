@@ -50,6 +50,21 @@ const electronAPI = {
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 
+  // File system
+  listFiles: (cwd: string) => ipcRenderer.invoke('fs:list-files', cwd),
+  readDir: (rootCwd: string, dirPath: string) =>
+    ipcRenderer.invoke('fs:read-dir', rootCwd, dirPath),
+  readFile: (rootCwd: string, filePath: string) =>
+    ipcRenderer.invoke('fs:read-file', rootCwd, filePath),
+  statFile: (rootCwd: string, filePath: string) =>
+    ipcRenderer.invoke('fs:stat', rootCwd, filePath),
+  showItemInFolder: (fullPath: string) =>
+    ipcRenderer.invoke('shell:showItemInFolder', fullPath),
+
+  // Board
+  boardLoad: () => ipcRenderer.invoke('board:load'),
+  boardSave: (data: unknown) => ipcRenderer.invoke('board:save', data),
+
   showNotification: (options: { title: string; body: string; sessionId: string }) =>
     ipcRenderer.invoke('notification:show', options),
 

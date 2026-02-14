@@ -58,11 +58,15 @@ class PtyManager {
       cols: 80,
       rows: 24,
       cwd,
-      env: {
-        ...getLoginShellEnv(),
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor'
-      }
+      env: (() => {
+        const env: Record<string, string> = {
+          ...getLoginShellEnv(),
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor'
+        }
+        delete env.CLAUDECODE
+        return env
+      })()
     })
 
     const session: PtySession = { id, cwd, folderName, ptyProcess, alive: true }

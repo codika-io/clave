@@ -5,6 +5,42 @@ export interface SessionInfo {
   alive: boolean
 }
 
+export interface DirEntry {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  size?: number
+}
+
+export interface FileStat {
+  type: 'file' | 'directory'
+  size: number
+  modified: number
+}
+
+export interface FileReadResult {
+  content: string
+  truncated: boolean
+  size: number
+  binary: boolean
+}
+
+export interface BoardTask {
+  id: string
+  title: string
+  prompt: string
+  cwd: string
+  status: 'todo' | 'processing' | 'done'
+  sessionId: string | null
+  createdAt: number
+  updatedAt: number
+  order: number
+}
+
+export interface BoardData {
+  tasks: BoardTask[]
+}
+
 export interface ElectronAPI {
   spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
@@ -20,6 +56,13 @@ export interface ElectronAPI {
   getPathForFile: (file: File) => string
   showNotification: (options: { title: string; body: string; sessionId: string }) => Promise<void>
   onNotificationClicked: (callback: (sessionId: string) => void) => () => void
+  listFiles: (cwd: string) => Promise<{ files: string[]; truncated: boolean }>
+  readDir: (rootCwd: string, dirPath: string) => Promise<DirEntry[]>
+  readFile: (rootCwd: string, filePath: string) => Promise<FileReadResult>
+  statFile: (rootCwd: string, filePath: string) => Promise<FileStat>
+  showItemInFolder: (fullPath: string) => Promise<void>
+  boardLoad: () => Promise<BoardData>
+  boardSave: (data: BoardData) => Promise<void>
 }
 
 declare global {

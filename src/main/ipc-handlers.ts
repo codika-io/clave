@@ -1,10 +1,31 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import { ptyManager } from './pty-manager'
 import { installUpdate } from './auto-updater'
+import { fileManager } from './file-manager'
+import { boardManager } from './board-manager'
 
 export function registerIpcHandlers(): void {
+  // Board handlers
+  ipcMain.handle('board:load', () => boardManager.load())
+  ipcMain.handle('board:save', (_event, data) => boardManager.save(data))
+
   ipcMain.handle('updater:install', () => {
     installUpdate()
+  })
+
+  // File system handlers
+  ipcMain.handle('fs:list-files', (_event, cwd: string) => fileManager.listFiles(cwd))
+  ipcMain.handle('fs:read-dir', (_event, rootCwd: string, dirPath: string) =>
+    fileManager.readDir(rootCwd, dirPath)
+  )
+  ipcMain.handle('fs:read-file', (_event, rootCwd: string, filePath: string) =>
+    fileManager.readFile(rootCwd, filePath)
+  )
+  ipcMain.handle('fs:stat', (_event, rootCwd: string, filePath: string) =>
+    fileManager.stat(rootCwd, filePath)
+  )
+  ipcMain.handle('shell:showItemInFolder', (_event, fullPath: string) => {
+    shell.showItemInFolder(fullPath)
   })
 
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) => {

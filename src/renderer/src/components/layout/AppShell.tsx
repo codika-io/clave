@@ -3,8 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useSessionStore } from '../../store/session-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
+import { KanbanBoard } from '../board/KanbanBoard'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { UpdateToast } from '../ui/UpdateToast'
+import { FilePalette } from '../files/FilePalette'
+import { FileTree } from '../files/FileTree'
+import { FilePreview } from '../files/FilePreview'
 
 const sidebarTransition = {
   duration: 0.2,
@@ -17,8 +21,17 @@ export function AppShell() {
   const toggleSidebar = useSessionStore((s) => s.toggleSidebar)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const theme = useSessionStore((s) => s.theme)
+  const toggleFilePalette = useSessionStore((s) => s.toggleFilePalette)
+  const fileTreeOpen = useSessionStore((s) => s.fileTreeOpen)
+  const fileTreeWidth = useSessionStore((s) => s.fileTreeWidth)
+  const toggleFileTree = useSessionStore((s) => s.toggleFileTree)
+  const setFileTreeWidth = useSessionStore((s) => s.setFileTreeWidth)
+  const activeView = useSessionStore((s) => s.activeView)
+  const previewFile = useSessionStore((s) => s.previewFile)
+  const previewSource = useSessionStore((s) => s.previewSource)
 
   const isResizing = useRef(false)
+  const isResizingTree = useRef(false)
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -45,6 +58,48 @@ export function AppShell() {
     },
     [setSidebarWidth]
   )
+
+  const handleTreeResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      isResizingTree.current = true
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!isResizingTree.current) return
+        setFileTreeWidth(window.innerWidth - ev.clientX)
+      }
+
+      const onMouseUp = () => {
+        isResizingTree.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        window.removeEventListener('mousemove', onMouseMove)
+        window.removeEventListener('mouseup', onMouseUp)
+      }
+
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('mouseup', onMouseUp)
+    },
+    [setFileTreeWidth]
+  )
+
+  // Keyboard shortcuts: Cmd+P (palette), Cmd+E (file tree)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key === 'p') {
+        e.preventDefault()
+        toggleFilePalette()
+      }
+      if (e.metaKey && e.key === 'e') {
+        e.preventDefault()
+        toggleFileTree()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [toggleFilePalette, toggleFileTree])
 
   // Sync data-theme attribute to root element
   useEffect(() => {
@@ -116,14 +171,68 @@ export function AppShell() {
             className="flex items-center gap-2"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            {/* File palette button */}
+            <button
+              onClick={toggleFilePalette}
+              className="p-1.5 rounded-md hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors"
+              title="Search files (Cmd+P)"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+            {/* File tree button */}
+            <button
+              onClick={toggleFileTree}
+              className={`p-1.5 rounded-md hover:bg-surface-200 transition-colors ${
+                fileTreeOpen ? 'text-accent' : 'text-text-secondary hover:text-text-primary'
+              }`}
+              title="File tree (Cmd+E)"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                <line x1="10.5" y1="2" x2="10.5" y2="14" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </button>
             <ThemeToggle />
           </div>
         </div>
 
-        {/* Terminal grid */}
-        <TerminalGrid />
+        {/* Main content: both views always mounted, toggled via display */}
+        <div className="flex-1 flex min-h-0">
+          {/* Board view — hidden but stays mounted */}
+          <div className={activeView === 'board' ? 'flex-1 flex min-h-0' : 'hidden'}>
+            <KanbanBoard />
+          </div>
+
+          {/* Terminal grid + file tree — hidden but stays mounted */}
+          <div className={activeView === 'terminals' ? 'flex-1 flex min-h-0' : 'hidden'}>
+            <TerminalGrid />
+            <AnimatePresence initial={false}>
+              {fileTreeOpen && (
+                <motion.div
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: fileTreeWidth, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  transition={sidebarTransition}
+                  className="flex-shrink-0 overflow-hidden relative"
+                >
+                  {/* Resize handle */}
+                  <div
+                    onMouseDown={handleTreeResizeStart}
+                    className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/40 active:bg-accent/60 transition-colors z-10"
+                  />
+                  <FileTree />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
 
+      <FilePalette />
+      {previewFile && previewSource === 'tree' && <FilePreview />}
       <UpdateToast />
     </div>
   )

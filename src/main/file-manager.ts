@@ -1,0 +1,150 @@
+import * as fs from 'fs/promises'
+import * as path from 'path'
+import fg from 'fast-glob'
+
+const ALWAYS_IGNORE = [
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '__pycache__',
+  '.next',
+  '.svelte-kit',
+  '.DS_Store',
+  'coverage',
+  '.cache'
+]
+
+const MAX_FILES = 50_000
+const MAX_FILE_SIZE = 1024 * 1024 // 1MB
+
+export interface DirEntry {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  size?: number
+}
+
+export interface FileStat {
+  type: 'file' | 'directory'
+  size: number
+  modified: number
+}
+
+export interface FileReadResult {
+  content: string
+  truncated: boolean
+  size: number
+  binary: boolean
+}
+
+function validatePath(rootCwd: string, requestedPath: string): string {
+  const resolved = path.resolve(rootCwd, requestedPath)
+  if (!resolved.startsWith(rootCwd)) {
+    throw new Error('Path traversal detected')
+  }
+  return resolved
+}
+
+class FileManager {
+  async listFiles(cwd: string): Promise<{ files: string[]; truncated: boolean }> {
+    const files = await fg('**/*', {
+      cwd,
+      dot: false,
+      ignore: ALWAYS_IGNORE.map((p) => `**/${p}/**`),
+      onlyFiles: true,
+      followSymbolicLinks: false
+    })
+
+    const truncated = files.length >= MAX_FILES
+    return {
+      files: files.slice(0, MAX_FILES).sort(),
+      truncated
+    }
+  }
+
+  async readDir(rootCwd: string, dirPath: string): Promise<DirEntry[]> {
+    const resolved = validatePath(rootCwd, dirPath)
+    const entries = await fs.readdir(resolved, { withFileTypes: true })
+
+    const filtered = entries.filter((e) => {
+      if (ALWAYS_IGNORE.includes(e.name)) return false
+      return true
+    })
+
+    const results: DirEntry[] = []
+    for (const entry of filtered) {
+      const entryPath = path.join(dirPath === '.' ? '' : dirPath, entry.name)
+      const result: DirEntry = {
+        name: entry.name,
+        path: entryPath,
+        type: entry.isDirectory() ? 'directory' : 'file'
+      }
+      if (entry.isFile()) {
+        try {
+          const stat = await fs.stat(path.join(resolved, entry.name))
+          result.size = stat.size
+        } catch {
+          // skip stat errors
+        }
+      }
+      results.push(result)
+    }
+
+    // Sort: folders first, then alphabetical case-insensitive
+    results.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    })
+
+    return results
+  }
+
+  async readFile(rootCwd: string, filePath: string): Promise<FileReadResult> {
+    const resolved = validatePath(rootCwd, filePath)
+    const stat = await fs.stat(resolved)
+
+    if (stat.isDirectory()) {
+      throw new Error('Cannot read a directory')
+    }
+
+    // Check for binary by reading first 8KB
+    const fd = await fs.open(resolved, 'r')
+    try {
+      const probe = Buffer.alloc(Math.min(8192, stat.size))
+      const { bytesRead } = await fd.read(probe, 0, probe.length, 0)
+      const isBinary = probe.subarray(0, bytesRead).includes(0)
+
+      if (isBinary) {
+        return { content: '', truncated: false, size: stat.size, binary: true }
+      }
+    } finally {
+      await fd.close()
+    }
+
+    const truncated = stat.size > MAX_FILE_SIZE
+    const content = await fs.readFile(resolved, {
+      encoding: 'utf-8',
+      flag: 'r'
+    })
+
+    return {
+      content: truncated ? content.slice(0, MAX_FILE_SIZE) : content,
+      truncated,
+      size: stat.size,
+      binary: false
+    }
+  }
+
+  async stat(rootCwd: string, filePath: string): Promise<FileStat> {
+    const resolved = validatePath(rootCwd, filePath)
+    const s = await fs.stat(resolved)
+    return {
+      type: s.isDirectory() ? 'directory' : 'file',
+      size: s.size,
+      modified: s.mtimeMs
+    }
+  }
+}
+
+export const fileManager = new FileManager()

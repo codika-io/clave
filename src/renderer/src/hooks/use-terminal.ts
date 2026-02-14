@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { useSessionStore, type Theme } from '../store/session-store'
+import { shellEscape } from '../lib/shell'
 import '@xterm/xterm/css/xterm.css'
 
 // eslint-disable-next-line no-control-regex
@@ -293,7 +294,7 @@ export function useTerminal(sessionId: string) {
       // Shell-escape and write to PTY
       const escaped = paths
         .filter(Boolean)
-        .map((p) => `'${p.replace(/'/g, "'\\''")}'`)
+        .map((p) => shellEscape(p))
 
       if (escaped.length > 0) {
         window.electronAPI.writeSession(sessionId, escaped.join(' '))
