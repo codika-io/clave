@@ -21,7 +21,8 @@ export function NewSessionButton() {
         folderName: sessionInfo.folderName,
         name: sessionInfo.folderName,
         alive: sessionInfo.alive,
-        activityStatus: 'idle'
+        activityStatus: 'idle',
+        promptWaiting: null
       })
     } catch (err) {
       console.error('Failed to create session:', err)

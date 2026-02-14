@@ -11,6 +11,7 @@ export interface Session {
   name: string
   alive: boolean
   activityStatus: ActivityStatus
+  promptWaiting: string | null
 }
 
 export interface SessionGroup {
@@ -60,6 +61,7 @@ interface SessionState {
   toggleTheme: () => void
   updateSessionAlive: (id: string, alive: boolean) => void
   setSessionActivity: (id: string, status: ActivityStatus) => void
+  setSessionPromptWaiting: (id: string, promptType: string | null) => void
   renameSession: (id: string, name: string) => void
   setSearchQuery: (query: string) => void
   toggleClaudeMode: () => void
@@ -309,6 +311,13 @@ export const useSessionStore = create<SessionState>((set) => ({
         sessions: state.sessions.map((s) => (s.id === id ? { ...s, activityStatus: status } : s))
       }
     }),
+
+  setSessionPromptWaiting: (id, promptType) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === id ? { ...s, promptWaiting: promptType } : s
+      )
+    })),
 
   renameSession: (id, name) =>
     set((state) => ({

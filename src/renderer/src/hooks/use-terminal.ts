@@ -148,12 +148,13 @@ export function useTerminal(sessionId: string) {
     let activityTimer: ReturnType<typeof setTimeout> | null = null
     let notificationTimer: ReturnType<typeof setTimeout> | null = null
     let outputBuffer = ''
-    const { setSessionActivity, updateSessionAlive } = useSessionStore.getState()
+    const { setSessionActivity, setSessionPromptWaiting, updateSessionAlive } = useSessionStore.getState()
 
     // Wire PTY output -> terminal
     const cleanupData = window.electronAPI.onSessionData(sessionId, (data) => {
       terminal.write(data)
       setSessionActivity(sessionId, 'active')
+      setSessionPromptWaiting(sessionId, null)
 
       // Append stripped data to rolling buffer (max 500 chars)
       outputBuffer = (outputBuffer + stripAnsi(data)).slice(-500)
@@ -169,6 +170,7 @@ export function useTerminal(sessionId: string) {
 
         // Check for prompt patterns after idle detection
         const promptType = detectPrompt(outputBuffer)
+        setSessionPromptWaiting(sessionId, promptType)
         console.log('[notification] Idle detected, prompt check:', promptType, '| buffer tail:', outputBuffer.slice(-100))
         if (promptType) {
           notificationTimer = setTimeout(() => {

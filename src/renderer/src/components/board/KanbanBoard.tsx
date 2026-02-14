@@ -81,7 +81,8 @@ export function KanbanBoard() {
         folderName: sessionInfo.folderName,
         name: task.title,
         alive: sessionInfo.alive,
-        activityStatus: 'idle'
+        activityStatus: 'idle',
+        promptWaiting: null
       })
 
       linkSession(task.id, sessionInfo.id)
@@ -157,12 +158,18 @@ export function KanbanBoard() {
       // Intercept processing → done when task has a linked session
       if (newStatus === 'done' && task.status === 'processing' && task.sessionId) {
         const session = sessions.find((s) => s.id === task.sessionId)
-        if (session?.alive) {
-          // Session still running — ask for confirmation
+        // Only confirm if the session is actively generating output or waiting
+        // for a specific prompt (permission/question). If Claude is idle with no
+        // prompt (i.e. task is done, waiting for new user input), skip confirmation.
+        const isActivelyWorking =
+          session?.alive &&
+          (session.activityStatus === 'active' || session.promptWaiting !== null)
+        if (isActivelyWorking) {
+          // Session actively working — ask for confirmation
           setPendingDoneTask({ taskId, sessionId: task.sessionId, order: newOrder })
           return
         }
-        // Session already dead — clean up silently and move
+        // Session dead or idle without prompt — clean up silently and move
         cleanupSession(task.sessionId)
         moveTask(taskId, 'done')
         reorderTask(taskId, newOrder)

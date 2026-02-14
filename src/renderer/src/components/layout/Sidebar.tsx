@@ -223,7 +223,8 @@ export function Sidebar() {
         folderName: sessionInfo.folderName,
         name: sessionInfo.folderName,
         alive: sessionInfo.alive,
-        activityStatus: 'idle'
+        activityStatus: 'idle',
+        promptWaiting: null
       })
     } catch (err) {
       console.error('Failed to create session:', err)
@@ -691,7 +692,7 @@ export function Sidebar() {
             <button
               onClick={() => setActiveView('board')}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-medium transition-colors',
+                'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors',
                 activeView === 'board'
                   ? 'bg-surface-200 text-text-primary'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'

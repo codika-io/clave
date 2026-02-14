@@ -186,11 +186,11 @@ export function SessionItem({
             onBlur={commitRename}
             onKeyDown={handleInputKeyDown}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 min-w-0 bg-transparent text-xs font-medium text-text-primary outline-none border-none"
+            className="flex-1 min-w-0 bg-transparent text-sm font-medium text-text-primary outline-none border-none"
           />
         ) : (
           <div className="flex-1 min-w-0" onDoubleClick={handleDoubleClick}>
-            <span className="block text-xs font-medium truncate">{session.name}</span>
+            <span className="block text-sm font-medium truncate">{session.name}</span>
             <span className="block text-[10px] leading-tight text-text-tertiary truncate">
               {session.cwd.replace(/^\/Users\/[^/]+/, '~')}
             </span>
