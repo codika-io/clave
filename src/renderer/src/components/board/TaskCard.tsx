@@ -100,15 +100,15 @@ export function TaskCard({
 
         <div className="flex items-start gap-2">
           {/* Status indicator */}
-          <div className="mt-0.5 flex-shrink-0">
+          <div className="flex-shrink-0">
             {task.status === 'todo' && (
-              <div className="w-3 h-3 rounded-full border-2 border-text-tertiary" />
+              <div className="w-2 h-2 mt-[6px] rounded-full border-[1.5px] border-text-tertiary" />
             )}
             {task.status === 'processing' && (
-              <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+              <div className="w-2 h-2 mt-[6px] rounded-full bg-green-500 animate-pulse" />
             )}
             {task.status === 'done' && (
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-green-500">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="mt-1 text-green-500">
                 <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.5" />
                 <path d="M4.5 7l2 2 3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>

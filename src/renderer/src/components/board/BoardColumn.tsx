@@ -120,6 +120,16 @@ export function BoardColumn({
         <span className="text-[11px] text-text-tertiary font-medium ml-1">
           {tasks.length}
         </span>
+        {onNewTask && (
+          <button
+            onClick={onNewTask}
+            className="ml-auto p-1 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Tasks */}
@@ -148,20 +158,6 @@ export function BoardColumn({
         )}
       </div>
 
-      {/* New task button for todo column */}
-      {onNewTask && (
-        <div className="p-2 border-t border-border-subtle">
-          <button
-            onClick={onNewTask}
-            className="w-full h-8 flex items-center justify-center gap-1.5 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-surface-200 transition-colors"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            New Task
-          </button>
-        </div>
-      )}
     </div>
   )
 }

@@ -129,7 +129,7 @@ export function SessionItem({
         onContextMenu={onContextMenu}
         onKeyDown={handleButtonKeyDown}
         className={cn(
-          'w-full flex items-center gap-2.5 py-1.5 rounded-lg text-left transition-colors outline-none',
+          'w-full flex items-center gap-2 py-1 rounded-lg text-left transition-colors outline-none',
           grouped ? 'pl-7 pr-3' : 'px-3',
           groupSelected
             ? 'text-text-primary'
@@ -186,12 +186,12 @@ export function SessionItem({
             onBlur={commitRename}
             onKeyDown={handleInputKeyDown}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 min-w-0 bg-transparent text-sm font-medium text-text-primary outline-none border-none"
+            className="flex-1 min-w-0 bg-transparent text-xs font-medium text-text-primary outline-none border-none"
           />
         ) : (
           <div className="flex-1 min-w-0" onDoubleClick={handleDoubleClick}>
-            <span className="block text-sm font-medium truncate">{session.name}</span>
-            <span className="block text-[11px] leading-tight text-text-tertiary truncate">
+            <span className="block text-xs font-medium truncate">{session.name}</span>
+            <span className="block text-[10px] leading-tight text-text-tertiary truncate">
               {session.cwd.replace(/^\/Users\/[^/]+/, '~')}
             </span>
           </div>

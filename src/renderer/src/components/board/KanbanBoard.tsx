@@ -4,6 +4,7 @@ import { useSessionStore } from '../../store/session-store'
 import { useBoardPersistence, useBoardAutoComplete } from '../../hooks/use-board-persistence'
 import { BoardColumn } from './BoardColumn'
 import { TaskForm } from './TaskForm'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { cn } from '../../lib/utils'
 import type { BoardTask } from '../../../../preload/index.d'
 
@@ -15,10 +16,17 @@ export function KanbanBoard() {
   const linkSession = useBoardStore((s) => s.linkSession)
   const reorderTask = useBoardStore((s) => s.reorderTask)
 
+  const sessions = useSessionStore((s) => s.sessions)
   const addSession = useSessionStore((s) => s.addSession)
+  const removeSession = useSessionStore((s) => s.removeSession)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editTask, setEditTask] = useState<BoardTask | null>(null)
+  const [pendingDoneTask, setPendingDoneTask] = useState<{
+    taskId: string
+    sessionId: string
+    order: number
+  } | null>(null)
 
   useBoardPersistence()
   useBoardAutoComplete()
@@ -116,17 +124,57 @@ export function KanbanBoard() {
     [addSession, linkSession, moveTask]
   )
 
+  const cleanupSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        await window.electronAPI?.killSession(sessionId)
+      } catch {
+        // session may already be dead
+      }
+      removeSession(sessionId)
+    },
+    [removeSession]
+  )
+
+  const handleConfirmDone = useCallback(async () => {
+    if (!pendingDoneTask) return
+    const { taskId, sessionId, order } = pendingDoneTask
+    await cleanupSession(sessionId)
+    moveTask(taskId, 'done')
+    reorderTask(taskId, order)
+    setPendingDoneTask(null)
+  }, [pendingDoneTask, cleanupSession, moveTask, reorderTask])
+
+  const handleCancelDone = useCallback(() => {
+    setPendingDoneTask(null)
+  }, [])
+
   const handleReorder = useCallback(
     (taskId: string, newOrder: number, newStatus: BoardTask['status']) => {
       const task = tasks.find((t) => t.id === taskId)
       if (!task) return
+
+      // Intercept processing → done when task has a linked session
+      if (newStatus === 'done' && task.status === 'processing' && task.sessionId) {
+        const session = sessions.find((s) => s.id === task.sessionId)
+        if (session?.alive) {
+          // Session still running — ask for confirmation
+          setPendingDoneTask({ taskId, sessionId: task.sessionId, order: newOrder })
+          return
+        }
+        // Session already dead — clean up silently and move
+        cleanupSession(task.sessionId)
+        moveTask(taskId, 'done')
+        reorderTask(taskId, newOrder)
+        return
+      }
 
       if (task.status !== newStatus) {
         moveTask(taskId, newStatus)
       }
       reorderTask(taskId, newOrder)
     },
-    [tasks, moveTask, reorderTask]
+    [tasks, sessions, moveTask, reorderTask, cleanupSession]
   )
 
   return (
@@ -167,7 +215,7 @@ export function KanbanBoard() {
       )}
 
       {/* Columns */}
-      <div className="flex-1 flex gap-4 p-4 overflow-x-auto min-h-0">
+      <div className="flex-1 flex justify-center gap-4 p-4 overflow-x-auto min-h-0">
         <BoardColumn
           title="Todo"
           status="todo"
@@ -197,6 +245,14 @@ export function KanbanBoard() {
         isOpen={formOpen}
         onClose={handleCloseForm}
         editTask={editTask}
+      />
+
+      <ConfirmDialog
+        isOpen={!!pendingDoneTask}
+        onConfirm={handleConfirmDone}
+        onCancel={handleCancelDone}
+        title="Complete task"
+        message="The linked session is still running. Completing this task will kill the session. Are you sure?"
       />
     </div>
   )

@@ -691,18 +691,20 @@ export function Sidebar() {
             <button
               onClick={() => setActiveView('board')}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-medium transition-colors',
                 activeView === 'board'
                   ? 'bg-surface-200 text-text-primary'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
               )}
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="flex-shrink-0">
-                <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.2" />
-                <line x1="5" y1="1.5" x2="5" y2="12.5" stroke="currentColor" strokeWidth="1.2" />
-                <line x1="9" y1="1.5" x2="9" y2="12.5" stroke="currentColor" strokeWidth="1.2" />
-                <line x1="1.5" y1="5" x2="12.5" y2="5" stroke="currentColor" strokeWidth="1.2" />
-              </svg>
+              <span className="relative flex-shrink-0 w-4 h-4">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-text-tertiary">
+                  <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.2" />
+                  <line x1="5.5" y1="1.5" x2="5.5" y2="14.5" stroke="currentColor" strokeWidth="1.2" />
+                  <line x1="10.5" y1="1.5" x2="10.5" y2="14.5" stroke="currentColor" strokeWidth="1.2" />
+                  <line x1="1.5" y1="6" x2="14.5" y2="6" stroke="currentColor" strokeWidth="1.2" />
+                </svg>
+              </span>
               <span>Board</span>
               {nonDoneCount > 0 && (
                 <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/15 text-accent">
