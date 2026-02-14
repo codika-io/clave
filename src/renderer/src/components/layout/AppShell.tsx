@@ -51,6 +51,14 @@ export function AppShell() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
+  // Handle notification click → switch to session
+  useEffect(() => {
+    if (!window.electronAPI?.onNotificationClicked) return
+    return window.electronAPI.onNotificationClicked((sessionId) => {
+      useSessionStore.getState().selectSession(sessionId, false)
+    })
+  }, [])
+
   return (
     <div className="flex h-screen w-screen bg-surface-0 overflow-hidden transition-colors duration-200">
       {/* Sidebar */}

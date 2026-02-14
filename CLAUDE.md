@@ -93,3 +93,4 @@ The build requires Apple code signing. Credentials are expected in `.env` (not c
 ## Rules
 
 - When using the Playwright MCP server to take screenshots, always delete the screenshot files after you are done using them. Do not leave screenshot files in the repository.
+- After implementing UI or renderer changes, always verify them with Playwright MCP: start `npm run dev`, navigate to the renderer URL (check dev server output for the port), take a snapshot, and check console for errors. This catches runtime issues that typecheck alone misses (e.g. missing guards for `window.electronAPI` which is only available inside Electron, not in a plain browser).

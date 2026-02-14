@@ -17,6 +17,9 @@ export interface ElectronAPI {
   openFolderDialog: () => Promise<string | null>
   onUpdateDownloaded: (callback: (version: string) => void) => () => void
   installUpdate: () => Promise<void>
+  getPathForFile: (file: File) => string
+  showNotification: (options: { title: string; body: string; sessionId: string }) => Promise<void>
+  onNotificationClicked: (callback: (sessionId: string) => void) => () => void
 }
 
 declare global {

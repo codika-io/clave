@@ -169,8 +169,11 @@ export function SessionItem({
           <span
             className={cn(
               'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-surface-50',
-              session.alive ? 'bg-status-active' : 'bg-status-inactive'
+              session.activityStatus === 'active' && 'bg-status-active',
+              session.activityStatus === 'idle' && 'bg-status-waiting',
+              session.activityStatus === 'ended' && 'bg-status-inactive'
             )}
+            style={session.activityStatus === 'active' ? { animation: 'pulse-dot 1.5s ease-in-out infinite' } : undefined}
           />
         </span>
 

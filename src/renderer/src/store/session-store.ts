@@ -2,12 +2,15 @@ import { create } from 'zustand'
 
 export type Theme = 'dark' | 'light'
 
+export type ActivityStatus = 'active' | 'idle' | 'ended'
+
 export interface Session {
   id: string
   cwd: string
   folderName: string
   name: string
   alive: boolean
+  activityStatus: ActivityStatus
 }
 
 export interface SessionGroup {
@@ -48,6 +51,7 @@ interface SessionState {
   setSidebarWidth: (width: number) => void
   toggleTheme: () => void
   updateSessionAlive: (id: string, alive: boolean) => void
+  setSessionActivity: (id: string, status: ActivityStatus) => void
   renameSession: (id: string, name: string) => void
   setSearchQuery: (query: string) => void
   toggleClaudeMode: () => void
@@ -86,7 +90,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   displayOrder: [],
   sidebarOpen: true,
   sidebarWidth: 260,
-  theme: 'dark',
+  theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   searchQuery: '',
   claudeMode: true,
   dangerousMode: false,
@@ -272,8 +276,19 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   updateSessionAlive: (id, alive) =>
     set((state) => ({
-      sessions: state.sessions.map((s) => (s.id === id ? { ...s, alive } : s))
+      sessions: state.sessions.map((s) =>
+        s.id === id ? { ...s, alive, ...(!alive && { activityStatus: 'ended' as const }) } : s
+      )
     })),
+
+  setSessionActivity: (id, status) =>
+    set((state) => {
+      const session = state.sessions.find((s) => s.id === id)
+      if (!session || session.activityStatus === status) return state
+      return {
+        sessions: state.sessions.map((s) => (s.id === id ? { ...s, activityStatus: status } : s))
+      }
+    }),
 
   renameSession: (id, name) =>
     set((state) => ({

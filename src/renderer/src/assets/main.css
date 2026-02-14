@@ -22,6 +22,7 @@
   --color-accent-hover: oklch(0.7 0.22 265);
 
   --color-status-active: #22c55e;
+  --color-status-waiting: #f59e0b;
   --color-status-inactive: #6b7280;
 
   --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -78,6 +79,11 @@
   --claude-toggle-bg: rgba(0, 0, 0, 0.06);
   --claude-toggle-active: rgba(217, 119, 87, 0.15);
   --claude-toggle-glow: rgba(217, 119, 87, 0.18);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 @keyframes fade-in {

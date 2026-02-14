@@ -22,6 +22,9 @@ Thumbs.db
 .playwright-mcp/
 .mcp.json
 
+# Planning docs
+next-features.md
+
 # Environment variables
 .env
 .certificates*

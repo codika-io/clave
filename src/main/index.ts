@@ -1,9 +1,10 @@
-import { app, BrowserWindow, shell, nativeImage } from 'electron'
+import { app, BrowserWindow, shell, nativeImage, nativeTheme } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
 import { ptyManager } from './pty-manager'
 import { initAutoUpdater } from './auto-updater'
+import { initNotificationManager } from './notification-manager'
 
 function createWindow(): void {
   const icon = nativeImage.createFromPath(join(__dirname, '../../resources/icon.png'))
@@ -15,7 +16,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     icon,
-    backgroundColor: '#000000',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#ffffff',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
     vibrancy: undefined,
@@ -53,6 +54,7 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
+  initNotificationManager()
   createWindow()
   initAutoUpdater()
 

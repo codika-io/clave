@@ -23,8 +23,11 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full flex-shrink-0',
-            session.alive ? 'bg-status-active' : 'bg-status-inactive'
+            session.activityStatus === 'active' && 'bg-status-active',
+            session.activityStatus === 'idle' && 'bg-status-waiting',
+            session.activityStatus === 'ended' && 'bg-status-inactive'
           )}
+          style={session.activityStatus === 'active' ? { animation: 'pulse-dot 1.5s ease-in-out infinite' } : undefined}
         />
         <span className="text-xs font-medium text-text-secondary truncate">{session.name}</span>
       </div>

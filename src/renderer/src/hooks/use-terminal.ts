@@ -4,6 +4,38 @@ import { FitAddon } from '@xterm/addon-fit'
 import { useSessionStore, type Theme } from '../store/session-store'
 import '@xterm/xterm/css/xterm.css'
 
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nq-uy=><~]/g
+
+function stripAnsi(str: string): string {
+  return str.replace(ANSI_RE, '')
+}
+
+function detectPrompt(buffer: string): string | null {
+  // Collapse whitespace for matching (ANSI stripping removes cursor positioning,
+  // leaving words glued together or with inconsistent spacing)
+  const tail = buffer.slice(-500)
+  // Claude Code permission/action prompt: keyboard hints at the bottom
+  // After ANSI strip these appear as "Esctocancel", "Tabtoamend", etc.
+  if (/Esc.*cancel/i.test(tail)) return 'is asking for permission'
+  // Legacy/alternative: "Allow" and "Deny" buttons
+  if (/Allow/i.test(tail) && /Deny/i.test(tail)) return 'is asking for permission'
+  // Explicit yes/no confirmation
+  if (/\(Y\/n\)|\[Y\/n\]|\(y\/N\)|\[y\/N\]/i.test(tail)) return 'is asking a question'
+  // "Do you want to proceed?" style prompts (line ending with ?)
+  // Exclude Claude's "? for shortcuts" hint line and single-char artifact lines
+  const lines = tail.split(/\r?\n/).filter((l) => {
+    const trimmed = l.trim()
+    return (
+      trimmed.length > 3 &&
+      !/^\?\s*(for\s+)?shortcuts/i.test(trimmed) &&
+      !/^[?]$/.test(trimmed)
+    )
+  })
+  if (lines.length > 0 && lines[lines.length - 1].trimEnd().endsWith('?')) return 'is asking a question'
+  return null
+}
+
 const DARK_THEME = {
   background: '#0a0a0a',
   foreground: 'rgba(255, 255, 255, 0.9)',
@@ -111,14 +143,64 @@ export function useTerminal(sessionId: string) {
       window.electronAPI.resizeSession(sessionId, cols, rows)
     })
 
+    // Activity tracking: debounce from active → idle after 2s of silence
+    let activityTimer: ReturnType<typeof setTimeout> | null = null
+    let notificationTimer: ReturnType<typeof setTimeout> | null = null
+    let outputBuffer = ''
+    const { setSessionActivity, updateSessionAlive } = useSessionStore.getState()
+
     // Wire PTY output -> terminal
     const cleanupData = window.electronAPI.onSessionData(sessionId, (data) => {
       terminal.write(data)
+      setSessionActivity(sessionId, 'active')
+
+      // Append stripped data to rolling buffer (max 500 chars)
+      outputBuffer = (outputBuffer + stripAnsi(data)).slice(-500)
+
+      if (activityTimer) clearTimeout(activityTimer)
+      if (notificationTimer) {
+        clearTimeout(notificationTimer)
+        notificationTimer = null
+      }
+
+      activityTimer = setTimeout(() => {
+        setSessionActivity(sessionId, 'idle')
+
+        // Check for prompt patterns after idle detection
+        const promptType = detectPrompt(outputBuffer)
+        console.log('[notification] Idle detected, prompt check:', promptType, '| buffer tail:', outputBuffer.slice(-100))
+        if (promptType) {
+          notificationTimer = setTimeout(() => {
+            const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
+            const title = session?.name ?? session?.folderName ?? 'Clave'
+            window.electronAPI.showNotification?.({
+              title,
+              body: `Claude ${promptType}`,
+              sessionId
+            })
+          }, 3000)
+        }
+      }, 2000)
     })
 
     // Handle PTY exit
     const cleanupExit = window.electronAPI.onSessionExit(sessionId, () => {
       terminal.write('\r\n\x1b[90m[Session ended]\x1b[0m\r\n')
+      if (activityTimer) clearTimeout(activityTimer)
+      activityTimer = null
+      if (notificationTimer) {
+        clearTimeout(notificationTimer)
+        notificationTimer = null
+      }
+      updateSessionAlive(sessionId, false)
+
+      const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
+      const title = session?.name ?? session?.folderName ?? 'Clave'
+      window.electronAPI.showNotification?.({
+        title,
+        body: 'Session has ended',
+        sessionId
+      })
     })
 
     // ResizeObserver for auto-fitting
@@ -171,7 +253,7 @@ export function useTerminal(sessionId: string) {
       // 1. Files from native file manager (Finder, etc.)
       if (e.dataTransfer.files.length > 0) {
         paths = Array.from(e.dataTransfer.files)
-          .map((f) => (f as File & { path: string }).path)
+          .map((f) => window.electronAPI.getPathForFile(f))
           .filter(Boolean)
       }
 
@@ -226,6 +308,8 @@ export function useTerminal(sessionId: string) {
       container.removeEventListener('dragover', handleDragOver, true)
       container.removeEventListener('drop', handleDrop, true)
       if (resizeTimer) clearTimeout(resizeTimer)
+      if (activityTimer) clearTimeout(activityTimer)
+      if (notificationTimer) clearTimeout(notificationTimer)
       inputDisposable.dispose()
       resizeDisposable.dispose()
       cleanupData()

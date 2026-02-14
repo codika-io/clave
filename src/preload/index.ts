@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 const electronAPI = {
   spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) =>
@@ -46,7 +46,22 @@ const electronAPI = {
     }
   },
 
-  installUpdate: () => ipcRenderer.invoke('updater:install')
+  installUpdate: () => ipcRenderer.invoke('updater:install'),
+
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+
+  showNotification: (options: { title: string; body: string; sessionId: string }) =>
+    ipcRenderer.invoke('notification:show', options),
+
+  onNotificationClicked: (callback: (sessionId: string) => void) => {
+    const channel = 'notification:clicked'
+    const listener = (_event: Electron.IpcRendererEvent, sessionId: string): void =>
+      callback(sessionId)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  }
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
