@@ -21,7 +21,7 @@ export interface SessionGroup {
   collapsed: boolean
 }
 
-export type ActiveView = 'terminals' | 'board'
+export type ActiveView = 'terminals' | 'board' | 'usage'
 
 interface SessionState {
   sessions: Session[]
@@ -41,6 +41,7 @@ interface SessionState {
   previewFile: string | null
   previewSource: 'palette' | 'tree' | null
   activeView: ActiveView
+  sidePanelTab: 'files' | 'git'
 
   addSession: (session: Session) => void
   removeSession: (id: string) => void
@@ -71,6 +72,7 @@ interface SessionState {
   toggleFileTree: () => void
   setFileTreeWidth: (width: number) => void
   setActiveView: (view: ActiveView) => void
+  setSidePanelTab: (tab: 'files' | 'git') => void
   setPreviewFile: (path: string | null, source?: 'palette' | 'tree') => void
 }
 
@@ -116,6 +118,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   previewFile: null,
   previewSource: null,
   activeView: 'terminals' as ActiveView,
+  sidePanelTab: 'files' as const,
 
   addSession: (session) =>
     set((state) => ({
@@ -169,7 +172,8 @@ export const useSessionStore = create<SessionState>((set) => ({
   selectSessions: (ids) =>
     set(() => ({
       selectedSessionIds: ids,
-      focusedSessionId: ids[0] ?? null
+      focusedSessionId: ids[0] ?? null,
+      activeView: 'terminals' as ActiveView
     })),
 
   setFocusedSession: (id) => set(() => ({ focusedSessionId: id })),
@@ -341,6 +345,8 @@ export const useSessionStore = create<SessionState>((set) => ({
   setFileTreeWidth: (width) => set({ fileTreeWidth: Math.max(180, Math.min(400, width)) }),
 
   setActiveView: (view) => set({ activeView: view }),
+
+  setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
 
   setPreviewFile: (path, source) =>
     set({ previewFile: path, previewSource: source ?? (path ? null : null) })

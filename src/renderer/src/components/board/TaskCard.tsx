@@ -9,6 +9,7 @@ interface TaskCardProps {
   task: BoardTask
   onEdit: (task: BoardTask) => void
   onStart?: (task: BoardTask) => void
+  onSaveAsTemplate?: (task: BoardTask) => void
   onDragStart: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
@@ -27,6 +28,7 @@ export function TaskCard({
   task,
   onEdit,
   onStart,
+  onSaveAsTemplate,
   onDragStart,
   onDragOver,
   onDrop,
@@ -58,10 +60,13 @@ export function TaskCard({
           onClick: () => selectSession(linkedSession.id, false)
         })
       }
+      if (onSaveAsTemplate) {
+        items.push({ label: 'Save as Template', onClick: () => onSaveAsTemplate(task) })
+      }
       items.push({ label: 'Delete', onClick: () => deleteTask(task.id), danger: true })
       setContextMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [task, linkedSession, onEdit, deleteTask, selectSession]
+    [task, linkedSession, onEdit, onSaveAsTemplate, deleteTask, selectSession]
   )
 
   const handleClick = useCallback(() => {

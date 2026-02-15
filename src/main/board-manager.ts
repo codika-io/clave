@@ -14,8 +14,18 @@ export interface BoardTask {
   order: number
 }
 
+export interface BoardTemplate {
+  id: string
+  name: string
+  title: string
+  prompt: string
+  cwd: string | null
+  createdAt: number
+}
+
 export interface BoardData {
   tasks: BoardTask[]
+  templates: BoardTemplate[]
 }
 
 class BoardManager {
@@ -28,9 +38,11 @@ class BoardManager {
   load(): BoardData {
     try {
       const raw = fs.readFileSync(this.filePath, 'utf-8')
-      return JSON.parse(raw) as BoardData
+      const data = JSON.parse(raw) as BoardData
+      if (!data.templates) data.templates = []
+      return data
     } catch {
-      return { tasks: [] }
+      return { tasks: [], templates: [] }
     }
   }
 

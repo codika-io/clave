@@ -65,6 +65,13 @@ const electronAPI = {
   boardLoad: () => ipcRenderer.invoke('board:load'),
   boardSave: (data: unknown) => ipcRenderer.invoke('board:save', data),
 
+  // Usage
+  getUsageStats: () => ipcRenderer.invoke('usage:get-stats'),
+  fetchRateLimits: () => ipcRenderer.invoke('usage:fetch-rate-limits'),
+
+  // Git
+  getGitStatus: (cwd: string) => ipcRenderer.invoke('git:status', cwd),
+
   showNotification: (options: { title: string; body: string; sessionId: string }) =>
     ipcRenderer.invoke('notification:show', options),
 

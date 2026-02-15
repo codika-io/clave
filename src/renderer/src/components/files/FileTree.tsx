@@ -1,10 +1,9 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { useFileTree, type FlatTreeNode } from '../../hooks/use-file-tree'
 import { FileTreeItem } from './FileTreeItem'
 import { ContextMenu } from '../ui/ContextMenu'
 import { insertPath, shellEscape } from '../../lib/shell'
-import { shortenPath } from '../../lib/utils'
 
 interface ContextMenuState {
   x: number
@@ -12,51 +11,25 @@ interface ContextMenuState {
   items: { label: string; onClick: () => void; shortcut?: string }[]
 }
 
-export function FileTree() {
+export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder }: {
+  cwd: string | null
+  isCustom: boolean
+  onChangeFolder: () => void
+  onResetFolder: () => void
+}) {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
-  const sessions = useSessionStore((s) => s.sessions)
-  const toggleFileTree = useSessionStore((s) => s.toggleFileTree)
   const setPreviewFile = useSessionStore((s) => s.setPreviewFile)
-
-  const focusedSession = sessions.find((s) => s.id === focusedSessionId)
-  const sessionCwd = focusedSession?.cwd ?? null
-
-  const [customCwd, setCustomCwd] = useState<string | null>(null)
-  const prevSessionIdRef = useRef(focusedSessionId)
-
-  // Reset custom cwd when focused session changes
-  useEffect(() => {
-    if (focusedSessionId !== prevSessionIdRef.current) {
-      prevSessionIdRef.current = focusedSessionId
-      setCustomCwd(null)
-    }
-  }, [focusedSessionId])
-
-  const cwd = customCwd ?? sessionCwd
-  const isCustom = customCwd !== null
 
   const { flatList, loading, filter, setFilter, toggleDir } = useFileTree(cwd)
 
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
 
-  const handleChangeFolder = useCallback(async () => {
-    const folderPath = await window.electronAPI?.openFolderDialog()
-    if (folderPath) {
-      setCustomCwd(folderPath)
-    }
-  }, [])
-
-  const handleResetFolder = useCallback(() => {
-    setCustomCwd(null)
-  }, [])
-
   const handleClickFile = useCallback(
     (filePath: string, metaKey: boolean) => {
       if (!focusedSessionId || !cwd) return
 
       if (metaKey) {
-        // Cmd+Click: toggle selection
         setSelectedPaths((prev) => {
           const next = new Set(prev)
           if (next.has(filePath)) {
@@ -67,10 +40,8 @@ export function FileTree() {
           return next
         })
       } else {
-        // Plain click: insert path
         setSelectedPaths(new Set())
         if (isCustom) {
-          // When browsing a custom folder, insert absolute paths
           insertPath(focusedSessionId, `${cwd}/${filePath}`)
         } else {
           insertPath(focusedSessionId, './' + filePath)
@@ -84,7 +55,6 @@ export function FileTree() {
     (e: React.DragEvent, node: FlatTreeNode) => {
       if (!cwd) return
       if (selectedPaths.size > 1 && selectedPaths.has(node.path)) {
-        // Multi-selection drag
         const paths = Array.from(selectedPaths)
           .map((p) => `${cwd}/${p}`)
           .map((p) => shellEscape(p))
@@ -127,22 +97,20 @@ export function FileTree() {
     [cwd, setPreviewFile]
   )
 
-  const displayPath = useMemo(() => {
-    if (!cwd) return ''
-    return shortenPath(cwd)
-  }, [cwd])
-
   return (
-    <div className="flex flex-col h-full bg-surface-50 border-l border-border">
-      {/* Header */}
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border-subtle flex-shrink-0">
-        <span className="flex-1 text-xs text-text-secondary font-medium truncate min-w-0" title={cwd ?? ''}>
-          {displayPath}
-        </span>
-        {/* Reset to session cwd */}
+    <div className="flex flex-col flex-1 min-h-0">
+      {/* Filter input + folder actions */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-subtle flex-shrink-0">
+        <input
+          type="text"
+          placeholder="Filter..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="flex-1 h-6 px-2 rounded bg-surface-100 text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors min-w-0"
+        />
         {isCustom && (
           <button
-            onClick={handleResetFolder}
+            onClick={onResetFolder}
             className="p-1 rounded hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0"
             title="Reset to session folder"
           >
@@ -153,9 +121,8 @@ export function FileTree() {
             </svg>
           </button>
         )}
-        {/* Change folder */}
         <button
-          onClick={handleChangeFolder}
+          onClick={onChangeFolder}
           className="p-1 rounded hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0"
           title="Browse another folder"
         >
@@ -168,27 +135,6 @@ export function FileTree() {
             />
           </svg>
         </button>
-        {/* Close */}
-        <button
-          onClick={toggleFileTree}
-          className="p-1 rounded hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0"
-          title="Close file tree"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Filter input */}
-      <div className="px-3 py-1.5 border-b border-border-subtle flex-shrink-0">
-        <input
-          type="text"
-          placeholder="Filter..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="w-full h-6 px-2 rounded bg-surface-100 text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors"
-        />
       </div>
 
       {/* Tree list */}

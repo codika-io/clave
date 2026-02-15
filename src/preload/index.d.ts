@@ -37,8 +37,70 @@ export interface BoardTask {
   order: number
 }
 
+export interface BoardTemplate {
+  id: string
+  name: string
+  title: string
+  prompt: string
+  cwd: string | null
+  createdAt: number
+}
+
 export interface BoardData {
   tasks: BoardTask[]
+  templates: BoardTemplate[]
+}
+
+export interface ModelTokenUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+}
+
+export interface UsageData {
+  dailyActivity: { date: string; messageCount: number; sessionCount: number; toolCallCount: number }[]
+  dailyModelTokens: { date: string; tokensByModel: Record<string, number> }[]
+  modelUsage: Record<string, ModelTokenUsage>
+  totalSessions: number
+  totalMessages: number
+  firstSessionDate: string | null
+  hourCounts: Record<string, number>
+  estimatedCost: number
+  totalTokens: number
+  rateLimits: RateLimits | null
+}
+
+export interface RateLimitEntry {
+  label: string
+  percent: number
+  resetInfo: string
+}
+
+export interface RateLimits {
+  entries: RateLimitEntry[]
+  fetchedAt: number
+}
+
+export interface GitFileStatus {
+  path: string
+  status:
+    | 'staged'
+    | 'modified'
+    | 'deleted'
+    | 'untracked'
+    | 'staged-modified'
+    | 'staged-deleted'
+    | 'renamed'
+  staged: boolean
+}
+
+export interface GitStatusResult {
+  isRepo: boolean
+  branch: string
+  ahead: number
+  behind: number
+  files: GitFileStatus[]
 }
 
 export interface ElectronAPI {
@@ -63,6 +125,9 @@ export interface ElectronAPI {
   showItemInFolder: (fullPath: string) => Promise<void>
   boardLoad: () => Promise<BoardData>
   boardSave: (data: BoardData) => Promise<void>
+  getUsageStats: () => Promise<UsageData>
+  fetchRateLimits: () => Promise<RateLimits | null>
+  getGitStatus: (cwd: string) => Promise<GitStatusResult>
 }
 
 declare global {

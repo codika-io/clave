@@ -3,11 +3,20 @@ import { ptyManager } from './pty-manager'
 import { installUpdate } from './auto-updater'
 import { fileManager } from './file-manager'
 import { boardManager } from './board-manager'
+import { usageManager } from './usage-manager'
+import { gitManager } from './git-manager'
 
 export function registerIpcHandlers(): void {
   // Board handlers
   ipcMain.handle('board:load', () => boardManager.load())
   ipcMain.handle('board:save', (_event, data) => boardManager.save(data))
+
+  // Usage handlers
+  ipcMain.handle('usage:get-stats', () => usageManager.getStats())
+  ipcMain.handle('usage:fetch-rate-limits', () => usageManager.fetchRateLimits())
+
+  // Git handlers
+  ipcMain.handle('git:status', (_event, cwd: string) => gitManager.getStatus(cwd))
 
   ipcMain.handle('updater:install', () => {
     installUpdate()

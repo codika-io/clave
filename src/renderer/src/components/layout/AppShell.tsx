@@ -4,10 +4,11 @@ import { useSessionStore } from '../../store/session-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
 import { KanbanBoard } from '../board/KanbanBoard'
+import { UsagePanel } from '../usage/UsagePanel'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { UpdateToast } from '../ui/UpdateToast'
 import { FilePalette } from '../files/FilePalette'
-import { FileTree } from '../files/FileTree'
+import { SidePanel } from '../git/SidePanel'
 import { FilePreview } from '../files/FilePreview'
 
 const sidebarTransition = {
@@ -206,6 +207,11 @@ export function AppShell() {
             <KanbanBoard />
           </div>
 
+          {/* Usage view — hidden but stays mounted */}
+          <div className={activeView === 'usage' ? 'flex-1 flex min-h-0' : 'hidden'}>
+            <UsagePanel />
+          </div>
+
           {/* Terminal grid + file tree — hidden but stays mounted */}
           <div className={activeView === 'terminals' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <TerminalGrid />
@@ -223,7 +229,7 @@ export function AppShell() {
                     onMouseDown={handleTreeResizeStart}
                     className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/40 active:bg-accent/60 transition-colors z-10"
                   />
-                  <FileTree />
+                  <SidePanel />
                 </motion.div>
               )}
             </AnimatePresence>

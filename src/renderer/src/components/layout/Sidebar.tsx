@@ -713,6 +713,24 @@ export function Sidebar() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveView('usage')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors',
+                activeView === 'usage'
+                  ? 'bg-surface-200 text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
+              )}
+            >
+              <span className="relative flex-shrink-0 w-4 h-4">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-text-tertiary">
+                  <rect x="2" y="9" width="3" height="5" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                  <rect x="6.5" y="5" width="3" height="9" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                  <rect x="11" y="2" width="3" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                </svg>
+              </span>
+              <span>Usage</span>
+            </button>
           </div>
         )}
 
