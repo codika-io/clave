@@ -476,6 +476,23 @@ export function Sidebar() {
         }
       } else {
         position = y < height / 2 ? 'before' : 'after'
+
+        // Escape zones: when dragging over first/last session in a group,
+        // redirect edge zones to the group itself with before/after position
+        // so moveItems places the item at the top level (escaping the group)
+        const state = useSessionStore.getState()
+        const parentGroup = state.groups.find((g) => g.sessionIds.includes(targetId))
+        if (parentGroup) {
+          const isFirst = parentGroup.sessionIds[0] === targetId
+          const isLast = parentGroup.sessionIds[parentGroup.sessionIds.length - 1] === targetId
+          if (isFirst && y < height * 0.25) {
+            targetId = parentGroup.id
+            position = 'before'
+          } else if (isLast && y > height * 0.75) {
+            targetId = parentGroup.id
+            position = 'after'
+          }
+        }
       }
 
       const newIndicator = { targetId, position }
@@ -514,6 +531,67 @@ export function Sidebar() {
     setDraggingIds([])
     setDropIndicator(null)
   }, [])
+
+  const handleContainerDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (draggedIdsRef.current.length === 0) return
+
+      // Always allow drops on the container — without this, if the cursor
+      // drifts into a gap between children (or above/below them), the browser
+      // rejects the drop because the last dragover didn't call preventDefault().
+      // The indicator set by the child handler persists, so the drop still
+      // uses the correct target.
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+
+      const container = e.currentTarget as HTMLElement
+      const children = Array.from(container.children) as HTMLElement[]
+      if (children.length === 0) return
+
+      // Update indicator only when cursor is in empty space above/below all items
+      const firstChild = children[0]
+      const lastChild = children[children.length - 1]
+      const firstRect = firstChild.getBoundingClientRect()
+      const lastRect = lastChild.getBoundingClientRect()
+
+      const state = useSessionStore.getState()
+      const order =
+        state.displayOrder.length > 0
+          ? state.displayOrder
+          : sessions.map((s) => s.id)
+
+      if (order.length === 0) return
+
+      if (e.clientY < firstRect.top) {
+        // Above all items → drop before first item
+        const firstId = order[0]
+        if (draggedIdsRef.current.includes(firstId)) return
+        const newIndicator = { targetId: firstId, position: 'before' as const }
+        if (
+          !dropIndicatorRef.current ||
+          dropIndicatorRef.current.targetId !== firstId ||
+          dropIndicatorRef.current.position !== 'before'
+        ) {
+          dropIndicatorRef.current = newIndicator
+          setDropIndicator(newIndicator)
+        }
+      } else if (e.clientY > lastRect.bottom) {
+        // Below all items → drop after last item
+        const lastId = order[order.length - 1]
+        if (draggedIdsRef.current.includes(lastId)) return
+        const newIndicator = { targetId: lastId, position: 'after' as const }
+        if (
+          !dropIndicatorRef.current ||
+          dropIndicatorRef.current.targetId !== lastId ||
+          dropIndicatorRef.current.position !== 'after'
+        ) {
+          dropIndicatorRef.current = newIndicator
+          setDropIndicator(newIndicator)
+        }
+      }
+    },
+    [sessions]
+  )
 
   // Get the drop indicator for a specific item
   const getDropIndicator = useCallback(
@@ -579,6 +657,8 @@ export function Sidebar() {
           <div
             className="overflow-y-auto px-2 space-y-0.5"
             style={{ maxHeight: 'calc(75vh - 140px)' }}
+            onDragOver={handleContainerDragOver}
+            onDrop={handleDrop}
           >
             {filteredSessions ? (
               filteredSessions.length === 0 ? (
