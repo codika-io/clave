@@ -4,6 +4,19 @@ import { FileTree } from '../files/FileTree'
 import { GitStatusPanel } from './GitStatusPanel'
 import { shortenPath } from '../../lib/utils'
 
+function getParentPaths(fullPath: string): { path: string; name: string }[] {
+  const homedir = fullPath.match(/^\/Users\/[^/]+/)?.[0] ?? ''
+  const parts = fullPath.split('/').filter(Boolean)
+  const result: { path: string; name: string }[] = []
+  for (let i = parts.length; i >= 1; i--) {
+    const p = '/' + parts.slice(0, i).join('/')
+    const name = p === homedir ? '~' : parts[i - 1]
+    result.push({ path: p, name })
+  }
+  result.push({ path: '/', name: '/' })
+  return result
+}
+
 export function SidePanel() {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const sessions = useSessionStore((s) => s.sessions)
@@ -16,6 +29,9 @@ export function SidePanel() {
 
   const [customCwd, setCustomCwd] = useState<string | null>(null)
   const prevSessionIdRef = useRef(focusedSessionId)
+  const [pathMenuOpen, setPathMenuOpen] = useState(false)
+  const pathButtonRef = useRef<HTMLButtonElement>(null)
+  const pathMenuRef = useRef<HTMLDivElement>(null)
 
   // Reset custom cwd when focused session changes
   useEffect(() => {
@@ -43,6 +59,35 @@ export function SidePanel() {
   const handleResetFolder = useCallback(() => {
     setCustomCwd(null)
   }, [])
+
+  const parentPaths = useMemo(() => {
+    if (!cwd) return []
+    return getParentPaths(cwd)
+  }, [cwd])
+
+  // Close path menu on outside click or Escape
+  useEffect(() => {
+    if (!pathMenuOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (
+        pathMenuRef.current &&
+        !pathMenuRef.current.contains(e.target as Node) &&
+        pathButtonRef.current &&
+        !pathButtonRef.current.contains(e.target as Node)
+      ) {
+        setPathMenuOpen(false)
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPathMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [pathMenuOpen])
 
   return (
     <div className="flex flex-col h-full bg-surface-50 border-l border-border">
@@ -79,13 +124,58 @@ export function SidePanel() {
           </svg>
         </button>
 
-        {/* Path display */}
-        <span
-          className="flex-1 text-xs text-text-secondary font-medium truncate min-w-0"
-          title={cwd ?? ''}
-        >
-          {displayPath}
-        </span>
+        {/* Path display — clickable with parent folder dropdown */}
+        <div className="relative flex-1 min-w-0">
+          <button
+            ref={pathButtonRef}
+            onClick={() => cwd && setPathMenuOpen((v) => !v)}
+            className="w-full text-left text-xs text-text-secondary font-medium truncate hover:text-text-primary cursor-pointer transition-colors"
+            title={cwd ?? ''}
+          >
+            {displayPath}
+          </button>
+          {pathMenuOpen && parentPaths.length > 0 && (
+            <div
+              ref={pathMenuRef}
+              className="fixed z-50 min-w-[180px] max-w-[320px] max-h-[60vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
+              style={{
+                top: (pathButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                right:
+                  document.documentElement.clientWidth -
+                  (pathButtonRef.current?.getBoundingClientRect().right ?? 0)
+              }}
+            >
+              {parentPaths.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => {
+                    setCustomCwd(item.path)
+                    setPathMenuOpen(false)
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium hover:bg-surface-200 transition-colors ${
+                    item.path === cwd ? 'text-accent' : 'text-text-primary'
+                  }`}
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    className="flex-shrink-0"
+                  >
+                    <path
+                      d="M1.5 2.5a1 1 0 0 1 1-1h2.172a1 1 0 0 1 .707.293L6.5 2.914a1 1 0 0 0 .707.293H9.5a1 1 0 0 1 1 1v5.293a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V2.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.1"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="truncate">{item.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Close */}
         <button

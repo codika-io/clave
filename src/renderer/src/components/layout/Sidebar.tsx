@@ -187,6 +187,7 @@ export function Sidebar() {
   const displayOrder = useSessionStore((s) => s.displayOrder)
   const createGroup = useSessionStore((s) => s.createGroup)
   const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
+  const deleteGroup = useSessionStore((s) => s.deleteGroup)
   const moveItems = useSessionStore((s) => s.moveItems)
   const searchQuery = useSessionStore((s) => s.searchQuery)
   const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
@@ -239,7 +240,7 @@ export function Sidebar() {
       if (e.metaKey && e.key === 'g') {
         e.preventDefault()
         const state = useSessionStore.getState()
-        if (state.selectedSessionIds.length > 1) {
+        if (state.selectedSessionIds.length >= 1) {
           createGroup(state.selectedSessionIds)
         }
       }
@@ -310,6 +311,24 @@ export function Sidebar() {
     [removeSession]
   )
 
+  const handleDeleteGroup = useCallback(
+    async (groupId: string) => {
+      const group = groups.find((g) => g.id === groupId)
+      if (!group) return
+      await Promise.all(
+        group.sessionIds.map(async (sid) => {
+          try {
+            await window.electronAPI.killSession(sid)
+          } catch {
+            // session may already be dead
+          }
+        })
+      )
+      deleteGroup(groupId)
+    },
+    [groups, deleteGroup]
+  )
+
   const handleSessionContextMenu = useCallback(
     (e: React.MouseEvent, sessionId: string) => {
       e.preventDefault()
@@ -338,7 +357,7 @@ export function Sidebar() {
         }
       ]
       const state = useSessionStore.getState()
-      if (state.selectedSessionIds.length > 1) {
+      if (state.selectedSessionIds.length >= 1) {
         items.push({
           label: 'Group',
           icon: groupIcon,
@@ -371,6 +390,11 @@ export function Sidebar() {
           <path d="M5 7h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
       )
+      const deleteIcon = (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 4h9M5 4V2.5h4V4M3.5 4l.5 8h6l.5-8M6 6.5v3M8 6.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
@@ -384,11 +408,17 @@ export function Sidebar() {
             label: 'Ungroup',
             icon: ungroupIcon,
             onClick: () => ungroupSessions(groupId)
+          },
+          {
+            label: 'Delete',
+            icon: deleteIcon,
+            danger: true,
+            onClick: () => handleDeleteGroup(groupId)
           }
         ]
       })
     },
-    [ungroupSessions]
+    [ungroupSessions, handleDeleteGroup]
   )
 
   const handleGroupClick = useCallback(

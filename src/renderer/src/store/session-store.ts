@@ -50,6 +50,7 @@ interface SessionState {
   setFocusedSession: (id: string) => void
   createGroup: (sessionIds: string[], name?: string) => void
   ungroupSessions: (groupId: string) => void
+  deleteGroup: (groupId: string) => void
   renameGroup: (groupId: string, name: string) => void
   toggleGroupCollapsed: (groupId: string) => void
   moveItems: (
@@ -229,6 +230,39 @@ export const useSessionStore = create<SessionState>((set) => ({
         groups: state.groups.filter((g) => g.id !== groupId),
         displayOrder
       }
+    }),
+
+  deleteGroup: (groupId) =>
+    set((state) => {
+      const group = state.groups.find((g) => g.id === groupId)
+      if (!group) return {}
+
+      const sessionIdsToRemove = new Set(group.sessionIds)
+      const sessions = state.sessions.filter((s) => !sessionIdsToRemove.has(s.id))
+      const selectedSessionIds = state.selectedSessionIds.filter(
+        (sid) => !sessionIdsToRemove.has(sid)
+      )
+      const displayOrder = getDisplayOrder(state).filter(
+        (did) => did !== groupId && !sessionIdsToRemove.has(did)
+      )
+      const groups = state.groups.filter((g) => g.id !== groupId)
+
+      let focusedSessionId = state.focusedSessionId
+      if (focusedSessionId && sessionIdsToRemove.has(focusedSessionId)) {
+        focusedSessionId = selectedSessionIds[0] ?? sessions[sessions.length - 1]?.id ?? null
+      }
+      if (selectedSessionIds.length === 0 && sessions.length > 0) {
+        const lastId = sessions[sessions.length - 1].id
+        return {
+          sessions,
+          selectedSessionIds: [lastId],
+          focusedSessionId: lastId,
+          groups,
+          displayOrder
+        }
+      }
+
+      return { sessions, selectedSessionIds, focusedSessionId, groups, displayOrder }
     }),
 
   renameGroup: (groupId, name) =>
