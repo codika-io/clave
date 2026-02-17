@@ -79,7 +79,7 @@ interface SessionState {
 
 let groupCounter = 0
 
-function getDisplayOrder(state: {
+export function getDisplayOrder(state: {
   sessions: Session[]
   groups: SessionGroup[]
   displayOrder: string[]

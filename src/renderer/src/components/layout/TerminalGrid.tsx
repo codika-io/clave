@@ -1,4 +1,5 @@
-import { useSessionStore } from '../../store/session-store'
+import { useMemo } from 'react'
+import { useSessionStore, getDisplayOrder } from '../../store/session-store'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { TerminalErrorBoundary } from '../terminal/TerminalErrorBoundary'
 import { EmptyState } from '../ui/EmptyState'
@@ -14,6 +15,27 @@ function computeGridLayout(count: number): { cols: number; rows: number } {
 export function TerminalGrid() {
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   const sessions = useSessionStore((s) => s.sessions)
+  const groups = useSessionStore((s) => s.groups)
+  const displayOrder = useSessionStore((s) => s.displayOrder)
+
+  const orderedSessions = useMemo(() => {
+    const order = getDisplayOrder({ sessions, groups, displayOrder })
+    const sessionMap = new Map(sessions.map((s) => [s.id, s]))
+    const result: typeof sessions = []
+    for (const id of order) {
+      const group = groups.find((g) => g.id === id)
+      if (group) {
+        for (const sid of group.sessionIds) {
+          const session = sessionMap.get(sid)
+          if (session) result.push(session)
+        }
+      } else {
+        const session = sessionMap.get(id)
+        if (session) result.push(session)
+      }
+    }
+    return result
+  }, [sessions, groups, displayOrder])
 
   if (sessions.length === 0) {
     return <EmptyState />
@@ -42,7 +64,7 @@ export function TerminalGrid() {
           gridTemplateRows: `repeat(${rows}, 1fr)`
         }}
       >
-        {sessions.map((session) => {
+        {orderedSessions.map((session) => {
           const isSelected = selectedSessionIds.includes(session.id)
           return (
             <div
