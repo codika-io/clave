@@ -9,6 +9,7 @@ interface TaskCardProps {
   task: BoardTask
   onEdit: (task: BoardTask) => void
   onStart?: (task: BoardTask) => void
+  onResume?: (task: BoardTask) => void
   onSaveAsTemplate?: (task: BoardTask) => void
   onDragStart: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
@@ -28,6 +29,7 @@ export function TaskCard({
   task,
   onEdit,
   onStart,
+  onResume,
   onSaveAsTemplate,
   onDragStart,
   onDragOver,
@@ -48,6 +50,17 @@ export function TaskCard({
 
   const linkedSession = task.sessionId ? sessions.find((s) => s.id === task.sessionId) : null
 
+  // A processing task is "disconnected" when it has a claudeSessionId but its linked PTY session is dead or missing
+  const isDisconnected =
+    task.status === 'processing' &&
+    !!task.claudeSessionId &&
+    (!linkedSession || !linkedSession.alive)
+
+  // Resumable: task has a claudeSessionId AND is either done, or processing but disconnected
+  const isResumable =
+    !!task.claudeSessionId &&
+    (task.status === 'done' || isDisconnected)
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
@@ -60,13 +73,16 @@ export function TaskCard({
           onClick: () => selectSession(linkedSession.id, false)
         })
       }
+      if (isResumable && onResume) {
+        items.push({ label: 'Resume', onClick: () => onResume(task) })
+      }
       if (onSaveAsTemplate) {
         items.push({ label: 'Save as Template', onClick: () => onSaveAsTemplate(task) })
       }
       items.push({ label: 'Delete', onClick: () => deleteTask(task.id), danger: true })
       setContextMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [task, linkedSession, onEdit, onSaveAsTemplate, deleteTask, selectSession]
+    [task, linkedSession, isResumable, onEdit, onResume, onSaveAsTemplate, deleteTask, selectSession]
   )
 
   const handleClick = useCallback(() => {
@@ -109,8 +125,11 @@ export function TaskCard({
             {task.status === 'todo' && (
               <div className="w-2 h-2 mt-[6px] rounded-full border-[1.5px] border-text-tertiary" />
             )}
-            {task.status === 'processing' && (
+            {task.status === 'processing' && !isDisconnected && (
               <div className="w-2 h-2 mt-[6px] rounded-full bg-green-500 animate-pulse" />
+            )}
+            {task.status === 'processing' && isDisconnected && (
+              <div className="w-2 h-2 mt-[6px] rounded-full bg-yellow-500" />
             )}
             {task.status === 'done' && (
               <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="mt-1 text-green-500">
@@ -149,6 +168,24 @@ export function TaskCard({
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path d="M3 1.5L10 6L3 10.5V1.5Z" fill="currentColor" />
+              </svg>
+            </button>
+          )}
+
+          {/* Resume button */}
+          {isResumable && onResume && hovered && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onResume(task)
+              }}
+              className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-md bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 transition-colors"
+              title="Resume session"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6a4 4 0 0 1 6.5-3.1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M10 6a4 4 0 0 1-6.5 3.1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M8 1.5L8.5 2.9L10 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           )}

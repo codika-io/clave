@@ -44,14 +44,24 @@ export interface PtySession {
 class PtyManager {
   private sessions = new Map<string, PtySession>()
 
-  spawn(cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }): PtySession {
+  spawn(cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }): PtySession {
     const id = randomUUID()
     const folderName = cwd.split('/').pop() || cwd
     const useClaudeMode = options?.claudeMode !== false
 
-    const shellArgs: string[] = useClaudeMode
-      ? ['-l', '-c', options?.dangerousMode ? 'claude --dangerously-skip-permissions' : 'claude']
-      : ['-l']
+    let shellArgs: string[]
+    if (!useClaudeMode) {
+      shellArgs = ['-l']
+    } else {
+      const parts = ['claude']
+      if (options?.resumeSessionId) {
+        parts.push('--resume', options.resumeSessionId)
+      }
+      if (options?.dangerousMode) {
+        parts.push('--dangerously-skip-permissions')
+      }
+      shellArgs = ['-l', '-c', parts.join(' ')]
+    }
 
     const ptyProcess = pty.spawn(getUserShell(), shellArgs, {
       name: 'xterm-256color',

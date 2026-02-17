@@ -9,6 +9,7 @@ export interface BoardTask {
   cwd: string
   status: 'todo' | 'processing' | 'done'
   sessionId: string | null
+  claudeSessionId: string | null
   createdAt: number
   updatedAt: number
   order: number
@@ -40,6 +41,11 @@ class BoardManager {
       const raw = fs.readFileSync(this.filePath, 'utf-8')
       const data = JSON.parse(raw) as BoardData
       if (!data.templates) data.templates = []
+      // Normalize old tasks that don't have claudeSessionId
+      data.tasks = data.tasks.map((t) => ({
+        ...t,
+        claudeSessionId: t.claudeSessionId ?? null
+      }))
       return data
     } catch {
       return { tasks: [], templates: [] }

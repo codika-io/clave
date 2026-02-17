@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 const electronAPI = {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) =>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }) =>
     ipcRenderer.invoke('pty:spawn', cwd, options),
 
   writeSession: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),
@@ -76,6 +76,16 @@ const electronAPI = {
   gitCommit: (cwd: string, message: string) => ipcRenderer.invoke('git:commit', cwd, message),
   gitPush: (cwd: string) => ipcRenderer.invoke('git:push', cwd),
   gitPull: (cwd: string) => ipcRenderer.invoke('git:pull', cwd),
+
+  onClaudeSessionDetected: (sessionId: string, callback: (claudeSessionId: string) => void) => {
+    const channel = `pty:claude-session-id:${sessionId}`
+    const listener = (_event: Electron.IpcRendererEvent, claudeSessionId: string): void =>
+      callback(claudeSessionId)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  },
 
   showNotification: (options: { title: string; body: string; sessionId: string }) =>
     ipcRenderer.invoke('notification:show', options),

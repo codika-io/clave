@@ -5,6 +5,76 @@ import { fileManager } from './file-manager'
 import { boardManager } from './board-manager'
 import { usageManager } from './usage-manager'
 import { gitManager } from './git-manager'
+import * as fs from 'fs'
+import * as path from 'path'
+import { homedir } from 'os'
+
+function getClaudeProjectDir(cwd: string): string {
+  const encoded = cwd.replace(/[/.]/g, '-')
+  return path.join(homedir(), '.claude', 'projects', encoded)
+}
+
+function snapshotJsonlFiles(dir: string): Set<string> {
+  try {
+    const entries = fs.readdirSync(dir)
+    return new Set(entries.filter((e) => e.endsWith('.jsonl')))
+  } catch {
+    return new Set()
+  }
+}
+
+function detectClaudeSessionId(
+  dir: string,
+  existingFiles: Set<string>
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    let resolved = false
+    let watcher: fs.FSWatcher | null = null
+
+    const done = (id: string | null): void => {
+      if (resolved) return
+      resolved = true
+      watcher?.close()
+      resolve(id)
+    }
+
+    // Check immediately for any new files (might already exist)
+    try {
+      const current = fs.readdirSync(dir).filter((e) => e.endsWith('.jsonl'))
+      for (const file of current) {
+        if (!existingFiles.has(file)) {
+          done(file.replace('.jsonl', ''))
+          return
+        }
+      }
+    } catch {
+      // dir may not exist yet
+    }
+
+    // Ensure directory exists for watching
+    try {
+      fs.mkdirSync(dir, { recursive: true })
+    } catch {
+      // already exists
+    }
+
+    try {
+      watcher = fs.watch(dir, (_eventType, filename) => {
+        if (resolved) return
+        if (filename && filename.endsWith('.jsonl') && !existingFiles.has(filename)) {
+          done(filename.replace('.jsonl', ''))
+        }
+      })
+      watcher.on('error', () => done(null))
+    } catch {
+      done(null)
+      return
+    }
+
+    // 15-second timeout
+    setTimeout(() => done(null), 15000)
+  })
+}
 
 export function registerIpcHandlers(): void {
   // Board handlers
@@ -46,7 +116,11 @@ export function registerIpcHandlers(): void {
     shell.showItemInFolder(fullPath)
   })
 
-  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) => {
+  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }) => {
+    const useClaudeMode = options?.claudeMode !== false
+    const projectDir = useClaudeMode ? getClaudeProjectDir(cwd) : null
+    const existingFiles = projectDir ? snapshotJsonlFiles(projectDir) : new Set<string>()
+
     const session = ptyManager.spawn(cwd, options)
     const win = BrowserWindow.fromWebContents(_event.sender)
 
@@ -61,6 +135,15 @@ export function registerIpcHandlers(): void {
         win.webContents.send(`pty:exit:${session.id}`, exitCode)
       }
     })
+
+    // Async: detect Claude Code session ID from new .jsonl file
+    if (projectDir) {
+      detectClaudeSessionId(projectDir, existingFiles).then((claudeSessionId) => {
+        if (claudeSessionId && win && !win.isDestroyed()) {
+          win.webContents.send(`pty:claude-session-id:${session.id}`, claudeSessionId)
+        }
+      })
+    }
 
     return {
       id: session.id,
@@ -90,8 +173,9 @@ export function registerIpcHandlers(): void {
     return shell.openExternal(url)
   })
 
-  ipcMain.handle('dialog:openFolder', async () => {
-    const result = await dialog.showOpenDialog({
+  ipcMain.handle('dialog:openFolder', async (_event) => {
+    const win = BrowserWindow.fromWebContents(_event.sender)
+    const result = await dialog.showOpenDialog(win!, {
       properties: ['openDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) {

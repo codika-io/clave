@@ -32,6 +32,7 @@ export interface BoardTask {
   cwd: string
   status: 'todo' | 'processing' | 'done'
   sessionId: string | null
+  claudeSessionId: string | null
   createdAt: number
   updatedAt: number
   order: number
@@ -109,7 +110,7 @@ export interface GitCommitResult {
 }
 
 export interface ElectronAPI {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) => Promise<SessionInfo>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
   resizeSession: (id: string, cols: number, rows: number) => void
   killSession: (id: string) => Promise<void>
@@ -122,6 +123,7 @@ export interface ElectronAPI {
   installUpdate: () => Promise<void>
   getPathForFile: (file: File) => string
   showNotification: (options: { title: string; body: string; sessionId: string }) => Promise<void>
+  onClaudeSessionDetected: (sessionId: string, callback: (claudeSessionId: string) => void) => () => void
   onNotificationClicked: (callback: (sessionId: string) => void) => () => void
   listFiles: (cwd: string) => Promise<{ files: string[]; truncated: boolean }>
   readDir: (rootCwd: string, dirPath: string) => Promise<DirEntry[]>

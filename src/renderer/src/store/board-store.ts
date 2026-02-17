@@ -8,11 +8,12 @@ interface BoardState {
   cwdFilter: string | null
 
   loadBoard: () => Promise<void>
-  addTask: (task: Omit<BoardTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'status' | 'sessionId'>) => void
+  addTask: (task: Omit<BoardTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'status' | 'sessionId' | 'claudeSessionId'>) => void
   updateTask: (id: string, updates: Partial<Pick<BoardTask, 'title' | 'prompt' | 'cwd'>>) => void
   deleteTask: (id: string) => void
   moveTask: (id: string, status: BoardTask['status']) => void
   linkSession: (taskId: string, sessionId: string) => void
+  linkClaudeSession: (taskId: string, claudeSessionId: string) => void
   completeTask: (taskId: string) => void
   reorderTask: (id: string, newOrder: number) => void
   setCwdFilter: (cwd: string | null) => void
@@ -53,6 +54,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       cwd: partial.cwd,
       status: 'todo',
       sessionId: null,
+      claudeSessionId: null,
       createdAt: now,
       updatedAt: now,
       order: maxOrder + 1
@@ -92,6 +94,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const { templates } = get()
     const newTasks = get().tasks.map((t) =>
       t.id === taskId ? { ...t, sessionId, updatedAt: Date.now() } : t
+    )
+    set({ tasks: newTasks })
+    debouncedSave(newTasks, templates)
+  },
+
+  linkClaudeSession: (taskId, claudeSessionId) => {
+    const { templates } = get()
+    const newTasks = get().tasks.map((t) =>
+      t.id === taskId ? { ...t, claudeSessionId, updatedAt: Date.now() } : t
     )
     set({ tasks: newTasks })
     debouncedSave(newTasks, templates)

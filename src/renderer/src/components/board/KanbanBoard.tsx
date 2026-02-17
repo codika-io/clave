@@ -15,6 +15,7 @@ export function KanbanBoard() {
   const setCwdFilter = useBoardStore((s) => s.setCwdFilter)
   const moveTask = useBoardStore((s) => s.moveTask)
   const linkSession = useBoardStore((s) => s.linkSession)
+  const linkClaudeSession = useBoardStore((s) => s.linkClaudeSession)
   const reorderTask = useBoardStore((s) => s.reorderTask)
 
   const sessions = useSessionStore((s) => s.sessions)
@@ -95,6 +96,15 @@ export function KanbanBoard() {
       linkSession(task.id, sessionInfo.id)
       moveTask(task.id, 'processing')
 
+      // Listen for Claude Code session ID detection
+      const cleanupDetect = window.electronAPI?.onClaudeSessionDetected(
+        sessionInfo.id,
+        (claudeSessionId) => {
+          linkClaudeSession(task.id, claudeSessionId)
+          cleanupDetect?.()
+        }
+      )
+
       // Write prompt after Claude Code finishes initializing.
       // Claude Code outputs a burst of data during startup (loading animation,
       // welcome text, etc.), then goes quiet when waiting for input.
@@ -129,7 +139,7 @@ export function KanbanBoard() {
         setTimeout(sendPrompt, 20000)
       }
     },
-    [addSession, linkSession, moveTask]
+    [addSession, linkSession, linkClaudeSession, moveTask]
   )
 
   const cleanupSession = useCallback(
@@ -142,6 +152,56 @@ export function KanbanBoard() {
       removeSession(sessionId)
     },
     [removeSession]
+  )
+
+  const resumeTask = useCallback(
+    async (task: BoardTask) => {
+      if (!window.electronAPI?.spawnSession || !task.claudeSessionId) return
+
+      // Clean up old dead session if one exists
+      if (task.sessionId) {
+        try {
+          await window.electronAPI?.killSession(task.sessionId)
+        } catch {
+          // may already be dead
+        }
+        removeSession(task.sessionId)
+      }
+
+      const state = useSessionStore.getState()
+      const sessionInfo = await window.electronAPI.spawnSession(task.cwd, {
+        dangerousMode: state.dangerousMode,
+        claudeMode: true,
+        resumeSessionId: task.claudeSessionId
+      })
+
+      addSession({
+        id: sessionInfo.id,
+        cwd: sessionInfo.cwd,
+        folderName: sessionInfo.folderName,
+        name: task.title,
+        alive: sessionInfo.alive,
+        activityStatus: 'idle',
+        promptWaiting: null
+      })
+
+      linkSession(task.id, sessionInfo.id)
+
+      // Listen for new Claude session ID (resume creates a new session file)
+      const cleanupDetect = window.electronAPI?.onClaudeSessionDetected(
+        sessionInfo.id,
+        (claudeSessionId) => {
+          linkClaudeSession(task.id, claudeSessionId)
+          cleanupDetect?.()
+        }
+      )
+
+      // Move back to processing if it was done
+      if (task.status === 'done') {
+        moveTask(task.id, 'processing')
+      }
+    },
+    [addSession, removeSession, linkSession, linkClaudeSession, moveTask]
   )
 
   const handleConfirmDone = useCallback(async () => {
@@ -247,6 +307,7 @@ export function KanbanBoard() {
           onEdit={handleEdit}
           onSaveAsTemplate={handleSaveAsTemplate}
           onReorder={handleReorder}
+          onResume={resumeTask}
         />
         <BoardColumn
           title="Done"
@@ -255,6 +316,7 @@ export function KanbanBoard() {
           onEdit={handleEdit}
           onSaveAsTemplate={handleSaveAsTemplate}
           onReorder={handleReorder}
+          onResume={resumeTask}
         />
       </div>
 

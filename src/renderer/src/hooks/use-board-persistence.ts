@@ -25,8 +25,11 @@ export function useBoardAutoComplete(): void {
       const session = sessions.find((s) => s.id === task.sessionId)
       if (!session) continue
 
-      // Only auto-complete when the session process has exited
+      // Only auto-complete when the session process has exited.
+      // Tasks with a claudeSessionId stay in "processing" (disconnected)
+      // so the user can resume them.
       if (!session.alive && session.activityStatus === 'ended') {
+        if (task.claudeSessionId) continue
         completeTask(task.id)
       }
     }

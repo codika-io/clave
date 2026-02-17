@@ -9,6 +9,7 @@ interface BoardColumnProps {
   tasks: BoardTask[]
   onEdit: (task: BoardTask) => void
   onStart?: (task: BoardTask) => void
+  onResume?: (task: BoardTask) => void
   onSaveAsTemplate?: (task: BoardTask) => void
   onNewTask?: () => void
   onReorder: (taskId: string, newOrder: number, newStatus: BoardTask['status']) => void
@@ -20,6 +21,7 @@ export function BoardColumn({
   tasks,
   onEdit,
   onStart,
+  onResume,
   onSaveAsTemplate,
   onNewTask,
   onReorder
@@ -142,6 +144,7 @@ export function BoardColumn({
             task={task}
             onEdit={onEdit}
             onStart={onStart}
+            onResume={onResume}
             onSaveAsTemplate={onSaveAsTemplate}
             onDragStart={(e) => handleDragStart(e, task.id)}
             onDragOver={(e) => handleDragOver(e, task.id)}
