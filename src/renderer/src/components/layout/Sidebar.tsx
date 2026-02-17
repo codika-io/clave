@@ -5,6 +5,19 @@ import { SessionItem } from '../session/SessionItem'
 import { SessionGroupItem } from '../session/SessionGroupItem'
 import { ContextMenu } from '../ui/ContextMenu'
 import { cn } from '../../lib/utils'
+import {
+  MagnifyingGlassIcon,
+  PlusIcon,
+  ChevronRightIcon,
+  ViewColumnsIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
+  PencilSquareIcon,
+  TrashIcon,
+  Squares2X2Icon,
+  FolderMinusIcon,
+  ShieldExclamationIcon
+} from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
   x: number
@@ -108,30 +121,14 @@ function DangerousToggle() {
           boxShadow: dangerousMode ? 'inset 0 0 12px var(--danger-toggle-glow)' : 'none'
         }}
       >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        fill="none"
+      <ShieldExclamationIcon
+        className="w-4 h-4"
+        strokeWidth={1.5}
         style={{
           color: dangerousMode ? 'var(--danger-toggle-icon)' : 'var(--text-secondary)',
           transition: 'color 0.2s'
         }}
-      >
-        <path
-          d="M7 1L1.5 4v3c0 3.5 2.3 6.2 5.5 7 3.2-.8 5.5-3.5 5.5-7V4L7 1z"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinejoin="round"
-          fill={dangerousMode ? 'rgba(229, 64, 64, 0.15)' : 'none'}
-        />
-        <path
-          d="M7 4.5v3M7 9v.5"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinecap="round"
-        />
-      </svg>
+      />
       </button>
       {hovered && (
         <div
@@ -155,21 +152,15 @@ function SectionHeading({ title, collapsed, onToggle }: { title: string; collaps
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center gap-1 px-4 pt-2 pb-1 flex-shrink-0"
+      className="w-full flex items-center gap-1.5 px-4 pt-4 pb-1.5 flex-shrink-0"
     >
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 10 10"
-        fill="none"
+      <ChevronRightIcon
         className={cn(
-          'text-text-tertiary transition-transform duration-150',
+          'w-3 h-3 text-text-tertiary transition-transform duration-150',
           collapsed ? 'rotate-0' : 'rotate-90'
         )}
-      >
-        <path d="M3 2.5L6.5 5L3 7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-widest">
+      />
+      <span className="text-xs font-medium text-text-tertiary">
         {title}
       </span>
     </button>
@@ -332,27 +323,10 @@ export function Sidebar() {
   const handleSessionContextMenu = useCallback(
     (e: React.MouseEvent, sessionId: string) => {
       e.preventDefault()
-      const renameIcon = (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M8.5 2.5l3 3M2 9.5L9.5 2l3 3L5 12.5H2v-3z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-      const deleteIcon = (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M2.5 4h9M5 4V2.5h4V4M3.5 4l.5 8h6l.5-8M6 6.5v3M8 6.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-      const groupIcon = (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="4.5" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      )
       const items: ContextMenuState['items'] = [
         {
           label: 'Rename',
-          icon: renameIcon,
+          icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
           onClick: () => setRenamingId(sessionId)
         }
       ]
@@ -360,14 +334,14 @@ export function Sidebar() {
       if (state.selectedSessionIds.length >= 1) {
         items.push({
           label: 'Group',
-          icon: groupIcon,
+          icon: <Squares2X2Icon className="w-3.5 h-3.5" />,
           shortcut: '\u2318G',
           onClick: () => createGroup(state.selectedSessionIds)
         })
       }
       items.push({
         label: 'Delete',
-        icon: deleteIcon,
+        icon: <TrashIcon className="w-3.5 h-3.5" />,
         danger: true,
         onClick: () => handleDeleteSession(sessionId)
       })
@@ -379,39 +353,23 @@ export function Sidebar() {
   const handleGroupContextMenu = useCallback(
     (e: React.MouseEvent, groupId: string) => {
       e.preventDefault()
-      const renameIcon = (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M8.5 2.5l3 3M2 9.5L9.5 2l3 3L5 12.5H2v-3z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-      const ungroupIcon = (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 2" />
-          <path d="M5 7h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      )
-      const deleteIcon = (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M2.5 4h9M5 4V2.5h4V4M3.5 4l.5 8h6l.5-8M6 6.5v3M8 6.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
         items: [
           {
             label: 'Rename',
-            icon: renameIcon,
+            icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
             onClick: () => setRenamingId(groupId)
           },
           {
             label: 'Ungroup',
-            icon: ungroupIcon,
+            icon: <FolderMinusIcon className="w-3.5 h-3.5" />,
             onClick: () => ungroupSessions(groupId)
           },
           {
             label: 'Delete',
-            icon: deleteIcon,
+            icon: <TrashIcon className="w-3.5 h-3.5" />,
             danger: true,
             onClick: () => handleDeleteGroup(groupId)
           }
@@ -637,21 +595,7 @@ export function Sidebar() {
       {/* Search row with traffic-light offset */}
       <div className="pt-11 px-3 pb-2 flex items-center gap-2 flex-shrink-0">
         <div className="flex-1 relative">
-          <svg
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-          >
-            <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-            <path
-              d="M9.5 9.5L12.5 12.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
+          <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
           <input
             type="text"
             placeholder="Search..."
@@ -668,14 +612,7 @@ export function Sidebar() {
           className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-100 hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-50"
           title="New session"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path
-              d="M7 1v12M1 7h12"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
+          <PlusIcon className="w-4 h-4" />
         </button>
       </div>
 
@@ -798,24 +735,17 @@ export function Sidebar() {
         {/* Workspace section */}
         <SectionHeading title="Workspace" collapsed={workspaceCollapsed} onToggle={() => setWorkspaceCollapsed((c) => !c)} />
         {!workspaceCollapsed && (
-          <div className="px-2 pt-0.5 space-y-0.5 flex-shrink-0">
+          <div className="px-2 pt-0.5 flex-shrink-0">
             <button
               onClick={() => setActiveView('board')}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors',
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 activeView === 'board'
                   ? 'bg-surface-200 text-text-primary'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
               )}
             >
-              <span className="relative flex-shrink-0 w-4 h-4">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-text-tertiary">
-                  <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.2" />
-                  <line x1="5.5" y1="1.5" x2="5.5" y2="14.5" stroke="currentColor" strokeWidth="1.2" />
-                  <line x1="10.5" y1="1.5" x2="10.5" y2="14.5" stroke="currentColor" strokeWidth="1.2" />
-                  <line x1="1.5" y1="6" x2="14.5" y2="6" stroke="currentColor" strokeWidth="1.2" />
-                </svg>
-              </span>
+              <ViewColumnsIcon className="flex-shrink-0 w-5 h-5 text-text-tertiary" />
               <span>Board</span>
               {nonDoneCount > 0 && (
                 <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/15 text-accent">
@@ -826,36 +756,25 @@ export function Sidebar() {
             <button
               onClick={() => setActiveView('usage')}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors',
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 activeView === 'usage'
                   ? 'bg-surface-200 text-text-primary'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
               )}
             >
-              <span className="relative flex-shrink-0 w-4 h-4">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-text-tertiary">
-                  <rect x="2" y="9" width="3" height="5" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
-                  <rect x="6.5" y="5" width="3" height="9" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
-                  <rect x="11" y="2" width="3" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
-                </svg>
-              </span>
+              <ChartBarIcon className="flex-shrink-0 w-5 h-5 text-text-tertiary" />
               <span>Usage</span>
             </button>
             <button
               onClick={() => setActiveView('settings')}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors',
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 activeView === 'settings'
                   ? 'bg-surface-200 text-text-primary'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
               )}
             >
-              <span className="relative flex-shrink-0 w-4 h-4">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-text-tertiary">
-                  <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" strokeWidth="1.2" />
-                  <path d="M13.3 10.2a1.1 1.1 0 00.2 1.2l.04.04a1.33 1.33 0 11-1.88 1.88l-.04-.04a1.1 1.1 0 00-1.2-.2 1.1 1.1 0 00-.67 1.01v.12a1.33 1.33 0 11-2.67 0v-.06a1.1 1.1 0 00-.72-1.01 1.1 1.1 0 00-1.2.2l-.04.04a1.33 1.33 0 11-1.88-1.88l.04-.04a1.1 1.1 0 00.2-1.2 1.1 1.1 0 00-1.01-.67h-.12a1.33 1.33 0 110-2.67h.06a1.1 1.1 0 001.01-.72 1.1 1.1 0 00-.2-1.2l-.04-.04A1.33 1.33 0 114.9 2.9l.04.04a1.1 1.1 0 001.2.2h.05a1.1 1.1 0 00.67-1.01v-.12a1.33 1.33 0 112.67 0v.06a1.1 1.1 0 00.67 1.01 1.1 1.1 0 001.2-.2l.04-.04a1.33 1.33 0 111.88 1.88l-.04.04a1.1 1.1 0 00-.2 1.2v.05a1.1 1.1 0 001.01.67h.12a1.33 1.33 0 010 2.67h-.06a1.1 1.1 0 00-1.01.67z" stroke="currentColor" strokeWidth="1.2" />
-                </svg>
-              </span>
+              <Cog6ToothIcon className="flex-shrink-0 w-5 h-5 text-text-tertiary" />
               <span>Settings</span>
             </button>
           </div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
+import { CommandLineIcon } from '@heroicons/react/24/outline'
 
 interface SessionItemProps {
   session: Session
@@ -128,8 +129,9 @@ export function SessionItem({
         onClick={handleClick}
         onContextMenu={onContextMenu}
         onKeyDown={handleButtonKeyDown}
+        title={session.cwd.replace(/^\/Users\/[^/]+/, '~')}
         className={cn(
-          'w-full flex items-center gap-2 py-1 rounded-lg text-left transition-colors outline-none',
+          'w-full flex items-center gap-3 py-2 rounded-lg text-left transition-colors outline-none',
           grouped ? 'pl-7 pr-3' : 'px-3',
           groupSelected
             ? 'text-text-primary'
@@ -140,32 +142,8 @@ export function SessionItem({
         )}
       >
         {/* Terminal icon with status badge */}
-        <span className="relative flex-shrink-0 w-4 h-4">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            className="text-text-tertiary"
-          >
-            <rect
-              x="1.5"
-              y="2.5"
-              width="13"
-              height="11"
-              rx="2"
-              stroke="currentColor"
-              strokeWidth="1.2"
-            />
-            <path
-              d="M4.5 6l2.5 2-2.5 2"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path d="M8.5 10h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
+        <span className="relative flex-shrink-0 w-5 h-5">
+          <CommandLineIcon className="w-5 h-5 text-text-tertiary" />
           <span
             className={cn(
               'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-surface-50',
@@ -177,7 +155,7 @@ export function SessionItem({
           />
         </span>
 
-        {/* Session name + path — double-click to rename */}
+        {/* Session name — double-click to rename */}
         {editing ? (
           <input
             ref={inputRef}
@@ -189,12 +167,9 @@ export function SessionItem({
             className="flex-1 min-w-0 bg-transparent text-sm font-medium text-text-primary outline-none border-none"
           />
         ) : (
-          <div className="flex-1 min-w-0" onDoubleClick={handleDoubleClick}>
-            <span className="block text-sm font-medium truncate">{session.name}</span>
-            <span className="block text-[10px] leading-tight text-text-tertiary truncate">
-              {session.cwd.replace(/^\/Users\/[^/]+/, '~')}
-            </span>
-          </div>
+          <span className="flex-1 min-w-0 text-sm font-medium truncate" onDoubleClick={handleDoubleClick}>
+            {session.name}
+          </span>
         )}
       </button>
       {dropIndicator === 'after' && (

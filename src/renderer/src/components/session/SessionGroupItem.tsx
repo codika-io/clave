@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
 import { useSessionStore, type SessionGroup } from '../../store/session-store'
+import { FolderIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 
 interface SessionGroupItemProps {
   group: SessionGroup
@@ -138,7 +139,7 @@ export function SessionGroupItem({
         onContextMenu={onContextMenu}
         onKeyDown={handleKeyDown}
         className={cn(
-          'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-left transition-colors outline-none',
+          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors outline-none',
           allSelected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-100',
           isDragging && 'opacity-30'
         )}
@@ -148,31 +149,13 @@ export function SessionGroupItem({
           onClick={handleToggleCollapse}
           className="flex-shrink-0 w-3 h-3 flex items-center justify-center text-text-tertiary cursor-pointer"
         >
-          <svg
-            width="8"
-            height="8"
-            viewBox="0 0 8 8"
-            fill="currentColor"
-            className={cn('transition-transform', group.collapsed ? '' : 'rotate-90')}
-          >
-            <path d="M2 1l4 3-4 3V1z" />
-          </svg>
+          <ChevronRightIcon
+            className={cn('w-3 h-3 transition-transform', group.collapsed ? '' : 'rotate-90')}
+          />
         </span>
 
         {/* Folder icon */}
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          className="flex-shrink-0 text-text-tertiary"
-        >
-          <path
-            d="M1.5 3.5a1 1 0 011-1h3l1.5 1.5h4.5a1 1 0 011 1v5a1 1 0 01-1 1h-9a1 1 0 01-1-1v-6.5z"
-            stroke="currentColor"
-            strokeWidth="1.2"
-          />
-        </svg>
+        <FolderIcon className="flex-shrink-0 w-5 h-5 text-text-tertiary" />
 
         {/* Group name */}
         {editing ? (

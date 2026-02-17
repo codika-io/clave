@@ -109,7 +109,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   displayOrder: [],
   sidebarOpen: true,
   sidebarWidth: 260,
-  theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  theme: 'coffee' as Theme,
   searchQuery: '',
   claudeMode: true,
   dangerousMode: false,

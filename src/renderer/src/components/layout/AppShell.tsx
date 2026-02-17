@@ -10,6 +10,7 @@ import { UpdateToast } from '../ui/UpdateToast'
 import { FilePalette } from '../files/FilePalette'
 import { SidePanel } from '../git/SidePanel'
 import { FilePreview } from '../files/FilePreview'
+import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 
 const sidebarTransition = {
   duration: 0.2,
@@ -153,18 +154,7 @@ export function AppShell() {
               className="p-1.5 rounded-md hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors"
               title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect
-                  x="1"
-                  y="2"
-                  width="14"
-                  height="12"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                />
-                <line x1="5.5" y1="2" x2="5.5" y2="14" stroke="currentColor" strokeWidth="1.5" />
-              </svg>
+              <Bars3BottomLeftIcon className="w-4 h-4" />
             </button>
           </div>
 
@@ -178,10 +168,7 @@ export function AppShell() {
               className="p-1.5 rounded-md hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors"
               title="Search files (Cmd+P)"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              <MagnifyingGlassIcon className="w-4 h-4" />
             </button>
             {/* File tree button */}
             <button
@@ -191,10 +178,7 @@ export function AppShell() {
               }`}
               title="File tree (Cmd+E)"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
-                <line x1="10.5" y1="2" x2="10.5" y2="14" stroke="currentColor" strokeWidth="1.5" />
-              </svg>
+              <Bars3BottomLeftIcon className="w-4 h-4 scale-x-[-1]" />
             </button>
           </div>
         </div>
