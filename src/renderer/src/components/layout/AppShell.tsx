@@ -5,7 +5,7 @@ import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
 import { KanbanBoard } from '../board/KanbanBoard'
 import { UsagePanel } from '../usage/UsagePanel'
-import { ThemeToggle } from '../ui/ThemeToggle'
+import { SettingsPanel } from '../settings/SettingsPanel'
 import { UpdateToast } from '../ui/UpdateToast'
 import { FilePalette } from '../files/FilePalette'
 import { SidePanel } from '../git/SidePanel'
@@ -196,7 +196,6 @@ export function AppShell() {
                 <line x1="10.5" y1="2" x2="10.5" y2="14" stroke="currentColor" strokeWidth="1.5" />
               </svg>
             </button>
-            <ThemeToggle />
           </div>
         </div>
 
@@ -210,6 +209,11 @@ export function AppShell() {
           {/* Usage view — hidden but stays mounted */}
           <div className={activeView === 'usage' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <UsagePanel />
+          </div>
+
+          {/* Settings view */}
+          <div className={activeView === 'settings' ? 'flex-1 flex min-h-0' : 'hidden'}>
+            <SettingsPanel />
           </div>
 
           {/* Terminal grid + file tree — hidden but stays mounted */}

@@ -87,7 +87,33 @@ const LIGHT_THEME = {
   brightWhite: '#525252'
 }
 
+const COFFEE_THEME = {
+  background: '#eeebe5',
+  foreground: '#1b1610',
+  cursor: 'rgba(27, 22, 16, 0.7)',
+  cursorAccent: '#eeebe5',
+  selectionBackground: 'rgba(120, 100, 80, 0.15)',
+  selectionForeground: undefined,
+  black: '#1b1610',
+  red: '#c53030',
+  green: '#2f855a',
+  yellow: '#b7791f',
+  blue: '#2b6cb0',
+  magenta: '#805ad5',
+  cyan: '#0e7490',
+  white: '#d0cbc3',
+  brightBlack: '#756e66',
+  brightRed: '#e53e3e',
+  brightGreen: '#38a169',
+  brightYellow: '#d69e2e',
+  brightBlue: '#3182ce',
+  brightMagenta: '#9f7aea',
+  brightCyan: '#0891b2',
+  brightWhite: '#9b9590'
+}
+
 function getXtermTheme(theme: Theme) {
+  if (theme === 'coffee') return COFFEE_THEME
   return theme === 'dark' ? DARK_THEME : LIGHT_THEME
 }
 

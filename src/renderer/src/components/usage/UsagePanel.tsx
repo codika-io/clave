@@ -211,7 +211,7 @@ function ActivityChart({ data }: { data: UsageData }) {
                 rx={2}
                 fill="var(--color-accent)"
                 opacity={isHovered ? 1 : 0.7}
-                style={{ transition: 'opacity 0.15s' }}
+                style={{ transition: 'opacity 0.15s', pointerEvents: 'none' }}
               />
               {(i % Math.ceil(last30.length / 6) === 0 || i === last30.length - 1) && (
                 <text

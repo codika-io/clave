@@ -81,6 +81,30 @@
   --claude-toggle-glow: rgba(217, 119, 87, 0.18);
 }
 
+/* Coffee theme — warm light, matching Claude's cream/beige aesthetic */
+[data-theme="coffee"] {
+  --surface-0: #f5f1eb;
+  --surface-50: #eeebe5;
+  --surface-100: #e8e4dd;
+  --surface-200: #ddd9d1;
+  --surface-300: #d0cbc3;
+  --surface-400: #c3bdb4;
+  --border-color: rgba(120, 100, 80, 0.15);
+  --border-subtle-color: rgba(120, 100, 80, 0.08);
+  --text-primary: #1b1610;
+  --text-secondary: #756e66;
+  --text-tertiary: #9b9590;
+  --scrollbar-thumb: rgba(120, 100, 80, 0.18);
+  --scrollbar-thumb-hover: rgba(120, 100, 80, 0.3);
+  --danger-toggle-bg: rgba(120, 100, 80, 0.08);
+  --danger-toggle-active: rgba(220, 53, 69, 0.15);
+  --danger-toggle-glow: rgba(220, 53, 69, 0.18);
+  --danger-toggle-icon: #dc3545;
+  --claude-toggle-bg: rgba(120, 100, 80, 0.08);
+  --claude-toggle-active: rgba(217, 119, 87, 0.18);
+  --claude-toggle-glow: rgba(217, 119, 87, 0.22);
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }

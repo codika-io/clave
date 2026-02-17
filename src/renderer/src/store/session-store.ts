@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type Theme = 'dark' | 'light'
+export type Theme = 'dark' | 'light' | 'coffee'
 
 export type ActivityStatus = 'active' | 'idle' | 'ended'
 
@@ -21,7 +21,7 @@ export interface SessionGroup {
   collapsed: boolean
 }
 
-export type ActiveView = 'terminals' | 'board' | 'usage'
+export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings'
 
 interface SessionState {
   sessions: Session[]
@@ -60,7 +60,7 @@ interface SessionState {
   ) => void
   toggleSidebar: () => void
   setSidebarWidth: (width: number) => void
-  toggleTheme: () => void
+  setTheme: (theme: Theme) => void
   updateSessionAlive: (id: string, alive: boolean) => void
   setSessionActivity: (id: string, status: ActivityStatus) => void
   setSessionPromptWaiting: (id: string, promptType: string | null) => void
@@ -332,7 +332,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setSidebarWidth: (width) => set({ sidebarWidth: Math.max(180, Math.min(480, width)) }),
 
-  toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
+  setTheme: (theme) => set({ theme }),
 
   updateSessionAlive: (id, alive) =>
     set((state) => ({

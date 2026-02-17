@@ -2,11 +2,13 @@ import { useSessionStore } from '../../store/session-store'
 
 export function ThemeToggle() {
   const theme = useSessionStore((s) => s.theme)
-  const toggleTheme = useSessionStore((s) => s.toggleTheme)
+  const setTheme = useSessionStore((s) => s.setTheme)
+
+  const toggle = () => setTheme(theme === 'dark' ? 'light' : 'dark')
 
   return (
     <button
-      onClick={toggleTheme}
+      onClick={toggle}
       className="p-1.5 rounded-md hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors"
       title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
     >

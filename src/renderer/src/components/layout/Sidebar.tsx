@@ -841,6 +841,23 @@ export function Sidebar() {
               </span>
               <span>Usage</span>
             </button>
+            <button
+              onClick={() => setActiveView('settings')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors',
+                activeView === 'settings'
+                  ? 'bg-surface-200 text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
+              )}
+            >
+              <span className="relative flex-shrink-0 w-4 h-4">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-text-tertiary">
+                  <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M13.3 10.2a1.1 1.1 0 00.2 1.2l.04.04a1.33 1.33 0 11-1.88 1.88l-.04-.04a1.1 1.1 0 00-1.2-.2 1.1 1.1 0 00-.67 1.01v.12a1.33 1.33 0 11-2.67 0v-.06a1.1 1.1 0 00-.72-1.01 1.1 1.1 0 00-1.2.2l-.04.04a1.33 1.33 0 11-1.88-1.88l.04-.04a1.1 1.1 0 00.2-1.2 1.1 1.1 0 00-1.01-.67h-.12a1.33 1.33 0 110-2.67h.06a1.1 1.1 0 001.01-.72 1.1 1.1 0 00-.2-1.2l-.04-.04A1.33 1.33 0 114.9 2.9l.04.04a1.1 1.1 0 001.2.2h.05a1.1 1.1 0 00.67-1.01v-.12a1.33 1.33 0 112.67 0v.06a1.1 1.1 0 00.67 1.01 1.1 1.1 0 001.2-.2l.04-.04a1.33 1.33 0 111.88 1.88l-.04.04a1.1 1.1 0 00-.2 1.2v.05a1.1 1.1 0 001.01.67h.12a1.33 1.33 0 010 2.67h-.06a1.1 1.1 0 00-1.01.67z" stroke="currentColor" strokeWidth="1.2" />
+                </svg>
+              </span>
+              <span>Settings</span>
+            </button>
           </div>
         )}
 
