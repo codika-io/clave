@@ -21,6 +21,11 @@ export interface GitStatusResult {
   files: GitFileStatus[]
 }
 
+export interface GitCommitResult {
+  hash: string
+  branch: string
+}
+
 function mapFiles(status: StatusResult): GitFileStatus[] {
   const files: GitFileStatus[] = []
 
@@ -64,6 +69,32 @@ function mapFiles(status: StatusResult): GitFileStatus[] {
 }
 
 class GitManager {
+  async stage(cwd: string, files: string[]): Promise<void> {
+    const git = simpleGit(cwd)
+    await git.add(files)
+  }
+
+  async unstage(cwd: string, files: string[]): Promise<void> {
+    const git = simpleGit(cwd)
+    await git.raw(['reset', 'HEAD', '--', ...files])
+  }
+
+  async commit(cwd: string, message: string): Promise<GitCommitResult> {
+    const git = simpleGit(cwd)
+    const result = await git.commit(message)
+    return { hash: result.commit, branch: result.branch }
+  }
+
+  async push(cwd: string): Promise<void> {
+    const git = simpleGit(cwd)
+    await git.push()
+  }
+
+  async pull(cwd: string): Promise<void> {
+    const git = simpleGit(cwd)
+    await git.pull()
+  }
+
   async getStatus(cwd: string): Promise<GitStatusResult> {
     try {
       const git = simpleGit(cwd)

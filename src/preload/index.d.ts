@@ -103,6 +103,11 @@ export interface GitStatusResult {
   files: GitFileStatus[]
 }
 
+export interface GitCommitResult {
+  hash: string
+  branch: string
+}
+
 export interface ElectronAPI {
   spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
@@ -128,6 +133,11 @@ export interface ElectronAPI {
   getUsageStats: () => Promise<UsageData>
   fetchRateLimits: () => Promise<RateLimits | null>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>
+  gitStage: (cwd: string, files: string[]) => Promise<void>
+  gitUnstage: (cwd: string, files: string[]) => Promise<void>
+  gitCommit: (cwd: string, message: string) => Promise<GitCommitResult>
+  gitPush: (cwd: string) => Promise<void>
+  gitPull: (cwd: string) => Promise<void>
 }
 
 declare global {

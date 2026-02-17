@@ -17,6 +17,15 @@ export function registerIpcHandlers(): void {
 
   // Git handlers
   ipcMain.handle('git:status', (_event, cwd: string) => gitManager.getStatus(cwd))
+  ipcMain.handle('git:stage', (_event, cwd: string, files: string[]) => gitManager.stage(cwd, files))
+  ipcMain.handle('git:unstage', (_event, cwd: string, files: string[]) =>
+    gitManager.unstage(cwd, files)
+  )
+  ipcMain.handle('git:commit', (_event, cwd: string, message: string) =>
+    gitManager.commit(cwd, message)
+  )
+  ipcMain.handle('git:push', (_event, cwd: string) => gitManager.push(cwd))
+  ipcMain.handle('git:pull', (_event, cwd: string) => gitManager.pull(cwd))
 
   ipcMain.handle('updater:install', () => {
     installUpdate()

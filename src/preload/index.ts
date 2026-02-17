@@ -71,6 +71,11 @@ const electronAPI = {
 
   // Git
   getGitStatus: (cwd: string) => ipcRenderer.invoke('git:status', cwd),
+  gitStage: (cwd: string, files: string[]) => ipcRenderer.invoke('git:stage', cwd, files),
+  gitUnstage: (cwd: string, files: string[]) => ipcRenderer.invoke('git:unstage', cwd, files),
+  gitCommit: (cwd: string, message: string) => ipcRenderer.invoke('git:commit', cwd, message),
+  gitPush: (cwd: string) => ipcRenderer.invoke('git:push', cwd),
+  gitPull: (cwd: string) => ipcRenderer.invoke('git:pull', cwd),
 
   showNotification: (options: { title: string; body: string; sessionId: string }) =>
     ipcRenderer.invoke('notification:show', options),
