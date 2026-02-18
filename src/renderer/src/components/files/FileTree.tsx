@@ -3,7 +3,7 @@ import { useSessionStore } from '../../store/session-store'
 import { useFileTree, type FlatTreeNode } from '../../hooks/use-file-tree'
 import { FileTreeItem } from './FileTreeItem'
 import { ContextMenu } from '../ui/ContextMenu'
-import { insertPath, shellEscape } from '../../lib/shell'
+import { shellEscape } from '../../lib/shell'
 
 interface ContextMenuState {
   x: number
@@ -41,14 +41,16 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder }: {
         })
       } else {
         setSelectedPaths(new Set())
-        if (isCustom) {
-          insertPath(focusedSessionId, `${cwd}/${filePath}`)
-        } else {
-          insertPath(focusedSessionId, './' + filePath)
-        }
       }
     },
-    [focusedSessionId, cwd, isCustom]
+    [focusedSessionId, cwd]
+  )
+
+  const handleDoubleClickFile = useCallback(
+    (filePath: string) => {
+      setPreviewFile(filePath, 'tree')
+    },
+    [setPreviewFile]
   )
 
   const handleDragStart = useCallback(
@@ -156,6 +158,7 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder }: {
               node={node}
               isSelected={selectedPaths.has(node.path)}
               onClickFile={handleClickFile}
+              onDoubleClickFile={handleDoubleClickFile}
               onToggleDir={toggleDir}
               onContextMenu={handleContextMenu}
               onDragStart={handleDragStart}
