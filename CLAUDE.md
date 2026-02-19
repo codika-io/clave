@@ -79,6 +79,10 @@ The build requires Apple code signing. Credentials are expected in `.env` (not c
 3. Launch — the app should detect version N, download it, and show a native notification.
 4. Quit and relaunch — the app should now be on version N.
 
+## Icons
+
+Use **Heroicons** (`@heroicons/react/24/outline`) for all UI icons. Do not use hand-rolled inline SVGs for standard icons — always check if a suitable Heroicon exists first. Custom SVGs in `src/renderer/src/components/files/file-icons.tsx` are only for file-type-specific icons (folder, code file, config, image, markdown, generic).
+
 ## Gotchas
 
 - **PATH resolution in packaged app (CRITICAL)**: Packaged Electron apps have a minimal `process.env.PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`). The user's full PATH (with homebrew, npm globals, etc.) must be resolved by spawning a login shell. `getLoginShellPath()` in `pty-manager.ts` handles this. **NEVER use `execSync` for this** — it runs through `/bin/sh` which expands `$PATH` before zsh starts, giving the minimal PATH. Always use `execFileSync('/bin/zsh', ['-lic', 'echo __PATH__$PATH'])` to call zsh directly so `$PATH` is expanded after zsh sources `.zprofile`/`.zshrc`. This is the root cause of `command not found: claude` in packaged builds.

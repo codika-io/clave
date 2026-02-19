@@ -1,7 +1,11 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { useGitStatus } from '../../hooks/use-git-status'
+import { FileIcon } from '../files/file-icons'
+import { ListBulletIcon, Bars3BottomLeftIcon } from '@heroicons/react/24/outline'
+import { buildGitTree, compactTree, flattenGitTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import type { GitFileStatus, GitStatusResult } from '../../../../preload/index.d'
+import type { FlatGitTreeNode } from '../../lib/git-file-tree'
 
 function statusLetter(status: GitFileStatus['status']): string {
   switch (status) {
@@ -115,6 +119,151 @@ function SectionHeader({
         </button>
       )}
     </div>
+  )
+}
+
+function ViewModeToggle() {
+  const gitViewMode = useSessionStore((s) => s.gitViewMode)
+  const setGitViewMode = useSessionStore((s) => s.setGitViewMode)
+  return (
+    <div className="flex items-center bg-surface-100 rounded p-0.5 gap-0.5">
+      <button
+        className={`p-0.5 rounded transition-colors ${
+          gitViewMode === 'list'
+            ? 'bg-surface-200 text-text-primary'
+            : 'text-text-tertiary hover:text-text-secondary'
+        }`}
+        onClick={() => setGitViewMode('list')}
+        title="List view"
+      >
+        <ListBulletIcon className="w-3 h-3" />
+      </button>
+      <button
+        className={`p-0.5 rounded transition-colors ${
+          gitViewMode === 'tree'
+            ? 'bg-surface-200 text-text-primary'
+            : 'text-text-tertiary hover:text-text-secondary'
+        }`}
+        onClick={() => setGitViewMode('tree')}
+        title="Tree view"
+      >
+        <Bars3BottomLeftIcon className="w-3 h-3" />
+      </button>
+    </div>
+  )
+}
+
+function GitTreeDirRow({
+  node,
+  onToggle
+}: {
+  node: FlatGitTreeNode
+  onToggle: (path: string) => void
+}) {
+  return (
+    <div
+      className="flex items-center gap-1.5 py-0.5 text-xs hover:bg-surface-100 transition-colors cursor-pointer pr-3"
+      style={{ paddingLeft: `${12 + node.depth * 16}px` }}
+      onClick={() => onToggle(node.path)}
+    >
+      <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-text-tertiary">
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          className={`transition-transform duration-100 ${node.expanded ? 'rotate-90' : ''}`}
+        >
+          <path d="M3 1.5L7 5L3 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+      <FileIcon name="" isDirectory className="flex-shrink-0 text-text-tertiary" />
+      <span className="text-text-secondary truncate">{node.name}</span>
+    </div>
+  )
+}
+
+function GitTreeFileRow({
+  node,
+  onClickName,
+  onStageToggle,
+  disabled
+}: {
+  node: FlatGitTreeNode
+  onClickName?: () => void
+  onStageToggle?: () => void
+  disabled?: boolean
+}) {
+  const file = node.file!
+  const isStaged = file.staged
+  return (
+    <div
+      className={`flex items-center gap-1.5 py-0.5 text-xs transition-colors group pr-3 ${
+        disabled ? 'opacity-50 pointer-events-none' : 'hover:bg-surface-100'
+      }`}
+      style={{ paddingLeft: `${12 + node.depth * 16}px` }}
+    >
+      <span className="w-4 flex-shrink-0" />
+      <span className={`font-mono w-3 flex-shrink-0 ${statusColor(file.status)}`}>
+        {statusLetter(file.status)}
+      </span>
+      <span
+        className="text-text-primary truncate cursor-pointer hover:underline"
+        onClick={onClickName}
+      >
+        {node.name}
+      </span>
+      <button
+        className="ml-auto flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary hover:bg-surface-200 transition-all"
+        onClick={(e) => {
+          e.stopPropagation()
+          onStageToggle?.()
+        }}
+        title={isStaged ? 'Unstage' : 'Stage'}
+      >
+        {isStaged ? '\u2212' : '+'}
+      </button>
+    </div>
+  )
+}
+
+function GitTreeSection({
+  files,
+  expandedPaths,
+  onToggleExpanded,
+  onClickFile,
+  onStageToggle,
+  disabled
+}: {
+  files: GitFileStatus[]
+  expandedPaths: Set<string>
+  onToggleExpanded: (path: string) => void
+  onClickFile: (file: GitFileStatus) => void
+  onStageToggle: (file: GitFileStatus) => void
+  disabled?: boolean
+}) {
+  const flatNodes = useMemo(() => {
+    if (files.length === 0) return []
+    const tree = compactTree(buildGitTree(files))
+    return flattenGitTree(tree, expandedPaths)
+  }, [files, expandedPaths])
+
+  return (
+    <>
+      {flatNodes.map((node) =>
+        node.type === 'directory' ? (
+          <GitTreeDirRow key={`d-${node.path}`} node={node} onToggle={onToggleExpanded} />
+        ) : (
+          <GitTreeFileRow
+            key={`f-${node.path}`}
+            node={node}
+            onClickName={() => node.file && onClickFile(node.file)}
+            onStageToggle={() => node.file && onStageToggle(node.file)}
+            disabled={disabled}
+          />
+        )
+      )}
+    </>
   )
 }
 
@@ -398,23 +547,26 @@ function BranchHeader({
         <path d="M6 4v4" stroke="currentColor" strokeWidth="1.2" />
       </svg>
       <span className="text-text-primary font-medium truncate">{branch}</span>
-      {(ahead > 0 || behind > 0) && (
-        <span className="text-text-tertiary ml-auto flex-shrink-0">
-          {ahead > 0 && (
-            <span className="text-green-400">
-              {'\u2191'}
-              {ahead}
-            </span>
-          )}
-          {ahead > 0 && behind > 0 && ' '}
-          {behind > 0 && (
-            <span className="text-orange-400">
-              {'\u2193'}
-              {behind}
-            </span>
-          )}
-        </span>
-      )}
+      <span className="ml-auto flex-shrink-0 flex items-center gap-1.5">
+        {(ahead > 0 || behind > 0) && (
+          <span className="text-text-tertiary">
+            {ahead > 0 && (
+              <span className="text-green-400">
+                {'\u2191'}
+                {ahead}
+              </span>
+            )}
+            {ahead > 0 && behind > 0 && ' '}
+            {behind > 0 && (
+              <span className="text-orange-400">
+                {'\u2193'}
+                {behind}
+              </span>
+            )}
+          </span>
+        )}
+        <ViewModeToggle />
+      </span>
     </div>
   )
 }
@@ -441,9 +593,12 @@ function RepoSection({
   onDiffClose?: () => void
 }) {
   const setFileTreeWidthOverride = useSessionStore((s) => s.setFileTreeWidthOverride)
+  const gitViewMode = useSessionStore((s) => s.gitViewMode)
   const [operating, setOperating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<GitFileStatus | null>(null)
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
+  const prevViewMode = useRef(gitViewMode)
 
   // Width override for diff view
   useEffect(() => {
@@ -469,6 +624,28 @@ function RepoSection({
     )
     if (!stillExists) setSelectedFile(null)
   }, [status?.files, selectedFile])
+
+  // Auto-expand all dirs when switching to tree mode
+  useEffect(() => {
+    if (gitViewMode === 'tree' && prevViewMode.current === 'list' && status?.files) {
+      const allFiles = status.files
+      const tree = compactTree(buildGitTree(allFiles))
+      setExpandedPaths(collectAllDirPaths(tree))
+    }
+    prevViewMode.current = gitViewMode
+  }, [gitViewMode, status?.files])
+
+  const toggleExpanded = useCallback((path: string) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
+  }, [])
 
   // Compute relative filter prefix from the repo root
   const relativeFilterPrefix = useMemo(() => {
@@ -614,15 +791,26 @@ function RepoSection({
               onAction={unstageAll}
               disabled={operating}
             />
-            {staged.map((f) => (
-              <FileRow
-                key={`s-${f.path}`}
-                file={f}
-                onClickName={() => setSelectedFile(f)}
-                onStageToggle={() => unstageFile(f.path)}
+            {gitViewMode === 'tree' ? (
+              <GitTreeSection
+                files={staged}
+                expandedPaths={expandedPaths}
+                onToggleExpanded={toggleExpanded}
+                onClickFile={setSelectedFile}
+                onStageToggle={(f) => unstageFile(f.path)}
                 disabled={operating}
               />
-            ))}
+            ) : (
+              staged.map((f) => (
+                <FileRow
+                  key={`s-${f.path}`}
+                  file={f}
+                  onClickName={() => setSelectedFile(f)}
+                  onStageToggle={() => unstageFile(f.path)}
+                  disabled={operating}
+                />
+              ))
+            )}
           </>
         )}
         {unstaged.length > 0 && (
@@ -634,15 +822,26 @@ function RepoSection({
               onAction={() => stageAll(unstaged)}
               disabled={operating}
             />
-            {unstaged.map((f) => (
-              <FileRow
-                key={`u-${f.path}`}
-                file={f}
-                onClickName={() => setSelectedFile(f)}
-                onStageToggle={() => stageFile(f.path)}
+            {gitViewMode === 'tree' ? (
+              <GitTreeSection
+                files={unstaged}
+                expandedPaths={expandedPaths}
+                onToggleExpanded={toggleExpanded}
+                onClickFile={setSelectedFile}
+                onStageToggle={(f) => stageFile(f.path)}
                 disabled={operating}
               />
-            ))}
+            ) : (
+              unstaged.map((f) => (
+                <FileRow
+                  key={`u-${f.path}`}
+                  file={f}
+                  onClickName={() => setSelectedFile(f)}
+                  onStageToggle={() => stageFile(f.path)}
+                  disabled={operating}
+                />
+              ))
+            )}
           </>
         )}
         {untracked.length > 0 && (
@@ -654,15 +853,26 @@ function RepoSection({
               onAction={() => stageAll(untracked)}
               disabled={operating}
             />
-            {untracked.map((f) => (
-              <FileRow
-                key={`t-${f.path}`}
-                file={f}
-                onClickName={() => setSelectedFile(f)}
-                onStageToggle={() => stageFile(f.path)}
+            {gitViewMode === 'tree' ? (
+              <GitTreeSection
+                files={untracked}
+                expandedPaths={expandedPaths}
+                onToggleExpanded={toggleExpanded}
+                onClickFile={setSelectedFile}
+                onStageToggle={(f) => stageFile(f.path)}
                 disabled={operating}
               />
-            ))}
+            ) : (
+              untracked.map((f) => (
+                <FileRow
+                  key={`t-${f.path}`}
+                  file={f}
+                  onClickName={() => setSelectedFile(f)}
+                  onStageToggle={() => stageFile(f.path)}
+                  disabled={operating}
+                />
+              ))
+            )}
           </>
         )}
       </div>
@@ -808,6 +1018,9 @@ export function MultiRepoGitPanel({
 }) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex items-center justify-end px-3 py-1 border-b border-border-subtle flex-shrink-0">
+        <ViewModeToggle />
+      </div>
       <div className="flex-1 overflow-y-auto">
         {repos.map((repo) => (
           <MultiRepoSection
