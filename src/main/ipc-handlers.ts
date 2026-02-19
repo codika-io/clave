@@ -96,6 +96,11 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('git:push', (_event, cwd: string) => gitManager.push(cwd))
   ipcMain.handle('git:pull', (_event, cwd: string) => gitManager.pull(cwd))
+  ipcMain.handle(
+    'git:diff',
+    (_event, cwd: string, filePath: string, staged: boolean, isUntracked: boolean) =>
+      gitManager.getDiff(cwd, filePath, staged, isUntracked)
+  )
 
   ipcMain.handle('updater:install', () => {
     installUpdate()

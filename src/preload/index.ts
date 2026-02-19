@@ -76,6 +76,8 @@ const electronAPI = {
   gitCommit: (cwd: string, message: string) => ipcRenderer.invoke('git:commit', cwd, message),
   gitPush: (cwd: string) => ipcRenderer.invoke('git:push', cwd),
   gitPull: (cwd: string) => ipcRenderer.invoke('git:pull', cwd),
+  gitDiff: (cwd: string, filePath: string, staged: boolean, isUntracked: boolean) =>
+    ipcRenderer.invoke('git:diff', cwd, filePath, staged, isUntracked),
 
   onClaudeSessionDetected: (sessionId: string, callback: (claudeSessionId: string) => void) => {
     const channel = `pty:claude-session-id:${sessionId}`

@@ -11,11 +11,13 @@ interface ContextMenuState {
   items: { label: string; onClick: () => void; shortcut?: string }[]
 }
 
-export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder }: {
+export function FileTree({ cwd, isCustom, sessionCwd, onChangeFolder, onResetFolder, onNavigateToFolder }: {
   cwd: string | null
   isCustom: boolean
+  sessionCwd: string | null
   onChangeFolder: () => void
   onResetFolder: () => void
+  onNavigateToFolder: (absolutePath: string) => void
 }) {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const setPreviewFile = useSessionStore((s) => s.setPreviewFile)
@@ -46,11 +48,27 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder }: {
     [focusedSessionId, cwd]
   )
 
+  // Compute the subfolder prefix to prepend to relative paths when navigated into a subfolder.
+  // When cwd is a subfolder of sessionCwd, file tree paths are relative to cwd but
+  // FilePreview resolves against sessionCwd, so we need the relative path from sessionCwd to cwd.
+  const subfolderPrefix = (() => {
+    if (!cwd || !sessionCwd || cwd === sessionCwd || !cwd.startsWith(sessionCwd + '/')) return ''
+    return cwd.slice(sessionCwd.length + 1) + '/'
+  })()
+
   const handleDoubleClickFile = useCallback(
     (filePath: string) => {
-      setPreviewFile(filePath, 'tree')
+      setPreviewFile(subfolderPrefix + filePath, 'tree')
     },
-    [setPreviewFile]
+    [setPreviewFile, subfolderPrefix]
+  )
+
+  const handleDoubleClickDir = useCallback(
+    (dirPath: string) => {
+      if (!cwd) return
+      onNavigateToFolder(`${cwd}/${dirPath}`)
+    },
+    [cwd, onNavigateToFolder]
   )
 
   const handleDragStart = useCallback(
@@ -91,12 +109,18 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder }: {
       if (node.type === 'file') {
         items.unshift({
           label: 'Preview',
-          onClick: () => setPreviewFile(node.path, 'tree')
+          onClick: () => setPreviewFile(subfolderPrefix + node.path, 'tree')
+        })
+      }
+      if (node.type === 'directory') {
+        items.unshift({
+          label: 'Open as Root',
+          onClick: () => onNavigateToFolder(absPath)
         })
       }
       setContextMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [cwd, setPreviewFile]
+    [cwd, setPreviewFile, subfolderPrefix, onNavigateToFolder]
   )
 
   return (
@@ -159,6 +183,7 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder }: {
               isSelected={selectedPaths.has(node.path)}
               onClickFile={handleClickFile}
               onDoubleClickFile={handleDoubleClickFile}
+              onDoubleClickDir={handleDoubleClickDir}
               onToggleDir={toggleDir}
               onContextMenu={handleContextMenu}
               onDragStart={handleDragStart}

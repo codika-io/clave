@@ -27,17 +27,34 @@ export function SidePanel() {
   const focusedSession = sessions.find((s) => s.id === focusedSessionId)
   const sessionCwd = focusedSession?.cwd ?? null
 
-  const [customCwd, setCustomCwd] = useState<string | null>(null)
+  const [customCwd, _setCustomCwd] = useState<string | null>(null)
+  const navMapRef = useRef(new Map<string, string>())
   const prevSessionIdRef = useRef(focusedSessionId)
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const pathButtonRef = useRef<HTMLButtonElement>(null)
   const pathMenuRef = useRef<HTMLDivElement>(null)
 
-  // Reset custom cwd when focused session changes
+  // Wrapper that also stores/clears entries in the per-session nav map
+  const setCustomCwd = useCallback(
+    (path: string | null) => {
+      _setCustomCwd(path)
+      if (focusedSessionId) {
+        if (path) {
+          navMapRef.current.set(focusedSessionId, path)
+        } else {
+          navMapRef.current.delete(focusedSessionId)
+        }
+      }
+    },
+    [focusedSessionId]
+  )
+
+  // Restore from nav map when focused session changes
   useEffect(() => {
     if (focusedSessionId !== prevSessionIdRef.current) {
       prevSessionIdRef.current = focusedSessionId
-      setCustomCwd(null)
+      const saved = focusedSessionId ? navMapRef.current.get(focusedSessionId) ?? null : null
+      _setCustomCwd(saved)
     }
   }, [focusedSessionId])
 
@@ -58,7 +75,37 @@ export function SidePanel() {
 
   const handleResetFolder = useCallback(() => {
     setCustomCwd(null)
-  }, [])
+  }, [setCustomCwd])
+
+  const handleNavigateToFolder = useCallback(
+    (absolutePath: string) => {
+      setCustomCwd(absolutePath)
+    },
+    [setCustomCwd]
+  )
+
+  // Are we navigated into a subfolder of the session's cwd?
+  const isNavigatedSubfolder = !!(
+    cwd && sessionCwd && cwd !== sessionCwd && cwd.startsWith(sessionCwd + '/')
+  )
+
+  // Breadcrumb segments when navigated into a subfolder
+  const breadcrumbSegments = useMemo(() => {
+    if (!isNavigatedSubfolder || !sessionCwd || !cwd) return []
+    const sessionFolderName = sessionCwd.split('/').pop() ?? sessionCwd
+    const relativePath = cwd.slice(sessionCwd.length + 1)
+    const parts = relativePath.split('/')
+    const segments: { label: string; path: string }[] = [
+      { label: sessionFolderName, path: sessionCwd }
+    ]
+    for (let i = 0; i < parts.length; i++) {
+      segments.push({
+        label: parts[i],
+        path: sessionCwd + '/' + parts.slice(0, i + 1).join('/')
+      })
+    }
+    return segments
+  }, [isNavigatedSubfolder, sessionCwd, cwd])
 
   const parentPaths = useMemo(() => {
     if (!cwd) return []
@@ -124,56 +171,90 @@ export function SidePanel() {
           </svg>
         </button>
 
-        {/* Path display — clickable with parent folder dropdown */}
+        {/* Path display — breadcrumb when navigated into subfolder, dropdown otherwise */}
         <div className="relative flex-1 min-w-0">
-          <button
-            ref={pathButtonRef}
-            onClick={() => cwd && setPathMenuOpen((v) => !v)}
-            className="w-full text-left text-xs text-text-secondary font-medium truncate hover:text-text-primary cursor-pointer transition-colors"
-            title={cwd ?? ''}
-          >
-            {displayPath}
-          </button>
-          {pathMenuOpen && parentPaths.length > 0 && (
+          {isNavigatedSubfolder ? (
             <div
-              ref={pathMenuRef}
-              className="fixed z-50 min-w-[180px] max-w-[320px] max-h-[60vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
-              style={{
-                top: (pathButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
-                right:
-                  document.documentElement.clientWidth -
-                  (pathButtonRef.current?.getBoundingClientRect().right ?? 0)
-              }}
+              className="flex items-center gap-0.5 text-xs font-medium min-w-0 overflow-hidden"
+              onDoubleClick={() => setCustomCwd(null)}
+              title="Double-click to reset to session folder"
             >
-              {parentPaths.map((item) => (
-                <button
-                  key={item.path}
-                  onClick={() => {
-                    setCustomCwd(item.path)
-                    setPathMenuOpen(false)
-                  }}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium hover:bg-surface-200 transition-colors ${
-                    item.path === cwd ? 'text-accent' : 'text-text-primary'
-                  }`}
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    className="flex-shrink-0"
+              {breadcrumbSegments.map((seg, i) => (
+                <span key={seg.path} className="flex items-center min-w-0">
+                  {i > 0 && (
+                    <span className="text-text-tertiary mx-0.5 flex-shrink-0">/</span>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (seg.path === sessionCwd) {
+                        setCustomCwd(null)
+                      } else {
+                        setCustomCwd(seg.path)
+                      }
+                    }}
+                    className={`truncate hover:text-text-primary transition-colors ${
+                      i === breadcrumbSegments.length - 1
+                        ? 'text-text-primary'
+                        : 'text-text-tertiary hover:underline'
+                    }`}
                   >
-                    <path
-                      d="M1.5 2.5a1 1 0 0 1 1-1h2.172a1 1 0 0 1 .707.293L6.5 2.914a1 1 0 0 0 .707.293H9.5a1 1 0 0 1 1 1v5.293a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V2.5Z"
-                      stroke="currentColor"
-                      strokeWidth="1.1"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span className="truncate">{item.name}</span>
-                </button>
+                    {seg.label}
+                  </button>
+                </span>
               ))}
             </div>
+          ) : (
+            <>
+              <button
+                ref={pathButtonRef}
+                onClick={() => cwd && setPathMenuOpen((v) => !v)}
+                className="w-full text-left text-xs text-text-secondary font-medium truncate hover:text-text-primary cursor-pointer transition-colors"
+                title={cwd ?? ''}
+              >
+                {displayPath}
+              </button>
+              {pathMenuOpen && parentPaths.length > 0 && (
+                <div
+                  ref={pathMenuRef}
+                  className="fixed z-50 min-w-[180px] max-w-[320px] max-h-[60vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
+                  style={{
+                    top: (pathButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                    right:
+                      document.documentElement.clientWidth -
+                      (pathButtonRef.current?.getBoundingClientRect().right ?? 0)
+                  }}
+                >
+                  {parentPaths.map((item) => (
+                    <button
+                      key={item.path}
+                      onClick={() => {
+                        setCustomCwd(item.path)
+                        setPathMenuOpen(false)
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium hover:bg-surface-200 transition-colors ${
+                        item.path === cwd ? 'text-accent' : 'text-text-primary'
+                      }`}
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        className="flex-shrink-0"
+                      >
+                        <path
+                          d="M1.5 2.5a1 1 0 0 1 1-1h2.172a1 1 0 0 1 .707.293L6.5 2.914a1 1 0 0 0 .707.293H9.5a1 1 0 0 1 1 1v5.293a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V2.5Z"
+                          stroke="currentColor"
+                          strokeWidth="1.1"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <span className="truncate">{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -199,11 +280,17 @@ export function SidePanel() {
         <FileTree
           cwd={cwd}
           isCustom={isCustom}
+          sessionCwd={sessionCwd}
           onChangeFolder={handleChangeFolder}
           onResetFolder={handleResetFolder}
+          onNavigateToFolder={handleNavigateToFolder}
         />
       ) : (
-        <GitStatusPanel cwd={cwd} isActive={sidePanelTab === 'git'} />
+        <GitStatusPanel
+          cwd={cwd}
+          isActive={sidePanelTab === 'git'}
+          filterPrefix={isNavigatedSubfolder ? cwd : null}
+        />
       )}
     </div>
   )

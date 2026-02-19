@@ -26,6 +26,7 @@ export function AppShell() {
   const toggleFilePalette = useSessionStore((s) => s.toggleFilePalette)
   const fileTreeOpen = useSessionStore((s) => s.fileTreeOpen)
   const fileTreeWidth = useSessionStore((s) => s.fileTreeWidth)
+  const fileTreeWidthOverride = useSessionStore((s) => s.fileTreeWidthOverride)
   const toggleFileTree = useSessionStore((s) => s.toggleFileTree)
   const setFileTreeWidth = useSessionStore((s) => s.setFileTreeWidth)
   const activeView = useSessionStore((s) => s.activeView)
@@ -207,7 +208,7 @@ export function AppShell() {
               {fileTreeOpen && (
                 <motion.div
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: fileTreeWidth, opacity: 1 }}
+                  animate={{ width: fileTreeWidthOverride ?? fileTreeWidth, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={sidebarTransition}
                   className="flex-shrink-0 overflow-hidden relative"

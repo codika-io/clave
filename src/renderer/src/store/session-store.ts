@@ -38,6 +38,7 @@ interface SessionState {
   filePaletteOpen: boolean
   fileTreeOpen: boolean
   fileTreeWidth: number
+  fileTreeWidthOverride: number | null
   previewFile: string | null
   previewSource: 'palette' | 'tree' | null
   activeView: ActiveView
@@ -72,6 +73,7 @@ interface SessionState {
   setFilePaletteOpen: (open: boolean) => void
   toggleFileTree: () => void
   setFileTreeWidth: (width: number) => void
+  setFileTreeWidthOverride: (width: number | null) => void
   setActiveView: (view: ActiveView) => void
   setSidePanelTab: (tab: 'files' | 'git') => void
   setPreviewFile: (path: string | null, source?: 'palette' | 'tree') => void
@@ -116,6 +118,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   filePaletteOpen: false,
   fileTreeOpen: false,
   fileTreeWidth: 240,
+  fileTreeWidthOverride: null,
   previewFile: null,
   previewSource: null,
   activeView: 'terminals' as ActiveView,
@@ -377,6 +380,8 @@ export const useSessionStore = create<SessionState>((set) => ({
   toggleFileTree: () => set((state) => ({ fileTreeOpen: !state.fileTreeOpen })),
 
   setFileTreeWidth: (width) => set({ fileTreeWidth: Math.max(180, Math.min(400, width)) }),
+
+  setFileTreeWidthOverride: (width) => set({ fileTreeWidthOverride: width }),
 
   setActiveView: (view) => set({ activeView: view }),
 

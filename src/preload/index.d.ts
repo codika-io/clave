@@ -102,6 +102,7 @@ export interface GitStatusResult {
   ahead: number
   behind: number
   files: GitFileStatus[]
+  repoRoot: string
 }
 
 export interface GitCommitResult {
@@ -140,6 +141,7 @@ export interface ElectronAPI {
   gitCommit: (cwd: string, message: string) => Promise<GitCommitResult>
   gitPush: (cwd: string) => Promise<void>
   gitPull: (cwd: string) => Promise<void>
+  gitDiff: (cwd: string, filePath: string, staged: boolean, isUntracked: boolean) => Promise<string>
 }
 
 declare global {

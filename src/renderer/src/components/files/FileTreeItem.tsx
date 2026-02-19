@@ -7,6 +7,7 @@ interface FileTreeItemProps {
   isSelected: boolean
   onClickFile: (path: string, metaKey: boolean) => void
   onDoubleClickFile: (path: string) => void
+  onDoubleClickDir: (path: string) => void
   onToggleDir: (path: string) => void
   onContextMenu: (e: React.MouseEvent, node: FlatTreeNode) => void
   onDragStart: (e: React.DragEvent, node: FlatTreeNode) => void
@@ -17,6 +18,7 @@ export function FileTreeItem({
   isSelected,
   onClickFile,
   onDoubleClickFile,
+  onDoubleClickDir,
   onToggleDir,
   onContextMenu,
   onDragStart
@@ -36,9 +38,11 @@ export function FileTreeItem({
     () => {
       if (node.type === 'file') {
         onDoubleClickFile(node.path)
+      } else {
+        onDoubleClickDir(node.path)
       }
     },
-    [node, onDoubleClickFile]
+    [node, onDoubleClickFile, onDoubleClickDir]
   )
 
   const handleDragStart = useCallback(
