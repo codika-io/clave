@@ -14,6 +14,7 @@ function formatSize(bytes: number): string {
 
 export function FilePreview() {
   const previewFile = useSessionStore((s) => s.previewFile)
+  const previewCwd = useSessionStore((s) => s.previewCwd)
   const previewSource = useSessionStore((s) => s.previewSource)
   const setPreviewFile = useSessionStore((s) => s.setPreviewFile)
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
@@ -22,7 +23,7 @@ export function FilePreview() {
   const fileTreeWidth = useSessionStore((s) => s.fileTreeWidth)
 
   const focusedSession = sessions.find((s) => s.id === focusedSessionId)
-  const cwd = focusedSession?.cwd ?? null
+  const cwd = previewCwd ?? focusedSession?.cwd ?? null
 
   const [fileData, setFileData] = useState<FileReadResult | null>(null)
   const [loadError, setLoadError] = useState(false)

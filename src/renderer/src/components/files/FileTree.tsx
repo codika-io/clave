@@ -11,10 +11,9 @@ interface ContextMenuState {
   items: { label: string; onClick: () => void; shortcut?: string }[]
 }
 
-export function FileTree({ cwd, isCustom, sessionCwd, onChangeFolder, onResetFolder, onNavigateToFolder }: {
+export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavigateToFolder }: {
   cwd: string | null
   isCustom: boolean
-  sessionCwd: string | null
   onChangeFolder: () => void
   onResetFolder: () => void
   onNavigateToFolder: (absolutePath: string) => void
@@ -48,19 +47,11 @@ export function FileTree({ cwd, isCustom, sessionCwd, onChangeFolder, onResetFol
     [focusedSessionId, cwd]
   )
 
-  // Compute the subfolder prefix to prepend to relative paths when navigated into a subfolder.
-  // When cwd is a subfolder of sessionCwd, file tree paths are relative to cwd but
-  // FilePreview resolves against sessionCwd, so we need the relative path from sessionCwd to cwd.
-  const subfolderPrefix = (() => {
-    if (!cwd || !sessionCwd || cwd === sessionCwd || !cwd.startsWith(sessionCwd + '/')) return ''
-    return cwd.slice(sessionCwd.length + 1) + '/'
-  })()
-
   const handleDoubleClickFile = useCallback(
     (filePath: string) => {
-      setPreviewFile(subfolderPrefix + filePath, 'tree')
+      setPreviewFile(filePath, 'tree', cwd)
     },
-    [setPreviewFile, subfolderPrefix]
+    [setPreviewFile, cwd]
   )
 
   const handleDoubleClickDir = useCallback(
@@ -109,7 +100,7 @@ export function FileTree({ cwd, isCustom, sessionCwd, onChangeFolder, onResetFol
       if (node.type === 'file') {
         items.unshift({
           label: 'Preview',
-          onClick: () => setPreviewFile(subfolderPrefix + node.path, 'tree')
+          onClick: () => setPreviewFile(node.path, 'tree', cwd)
         })
       }
       if (node.type === 'directory') {
@@ -120,7 +111,7 @@ export function FileTree({ cwd, isCustom, sessionCwd, onChangeFolder, onResetFol
       }
       setContextMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [cwd, setPreviewFile, subfolderPrefix, onNavigateToFolder]
+    [cwd, setPreviewFile, onNavigateToFolder]
   )
 
   return (

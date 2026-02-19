@@ -284,7 +284,6 @@ export function SidePanel() {
         <FileTree
           cwd={cwd}
           isCustom={isCustom}
-          sessionCwd={sessionCwd}
           onChangeFolder={handleChangeFolder}
           onResetFolder={handleResetFolder}
           onNavigateToFolder={handleNavigateToFolder}

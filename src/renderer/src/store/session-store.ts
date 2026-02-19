@@ -40,6 +40,7 @@ interface SessionState {
   fileTreeWidth: number
   fileTreeWidthOverride: number | null
   previewFile: string | null
+  previewCwd: string | null
   previewSource: 'palette' | 'tree' | null
   activeView: ActiveView
   sidePanelTab: 'files' | 'git'
@@ -76,7 +77,7 @@ interface SessionState {
   setFileTreeWidthOverride: (width: number | null) => void
   setActiveView: (view: ActiveView) => void
   setSidePanelTab: (tab: 'files' | 'git') => void
-  setPreviewFile: (path: string | null, source?: 'palette' | 'tree') => void
+  setPreviewFile: (path: string | null, source?: 'palette' | 'tree', cwd?: string | null) => void
 }
 
 let groupCounter = 0
@@ -120,6 +121,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   fileTreeWidth: 240,
   fileTreeWidthOverride: null,
   previewFile: null,
+  previewCwd: null,
   previewSource: null,
   activeView: 'terminals' as ActiveView,
   sidePanelTab: 'files' as const,
@@ -387,6 +389,6 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
 
-  setPreviewFile: (path, source) =>
-    set({ previewFile: path, previewSource: source ?? (path ? null : null) })
+  setPreviewFile: (path, source, cwd) =>
+    set({ previewFile: path, previewCwd: cwd ?? null, previewSource: source ?? (path ? null : null) })
 }))
