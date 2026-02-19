@@ -448,10 +448,21 @@ export function Sidebar() {
 
       let position: 'before' | 'after' | 'inside'
       if (isGroup) {
-        // For groups: top 25% = before, bottom 25% = after, middle 50% = inside
-        if (y < height * 0.25) position = 'before'
-        else if (y > height * 0.75) position = 'after'
-        else position = 'inside'
+        const state = useSessionStore.getState()
+        const group = state.groups.find((g) => g.id === targetId)
+        const isExpanded = group && !group.collapsed
+
+        if (isExpanded) {
+          // Expanded group: top 25% = before, rest = inside
+          // Children are visible below so there's no gap to place items "after"
+          if (y < height * 0.25) position = 'before'
+          else position = 'inside'
+        } else {
+          // Collapsed group: top 25% = before, bottom 25% = after, middle 50% = inside
+          if (y < height * 0.25) position = 'before'
+          else if (y > height * 0.75) position = 'after'
+          else position = 'inside'
+        }
 
         // Don't allow dropping a group inside another group
         if (
@@ -465,20 +476,53 @@ export function Sidebar() {
       } else {
         position = y < height / 2 ? 'before' : 'after'
 
-        // Escape zones: when dragging over first/last session in a group,
-        // redirect edge zones to the group itself with before/after position
-        // so moveItems places the item at the top level (escaping the group)
         const state = useSessionStore.getState()
         const parentGroup = state.groups.find((g) => g.sessionIds.includes(targetId))
         if (parentGroup) {
           const isFirst = parentGroup.sessionIds[0] === targetId
           const isLast = parentGroup.sessionIds[parentGroup.sessionIds.length - 1] === targetId
-          if (isFirst && y < height * 0.25) {
-            targetId = parentGroup.id
-            position = 'before'
-          } else if (isLast && y > height * 0.75) {
-            targetId = parentGroup.id
-            position = 'after'
+
+          // Skip group highlight when dragging a group or reordering within same group
+          const isDraggingGroup = draggedIdsRef.current.some((id) =>
+            state.groups.some((g) => g.id === id)
+          )
+          const isDraggingWithinGroup = draggedIdsRef.current.every((id) =>
+            parentGroup.sessionIds.includes(id)
+          )
+
+          if (!isDraggingGroup && !isDraggingWithinGroup) {
+            if (isFirst && isLast) {
+              // Single-session group: group highlight except escape zone
+              if (y <= height * 0.75) {
+                targetId = parentGroup.id
+                position = 'inside'
+              } else {
+                targetId = parentGroup.id
+                position = 'after'
+              }
+            } else if (isFirst) {
+              // First session: top half = group highlight, bottom half = normal after
+              if (y < height * 0.5) {
+                targetId = parentGroup.id
+                position = 'inside'
+              }
+            } else if (isLast) {
+              // Last session: top half = normal before, 50-75% = group highlight, >75% = escape
+              if (y > height * 0.5 && y <= height * 0.75) {
+                targetId = parentGroup.id
+                position = 'inside'
+              } else if (y > height * 0.75) {
+                targetId = parentGroup.id
+                position = 'after'
+              }
+            }
+            // Middle sessions: keep default before/after
+          } else {
+            // No group highlight, but still apply escape zone
+            if (isLast && y > height * 0.75) {
+              targetId = parentGroup.id
+              position = 'after'
+            }
           }
         }
       }
@@ -677,10 +721,13 @@ export function Sidebar() {
                     <div
                       key={group.id}
                       className={cn(
-                        'rounded-lg transition-colors',
+                        'relative rounded-lg transition-colors',
                         allGroupSelected && 'bg-surface-200'
                       )}
                     >
+                      {getDropIndicator(group.id) === 'inside' && (
+                        <div className="absolute inset-0 rounded-lg border-2 border-accent pointer-events-none z-10" />
+                      )}
                       <SessionGroupItem
                         group={group}
                         onClick={(shiftKey) => handleGroupClick(group.id, shiftKey)}

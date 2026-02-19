@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { FileTree } from '../files/FileTree'
-import { GitStatusPanel } from './GitStatusPanel'
+import { GitStatusPanel, MultiRepoGitPanel } from './GitStatusPanel'
+import { useMultiRepoStatus } from '../../hooks/use-multi-repo-status'
 import { shortenPath } from '../../lib/utils'
 
 function getParentPaths(fullPath: string): { path: string; name: string }[] {
@@ -60,6 +61,9 @@ export function SidePanel() {
 
   const cwd = customCwd ?? sessionCwd
   const isCustom = customCwd !== null
+
+  const isGitTabActive = sidePanelTab === 'git'
+  const multiRepo = useMultiRepoStatus(cwd, isGitTabActive)
 
   const displayPath = useMemo(() => {
     if (!cwd) return ''
@@ -285,10 +289,16 @@ export function SidePanel() {
           onResetFolder={handleResetFolder}
           onNavigateToFolder={handleNavigateToFolder}
         />
+      ) : multiRepo.result.mode === 'multi' ? (
+        <MultiRepoGitPanel repos={multiRepo.result.repos} refresh={multiRepo.refresh} />
+      ) : multiRepo.result.mode === 'none' ? (
+        <div className="flex-1 flex items-center justify-center px-3">
+          <span className="text-xs text-text-tertiary text-center">Not a git repository</span>
+        </div>
       ) : (
         <GitStatusPanel
           cwd={cwd}
-          isActive={sidePanelTab === 'git'}
+          isActive={isGitTabActive}
           filterPrefix={isNavigatedSubfolder ? cwd : null}
         />
       )}

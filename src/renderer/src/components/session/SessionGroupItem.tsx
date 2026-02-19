@@ -131,9 +131,6 @@ export function SessionGroupItem({
       {dropIndicator === 'before' && (
         <div className="absolute top-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />
       )}
-      {dropIndicator === 'inside' && (
-        <div className="absolute inset-0 rounded-lg border-2 border-accent pointer-events-none z-10" />
-      )}
       <button
         onClick={handleClick}
         onContextMenu={onContextMenu}

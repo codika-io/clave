@@ -87,6 +87,7 @@ export function registerIpcHandlers(): void {
 
   // Git handlers
   ipcMain.handle('git:status', (_event, cwd: string) => gitManager.getStatus(cwd))
+  ipcMain.handle('git:discover-repos', (_event, cwd: string) => gitManager.discoverRepos(cwd))
   ipcMain.handle('git:stage', (_event, cwd: string, files: string[]) => gitManager.stage(cwd, files))
   ipcMain.handle('git:unstage', (_event, cwd: string, files: string[]) =>
     gitManager.unstage(cwd, files)

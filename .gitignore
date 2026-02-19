@@ -21,6 +21,7 @@ Thumbs.db
 .claude/
 .playwright-mcp/
 .mcp.json
+.playwright-electron.config.json
 
 # Planning docs
 next-features.md

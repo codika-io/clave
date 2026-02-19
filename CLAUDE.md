@@ -93,4 +93,24 @@ The build requires Apple code signing. Credentials are expected in `.env` (not c
 ## Rules
 
 - When using the Playwright MCP server to take screenshots, always delete the screenshot files after you are done using them. Do not leave screenshot files in the repository.
-- After implementing UI or renderer changes, always verify them with Playwright MCP: start `npm run dev`, navigate to the renderer URL (check dev server output for the port), take a snapshot, and check console for errors. This catches runtime issues that typecheck alone misses (e.g. missing guards for `window.electronAPI` which is only available inside Electron, not in a plain browser).
+- After implementing UI or renderer changes, always verify them with the **Playwright Electron MCP** (not the regular Playwright MCP). This launches the real Electron app with full `window.electronAPI` support, so you can actually test features end-to-end.
+
+### Playwright Electron MCP — Verification workflow
+
+The Playwright Electron MCP is configured via `.playwright-electron.config.json` (gitignored). It launches the built Electron app directly, giving access to the full app including IPC, PTY, git, and file system features.
+
+**Steps to verify UI changes:**
+
+1. Build the app: `npx electron-vite build` (compiles to `out/`)
+2. Load the Electron tools: `ToolSearch` for `+playwright-electron` to discover available tools
+3. Launch: call `electron_first_window` — this starts the Electron app and returns the first window
+4. Use `browser_snapshot` to inspect the UI, `browser_click` to interact, `browser_console_messages` to check for errors
+5. When done: call `browser_close` to shut down the Electron instance
+6. Delete any screenshot files created during verification
+
+**Why not the regular Playwright MCP?** The regular `playwright` MCP opens `localhost:5173` in Chrome where `window.electronAPI` is undefined. You can only verify that the page loads — you cannot spawn sessions, test git features, or interact with any Electron-dependent functionality.
+
+**Important notes:**
+- Always build before testing (`npx electron-vite build`). The MCP launches from `out/main/index.js`, not the dev server.
+- The MCP config file (`.playwright-electron.config.json`) contains absolute paths. If the project moves, regenerate it.
+- If `electron_first_window` fails with "Process failed to launch", ensure no other Electron instance is running (kill `npm run dev` first).

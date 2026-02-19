@@ -72,6 +72,40 @@ function mapFiles(status: StatusResult): GitFileStatus[] {
 }
 
 class GitManager {
+  async discoverRepos(cwd: string): Promise<Array<{ name: string; path: string }>> {
+    const SKIP = new Set(['.git', 'node_modules'])
+    const MAX_DEPTH = 2
+    const repos: Array<{ name: string; path: string }> = []
+
+    const scan = async (dir: string, depth: number): Promise<void> => {
+      if (depth > MAX_DEPTH) return
+      try {
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true })
+        await Promise.all(
+          entries
+            .filter((e) => e.isDirectory() && !SKIP.has(e.name))
+            .map(async (e) => {
+              const dirPath = path.join(dir, e.name)
+              try {
+                await fs.promises.access(path.join(dirPath, '.git'))
+                repos.push({ name: e.name, path: dirPath })
+              } catch {
+                // Not a repo — recurse deeper
+                if (depth < MAX_DEPTH) {
+                  await scan(dirPath, depth + 1)
+                }
+              }
+            })
+        )
+      } catch {
+        // unreadable directory
+      }
+    }
+
+    await scan(cwd, 1)
+    return repos.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
   async getDiff(
     cwd: string,
     filePath: string,

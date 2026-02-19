@@ -1,7 +1,7 @@
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { useGitStatus } from '../../hooks/use-git-status'
-import type { GitFileStatus } from '../../../../preload/index.d'
+import type { GitFileStatus, GitStatusResult } from '../../../../preload/index.d'
 
 function statusLetter(status: GitFileStatus['status']): string {
   switch (status) {
@@ -368,25 +368,95 @@ function GitDiffView({
   )
 }
 
-export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | null; isActive: boolean; filterPrefix?: string | null }) {
-  const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div className="px-3 py-1.5 bg-red-500/10 text-red-400 text-xs flex-shrink-0">{message}</div>
+  )
+}
+
+function BranchHeader({
+  branch,
+  ahead,
+  behind
+}: {
+  branch: string
+  ahead: number
+  behind: number
+}) {
+  return (
+    <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-subtle text-xs flex-shrink-0">
+      {/* Branch icon */}
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
+        fill="none"
+        className="text-text-secondary flex-shrink-0"
+      >
+        <circle cx="6" cy="2.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
+        <circle cx="6" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M6 4v4" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+      <span className="text-text-primary font-medium truncate">{branch}</span>
+      {(ahead > 0 || behind > 0) && (
+        <span className="text-text-tertiary ml-auto flex-shrink-0">
+          {ahead > 0 && (
+            <span className="text-green-400">
+              {'\u2191'}
+              {ahead}
+            </span>
+          )}
+          {ahead > 0 && behind > 0 && ' '}
+          {behind > 0 && (
+            <span className="text-orange-400">
+              {'\u2193'}
+              {behind}
+            </span>
+          )}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// RepoSection — reusable file list + commit bar + diff view for a single repo
+// ---------------------------------------------------------------------------
+
+function RepoSection({
+  cwd,
+  status,
+  filterPrefix,
+  refresh,
+  fillHeight = true,
+  onDiffOpen,
+  onDiffClose
+}: {
+  cwd: string
+  status: GitStatusResult
+  filterPrefix?: string | null
+  refresh: () => void
+  fillHeight?: boolean
+  onDiffOpen?: () => void
+  onDiffClose?: () => void
+}) {
   const setFileTreeWidthOverride = useSessionStore((s) => s.setFileTreeWidthOverride)
-  const { status, loading, refresh } = useGitStatus(cwd, isActive)
   const [operating, setOperating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<GitFileStatus | null>(null)
 
-  // Expand panel when entering diff view, restore when leaving
+  // Width override for diff view
   useEffect(() => {
     if (selectedFile) {
       const currentWidth = useSessionStore.getState().fileTreeWidth
       setFileTreeWidthOverride(Math.max(currentWidth, Math.floor(window.innerWidth * 0.5)))
+      onDiffOpen?.()
     } else {
       setFileTreeWidthOverride(null)
+      onDiffClose?.()
     }
-  }, [selectedFile, setFileTreeWidthOverride])
+  }, [selectedFile, setFileTreeWidthOverride, onDiffOpen, onDiffClose])
 
-  // Clear override on unmount
   useEffect(() => {
     return () => setFileTreeWidthOverride(null)
   }, [setFileTreeWidthOverride])
@@ -414,7 +484,6 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
     const unstaged: GitFileStatus[] = []
     const untracked: GitFileStatus[] = []
     for (const f of status.files) {
-      // Apply subfolder filter if active
       if (relativeFilterPrefix && !f.path.startsWith(relativeFilterPrefix)) continue
       if (f.status === 'untracked') {
         untracked.push(f)
@@ -445,7 +514,6 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
 
   const stageFile = useCallback(
     (path: string) => {
-      if (!cwd) return
       runOperation(() => window.electronAPI.gitStage(cwd, [path]))
     },
     [cwd, runOperation]
@@ -453,7 +521,6 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
 
   const unstageFile = useCallback(
     (path: string) => {
-      if (!cwd) return
       runOperation(() => window.electronAPI.gitUnstage(cwd, [path]))
     },
     [cwd, runOperation]
@@ -461,7 +528,6 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
 
   const stageAll = useCallback(
     (files: GitFileStatus[]) => {
-      if (!cwd) return
       runOperation(() =>
         window.electronAPI.gitStage(
           cwd,
@@ -473,7 +539,6 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
   )
 
   const unstageAll = useCallback(() => {
-    if (!cwd) return
     runOperation(() =>
       window.electronAPI.gitUnstage(
         cwd,
@@ -482,40 +547,36 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
     )
   }, [cwd, staged, runOperation])
 
-  if (!focusedSessionId || !cwd) {
-    return (
-      <div className="flex-1 flex items-center justify-center px-3">
-        <span className="text-xs text-text-tertiary text-center">
-          Focus a session to view git status
-        </span>
-      </div>
-    )
-  }
-
-  if (loading && !status) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <span className="text-xs text-text-tertiary">Loading...</span>
-      </div>
-    )
-  }
-
-  if (status && !status.isRepo) {
-    return (
-      <div className="flex-1 flex items-center justify-center px-3">
-        <span className="text-xs text-text-tertiary text-center">Not a git repository</span>
-      </div>
-    )
-  }
-
   const totalFiltered = staged.length + unstaged.length + untracked.length
 
-  if (status && (status.files.length === 0 || (relativeFilterPrefix && totalFiltered === 0))) {
+  // Diff view
+  if (selectedFile) {
+    const diffView = (
+      <GitDiffView
+        file={selectedFile}
+        cwd={cwd}
+        onBack={() => setSelectedFile(null)}
+        onStageToggle={() => {
+          if (selectedFile.staged) {
+            unstageFile(selectedFile.path)
+          } else {
+            stageFile(selectedFile.path)
+          }
+        }}
+        operating={operating}
+      />
+    )
+    return fillHeight ? diffView : (
+      <div className="flex flex-col h-[50vh]">{diffView}</div>
+    )
+  }
+
+  // Clean state
+  if (status.files.length === 0 || (relativeFilterPrefix && totalFiltered === 0)) {
     return (
-      <div className="flex-1 flex flex-col">
-        <BranchHeader branch={status.branch} ahead={status.ahead} behind={status.behind} />
+      <>
         {error && <ErrorBanner message={error} />}
-        <div className="flex-1 flex items-center justify-center px-3">
+        <div className={`${fillHeight ? 'flex-1' : ''} flex items-center justify-center px-3 py-4`}>
           <span className="text-xs text-text-tertiary text-center">
             {relativeFilterPrefix ? 'No changes in this folder' : 'Working tree clean'}
           </span>
@@ -530,45 +591,20 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
             onOperation={runOperation}
           />
         )}
-      </div>
+      </>
     )
   }
 
-  if (!status) return null
-
-  if (selectedFile && cwd) {
-    return (
-      <div className="flex-1 flex flex-col min-h-0">
-        <BranchHeader branch={status.branch} ahead={status.ahead} behind={status.behind} />
-        <GitDiffView
-          file={selectedFile}
-          cwd={cwd}
-          onBack={() => setSelectedFile(null)}
-          onStageToggle={() => {
-            if (selectedFile.staged) {
-              unstageFile(selectedFile.path)
-            } else {
-              stageFile(selectedFile.path)
-            }
-          }}
-          operating={operating}
-        />
-      </div>
-    )
-  }
-
+  // File list + commit bar
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <BranchHeader branch={status.branch} ahead={status.ahead} behind={status.behind} />
+    <>
       {error && <ErrorBanner message={error} />}
       {relativeFilterPrefix && (
         <div className="px-3 py-1 text-[10px] text-text-tertiary border-b border-border-subtle flex-shrink-0">
           Filtered to: {relativeFilterPrefix}
         </div>
       )}
-
-      {/* File list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className={`${fillHeight ? 'flex-1 overflow-y-auto' : ''}`}>
         {staged.length > 0 && (
           <>
             <SectionHeader
@@ -630,7 +666,6 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
           </>
         )}
       </div>
-
       <CommitBar
         cwd={cwd}
         stagedCount={staged.length}
@@ -639,57 +674,151 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
         operating={operating}
         onOperation={runOperation}
       />
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// GitStatusPanel — single-repo view (existing behavior)
+// ---------------------------------------------------------------------------
+
+export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | null; isActive: boolean; filterPrefix?: string | null }) {
+  const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
+  const { status, loading, refresh } = useGitStatus(cwd, isActive)
+
+  if (!focusedSessionId || !cwd) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-3">
+        <span className="text-xs text-text-tertiary text-center">
+          Focus a session to view git status
+        </span>
+      </div>
+    )
+  }
+
+  if (loading && !status) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <span className="text-xs text-text-tertiary">Loading...</span>
+      </div>
+    )
+  }
+
+  if (status && !status.isRepo) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-3">
+        <span className="text-xs text-text-tertiary text-center">Not a git repository</span>
+      </div>
+    )
+  }
+
+  if (!status) return null
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <BranchHeader branch={status.branch} ahead={status.ahead} behind={status.behind} />
+      <RepoSection cwd={cwd} status={status} filterPrefix={filterPrefix} refresh={refresh} fillHeight />
     </div>
   )
 }
 
-function ErrorBanner({ message }: { message: string }) {
+// ---------------------------------------------------------------------------
+// MultiRepoGitPanel — multi-repo collapsible view
+// ---------------------------------------------------------------------------
+
+function MultiRepoSection({
+  name,
+  repoPath,
+  status,
+  refresh
+}: {
+  name: string
+  repoPath: string
+  status: GitStatusResult
+  refresh: () => void
+}) {
+  const changeCount = status.files.length
+  const hasChanges = changeCount > 0
+  const [expanded, setExpanded] = useState(hasChanges)
+  const initializedRef = useRef(false)
+
+  // Update default expanded state when changes appear/disappear, but only on first load
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true
+      setExpanded(hasChanges)
+    }
+  }, [hasChanges])
+
   return (
-    <div className="px-3 py-1.5 bg-red-500/10 text-red-400 text-xs flex-shrink-0">{message}</div>
+    <div className="border-b border-border-subtle">
+      {/* Collapsible header */}
+      <button
+        className="w-full flex items-center gap-1.5 px-3 py-1.5 text-xs hover:bg-surface-100 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {/* Chevron */}
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          className={`text-text-tertiary flex-shrink-0 transition-transform duration-150 ${
+            expanded ? 'rotate-90' : ''
+          }`}
+        >
+          <path d="M3 1.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+
+        {/* Repo name */}
+        <span className="text-text-primary font-medium truncate">{name}</span>
+
+        {/* Branch badge */}
+        <span className="text-text-tertiary truncate">{status.branch}</span>
+
+        {/* Change count badge */}
+        {changeCount > 0 && (
+          <span className="ml-auto flex-shrink-0 text-[10px] font-medium bg-surface-200 text-text-secondary rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+            {changeCount}
+          </span>
+        )}
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="flex flex-col">
+          <RepoSection
+            cwd={repoPath}
+            status={status}
+            refresh={refresh}
+            fillHeight={false}
+          />
+        </div>
+      )}
+    </div>
   )
 }
 
-function BranchHeader({
-  branch,
-  ahead,
-  behind
+export function MultiRepoGitPanel({
+  repos,
+  refresh
 }: {
-  branch: string
-  ahead: number
-  behind: number
+  repos: Array<{ name: string; path: string; status: GitStatusResult }>
+  refresh: () => void
 }) {
   return (
-    <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-subtle text-xs flex-shrink-0">
-      {/* Branch icon */}
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 12 12"
-        fill="none"
-        className="text-text-secondary flex-shrink-0"
-      >
-        <circle cx="6" cy="2.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-        <circle cx="6" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-        <path d="M6 4v4" stroke="currentColor" strokeWidth="1.2" />
-      </svg>
-      <span className="text-text-primary font-medium truncate">{branch}</span>
-      {(ahead > 0 || behind > 0) && (
-        <span className="text-text-tertiary ml-auto flex-shrink-0">
-          {ahead > 0 && (
-            <span className="text-green-400">
-              {'\u2191'}
-              {ahead}
-            </span>
-          )}
-          {ahead > 0 && behind > 0 && ' '}
-          {behind > 0 && (
-            <span className="text-orange-400">
-              {'\u2193'}
-              {behind}
-            </span>
-          )}
-        </span>
-      )}
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 overflow-y-auto">
+        {repos.map((repo) => (
+          <MultiRepoSection
+            key={repo.path}
+            name={repo.name}
+            repoPath={repo.path}
+            status={repo.status}
+            refresh={refresh}
+          />
+        ))}
+      </div>
     </div>
   )
 }
