@@ -149,6 +149,43 @@ class GitManager {
     await git.pull()
   }
 
+  async discard(
+    cwd: string,
+    files: Array<{ path: string; status: string; staged: boolean }>
+  ): Promise<void> {
+    const git = simpleGit(cwd)
+
+    const stagedTracked: string[] = []
+    const trackedOnly: string[] = []
+    const untrackedPaths: string[] = []
+
+    for (const f of files) {
+      if (f.status === 'untracked') {
+        untrackedPaths.push(f.path)
+      } else if (f.staged) {
+        stagedTracked.push(f.path)
+      } else {
+        trackedOnly.push(f.path)
+      }
+    }
+
+    // Unstage staged files first, then revert
+    if (stagedTracked.length > 0) {
+      await git.raw(['reset', 'HEAD', '--', ...stagedTracked])
+      await git.raw(['checkout', '--', ...stagedTracked])
+    }
+
+    // Revert unstaged tracked files
+    if (trackedOnly.length > 0) {
+      await git.raw(['checkout', '--', ...trackedOnly])
+    }
+
+    // Delete untracked files from filesystem
+    for (const filePath of untrackedPaths) {
+      await fs.promises.unlink(path.join(cwd, filePath)).catch(() => {})
+    }
+  }
+
   async getStatus(cwd: string): Promise<GitStatusResult> {
     try {
       const git = simpleGit(cwd)

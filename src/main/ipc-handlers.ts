@@ -106,6 +106,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('git:push', (_event, cwd: string) => gitManager.push(cwd))
   ipcMain.handle('git:pull', (_event, cwd: string) => gitManager.pull(cwd))
   ipcMain.handle(
+    'git:discard',
+    (_event, cwd: string, files: Array<{ path: string; status: string; staged: boolean }>) =>
+      gitManager.discard(cwd, files)
+  )
+  ipcMain.handle(
     'git:diff',
     (_event, cwd: string, filePath: string, staged: boolean, isUntracked: boolean) =>
       gitManager.getDiff(cwd, filePath, staged, isUntracked)

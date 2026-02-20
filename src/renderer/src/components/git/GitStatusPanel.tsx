@@ -2,7 +2,8 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { FileIcon } from '../files/file-icons'
-import { ListBulletIcon, Bars3BottomLeftIcon } from '@heroicons/react/24/outline'
+import { ListBulletIcon, Bars3BottomLeftIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { buildGitTree, compactTree, flattenGitTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import type { GitFileStatus, GitStatusResult } from '../../../../preload/index.d'
 import type { FlatGitTreeNode } from '../../lib/git-file-tree'
@@ -52,11 +53,13 @@ function FileRow({
   file,
   onClickName,
   onStageToggle,
+  onDiscard,
   disabled
 }: {
   file: GitFileStatus
   onClickName?: () => void
   onStageToggle?: () => void
+  onDiscard?: () => void
   disabled?: boolean
 }) {
   const { name, dir } = splitPath(file.path)
@@ -77,16 +80,28 @@ function FileRow({
         {name}
       </span>
       {dir && <span className="text-text-tertiary truncate text-[10px]">{dir}</span>}
-      <button
-        className="ml-auto flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary hover:bg-surface-200 transition-all"
-        onClick={(e) => {
-          e.stopPropagation()
-          onStageToggle?.()
-        }}
-        title={isStaged ? 'Unstage' : 'Stage'}
-      >
-        {isStaged ? '\u2212' : '+'}
-      </button>
+      <div className="ml-auto flex-shrink-0 flex items-center gap-0.5">
+        <button
+          className="w-5 h-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-surface-200 transition-all"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDiscard?.()
+          }}
+          title="Discard changes"
+        >
+          <ArrowUturnLeftIcon className="w-3 h-3" />
+        </button>
+        <button
+          className="w-5 h-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary hover:bg-surface-200 transition-all"
+          onClick={(e) => {
+            e.stopPropagation()
+            onStageToggle?.()
+          }}
+          title={isStaged ? 'Unstage' : 'Stage'}
+        >
+          {isStaged ? '\u2212' : '+'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -96,12 +111,16 @@ function SectionHeader({
   count,
   action,
   onAction,
+  discardAction,
+  onDiscardAction,
   disabled
 }: {
   label: string
   count: number
   action?: string
   onAction?: () => void
+  discardAction?: string
+  onDiscardAction?: () => void
   disabled?: boolean
 }) {
   return (
@@ -109,15 +128,26 @@ function SectionHeader({
       <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
         {label} ({count})
       </span>
-      {action && onAction && (
-        <button
-          className="ml-auto text-[10px] text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-50"
-          onClick={onAction}
-          disabled={disabled}
-        >
-          {action}
-        </button>
-      )}
+      <span className="ml-auto flex items-center gap-2">
+        {discardAction && onDiscardAction && (
+          <button
+            className="text-[10px] text-text-tertiary hover:text-red-400 transition-colors disabled:opacity-50"
+            onClick={onDiscardAction}
+            disabled={disabled}
+          >
+            {discardAction}
+          </button>
+        )}
+        {action && onAction && (
+          <button
+            className="text-[10px] text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-50"
+            onClick={onAction}
+            disabled={disabled}
+          >
+            {action}
+          </button>
+        )}
+      </span>
     </div>
   )
 }
@@ -187,11 +217,13 @@ function GitTreeFileRow({
   node,
   onClickName,
   onStageToggle,
+  onDiscard,
   disabled
 }: {
   node: FlatGitTreeNode
   onClickName?: () => void
   onStageToggle?: () => void
+  onDiscard?: () => void
   disabled?: boolean
 }) {
   const file = node.file!
@@ -213,16 +245,28 @@ function GitTreeFileRow({
       >
         {node.name}
       </span>
-      <button
-        className="ml-auto flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary hover:bg-surface-200 transition-all"
-        onClick={(e) => {
-          e.stopPropagation()
-          onStageToggle?.()
-        }}
-        title={isStaged ? 'Unstage' : 'Stage'}
-      >
-        {isStaged ? '\u2212' : '+'}
-      </button>
+      <div className="ml-auto flex-shrink-0 flex items-center gap-0.5">
+        <button
+          className="w-5 h-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-surface-200 transition-all"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDiscard?.()
+          }}
+          title="Discard changes"
+        >
+          <ArrowUturnLeftIcon className="w-3 h-3" />
+        </button>
+        <button
+          className="w-5 h-5 flex items-center justify-center rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary hover:bg-surface-200 transition-all"
+          onClick={(e) => {
+            e.stopPropagation()
+            onStageToggle?.()
+          }}
+          title={isStaged ? 'Unstage' : 'Stage'}
+        >
+          {isStaged ? '\u2212' : '+'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -233,6 +277,7 @@ function GitTreeSection({
   onToggleExpanded,
   onClickFile,
   onStageToggle,
+  onDiscard,
   disabled
 }: {
   files: GitFileStatus[]
@@ -240,6 +285,7 @@ function GitTreeSection({
   onToggleExpanded: (path: string) => void
   onClickFile: (file: GitFileStatus) => void
   onStageToggle: (file: GitFileStatus) => void
+  onDiscard: (file: GitFileStatus) => void
   disabled?: boolean
 }) {
   const flatNodes = useMemo(() => {
@@ -259,6 +305,7 @@ function GitTreeSection({
             node={node}
             onClickName={() => node.file && onClickFile(node.file)}
             onStageToggle={() => node.file && onStageToggle(node.file)}
+            onDiscard={() => node.file && onDiscard(node.file)}
             disabled={disabled}
           />
         )
@@ -598,6 +645,10 @@ function RepoSection({
   const [error, setError] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<GitFileStatus | null>(null)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
+  const [confirmDiscard, setConfirmDiscard] = useState<{
+    files: Array<{ path: string; status: string; staged: boolean }>
+    label: string
+  } | null>(null)
   const prevViewMode = useRef(gitViewMode)
 
   // Width override for diff view
@@ -724,6 +775,28 @@ function RepoSection({
     )
   }, [cwd, staged, runOperation])
 
+  const promptDiscardFile = useCallback((file: GitFileStatus) => {
+    const name = file.path.includes('/') ? file.path.split('/').pop()! : file.path
+    setConfirmDiscard({
+      files: [{ path: file.path, status: file.status, staged: file.staged }],
+      label: `Discard changes to ${name}? This cannot be undone.`
+    })
+  }, [])
+
+  const promptDiscardAll = useCallback((files: GitFileStatus[]) => {
+    setConfirmDiscard({
+      files: files.map((f) => ({ path: f.path, status: f.status, staged: f.staged })),
+      label: `Discard all changes in ${files.length} file${files.length === 1 ? '' : 's'}? This cannot be undone.`
+    })
+  }, [])
+
+  const executeDiscard = useCallback(() => {
+    if (!confirmDiscard) return
+    const filesToDiscard = confirmDiscard.files
+    setConfirmDiscard(null)
+    runOperation(() => window.electronAPI.gitDiscard(cwd, filesToDiscard))
+  }, [cwd, confirmDiscard, runOperation])
+
   const totalFiltered = staged.length + unstaged.length + untracked.length
 
   // Diff view
@@ -789,6 +862,8 @@ function RepoSection({
               count={staged.length}
               action="Unstage All"
               onAction={unstageAll}
+              discardAction="Discard All"
+              onDiscardAction={() => promptDiscardAll(staged)}
               disabled={operating}
             />
             {gitViewMode === 'tree' ? (
@@ -798,6 +873,7 @@ function RepoSection({
                 onToggleExpanded={toggleExpanded}
                 onClickFile={setSelectedFile}
                 onStageToggle={(f) => unstageFile(f.path)}
+                onDiscard={promptDiscardFile}
                 disabled={operating}
               />
             ) : (
@@ -807,6 +883,7 @@ function RepoSection({
                   file={f}
                   onClickName={() => setSelectedFile(f)}
                   onStageToggle={() => unstageFile(f.path)}
+                  onDiscard={() => promptDiscardFile(f)}
                   disabled={operating}
                 />
               ))
@@ -820,6 +897,8 @@ function RepoSection({
               count={unstaged.length}
               action="Stage All"
               onAction={() => stageAll(unstaged)}
+              discardAction="Discard All"
+              onDiscardAction={() => promptDiscardAll(unstaged)}
               disabled={operating}
             />
             {gitViewMode === 'tree' ? (
@@ -829,6 +908,7 @@ function RepoSection({
                 onToggleExpanded={toggleExpanded}
                 onClickFile={setSelectedFile}
                 onStageToggle={(f) => stageFile(f.path)}
+                onDiscard={promptDiscardFile}
                 disabled={operating}
               />
             ) : (
@@ -838,6 +918,7 @@ function RepoSection({
                   file={f}
                   onClickName={() => setSelectedFile(f)}
                   onStageToggle={() => stageFile(f.path)}
+                  onDiscard={() => promptDiscardFile(f)}
                   disabled={operating}
                 />
               ))
@@ -851,6 +932,8 @@ function RepoSection({
               count={untracked.length}
               action="Stage All"
               onAction={() => stageAll(untracked)}
+              discardAction="Discard All"
+              onDiscardAction={() => promptDiscardAll(untracked)}
               disabled={operating}
             />
             {gitViewMode === 'tree' ? (
@@ -860,6 +943,7 @@ function RepoSection({
                 onToggleExpanded={toggleExpanded}
                 onClickFile={setSelectedFile}
                 onStageToggle={(f) => stageFile(f.path)}
+                onDiscard={promptDiscardFile}
                 disabled={operating}
               />
             ) : (
@@ -869,6 +953,7 @@ function RepoSection({
                   file={f}
                   onClickName={() => setSelectedFile(f)}
                   onStageToggle={() => stageFile(f.path)}
+                  onDiscard={() => promptDiscardFile(f)}
                   disabled={operating}
                 />
               ))
@@ -883,6 +968,13 @@ function RepoSection({
         behind={status.behind}
         operating={operating}
         onOperation={runOperation}
+      />
+      <ConfirmDialog
+        isOpen={confirmDiscard !== null}
+        title="Discard changes"
+        message={confirmDiscard?.label ?? ''}
+        onConfirm={executeDiscard}
+        onCancel={() => setConfirmDiscard(null)}
       />
     </>
   )
