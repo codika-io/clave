@@ -7,6 +7,7 @@ import { KanbanBoard } from '../board/KanbanBoard'
 import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { UpdateToast } from '../ui/UpdateToast'
+import { useLaunchTemplate } from '../../hooks/use-launch-template'
 import { FilePalette } from '../files/FilePalette'
 import { SidePanel } from '../git/SidePanel'
 import { FilePreview } from '../files/FilePreview'
@@ -32,6 +33,8 @@ export function AppShell() {
   const activeView = useSessionStore((s) => s.activeView)
   const previewFile = useSessionStore((s) => s.previewFile)
   const previewSource = useSessionStore((s) => s.previewSource)
+
+  useLaunchTemplate()
 
   const isResizing = useRef(false)
   const isResizingTree = useRef(false)

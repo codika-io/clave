@@ -3,6 +3,7 @@ import { ptyManager } from './pty-manager'
 import { installUpdate } from './auto-updater'
 import { fileManager } from './file-manager'
 import { boardManager } from './board-manager'
+import { templateManager, type LaunchTemplate, type LaunchTemplatesData } from './template-manager'
 import { usageManager } from './usage-manager'
 import { gitManager } from './git-manager'
 import * as fs from 'fs'
@@ -80,6 +81,13 @@ export function registerIpcHandlers(): void {
   // Board handlers
   ipcMain.handle('board:load', () => boardManager.load())
   ipcMain.handle('board:save', (_event, data) => boardManager.save(data))
+
+  // Template handlers
+  ipcMain.handle('templates:load', () => templateManager.load())
+  ipcMain.handle('templates:save', (_event, data: LaunchTemplatesData) => templateManager.save(data))
+  ipcMain.handle('templates:validate', (_event, template: LaunchTemplate) =>
+    templateManager.validateTemplate(template)
+  )
 
   // Usage handlers
   ipcMain.handle('usage:get-stats', () => usageManager.getStats())

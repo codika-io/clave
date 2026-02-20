@@ -110,6 +110,38 @@ export interface GitCommitResult {
   branch: string
 }
 
+export interface LaunchTemplateSession {
+  id: string
+  cwd: string
+  name: string
+}
+
+export interface LaunchTemplateGroup {
+  id: string
+  name: string
+  sessionIds: string[]
+}
+
+export interface LaunchTemplate {
+  id: string
+  name: string
+  sessions: LaunchTemplateSession[]
+  groups: LaunchTemplateGroup[]
+  displayOrder: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface LaunchTemplatesData {
+  templates: LaunchTemplate[]
+  defaultTemplateId: string
+}
+
+export interface ValidationResult {
+  valid: LaunchTemplateSession[]
+  missing: LaunchTemplateSession[]
+}
+
 export interface ElectronAPI {
   spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
@@ -133,6 +165,9 @@ export interface ElectronAPI {
   showItemInFolder: (fullPath: string) => Promise<void>
   boardLoad: () => Promise<BoardData>
   boardSave: (data: BoardData) => Promise<void>
+  templatesLoad: () => Promise<LaunchTemplatesData>
+  templatesSave: (data: LaunchTemplatesData) => Promise<void>
+  templatesValidate: (template: LaunchTemplate) => Promise<ValidationResult>
   getUsageStats: () => Promise<UsageData>
   fetchRateLimits: () => Promise<RateLimits | null>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>
