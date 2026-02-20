@@ -38,9 +38,6 @@ async function applyTemplate(template: ReturnType<typeof useTemplateStore.getSta
     return
   }
 
-  const state = useSessionStore.getState()
-  const { dangerousMode, claudeMode } = state
-
   // Map template session IDs to spawned session IDs
   const idMap = new Map<string, string>()
 
@@ -50,6 +47,10 @@ async function applyTemplate(template: ReturnType<typeof useTemplateStore.getSta
       console.warn(`[launch-template] Skipping session "${templateSession.name}" — directory missing: ${templateSession.cwd}`)
       continue
     }
+
+    // Use per-session flags from the template, falling back to global defaults
+    const claudeMode = templateSession.claudeMode ?? true
+    const dangerousMode = templateSession.dangerousMode ?? false
 
     try {
       const sessionInfo = await window.electronAPI.spawnSession(templateSession.cwd, {
@@ -66,7 +67,9 @@ async function applyTemplate(template: ReturnType<typeof useTemplateStore.getSta
         name: templateSession.name,
         alive: sessionInfo.alive,
         activityStatus: 'idle',
-        promptWaiting: null
+        promptWaiting: null,
+        claudeMode,
+        dangerousMode
       })
 
       // Apply custom name if different from folderName

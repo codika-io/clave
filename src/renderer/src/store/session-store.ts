@@ -12,6 +12,8 @@ export interface Session {
   alive: boolean
   activityStatus: ActivityStatus
   promptWaiting: string | null
+  claudeMode: boolean
+  dangerousMode: boolean
 }
 
 export interface SessionGroup {

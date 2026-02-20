@@ -114,6 +114,8 @@ export interface LaunchTemplateSession {
   id: string
   cwd: string
   name: string
+  claudeMode: boolean
+  dangerousMode: boolean
 }
 
 export interface LaunchTemplateGroup {

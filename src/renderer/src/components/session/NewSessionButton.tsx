@@ -13,7 +13,8 @@ export function NewSessionButton() {
 
       const state = useSessionStore.getState()
       const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
-        claudeMode: state.claudeMode
+        claudeMode: state.claudeMode,
+        dangerousMode: state.dangerousMode
       })
       addSession({
         id: sessionInfo.id,
@@ -22,7 +23,9 @@ export function NewSessionButton() {
         name: sessionInfo.folderName,
         alive: sessionInfo.alive,
         activityStatus: 'idle',
-        promptWaiting: null
+        promptWaiting: null,
+        claudeMode: state.claudeMode,
+        dangerousMode: state.dangerousMode
       })
     } catch (err) {
       console.error('Failed to create session:', err)

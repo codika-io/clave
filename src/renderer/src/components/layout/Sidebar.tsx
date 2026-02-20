@@ -216,7 +216,9 @@ export function Sidebar() {
         name: sessionInfo.folderName,
         alive: sessionInfo.alive,
         activityStatus: 'idle',
-        promptWaiting: null
+        promptWaiting: null,
+        claudeMode: state.claudeMode,
+        dangerousMode: state.dangerousMode
       })
     } catch (err) {
       console.error('Failed to create session:', err)
