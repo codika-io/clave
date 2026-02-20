@@ -36,6 +36,16 @@ const electronAPI = {
 
   openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
 
+  onUpdateAvailable: (callback: (version: string) => void) => {
+    const channel = 'updater:update-available'
+    const listener = (_event: Electron.IpcRendererEvent, version: string): void =>
+      callback(version)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  },
+
   onUpdateDownloaded: (callback: (version: string) => void) => {
     const channel = 'updater:update-downloaded'
     const listener = (_event: Electron.IpcRendererEvent, version: string): void =>
@@ -46,7 +56,38 @@ const electronAPI = {
     }
   },
 
+  onDownloadProgress: (
+    callback: (progress: {
+      percent: number
+      bytesPerSecond: number
+      transferred: number
+      total: number
+    }) => void
+  ) => {
+    const channel = 'updater:download-progress'
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }
+    ): void => callback(progress)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  },
+
+  onDownloadError: (callback: (message: string) => void) => {
+    const channel = 'updater:download-error'
+    const listener = (_event: Electron.IpcRendererEvent, message: string): void =>
+      callback(message)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  },
+
   installUpdate: () => ipcRenderer.invoke('updater:install'),
+  startDownload: () => ipcRenderer.invoke('updater:start-download'),
+  cancelDownload: () => ipcRenderer.invoke('updater:cancel-download'),
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 

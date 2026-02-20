@@ -144,6 +144,13 @@ export interface ValidationResult {
   missing: LaunchTemplateSession[]
 }
 
+export interface DownloadProgress {
+  percent: number
+  bytesPerSecond: number
+  transferred: number
+  total: number
+}
+
 export interface ElectronAPI {
   spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
@@ -154,8 +161,13 @@ export interface ElectronAPI {
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   openExternal: (url: string) => Promise<void>
   openFolderDialog: () => Promise<string | null>
+  onUpdateAvailable: (callback: (version: string) => void) => () => void
   onUpdateDownloaded: (callback: (version: string) => void) => () => void
+  onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
+  onDownloadError: (callback: (message: string) => void) => () => void
   installUpdate: () => Promise<void>
+  startDownload: () => Promise<void>
+  cancelDownload: () => Promise<void>
   getPathForFile: (file: File) => string
   showNotification: (options: { title: string; body: string; sessionId: string }) => Promise<void>
   onClaudeSessionDetected: (sessionId: string, callback: (claudeSessionId: string) => void) => () => void

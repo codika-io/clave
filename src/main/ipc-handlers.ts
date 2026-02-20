@@ -1,6 +1,6 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import { ptyManager } from './pty-manager'
-import { installUpdate } from './auto-updater'
+import { installUpdate, startDownload, cancelDownload } from './auto-updater'
 import { fileManager } from './file-manager'
 import { boardManager } from './board-manager'
 import { templateManager, type LaunchTemplate, type LaunchTemplatesData } from './template-manager'
@@ -118,6 +118,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('updater:install', () => {
     installUpdate()
+  })
+
+  ipcMain.handle('updater:start-download', () => {
+    startDownload()
+  })
+
+  ipcMain.handle('updater:cancel-download', () => {
+    cancelDownload()
   })
 
   // File system handlers
