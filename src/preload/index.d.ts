@@ -185,6 +185,7 @@ export interface ElectronAPI {
   getUsageStats: () => Promise<UsageData>
   fetchRateLimits: () => Promise<RateLimits | null>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>
+  gitFetch: (cwd: string) => Promise<void>
   discoverGitRepos: (cwd: string) => Promise<Array<{ name: string; path: string }>>
   gitStage: (cwd: string, files: string[]) => Promise<void>
   gitUnstage: (cwd: string, files: string[]) => Promise<void>

@@ -1,6 +1,6 @@
 {
   "name": "clave",
-  "version": "1.6.6",
+  "version": "1.7.0",
   "description": "Manage multiple Claude Code sessions from a single desktop app",
   "main": "./out/main/index.js",
   "scripts": {

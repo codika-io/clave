@@ -94,6 +94,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('usage:fetch-rate-limits', () => usageManager.fetchRateLimits())
 
   // Git handlers
+  ipcMain.handle('git:fetch', (_event, cwd: string) => gitManager.fetch(cwd))
   ipcMain.handle('git:status', (_event, cwd: string) => gitManager.getStatus(cwd))
   ipcMain.handle('git:discover-repos', (_event, cwd: string) => gitManager.discoverRepos(cwd))
   ipcMain.handle('git:stage', (_event, cwd: string, files: string[]) => gitManager.stage(cwd, files))

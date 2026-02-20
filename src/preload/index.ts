@@ -117,6 +117,7 @@ const electronAPI = {
 
   // Git
   getGitStatus: (cwd: string) => ipcRenderer.invoke('git:status', cwd),
+  gitFetch: (cwd: string) => ipcRenderer.invoke('git:fetch', cwd),
   discoverGitRepos: (cwd: string) => ipcRenderer.invoke('git:discover-repos', cwd),
   gitStage: (cwd: string, files: string[]) => ipcRenderer.invoke('git:stage', cwd, files),
   gitUnstage: (cwd: string, files: string[]) => ipcRenderer.invoke('git:unstage', cwd, files),

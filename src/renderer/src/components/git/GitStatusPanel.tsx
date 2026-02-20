@@ -1041,16 +1041,18 @@ function MultiRepoSection({
 }) {
   const changeCount = status.files.length
   const hasChanges = changeCount > 0
-  const [expanded, setExpanded] = useState(hasChanges)
+  const hasRemoteChanges = status.behind > 0
+  const shouldExpand = hasChanges || hasRemoteChanges
+  const [expanded, setExpanded] = useState(shouldExpand)
   const initializedRef = useRef(false)
 
   // Update default expanded state when changes appear/disappear, but only on first load
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true
-      setExpanded(hasChanges)
+      setExpanded(shouldExpand)
     }
-  }, [hasChanges])
+  }, [shouldExpand])
 
   return (
     <div className="border-b border-border-subtle">
@@ -1078,12 +1080,24 @@ function MultiRepoSection({
         {/* Branch badge */}
         <span className="text-text-tertiary truncate">{status.branch}</span>
 
-        {/* Change count badge */}
-        {changeCount > 0 && (
-          <span className="ml-auto flex-shrink-0 text-[10px] font-medium bg-surface-200 text-text-secondary rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
-            {changeCount}
-          </span>
-        )}
+        {/* Badges (right-aligned) */}
+        <span className="ml-auto flex-shrink-0 flex items-center gap-1.5">
+          {status.behind > 0 && (
+            <span className="text-[10px] font-medium text-orange-400">
+              {'\u2193'}{status.behind}
+            </span>
+          )}
+          {status.ahead > 0 && (
+            <span className="text-[10px] font-medium text-green-400">
+              {'\u2191'}{status.ahead}
+            </span>
+          )}
+          {changeCount > 0 && (
+            <span className="text-[10px] font-medium bg-surface-200 text-text-secondary rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+              {changeCount}
+            </span>
+          )}
+        </span>
       </button>
 
       {/* Expanded content */}

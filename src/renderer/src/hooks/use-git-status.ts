@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { GitStatusResult } from '../../../preload/index.d'
 
 const POLL_INTERVAL = 5000
+const FETCH_INTERVAL = 30000
 
 export function useGitStatus(cwd: string | null, active: boolean) {
   const [status, setStatus] = useState<GitStatusResult | null>(null)
@@ -42,6 +43,16 @@ export function useGitStatus(cwd: string | null, active: boolean) {
     const interval = setInterval(fetch, POLL_INTERVAL)
     return () => clearInterval(interval)
   }, [cwd, active, fetch])
+
+  // Periodic git fetch to update remote tracking refs
+  useEffect(() => {
+    if (!cwd || !active) return
+    window.electronAPI.gitFetch(cwd)
+    const interval = setInterval(() => {
+      window.electronAPI.gitFetch(cwd)
+    }, FETCH_INTERVAL)
+    return () => clearInterval(interval)
+  }, [cwd, active])
 
   const refresh = useCallback(() => {
     setLoading(true)

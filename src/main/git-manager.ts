@@ -146,7 +146,17 @@ class GitManager {
 
   async pull(cwd: string): Promise<void> {
     const git = simpleGit(cwd)
-    await git.pull()
+    try {
+      await git.pull(['--rebase'])
+    } catch (err) {
+      // If rebase fails (conflicts), abort to leave repo clean
+      try {
+        await git.rebase(['--abort'])
+      } catch {
+        // abort may fail if rebase didn't actually start
+      }
+      throw err
+    }
   }
 
   async discard(
@@ -183,6 +193,15 @@ class GitManager {
     // Delete untracked files from filesystem
     for (const filePath of untrackedPaths) {
       await fs.promises.unlink(path.join(cwd, filePath)).catch(() => {})
+    }
+  }
+
+  async fetch(cwd: string): Promise<void> {
+    try {
+      const git = simpleGit(cwd)
+      await git.fetch()
+    } catch {
+      // silently ignore — offline, no remote, auth issues
     }
   }
 

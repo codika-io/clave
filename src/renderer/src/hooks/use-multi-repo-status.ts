@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { GitStatusResult } from '../../../preload/index.d'
 
 const POLL_INTERVAL = 5000
+const FETCH_INTERVAL = 30000
 
 export type MultiRepoMode =
   | { mode: 'single' }
@@ -63,6 +64,21 @@ export function useMultiRepoStatus(
     const interval = setInterval(fetchAll, POLL_INTERVAL)
     return () => clearInterval(interval)
   }, [cwd, active, fetchAll, result.mode])
+
+  // Periodic git fetch for all repos in multi mode
+  useEffect(() => {
+    if (!cwd || !active || result.mode !== 'multi') return
+    const repos = result.repos
+    for (const repo of repos) {
+      window.electronAPI.gitFetch(repo.path)
+    }
+    const interval = setInterval(() => {
+      for (const repo of repos) {
+        window.electronAPI.gitFetch(repo.path)
+      }
+    }, FETCH_INTERVAL)
+    return () => clearInterval(interval)
+  }, [cwd, active, result])
 
   const refresh = useCallback(() => {
     fetchAll()
