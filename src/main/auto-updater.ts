@@ -99,5 +99,11 @@ export function cancelDownload(): void {
 }
 
 export function installUpdate(): void {
-  autoUpdater.quitAndInstall(false, true)
+  // Use app.quit() instead of autoUpdater.quitAndInstall() to avoid
+  // macOS "quit unexpectedly" dialog. quitAndInstall force-terminates
+  // the process, which macOS interprets as a crash.
+  // autoInstallOnAppQuit is already true, so the update gets installed
+  // during the normal quit lifecycle (before-quit fires, PTYs cleaned up,
+  // process exits with code 0).
+  app.quit()
 }
