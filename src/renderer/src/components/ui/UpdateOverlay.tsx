@@ -131,7 +131,7 @@ export function UpdateOverlay() {
               {phase === 'downloading' && (
                 <>
                   <p className="text-[15px] font-medium text-text-primary">
-                    Updating to v{version}
+                    Updating to {version ? `v${version}` : 'new version'}
                   </p>
                   <p className="text-[13px] text-text-tertiary mt-1">
                     {progress.total > 0
@@ -147,7 +147,7 @@ export function UpdateOverlay() {
                 <>
                   <p className="text-[15px] font-medium text-text-primary">Restarting...</p>
                   <p className="text-[13px] text-text-tertiary mt-1">
-                    v{version} is ready to go
+                    {version ? `v${version}` : 'Update'} is ready to go
                   </p>
                 </>
               )}

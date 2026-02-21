@@ -7,6 +7,7 @@ const RETRY_DELAY = 60 * 1000 // 1 minute
 
 let cancellationToken: CancellationToken | null = null
 let downloadCancelled = false
+let isDownloading = false
 
 function sendToRenderer(channel: string, ...args: unknown[]): void {
   const win = BrowserWindow.getAllWindows()[0]
@@ -46,15 +47,19 @@ export function initAutoUpdater(): void {
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log(`[updater] Update downloaded: ${info.version}`)
+    isDownloading = false
     sendToRenderer('updater:update-downloaded', info.version)
   })
 
   autoUpdater.on('error', (err) => {
     console.error('[updater] Error:', err.message)
-    if (!downloadCancelled) {
+    // Only forward errors to renderer if a download was in progress.
+    // checkForUpdates() errors should not trigger the download-error overlay.
+    if (isDownloading && !downloadCancelled) {
       sendToRenderer('updater:download-error', err.message)
     }
     downloadCancelled = false
+    isDownloading = false
   })
 
   const check = (): void => {
@@ -74,17 +79,20 @@ export function initAutoUpdater(): void {
 
 export function startDownload(): void {
   downloadCancelled = false
+  isDownloading = true
   cancellationToken = new CancellationToken()
   autoUpdater.downloadUpdate(cancellationToken).catch((err) => {
     if (!downloadCancelled) {
       console.error('[updater] Download failed:', err?.message)
     }
+    isDownloading = false
   })
 }
 
 export function cancelDownload(): void {
   if (cancellationToken) {
     downloadCancelled = true
+    isDownloading = false
     cancellationToken.cancel()
     cancellationToken = null
   }

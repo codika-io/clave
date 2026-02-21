@@ -62,7 +62,7 @@ export function UpdateToast() {
               <p className="text-[13px] font-medium text-text-primary leading-tight">
                 New version available
               </p>
-              <p className="text-[12px] text-text-tertiary mt-0.5">v{version}</p>
+              <p className="text-[12px] text-text-tertiary mt-0.5">{version ? `v${version}` : 'New version'}</p>
             </div>
 
             {/* Actions */}
@@ -94,7 +94,7 @@ export function UpdateToast() {
             transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
             onClick={undismiss}
             className="fixed bottom-4 left-4 z-50 flex items-center justify-center w-8 h-8 rounded-lg border border-border bg-surface-100 shadow-md backdrop-blur-sm text-accent hover:bg-surface-200 transition-colors"
-            title={`Update available: v${version}`}
+            title={`Update available${version ? `: v${version}` : ''}`}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path
