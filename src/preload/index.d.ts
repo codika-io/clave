@@ -191,7 +191,7 @@ export interface ElectronAPI {
   gitUnstage: (cwd: string, files: string[]) => Promise<void>
   gitCommit: (cwd: string, message: string) => Promise<GitCommitResult>
   gitPush: (cwd: string) => Promise<void>
-  gitPull: (cwd: string) => Promise<void>
+  gitPull: (cwd: string, strategy?: 'auto' | 'merge' | 'rebase' | 'ff-only') => Promise<void>
   gitDiscard: (cwd: string, files: Array<{ path: string; status: string; staged: boolean }>) => Promise<void>
   gitDiff: (cwd: string, filePath: string, staged: boolean, isUntracked: boolean) => Promise<string>
 }

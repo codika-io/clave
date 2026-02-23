@@ -144,18 +144,34 @@ class GitManager {
     await git.push()
   }
 
-  async pull(cwd: string): Promise<void> {
+  async pull(cwd: string, strategy: 'auto' | 'merge' | 'rebase' | 'ff-only' = 'auto'): Promise<void> {
     const git = simpleGit(cwd)
-    try {
-      await git.pull(['--rebase'])
-    } catch (err) {
-      // If rebase fails (conflicts), abort to leave repo clean
+
+    if (strategy === 'ff-only') {
+      await git.pull(['--ff-only'])
+      return
+    }
+
+    if (strategy === 'merge') {
+      await git.pull(['--no-rebase', '--autostash'])
+      return
+    }
+
+    if (strategy === 'rebase') {
       try {
-        await git.rebase(['--abort'])
-      } catch {
-        // abort may fail if rebase didn't actually start
+        await git.pull(['--rebase', '--autostash'])
+      } catch (err) {
+        try { await git.rebase(['--abort']) } catch { /* abort may fail if rebase didn't start */ }
+        throw err
       }
-      throw err
+      return
+    }
+
+    // strategy === 'auto': try ff-only, then fall back to merge
+    try {
+      await git.pull(['--ff-only'])
+    } catch {
+      await git.pull(['--no-rebase', '--autostash'])
     }
   }
 

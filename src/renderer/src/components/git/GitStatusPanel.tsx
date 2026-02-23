@@ -2,11 +2,13 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { FileIcon } from '../files/file-icons'
-import { ListBulletIcon, Bars3BottomLeftIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
+import { ListBulletIcon, Bars3BottomLeftIcon, ArrowUturnLeftIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { buildGitTree, compactTree, flattenGitTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import type { GitFileStatus, GitStatusResult } from '../../../../preload/index.d'
 import type { FlatGitTreeNode } from '../../lib/git-file-tree'
+
+type PullStrategy = 'auto' | 'merge' | 'rebase' | 'ff-only'
 
 function statusLetter(status: GitFileStatus['status']): string {
   switch (status) {
@@ -314,6 +316,82 @@ function GitTreeSection({
   )
 }
 
+function PullButton({
+  cwd,
+  operating,
+  onOperation
+}: {
+  cwd: string
+  operating: boolean
+  onOperation: (fn: () => Promise<void>) => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  const handlePull = useCallback(
+    (strategy: PullStrategy) => {
+      setMenuOpen(false)
+      onOperation(async () => {
+        await window.electronAPI.gitPull(cwd, strategy)
+      })
+    },
+    [cwd, onOperation]
+  )
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return
+    const handler = (e: MouseEvent): void => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <div className="flex items-center">
+        <button
+          className="text-xs font-medium pl-2 pr-1 py-1 rounded-l bg-surface-100 text-text-secondary hover:text-text-primary disabled:opacity-40 transition-all"
+          disabled={operating}
+          onClick={() => handlePull('auto')}
+          title="Pull (auto: fast-forward, then merge)"
+        >
+          {'\u2193'} Pull
+        </button>
+        <button
+          className="text-xs py-1 pr-1.5 pl-0.5 rounded-r bg-surface-100 text-text-tertiary hover:text-text-primary disabled:opacity-40 transition-all border-l border-border-subtle"
+          disabled={operating}
+          onClick={() => setMenuOpen((v) => !v)}
+          title="Pull options"
+        >
+          <ChevronDownIcon className="w-3 h-3" />
+        </button>
+      </div>
+      {menuOpen && (
+        <div className="absolute bottom-full right-0 mb-1 bg-surface-200 border border-border-subtle rounded shadow-lg py-0.5 z-50 min-w-[140px]">
+          {([
+            ['auto', 'Pull'],
+            ['merge', 'Pull (Merge)'],
+            ['rebase', 'Pull (Rebase)'],
+            ['ff-only', 'Pull (FF only)']
+          ] as [PullStrategy, string][]).map(([strategy, label]) => (
+            <button
+              key={strategy}
+              className="w-full text-left text-xs px-3 py-1.5 text-text-secondary hover:bg-surface-100 hover:text-text-primary transition-colors"
+              onClick={() => handlePull(strategy)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CommitBar({
   cwd,
   stagedCount,
@@ -343,12 +421,6 @@ function CommitBar({
   const handlePush = useCallback(() => {
     onOperation(async () => {
       await window.electronAPI.gitPush(cwd)
-    })
-  }, [cwd, onOperation])
-
-  const handlePull = useCallback(() => {
-    onOperation(async () => {
-      await window.electronAPI.gitPull(cwd)
     })
   }, [cwd, onOperation])
 
@@ -392,14 +464,7 @@ function CommitBar({
           </button>
         )}
         {behind > 0 && (
-          <button
-            className="text-xs font-medium px-2 py-1 rounded bg-surface-100 text-text-secondary hover:text-text-primary disabled:opacity-40 transition-all"
-            disabled={operating}
-            onClick={handlePull}
-            title="Pull"
-          >
-            {'\u2193'} Pull
-          </button>
+          <PullButton cwd={cwd} operating={operating} onOperation={onOperation} />
         )}
       </div>
     </div>

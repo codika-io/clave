@@ -105,7 +105,7 @@ export function registerIpcHandlers(): void {
     gitManager.commit(cwd, message)
   )
   ipcMain.handle('git:push', (_event, cwd: string) => gitManager.push(cwd))
-  ipcMain.handle('git:pull', (_event, cwd: string) => gitManager.pull(cwd))
+  ipcMain.handle('git:pull', (_event, cwd: string, strategy?: 'auto' | 'merge' | 'rebase' | 'ff-only') => gitManager.pull(cwd, strategy))
   ipcMain.handle(
     'git:discard',
     (_event, cwd: string, files: Array<{ path: string; status: string; staged: boolean }>) =>
