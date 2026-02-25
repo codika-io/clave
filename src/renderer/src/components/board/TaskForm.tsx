@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBoardStore } from '../../store/board-store'
-import { TemplateManager } from './TemplateManager'
 
 interface TaskFormProps {
   isOpen: boolean
@@ -12,12 +11,10 @@ interface TaskFormProps {
 export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
   const addTask = useBoardStore((s) => s.addTask)
   const updateTask = useBoardStore((s) => s.updateTask)
-  const templates = useBoardStore((s) => s.templates)
 
   const [title, setTitle] = useState('')
   const [prompt, setPrompt] = useState('')
   const [cwd, setCwd] = useState('')
-  const [managerOpen, setManagerOpen] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -40,16 +37,12 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        if (managerOpen) {
-          setManagerOpen(false)
-        } else {
-          onClose()
-        }
+        onClose()
       }
     }
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [isOpen, managerOpen, onClose])
+  }, [isOpen, onClose])
 
   const handlePickFolder = useCallback(async () => {
     const folder = await window.electronAPI?.openFolderDialog()
@@ -82,7 +75,6 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
   )
 
   return (
-    <>
       <AnimatePresence>
         {isOpen && (
           <>
@@ -114,34 +106,6 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
                 </div>
 
                 <div className="px-5 space-y-3 pb-4">
-                  {/* Template chips — only shown when creating a new task */}
-                  {!editTask && templates.length > 0 && (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {templates.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => {
-                            setTitle(t.title)
-                            setPrompt(t.prompt)
-                            if (t.cwd) setCwd(t.cwd)
-                          }}
-                          className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors truncate max-w-[160px]"
-                          title={t.name}
-                        >
-                          {t.name}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setManagerOpen(true)}
-                        className="px-2 py-1 text-[11px] text-text-tertiary hover:text-text-secondary transition-colors"
-                      >
-                        Manage
-                      </button>
-                    </div>
-                  )}
-
                   <div>
                     <label className="block text-xs text-text-secondary mb-1">Title</label>
                     <input
@@ -212,11 +176,5 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
           </>
         )}
       </AnimatePresence>
-
-      <TemplateManager
-        isOpen={managerOpen}
-        onClose={() => setManagerOpen(false)}
-      />
-    </>
   )
 }

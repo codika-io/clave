@@ -10,6 +10,25 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { homedir } from 'os'
 
+const WATCH_IGNORE = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '__pycache__',
+  '.next',
+  '.svelte-kit',
+  '.DS_Store',
+  'coverage',
+  '.cache'
+])
+
+// Active file system watchers keyed by webContents id
+const fsWatchers = new Map<
+  number,
+  { cwd: string; watcher: fs.FSWatcher; cleanup: () => void }
+>()
+
 function getClaudeProjectDir(cwd: string): string {
   const encoded = cwd.replace(/[/.]/g, '-')
   return path.join(homedir(), '.claude', 'projects', encoded)
@@ -154,6 +173,59 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('shell:showItemInFolder', (_event, fullPath: string) => {
     shell.showItemInFolder(fullPath)
+  })
+
+  // File system watcher — recursive fs.watch with debounced change events
+  ipcMain.handle('fs:watch', (_event, cwd: string) => {
+    const win = BrowserWindow.fromWebContents(_event.sender)
+    if (!win) return
+
+    const wcId = _event.sender.id
+
+    // Close any existing watcher for this window
+    const existing = fsWatchers.get(wcId)
+    if (existing) existing.cleanup()
+
+    try {
+      const changedDirs = new Set<string>()
+      let debounceTimer: NodeJS.Timeout | null = null
+
+      const watcher = fs.watch(cwd, { recursive: true }, (_eventType, filename) => {
+        if (!filename) return
+
+        // Skip ignored directories
+        const segments = filename.split(path.sep)
+        if (segments.some((s) => WATCH_IGNORE.has(s))) return
+
+        const dir = path.dirname(filename)
+        changedDirs.add(dir === '.' ? '.' : dir)
+
+        if (debounceTimer) clearTimeout(debounceTimer)
+        debounceTimer = setTimeout(() => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('fs:changed', cwd, Array.from(changedDirs))
+          }
+          changedDirs.clear()
+        }, 300)
+      })
+
+      const cleanup = (): void => {
+        if (debounceTimer) clearTimeout(debounceTimer)
+        watcher.close()
+        fsWatchers.delete(wcId)
+      }
+
+      watcher.on('error', cleanup)
+      fsWatchers.set(wcId, { cwd, watcher, cleanup })
+    } catch {
+      // fs.watch can throw if path doesn't exist
+    }
+  })
+
+  ipcMain.handle('fs:unwatch', (_event) => {
+    const wcId = _event.sender.id
+    const existing = fsWatchers.get(wcId)
+    if (existing) existing.cleanup()
   })
 
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }) => {

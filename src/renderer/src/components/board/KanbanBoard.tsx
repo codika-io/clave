@@ -4,7 +4,6 @@ import { useSessionStore } from '../../store/session-store'
 import { useBoardPersistence, useBoardAutoComplete } from '../../hooks/use-board-persistence'
 import { BoardColumn } from './BoardColumn'
 import { TaskForm } from './TaskForm'
-import { TemplateSaveDialog } from './TemplateSaveDialog'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { cn } from '../../lib/utils'
 import type { BoardTask } from '../../../../preload/index.d'
@@ -24,7 +23,6 @@ export function KanbanBoard() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editTask, setEditTask] = useState<BoardTask | null>(null)
-  const [templateSaveTask, setTemplateSaveTask] = useState<BoardTask | null>(null)
 
   const [pendingDoneTask, setPendingDoneTask] = useState<{
     taskId: string
@@ -67,10 +65,6 @@ export function KanbanBoard() {
   const handleCloseForm = useCallback(() => {
     setFormOpen(false)
     setEditTask(null)
-  }, [])
-
-  const handleSaveAsTemplate = useCallback((task: BoardTask) => {
-    setTemplateSaveTask(task)
   }, [])
 
   const startTask = useCallback(
@@ -300,7 +294,7 @@ export function KanbanBoard() {
           tasks={todoTasks}
           onEdit={handleEdit}
           onStart={startTask}
-          onSaveAsTemplate={handleSaveAsTemplate}
+
           onNewTask={handleNewTask}
           onReorder={handleReorder}
         />
@@ -309,7 +303,7 @@ export function KanbanBoard() {
           status="processing"
           tasks={processingTasks}
           onEdit={handleEdit}
-          onSaveAsTemplate={handleSaveAsTemplate}
+
           onReorder={handleReorder}
           onResume={resumeTask}
         />
@@ -318,7 +312,7 @@ export function KanbanBoard() {
           status="done"
           tasks={doneTasks}
           onEdit={handleEdit}
-          onSaveAsTemplate={handleSaveAsTemplate}
+
           onReorder={handleReorder}
           onResume={resumeTask}
         />
@@ -328,12 +322,6 @@ export function KanbanBoard() {
         isOpen={formOpen}
         onClose={handleCloseForm}
         editTask={editTask}
-      />
-
-      <TemplateSaveDialog
-        isOpen={!!templateSaveTask}
-        onClose={() => setTemplateSaveTask(null)}
-        task={templateSaveTask}
       />
 
       <ConfirmDialog

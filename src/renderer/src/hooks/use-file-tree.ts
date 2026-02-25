@@ -81,6 +81,41 @@ function markIgnoredInChildren(
   })
 }
 
+/** Merge new entries into an existing parent node's children, preserving expansion state */
+function mergeNodeChildren(
+  nodes: TreeNode[],
+  parentPath: string,
+  newChildren: TreeNode[]
+): TreeNode[] {
+  return nodes.map((node) => {
+    if (node.path === parentPath) {
+      if (!node.children) return node // Not expanded — skip
+      const existingByPath = new Map(node.children.map((c) => [c.path, c]))
+      const merged = newChildren.map((child) => {
+        const existing = existingByPath.get(child.path)
+        if (existing && existing.type === child.type && child.type === 'directory') {
+          return {
+            ...child,
+            expanded: existing.expanded,
+            children: existing.children,
+            ignored: existing.ignored,
+            loading: existing.loading
+          }
+        }
+        if (existing) {
+          return { ...child, ignored: existing.ignored }
+        }
+        return child
+      })
+      return { ...node, children: merged }
+    }
+    if (node.children) {
+      return { ...node, children: mergeNodeChildren(node.children, parentPath, newChildren) }
+    }
+    return node
+  })
+}
+
 export function useFileTree(cwd: string | null) {
   const [rootNodes, setRootNodes] = useState<TreeNode[]>([])
   const [loading, setLoading] = useState(false)
@@ -139,6 +174,71 @@ export function useFileTree(cwd: string | null) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cwd])
+
+  // Watch for file system changes and merge updates into the tree
+  useEffect(() => {
+    if (!cwd) return
+
+    window.electronAPI?.watchDir(cwd)
+
+    const unsub = window.electronAPI?.onFsChanged((changedCwd, changedDirs) => {
+      if (changedCwd !== cwd) return
+
+      for (const dir of changedDirs) {
+        window.electronAPI
+          ?.readDir(cwd, dir === '.' ? '.' : dir)
+          .then((entries) => {
+            if (!entries) return
+
+            const newChildren: TreeNode[] = entries.map((e: DirEntry) => ({
+              name: e.name,
+              path: e.path,
+              type: e.type,
+              size: e.size,
+              expanded: false,
+              loading: false,
+              depth: 0
+            }))
+
+            if (dir === '.') {
+              // Merge root nodes, preserving expanded directories
+              setRootNodes((prev) => {
+                const prevByPath = new Map(prev.map((n) => [n.path, n]))
+                return newChildren.map((child) => {
+                  const existing = prevByPath.get(child.path)
+                  if (existing && existing.type === child.type && child.type === 'directory') {
+                    return {
+                      ...child,
+                      expanded: existing.expanded,
+                      children: existing.children,
+                      ignored: existing.ignored,
+                      loading: existing.loading
+                    }
+                  }
+                  if (existing) {
+                    return { ...child, ignored: existing.ignored }
+                  }
+                  return child
+                })
+              })
+            } else {
+              setRootNodes((prev) => mergeNodeChildren(prev, dir, newChildren))
+            }
+
+            // Enrich gitignore status for new entries
+            enrichWithIgnored(cwd, newChildren, setRootNodes, dir === '.' ? undefined : dir)
+          })
+          .catch(() => {
+            // Directory may have been deleted — ignore
+          })
+      }
+    })
+
+    return () => {
+      window.electronAPI?.unwatchDir()
+      unsub?.()
+    }
   }, [cwd])
 
   const loadChildren = useCallback(

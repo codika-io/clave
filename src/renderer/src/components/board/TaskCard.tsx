@@ -10,7 +10,6 @@ interface TaskCardProps {
   onEdit: (task: BoardTask) => void
   onStart?: (task: BoardTask) => void
   onResume?: (task: BoardTask) => void
-  onSaveAsTemplate?: (task: BoardTask) => void
   onDragStart: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
@@ -30,7 +29,6 @@ export function TaskCard({
   onEdit,
   onStart,
   onResume,
-  onSaveAsTemplate,
   onDragStart,
   onDragOver,
   onDrop,
@@ -76,13 +74,10 @@ export function TaskCard({
       if (isResumable && onResume) {
         items.push({ label: 'Resume', onClick: () => onResume(task) })
       }
-      if (onSaveAsTemplate) {
-        items.push({ label: 'Save as Template', onClick: () => onSaveAsTemplate(task) })
-      }
       items.push({ label: 'Delete', onClick: () => deleteTask(task.id), danger: true })
       setContextMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [task, linkedSession, isResumable, onEdit, onResume, onSaveAsTemplate, deleteTask, selectSession]
+    [task, linkedSession, isResumable, onEdit, onResume, deleteTask, selectSession]
   )
 
   const handleClick = useCallback(() => {

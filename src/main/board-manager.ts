@@ -15,18 +15,8 @@ export interface BoardTask {
   order: number
 }
 
-export interface BoardTemplate {
-  id: string
-  name: string
-  title: string
-  prompt: string
-  cwd: string | null
-  createdAt: number
-}
-
 export interface BoardData {
   tasks: BoardTask[]
-  templates: BoardTemplate[]
 }
 
 class BoardManager {
@@ -40,7 +30,6 @@ class BoardManager {
     try {
       const raw = fs.readFileSync(this.filePath, 'utf-8')
       const data = JSON.parse(raw) as BoardData
-      if (!data.templates) data.templates = []
       // Normalize old tasks that don't have claudeSessionId
       data.tasks = data.tasks.map((t) => ({
         ...t,
@@ -48,7 +37,7 @@ class BoardManager {
       }))
       return data
     } catch {
-      return { tasks: [], templates: [] }
+      return { tasks: [] }
     }
   }
 

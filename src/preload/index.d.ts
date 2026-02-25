@@ -38,18 +38,8 @@ export interface BoardTask {
   order: number
 }
 
-export interface BoardTemplate {
-  id: string
-  name: string
-  title: string
-  prompt: string
-  cwd: string | null
-  createdAt: number
-}
-
 export interface BoardData {
   tasks: BoardTask[]
-  templates: BoardTemplate[]
 }
 
 export interface ModelTokenUsage {
@@ -180,6 +170,9 @@ export interface ElectronAPI {
   createFile: (rootCwd: string, filePath: string) => Promise<void>
   createDirectory: (rootCwd: string, dirPath: string) => Promise<void>
   showItemInFolder: (fullPath: string) => Promise<void>
+  watchDir: (cwd: string) => Promise<void>
+  unwatchDir: () => Promise<void>
+  onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => () => void
   boardLoad: () => Promise<BoardData>
   boardSave: (data: BoardData) => Promise<void>
   templatesLoad: () => Promise<LaunchTemplatesData>

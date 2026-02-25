@@ -35,7 +35,37 @@ export function AppShell() {
   const previewFile = useSessionStore((s) => s.previewFile)
   const previewSource = useSessionStore((s) => s.previewSource)
 
+  const addSession = useSessionStore((s) => s.addSession)
+
   useLaunchTemplate()
+
+  const spawnSessionWithOptions = useCallback(
+    async (claudeMode: boolean, dangerousMode: boolean) => {
+      try {
+        const folderPath = await window.electronAPI.openFolderDialog()
+        if (!folderPath) return
+
+        const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
+          claudeMode,
+          dangerousMode
+        })
+        addSession({
+          id: sessionInfo.id,
+          cwd: sessionInfo.cwd,
+          folderName: sessionInfo.folderName,
+          name: sessionInfo.folderName,
+          alive: sessionInfo.alive,
+          activityStatus: 'idle',
+          promptWaiting: null,
+          claudeMode,
+          dangerousMode
+        })
+      } catch (err) {
+        console.error('Failed to create session:', err)
+      }
+    },
+    [addSession]
+  )
 
   const isResizing = useRef(false)
   const isResizingTree = useRef(false)
@@ -92,7 +122,7 @@ export function AppShell() {
     [setFileTreeWidth]
   )
 
-  // Keyboard shortcuts: Cmd+P (palette), Cmd+E (file tree)
+  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey && e.key === 'p') {
@@ -103,10 +133,25 @@ export function AppShell() {
         e.preventDefault()
         toggleFileTree()
       }
+      // Cmd+T: New terminal session
+      if (e.metaKey && e.key === 't') {
+        e.preventDefault()
+        spawnSessionWithOptions(false, false)
+      }
+      // Cmd+N: New Claude Code session
+      if (e.metaKey && e.key === 'n') {
+        e.preventDefault()
+        spawnSessionWithOptions(true, false)
+      }
+      // Cmd+D: New Claude Code session with --dangerously-skip-permissions
+      if (e.metaKey && e.key === 'd') {
+        e.preventDefault()
+        spawnSessionWithOptions(true, true)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleFilePalette, toggleFileTree])
+  }, [toggleFilePalette, toggleFileTree, spawnSessionWithOptions])
 
   // Sync data-theme attribute to root element
   useEffect(() => {

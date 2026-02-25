@@ -108,6 +108,22 @@ const electronAPI = {
   showItemInFolder: (fullPath: string) =>
     ipcRenderer.invoke('shell:showItemInFolder', fullPath),
 
+  // File system watching
+  watchDir: (cwd: string) => ipcRenderer.invoke('fs:watch', cwd),
+  unwatchDir: () => ipcRenderer.invoke('fs:unwatch'),
+  onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => {
+    const channel = 'fs:changed'
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      cwd: string,
+      changedDirs: string[]
+    ): void => callback(cwd, changedDirs)
+    ipcRenderer.on(channel, listener)
+    return (): void => {
+      ipcRenderer.removeListener(channel, listener)
+    }
+  },
+
   // Board
   boardLoad: () => ipcRenderer.invoke('board:load'),
   boardSave: (data: unknown) => ipcRenderer.invoke('board:save', data),
