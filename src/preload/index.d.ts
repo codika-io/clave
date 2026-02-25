@@ -100,6 +100,22 @@ export interface GitCommitResult {
   branch: string
 }
 
+export interface GitLogEntry {
+  hash: string
+  shortHash: string
+  message: string
+  author: string
+  date: string
+  refs: string[]
+}
+
+export interface GitCommitFileStatus {
+  path: string
+  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'T'
+  insertions: number
+  deletions: number
+}
+
 export interface LaunchTemplateSession {
   id: string
   cwd: string
@@ -191,6 +207,11 @@ export interface ElectronAPI {
   gitPull: (cwd: string, strategy?: 'auto' | 'merge' | 'rebase' | 'ff-only') => Promise<void>
   gitDiscard: (cwd: string, files: Array<{ path: string; status: string; staged: boolean }>) => Promise<void>
   gitDiff: (cwd: string, filePath: string, staged: boolean, isUntracked: boolean) => Promise<string>
+  gitLog: (cwd: string, maxCount?: number) => Promise<GitLogEntry[]>
+  gitOutgoingCommits: (cwd: string) => Promise<GitLogEntry[]>
+  gitIncomingCommits: (cwd: string) => Promise<GitLogEntry[]>
+  gitCommitFiles: (cwd: string, hash: string) => Promise<GitCommitFileStatus[]>
+  gitCommitDiff: (cwd: string, hash: string, filePath: string) => Promise<string>
 }
 
 declare global {

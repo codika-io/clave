@@ -29,6 +29,22 @@ export interface GitCommitResult {
   branch: string
 }
 
+export interface GitLogEntry {
+  hash: string
+  shortHash: string
+  message: string
+  author: string
+  date: string
+  refs: string[]
+}
+
+export interface GitCommitFileStatus {
+  path: string
+  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'T'
+  insertions: number
+  deletions: number
+}
+
 function mapFiles(status: StatusResult): GitFileStatus[] {
   const files: GitFileStatus[] = []
 
@@ -233,6 +249,144 @@ class GitManager {
       return result.trim().split('\n').filter(Boolean)
     } catch {
       return []
+    }
+  }
+
+  async getLog(
+    cwd: string,
+    maxCount: number = 100
+  ): Promise<GitLogEntry[]> {
+    try {
+      const git = simpleGit(cwd)
+      const result = await git.log({
+        maxCount,
+        format: {
+          hash: '%H',
+          shortHash: '%h',
+          message: '%s',
+          author: '%an',
+          date: '%aI',
+          refs: '%D'
+        }
+      })
+      return result.all.map((entry) => ({
+        hash: entry.hash,
+        shortHash: entry.shortHash,
+        message: entry.message,
+        author: entry.author,
+        date: entry.date,
+        refs: entry.refs
+          ? entry.refs.split(', ').filter(Boolean)
+          : []
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  async getOutgoingCommits(cwd: string): Promise<GitLogEntry[]> {
+    try {
+      const git = simpleGit(cwd)
+      const branch = (await git.status()).current
+      if (!branch) return []
+      const result = await git.log({
+        from: `origin/${branch}`,
+        to: 'HEAD',
+        format: {
+          hash: '%H',
+          shortHash: '%h',
+          message: '%s',
+          author: '%an',
+          date: '%aI',
+          refs: '%D'
+        }
+      })
+      return result.all.map((entry) => ({
+        hash: entry.hash,
+        shortHash: entry.shortHash,
+        message: entry.message,
+        author: entry.author,
+        date: entry.date,
+        refs: entry.refs ? entry.refs.split(', ').filter(Boolean) : []
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  async getIncomingCommits(cwd: string): Promise<GitLogEntry[]> {
+    try {
+      const git = simpleGit(cwd)
+      const branch = (await git.status()).current
+      if (!branch) return []
+      const result = await git.log({
+        from: 'HEAD',
+        to: `origin/${branch}`,
+        format: {
+          hash: '%H',
+          shortHash: '%h',
+          message: '%s',
+          author: '%an',
+          date: '%aI',
+          refs: '%D'
+        }
+      })
+      return result.all.map((entry) => ({
+        hash: entry.hash,
+        shortHash: entry.shortHash,
+        message: entry.message,
+        author: entry.author,
+        date: entry.date,
+        refs: entry.refs ? entry.refs.split(', ').filter(Boolean) : []
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  async getCommitFiles(cwd: string, hash: string): Promise<GitCommitFileStatus[]> {
+    try {
+      const git = simpleGit(cwd)
+      const raw = await git.raw(['diff-tree', '--no-commit-id', '-r', '--numstat', '--diff-filter=AMDRTC', hash])
+      const nameRaw = await git.raw(['diff-tree', '--no-commit-id', '-r', '--name-status', '--diff-filter=AMDRTC', hash])
+
+      const numLines = raw.trim().split('\n').filter(Boolean)
+      const nameLines = nameRaw.trim().split('\n').filter(Boolean)
+
+      const files: GitCommitFileStatus[] = []
+      for (let i = 0; i < nameLines.length; i++) {
+        const nameParts = nameLines[i].split('\t')
+        const statusChar = nameParts[0].charAt(0) as GitCommitFileStatus['status']
+        const filePath = nameParts[nameParts.length - 1]
+
+        let insertions = 0
+        let deletions = 0
+        if (numLines[i]) {
+          const numParts = numLines[i].split('\t')
+          insertions = numParts[0] === '-' ? 0 : parseInt(numParts[0], 10) || 0
+          deletions = numParts[1] === '-' ? 0 : parseInt(numParts[1], 10) || 0
+        }
+
+        files.push({ path: filePath, status: statusChar, insertions, deletions })
+      }
+      return files
+    } catch {
+      return []
+    }
+  }
+
+  async getCommitDiff(cwd: string, hash: string, filePath: string): Promise<string> {
+    try {
+      const git = simpleGit(cwd)
+      return await git.raw(['diff', `${hash}~1`, hash, '--', filePath])
+    } catch {
+      // For initial commits (no parent), use show
+      try {
+        const git = simpleGit(cwd)
+        return await git.raw(['show', `${hash}:${filePath}`])
+      } catch {
+        return ''
+      }
     }
   }
 

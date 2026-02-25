@@ -5,6 +5,7 @@ import { FileIcon } from '../files/file-icons'
 import { ListBulletIcon, Bars3BottomLeftIcon, ArrowUturnLeftIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { buildGitTree, compactTree, flattenGitTree, collectAllDirPaths } from '../../lib/git-file-tree'
+import { GitLogView } from './GitLogView'
 import type { GitFileStatus, GitStatusResult } from '../../../../preload/index.d'
 import type { FlatGitTreeNode } from '../../lib/git-file-tree'
 
@@ -635,6 +636,36 @@ function ErrorBanner({ message }: { message: string }) {
   )
 }
 
+function PanelModeToggle() {
+  const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
+  const setGitPanelMode = useSessionStore((s) => s.setGitPanelMode)
+  return (
+    <div className="flex items-center gap-0.5 text-[10px] font-medium">
+      <button
+        className={`px-1 py-0.5 rounded transition-colors ${
+          gitPanelMode === 'changes'
+            ? 'text-text-primary'
+            : 'text-text-tertiary hover:text-text-secondary'
+        }`}
+        onClick={() => setGitPanelMode('changes')}
+      >
+        Changes
+      </button>
+      <span className="text-text-tertiary/50">|</span>
+      <button
+        className={`px-1 py-0.5 rounded transition-colors ${
+          gitPanelMode === 'log'
+            ? 'text-text-primary'
+            : 'text-text-tertiary hover:text-text-secondary'
+        }`}
+        onClick={() => setGitPanelMode('log')}
+      >
+        Log
+      </button>
+    </div>
+  )
+}
+
 function BranchHeader({
   branch,
   ahead,
@@ -644,6 +675,7 @@ function BranchHeader({
   ahead: number
   behind: number
 }) {
+  const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
   return (
     <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-subtle text-xs flex-shrink-0">
       {/* Branch icon */}
@@ -677,7 +709,8 @@ function BranchHeader({
             )}
           </span>
         )}
-        <ViewModeToggle />
+        <PanelModeToggle />
+        {gitPanelMode === 'changes' && <ViewModeToggle />}
       </span>
     </div>
   )
@@ -1051,6 +1084,7 @@ function RepoSection({
 
 export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | null; isActive: boolean; filterPrefix?: string | null }) {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
+  const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
   const { status, loading, refresh } = useGitStatus(cwd, isActive)
 
   if (!focusedSessionId || !cwd) {
@@ -1084,7 +1118,16 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <BranchHeader branch={status.branch} ahead={status.ahead} behind={status.behind} />
-      <RepoSection cwd={cwd} status={status} filterPrefix={filterPrefix} refresh={refresh} fillHeight />
+      {gitPanelMode === 'log' ? (
+        <GitLogView
+          cwd={cwd}
+          branch={status.branch}
+          ahead={status.ahead}
+          behind={status.behind}
+        />
+      ) : (
+        <RepoSection cwd={cwd} status={status} filterPrefix={filterPrefix} refresh={refresh} fillHeight />
+      )}
     </div>
   )
 }
@@ -1104,6 +1147,7 @@ function MultiRepoSection({
   status: GitStatusResult
   refresh: () => void
 }) {
+  const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
   const changeCount = status.files.length
   const hasChanges = changeCount > 0
   const hasRemoteChanges = status.behind > 0
@@ -1168,12 +1212,21 @@ function MultiRepoSection({
       {/* Expanded content */}
       {expanded && (
         <div className="flex flex-col">
-          <RepoSection
-            cwd={repoPath}
-            status={status}
-            refresh={refresh}
-            fillHeight={false}
-          />
+          {gitPanelMode === 'log' ? (
+            <GitLogView
+              cwd={repoPath}
+              branch={status.branch}
+              ahead={status.ahead}
+              behind={status.behind}
+            />
+          ) : (
+            <RepoSection
+              cwd={repoPath}
+              status={status}
+              refresh={refresh}
+              fillHeight={false}
+            />
+          )}
         </div>
       )}
     </div>
@@ -1200,10 +1253,13 @@ export function MultiRepoGitPanel({
     [nestedRepos]
   )
 
+  const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex items-center justify-end px-3 py-1 border-b border-border-subtle flex-shrink-0">
-        <ViewModeToggle />
+      <div className="flex items-center justify-end gap-1.5 px-3 py-1 border-b border-border-subtle flex-shrink-0">
+        <PanelModeToggle />
+        {gitPanelMode === 'changes' && <ViewModeToggle />}
       </div>
       <div className="flex-1 overflow-y-auto">
         {/* Root repo */}

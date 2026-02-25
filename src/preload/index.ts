@@ -152,6 +152,16 @@ const electronAPI = {
     ipcRenderer.invoke('git:discard', cwd, files),
   gitDiff: (cwd: string, filePath: string, staged: boolean, isUntracked: boolean) =>
     ipcRenderer.invoke('git:diff', cwd, filePath, staged, isUntracked),
+  gitLog: (cwd: string, maxCount?: number) =>
+    ipcRenderer.invoke('git:log', cwd, maxCount),
+  gitOutgoingCommits: (cwd: string) =>
+    ipcRenderer.invoke('git:outgoing-commits', cwd),
+  gitIncomingCommits: (cwd: string) =>
+    ipcRenderer.invoke('git:incoming-commits', cwd),
+  gitCommitFiles: (cwd: string, hash: string) =>
+    ipcRenderer.invoke('git:commit-files', cwd, hash),
+  gitCommitDiff: (cwd: string, hash: string, filePath: string) =>
+    ipcRenderer.invoke('git:commit-diff', cwd, hash, filePath),
 
   onClaudeSessionDetected: (sessionId: string, callback: (claudeSessionId: string) => void) => {
     const channel = `pty:claude-session-id:${sessionId}`

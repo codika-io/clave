@@ -138,6 +138,21 @@ export function registerIpcHandlers(): void {
     (_event, cwd: string, filePath: string, staged: boolean, isUntracked: boolean) =>
       gitManager.getDiff(cwd, filePath, staged, isUntracked)
   )
+  ipcMain.handle('git:log', (_event, cwd: string, maxCount?: number) =>
+    gitManager.getLog(cwd, maxCount)
+  )
+  ipcMain.handle('git:outgoing-commits', (_event, cwd: string) =>
+    gitManager.getOutgoingCommits(cwd)
+  )
+  ipcMain.handle('git:incoming-commits', (_event, cwd: string) =>
+    gitManager.getIncomingCommits(cwd)
+  )
+  ipcMain.handle('git:commit-files', (_event, cwd: string, hash: string) =>
+    gitManager.getCommitFiles(cwd, hash)
+  )
+  ipcMain.handle('git:commit-diff', (_event, cwd: string, hash: string, filePath: string) =>
+    gitManager.getCommitDiff(cwd, hash, filePath)
+  )
 
   ipcMain.handle('updater:install', () => {
     installUpdate()
