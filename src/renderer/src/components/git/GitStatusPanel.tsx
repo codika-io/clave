@@ -1090,7 +1090,7 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
 }
 
 // ---------------------------------------------------------------------------
-// MultiRepoGitPanel — multi-repo collapsible view
+// MultiRepoGitPanel — multi-repo collapsible view with minimize/dock
 // ---------------------------------------------------------------------------
 
 function MultiRepoSection({
@@ -1182,27 +1182,103 @@ function MultiRepoSection({
 
 export function MultiRepoGitPanel({
   repos,
+  rootPath,
   refresh
 }: {
   repos: Array<{ name: string; path: string; status: GitStatusResult }>
+  rootPath?: string | null
   refresh: () => void
 }) {
+  const [nestedDocked, setNestedDocked] = useState(false)
+
+  const rootRepo = rootPath ? repos.find((r) => r.path === rootPath) ?? null : null
+  const nestedRepos = rootPath ? repos.filter((r) => r.path !== rootPath) : repos
+  const hasRoot = rootRepo !== null
+
+  const nestedChangeCount = useMemo(
+    () => nestedRepos.reduce((sum, r) => sum + r.status.files.length, 0),
+    [nestedRepos]
+  )
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center justify-end px-3 py-1 border-b border-border-subtle flex-shrink-0">
         <ViewModeToggle />
       </div>
       <div className="flex-1 overflow-y-auto">
-        {repos.map((repo) => (
+        {/* Root repo */}
+        {rootRepo && (
           <MultiRepoSection
-            key={repo.path}
-            name={repo.name}
-            repoPath={repo.path}
-            status={repo.status}
+            name={rootRepo.name}
+            repoPath={rootRepo.path}
+            status={rootRepo.status}
             refresh={refresh}
           />
-        ))}
+        )}
+
+        {/* Separator with dock arrow — only when root + nested coexist and nested are visible */}
+        {hasRoot && nestedRepos.length > 0 && !nestedDocked && (
+          <div className="group/sep flex items-center gap-0 px-3 py-1">
+            <div className="flex-1 h-px bg-border" />
+            <button
+              className="p-0.5 rounded text-text-tertiary opacity-0 group-hover/sep:opacity-100 hover:text-text-primary hover:bg-surface-200 transition-all flex-shrink-0 mx-1"
+              onClick={() => setNestedDocked(true)}
+              title="Dock nested repos"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M2.5 4L5 7l2.5-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+        )}
+
+        {/* Nested repos (when root exists) — visible when not docked */}
+        {hasRoot &&
+          !nestedDocked &&
+          nestedRepos.map((repo) => (
+            <MultiRepoSection
+              key={repo.path}
+              name={repo.name}
+              repoPath={repo.path}
+              status={repo.status}
+              refresh={refresh}
+            />
+          ))}
+
+        {/* All repos flat when CWD is not itself a repo (no root) */}
+        {!hasRoot &&
+          repos.map((repo) => (
+            <MultiRepoSection
+              key={repo.path}
+              name={repo.name}
+              repoPath={repo.path}
+              status={repo.status}
+              refresh={refresh}
+            />
+          ))}
       </div>
+
+      {/* Bottom dock tab for nested repos */}
+      {nestedDocked && nestedRepos.length > 0 && (
+        <div className="flex-shrink-0 border-t border-border px-2 py-1.5 bg-surface-100/50">
+          <button
+            className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium rounded bg-surface-100 hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors w-full"
+            onClick={() => setNestedDocked(false)}
+            title="Restore nested repos"
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="none" className="flex-shrink-0">
+              <path d="M2 5.5L4 3l2 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>{nestedRepos.length} nested repo{nestedRepos.length !== 1 ? 's' : ''}</span>
+            {nestedChangeCount > 0 && (
+              <span className="bg-surface-200 text-text-tertiary rounded-full px-1.5 min-w-[16px] text-center text-[9px]">
+                {nestedChangeCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

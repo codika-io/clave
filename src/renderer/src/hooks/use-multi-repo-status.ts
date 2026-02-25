@@ -13,8 +13,9 @@ export type MultiRepoMode =
 export function useMultiRepoStatus(
   cwd: string | null,
   active: boolean
-): { result: MultiRepoMode; refresh: () => void } {
+): { result: MultiRepoMode; refresh: () => void; hasNestedRepos: boolean } {
   const [result, setResult] = useState<MultiRepoMode>({ mode: 'loading' })
+  const [hasNestedRepos, setHasNestedRepos] = useState(false)
   const cwdRef = useRef(cwd)
 
   const fetchAll = useCallback(async () => {
@@ -24,9 +25,33 @@ export function useMultiRepoStatus(
     if (cwdRef.current !== cwd) return
 
     if (status.isRepo) {
-      setResult({ mode: 'single' })
+      const nestedRepos = await window.electronAPI.discoverGitRepos(cwd)
+      if (cwdRef.current !== cwd) return
+
+      setHasNestedRepos(nestedRepos.length > 0)
+
+      if (nestedRepos.length === 0) {
+        setResult({ mode: 'single' })
+        return
+      }
+
+      // Always show all repos when nested repos exist
+      const rootName = cwd.split('/').pop() ?? cwd
+      const allRepoEntries = [{ name: rootName, path: cwd }, ...nestedRepos]
+      const repoStatuses = await Promise.all(
+        allRepoEntries.map(async (repo) => {
+          const repoStatus =
+            repo.path === cwd ? status : await window.electronAPI.getGitStatus(repo.path)
+          return { name: repo.name, path: repo.path, status: repoStatus }
+        })
+      )
+      if (cwdRef.current !== cwd) return
+      setResult({ mode: 'multi', repos: repoStatuses })
       return
     }
+
+    // CWD is not a repo — discover repos in children
+    setHasNestedRepos(false)
 
     const repos = await window.electronAPI.discoverGitRepos(cwd)
     if (cwdRef.current !== cwd) return
@@ -84,5 +109,5 @@ export function useMultiRepoStatus(
     fetchAll()
   }, [fetchAll])
 
-  return { result, refresh }
+  return { result, refresh, hasNestedRepos }
 }

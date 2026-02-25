@@ -289,7 +289,11 @@ export function SidePanel() {
           onNavigateToFolder={handleNavigateToFolder}
         />
       ) : multiRepo.result.mode === 'multi' ? (
-        <MultiRepoGitPanel repos={multiRepo.result.repos} refresh={multiRepo.refresh} />
+        <MultiRepoGitPanel
+          repos={multiRepo.result.repos}
+          rootPath={multiRepo.hasNestedRepos ? cwd : null}
+          refresh={multiRepo.refresh}
+        />
       ) : multiRepo.result.mode === 'none' ? (
         <div className="flex-1 flex items-center justify-center px-3">
           <span className="text-xs text-text-tertiary text-center">Not a git repository</span>
