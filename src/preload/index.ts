@@ -99,6 +99,12 @@ const electronAPI = {
     ipcRenderer.invoke('fs:read-file', rootCwd, filePath),
   statFile: (rootCwd: string, filePath: string) =>
     ipcRenderer.invoke('fs:stat', rootCwd, filePath),
+  writeFile: (rootCwd: string, filePath: string, content: string) =>
+    ipcRenderer.invoke('fs:write-file', rootCwd, filePath, content),
+  createFile: (rootCwd: string, filePath: string) =>
+    ipcRenderer.invoke('fs:create-file', rootCwd, filePath),
+  createDirectory: (rootCwd: string, dirPath: string) =>
+    ipcRenderer.invoke('fs:create-directory', rootCwd, dirPath),
   showItemInFolder: (fullPath: string) =>
     ipcRenderer.invoke('shell:showItemInFolder', fullPath),
 
@@ -116,6 +122,8 @@ const electronAPI = {
   fetchRateLimits: () => ipcRenderer.invoke('usage:fetch-rate-limits'),
 
   // Git
+  gitCheckIgnored: (cwd: string, paths: string[]) =>
+    ipcRenderer.invoke('git:check-ignored', cwd, paths),
   getGitStatus: (cwd: string) => ipcRenderer.invoke('git:status', cwd),
   gitFetch: (cwd: string) => ipcRenderer.invoke('git:fetch', cwd),
   discoverGitRepos: (cwd: string) => ipcRenderer.invoke('git:discover-repos', cwd),

@@ -62,9 +62,10 @@ export function FileTreeItem({
 
   return (
     <div
+      data-tree-item
       className={`flex items-center h-7 px-2 cursor-pointer select-none transition-colors text-sm ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
-      }`}
+      } ${node.ignored ? 'opacity-40' : ''}`}
       style={{ paddingLeft: `${8 + node.depth * 16}px` }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}

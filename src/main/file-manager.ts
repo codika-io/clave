@@ -145,6 +145,24 @@ class FileManager {
       modified: s.mtimeMs
     }
   }
+
+  async writeFile(rootCwd: string, filePath: string, content: string): Promise<void> {
+    const resolved = validatePath(rootCwd, filePath)
+    await fs.writeFile(resolved, content, 'utf-8')
+  }
+
+  async createFile(rootCwd: string, filePath: string): Promise<void> {
+    const resolved = validatePath(rootCwd, filePath)
+    // Ensure parent directory exists
+    await fs.mkdir(path.dirname(resolved), { recursive: true })
+    // Create empty file (fail if already exists)
+    await fs.writeFile(resolved, '', { flag: 'wx' })
+  }
+
+  async createDirectory(rootCwd: string, dirPath: string): Promise<void> {
+    const resolved = validatePath(rootCwd, dirPath)
+    await fs.mkdir(resolved, { recursive: true })
+  }
 }
 
 export const fileManager = new FileManager()

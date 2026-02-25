@@ -221,6 +221,21 @@ class GitManager {
     }
   }
 
+  async checkIgnored(cwd: string, paths: string[]): Promise<string[]> {
+    if (paths.length === 0) return []
+    try {
+      const git = simpleGit(cwd)
+      const isRepo = await git.checkIsRepo()
+      if (!isRepo) return []
+      // git check-ignore returns the paths that ARE ignored (exit code 1 = none ignored)
+      const result = await git.raw(['check-ignore', ...paths]).catch(() => '')
+      if (!result.trim()) return []
+      return result.trim().split('\n').filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+
   async getStatus(cwd: string): Promise<GitStatusResult> {
     try {
       const git = simpleGit(cwd)

@@ -94,6 +94,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('usage:fetch-rate-limits', () => usageManager.fetchRateLimits())
 
   // Git handlers
+  ipcMain.handle('git:check-ignored', (_event, cwd: string, paths: string[]) =>
+    gitManager.checkIgnored(cwd, paths)
+  )
   ipcMain.handle('git:fetch', (_event, cwd: string) => gitManager.fetch(cwd))
   ipcMain.handle('git:status', (_event, cwd: string) => gitManager.getStatus(cwd))
   ipcMain.handle('git:discover-repos', (_event, cwd: string) => gitManager.discoverRepos(cwd))
@@ -139,6 +142,15 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('fs:stat', (_event, rootCwd: string, filePath: string) =>
     fileManager.stat(rootCwd, filePath)
+  )
+  ipcMain.handle('fs:write-file', (_event, rootCwd: string, filePath: string, content: string) =>
+    fileManager.writeFile(rootCwd, filePath, content)
+  )
+  ipcMain.handle('fs:create-file', (_event, rootCwd: string, filePath: string) =>
+    fileManager.createFile(rootCwd, filePath)
+  )
+  ipcMain.handle('fs:create-directory', (_event, rootCwd: string, dirPath: string) =>
+    fileManager.createDirectory(rootCwd, dirPath)
   )
   ipcMain.handle('shell:showItemInFolder', (_event, fullPath: string) => {
     shell.showItemInFolder(fullPath)

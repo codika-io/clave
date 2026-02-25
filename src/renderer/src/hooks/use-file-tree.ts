@@ -10,6 +10,7 @@ export interface TreeNode {
   expanded: boolean
   loading: boolean
   depth: number
+  ignored?: boolean
 }
 
 export interface FlatTreeNode extends TreeNode {
@@ -25,6 +26,59 @@ function flattenTree(nodes: TreeNode[], depth = 0): FlatTreeNode[] {
     }
   }
   return result
+}
+
+/** Mark nodes whose paths appear in the ignored set */
+function applyIgnored(nodes: TreeNode[], ignoredSet: Set<string>): TreeNode[] {
+  return nodes.map((node) => {
+    const ignored = ignoredSet.has(node.path)
+    if (node.children) {
+      return { ...node, ignored, children: applyIgnored(node.children, ignoredSet) }
+    }
+    return { ...node, ignored }
+  })
+}
+
+/** Batch-check which paths are gitignored, then mark them in the tree */
+async function enrichWithIgnored(
+  rootCwd: string,
+  nodes: TreeNode[],
+  setRootNodes: React.Dispatch<React.SetStateAction<TreeNode[]>>,
+  parentDirPath?: string
+): Promise<void> {
+  const paths = nodes.map((n) => n.path)
+  if (paths.length === 0) return
+
+  const ignoredPaths = await window.electronAPI?.gitCheckIgnored(rootCwd, paths)
+  if (!ignoredPaths || ignoredPaths.length === 0) return
+
+  const ignoredSet = new Set(ignoredPaths)
+
+  setRootNodes((prev) => {
+    if (parentDirPath) {
+      // Enriching children of a specific directory
+      return markIgnoredInChildren(prev, parentDirPath, ignoredSet)
+    }
+    // Enriching root-level nodes
+    return applyIgnored(prev, ignoredSet)
+  })
+}
+
+/** Apply ignored flags to children of a specific parent node */
+function markIgnoredInChildren(
+  nodes: TreeNode[],
+  parentPath: string,
+  ignoredSet: Set<string>
+): TreeNode[] {
+  return nodes.map((node) => {
+    if (node.path === parentPath && node.children) {
+      return { ...node, children: applyIgnored(node.children, ignoredSet) }
+    }
+    if (node.children) {
+      return { ...node, children: markIgnoredInChildren(node.children, parentPath, ignoredSet) }
+    }
+    return node
+  })
 }
 
 export function useFileTree(cwd: string | null) {
@@ -63,6 +117,9 @@ export function useFileTree(cwd: string | null) {
         }))
 
         setRootNodes(nodes)
+
+        // Check gitignore status (async, non-blocking)
+        enrichWithIgnored(cwd, nodes, setRootNodes)
 
         // Auto-expand previously expanded dirs
         for (const node of nodes) {
@@ -108,6 +165,9 @@ export function useFileTree(cwd: string | null) {
           const nodes = currentNodes ?? prev
           return updateNodeChildren(nodes, dirPath, children)
         })
+
+        // Check gitignore status for children (async, non-blocking)
+        enrichWithIgnored(rootCwd, children, setRootNodes, dirPath)
       } catch (err) {
         console.error('Failed to load children:', err)
       }
@@ -153,6 +213,37 @@ export function useFileTree(cwd: string | null) {
     [cwd, rootNodes, loadChildren]
   )
 
+  const refreshDir = useCallback(
+    async (dirPath: string) => {
+      if (!cwd) return
+      // Reload children of the given directory (or root if '.')
+      if (dirPath === '.') {
+        const entries = await window.electronAPI?.readDir(cwd, '.')
+        if (!entries) return
+        const expanded = expansionCache.current.get(cwd) ?? new Set<string>()
+        const nodes: TreeNode[] = entries.map((e: DirEntry) => ({
+          name: e.name,
+          path: e.path,
+          type: e.type,
+          size: e.size,
+          expanded: expanded.has(e.path),
+          loading: false,
+          depth: 0
+        }))
+        setRootNodes(nodes)
+        enrichWithIgnored(cwd, nodes, setRootNodes)
+        for (const node of nodes) {
+          if (node.type === 'directory' && expanded.has(node.path)) {
+            loadChildren(cwd, node.path, nodes)
+          }
+        }
+      } else {
+        await loadChildren(cwd, dirPath)
+      }
+    },
+    [cwd, loadChildren]
+  )
+
   const flatList = useMemo(() => {
     let nodes = flattenTree(rootNodes)
     if (filter) {
@@ -162,7 +253,7 @@ export function useFileTree(cwd: string | null) {
     return nodes
   }, [rootNodes, filter])
 
-  return { rootNodes, flatList, loading, filter, setFilter, toggleDir }
+  return { rootNodes, flatList, loading, filter, setFilter, toggleDir, refreshDir }
 }
 
 // Helper functions to update tree immutably

@@ -176,6 +176,9 @@ export interface ElectronAPI {
   readDir: (rootCwd: string, dirPath: string) => Promise<DirEntry[]>
   readFile: (rootCwd: string, filePath: string) => Promise<FileReadResult>
   statFile: (rootCwd: string, filePath: string) => Promise<FileStat>
+  writeFile: (rootCwd: string, filePath: string, content: string) => Promise<void>
+  createFile: (rootCwd: string, filePath: string) => Promise<void>
+  createDirectory: (rootCwd: string, dirPath: string) => Promise<void>
   showItemInFolder: (fullPath: string) => Promise<void>
   boardLoad: () => Promise<BoardData>
   boardSave: (data: BoardData) => Promise<void>
@@ -184,6 +187,7 @@ export interface ElectronAPI {
   templatesValidate: (template: LaunchTemplate) => Promise<ValidationResult>
   getUsageStats: () => Promise<UsageData>
   fetchRateLimits: () => Promise<RateLimits | null>
+  gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>
   gitFetch: (cwd: string) => Promise<void>
   discoverGitRepos: (cwd: string) => Promise<Array<{ name: string; path: string }>>
