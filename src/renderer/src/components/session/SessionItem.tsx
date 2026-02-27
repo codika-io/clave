@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
-import { CommandLineIcon } from '@heroicons/react/24/outline'
+import { CommandLineIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 interface SessionItemProps {
   session: Session
@@ -18,6 +18,7 @@ interface SessionItemProps {
   onDragEnd?: (e: React.DragEvent) => void
   dropIndicator?: 'before' | 'after' | null
   isDragging?: boolean
+  onDelete?: () => void
 }
 
 export function SessionItem({
@@ -34,7 +35,8 @@ export function SessionItem({
   onDrop,
   onDragEnd,
   dropIndicator,
-  isDragging
+  isDragging,
+  onDelete
 }: SessionItemProps) {
   const renameSession = useSessionStore((s) => s.renameSession)
   const [editing, setEditing] = useState(false)
@@ -131,7 +133,7 @@ export function SessionItem({
         onKeyDown={handleButtonKeyDown}
         title={session.cwd.replace(/^\/Users\/[^/]+/, '~')}
         className={cn(
-          'w-full flex items-center gap-3 py-2.5 rounded-lg text-left transition-all outline-none',
+          'group w-full flex items-center gap-3 py-2.5 rounded-lg text-left transition-all outline-none',
           grouped ? 'pl-4 pr-2' : 'px-3',
           groupSelected
             ? 'text-text-primary'
@@ -172,6 +174,21 @@ export function SessionItem({
         ) : (
           <span className="flex-1 min-w-0 text-sm font-medium truncate" onDoubleClick={handleDoubleClick}>
             {session.name}
+          </span>
+        )}
+
+        {/* Close button — visible on hover */}
+        {!editing && onDelete && !isDragging && (
+          <span
+            role="button"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity text-text-tertiary hover:text-text-primary"
+          >
+            <XMarkIcon className="w-3.5 h-3.5" />
           </span>
         )}
       </button>

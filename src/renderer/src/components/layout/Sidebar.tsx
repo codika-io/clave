@@ -4,6 +4,7 @@ import { useBoardStore } from '../../store/board-store'
 import { SessionItem } from '../session/SessionItem'
 import { SessionGroupItem } from '../session/SessionGroupItem'
 import { ContextMenu } from '../ui/ContextMenu'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { cn } from '../../lib/utils'
 import {
   MagnifyingGlassIcon,
@@ -191,6 +192,7 @@ export function Sidebar() {
   const [loading, setLoading] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null)
 
   // Selection anchor for Cmd+Shift range select (Finder behavior)
   const selectionAnchorRef = useRef<string | null>(null)
@@ -773,6 +775,7 @@ export function Sidebar() {
                     onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
                     forceEditing={renamingId === session.id}
                     onEditingDone={clearRenaming}
+                    onDelete={() => setDeleteConfirmSessionId(session.id)}
                   />
                 ))
               )
@@ -796,6 +799,7 @@ export function Sidebar() {
                       onDragEnd={handleDragEnd}
                       dropIndicator={getDropIndicator(session.id) as 'before' | 'after' | null}
                       isDragging={draggingIds.includes(session.id)}
+                      onDelete={() => setDeleteConfirmSessionId(session.id)}
                     />
                   )
                 } else {
@@ -855,6 +859,7 @@ export function Sidebar() {
                                   getDropIndicator(session.id) as 'before' | 'after' | null
                                 }
                                 isDragging={draggingIds.includes(session.id)}
+                                onDelete={() => setDeleteConfirmSessionId(session.id)}
                               />
                             )
                           })}
@@ -929,6 +934,18 @@ export function Sidebar() {
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      {/* Delete session confirmation */}
+      <ConfirmDialog
+        isOpen={deleteConfirmSessionId !== null}
+        title="Delete session"
+        message="Are you sure you want to delete this session? This will terminate the process."
+        onConfirm={() => {
+          if (deleteConfirmSessionId) handleDeleteSession(deleteConfirmSessionId)
+          setDeleteConfirmSessionId(null)
+        }}
+        onCancel={() => setDeleteConfirmSessionId(null)}
+      />
     </div>
   )
 }
