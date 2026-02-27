@@ -230,20 +230,33 @@ export function Sidebar() {
     }
   }, [addSession])
 
-  // Cmd+G to group selected sessions
+  // Cmd+G to group, Cmd+Shift+G to ungroup
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey && e.key === 'g') {
         e.preventDefault()
         const state = useSessionStore.getState()
-        if (state.selectedSessionIds.length >= 1) {
-          createGroup(state.selectedSessionIds)
+        if (e.shiftKey) {
+          // Cmd+Shift+G: ungroup — find the group that contains all selected sessions
+          const containingGroup = state.groups.find(
+            (g) =>
+              state.selectedSessionIds.length > 0 &&
+              state.selectedSessionIds.every((sid) => g.sessionIds.includes(sid))
+          )
+          if (containingGroup) {
+            ungroupSessions(containingGroup.id)
+          }
+        } else {
+          // Cmd+G: group selected sessions
+          if (state.selectedSessionIds.length >= 1) {
+            createGroup(state.selectedSessionIds)
+          }
         }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [createGroup])
+  }, [createGroup, ungroupSessions])
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery) return null
@@ -644,20 +657,12 @@ export function Sidebar() {
       // Always allow drops on the container — without this, if the cursor
       // drifts into a gap between children (or above/below them), the browser
       // rejects the drop because the last dragover didn't call preventDefault().
-      // The indicator set by the child handler persists, so the drop still
-      // uses the correct target.
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
 
       const container = e.currentTarget as HTMLElement
       const children = Array.from(container.children) as HTMLElement[]
       if (children.length === 0) return
-
-      // Update indicator only when cursor is in empty space above/below all items
-      const firstChild = children[0]
-      const lastChild = children[children.length - 1]
-      const firstRect = firstChild.getBoundingClientRect()
-      const lastRect = lastChild.getBoundingClientRect()
 
       const state = useSessionStore.getState()
       const order =
@@ -667,31 +672,40 @@ export function Sidebar() {
 
       if (order.length === 0) return
 
-      if (e.clientY < firstRect.top) {
-        // Above all items → drop before first item
-        const firstId = order[0]
-        if (draggedIdsRef.current.includes(firstId)) return
-        const newIndicator = { targetId: firstId, position: 'before' as const }
+      const firstRect = children[0].getBoundingClientRect()
+      const lastRect = children[children.length - 1].getBoundingClientRect()
+
+      const setIndicator = (targetId: string, position: 'before' | 'after') => {
+        if (draggedIdsRef.current.includes(targetId)) return
+        const newIndicator = { targetId, position }
         if (
           !dropIndicatorRef.current ||
-          dropIndicatorRef.current.targetId !== firstId ||
-          dropIndicatorRef.current.position !== 'before'
+          dropIndicatorRef.current.targetId !== targetId ||
+          dropIndicatorRef.current.position !== position
         ) {
           dropIndicatorRef.current = newIndicator
           setDropIndicator(newIndicator)
         }
+      }
+
+      if (e.clientY < firstRect.top) {
+        // Above all items → drop before first item
+        setIndicator(order[0], 'before')
       } else if (e.clientY > lastRect.bottom) {
         // Below all items → drop after last item
-        const lastId = order[order.length - 1]
-        if (draggedIdsRef.current.includes(lastId)) return
-        const newIndicator = { targetId: lastId, position: 'after' as const }
-        if (
-          !dropIndicatorRef.current ||
-          dropIndicatorRef.current.targetId !== lastId ||
-          dropIndicatorRef.current.position !== 'after'
-        ) {
-          dropIndicatorRef.current = newIndicator
-          setDropIndicator(newIndicator)
+        setIndicator(order[order.length - 1], 'after')
+      } else {
+        // Check gaps between children — enables dropping between groups
+        for (let i = 0; i < children.length - 1; i++) {
+          const bottomOfCurrent = children[i].getBoundingClientRect().bottom
+          const topOfNext = children[i + 1].getBoundingClientRect().top
+          if (e.clientY > bottomOfCurrent && e.clientY < topOfNext) {
+            // Cursor is in the gap — drop "after" the preceding item
+            if (i < order.length) {
+              setIndicator(order[i], 'after')
+            }
+            break
+          }
         }
       }
     },
@@ -739,7 +753,7 @@ export function Sidebar() {
         <SectionHeading title="Sessions" collapsed={sessionsCollapsed} onToggle={() => setSessionsCollapsed((c) => !c)} />
         {!sessionsCollapsed && (
           <div
-            className="overflow-y-auto px-2 space-y-0.5"
+            className="overflow-y-auto px-2 space-y-2"
             style={{ maxHeight: 'calc(75vh - 140px)' }}
             onDragOver={handleContainerDragOver}
             onDrop={handleDrop}
@@ -794,12 +808,14 @@ export function Sidebar() {
                     <div
                       key={group.id}
                       className={cn(
-                        'relative rounded-lg transition-colors',
-                        allGroupSelected && 'bg-surface-200'
+                        'relative rounded-xl border transition-colors',
+                        allGroupSelected
+                          ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
+                          : 'bg-surface-100/30 border-border-subtle'
                       )}
                     >
                       {getDropIndicator(group.id) === 'inside' && (
-                        <div className="absolute inset-0 rounded-lg border-2 border-accent pointer-events-none z-10" />
+                        <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10" />
                       )}
                       <SessionGroupItem
                         group={group}
@@ -816,7 +832,7 @@ export function Sidebar() {
                         isDragging={draggingIds.includes(group.id)}
                       />
                       {!group.collapsed && (
-                        <div className="pl-4">
+                        <div className="px-1 pb-1 space-y-0.5">
                           {group.sessionIds.map((sid) => {
                             const session = sessions.find((s) => s.id === sid)
                             if (!session) return null

@@ -136,8 +136,8 @@ export function SessionGroupItem({
         onContextMenu={onContextMenu}
         onKeyDown={handleKeyDown}
         className={cn(
-          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors outline-none',
-          allSelected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-100',
+          'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors outline-none',
+          allSelected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-100/50',
           isDragging && 'opacity-30'
         )}
       >

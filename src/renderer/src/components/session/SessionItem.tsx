@@ -131,12 +131,14 @@ export function SessionItem({
         onKeyDown={handleButtonKeyDown}
         title={session.cwd.replace(/^\/Users\/[^/]+/, '~')}
         className={cn(
-          'w-full flex items-center gap-3 py-2 rounded-lg text-left transition-colors outline-none',
-          grouped ? 'pl-7 pr-3' : 'px-3',
+          'w-full flex items-center gap-3 py-2.5 rounded-lg text-left transition-all outline-none',
+          grouped ? 'pl-4 pr-2' : 'px-3',
           groupSelected
             ? 'text-text-primary'
             : isSelected
-              ? 'bg-surface-200 text-text-primary'
+              ? grouped
+                ? 'bg-surface-200/80 text-text-primary'
+                : 'bg-surface-200 text-text-primary shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
               : 'text-text-secondary hover:bg-surface-100',
           isDragging && 'opacity-30'
         )}
