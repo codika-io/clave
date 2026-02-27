@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useTemplateStore } from '../store/template-store'
-import { useSessionStore } from '../store/session-store'
+import { useSessionStore, type GroupTerminalColor } from '../store/session-store'
 
 export function useLaunchTemplate(): void {
   const hasApplied = useRef(false)
@@ -81,7 +81,9 @@ async function applyTemplate(template: ReturnType<typeof useTemplateStore.getSta
     }
   }
 
-  // Create groups
+  // Create groups and restore metadata
+  const groupIdMap = new Map<string, string>()
+
   for (const templateGroup of template.groups) {
     const mappedIds = templateGroup.sessionIds
       .map((id) => idMap.get(id))
@@ -89,6 +91,55 @@ async function applyTemplate(template: ReturnType<typeof useTemplateStore.getSta
 
     if (mappedIds.length > 0) {
       useSessionStore.getState().createGroup(mappedIds, templateGroup.name)
+
+      // Find the newly created group (last one added)
+      const state = useSessionStore.getState()
+      const newGroup = state.groups[state.groups.length - 1]
+      if (newGroup) {
+        groupIdMap.set(templateGroup.id, newGroup.id)
+
+        // Migrate old single-command format to terminals array
+        const migratedTerminals = templateGroup.terminals
+          ?? (templateGroup.command
+            ? [{
+                id: crypto.randomUUID(),
+                command: templateGroup.command,
+                commandMode: templateGroup.commandMode ?? 'prefill',
+                color: 'blue' as const
+              }]
+            : [])
+
+        // Patch group with saved metadata
+        useSessionStore.setState((s) => ({
+          groups: s.groups.map((g) =>
+            g.id === newGroup.id
+              ? {
+                  ...g,
+                  collapsed: templateGroup.collapsed ?? false,
+                  cwd: templateGroup.cwd ?? g.cwd,
+                  terminals: migratedTerminals.map((t) => ({
+                    id: crypto.randomUUID(),
+                    command: t.command,
+                    commandMode: t.commandMode,
+                    color: t.color as GroupTerminalColor,
+                    sessionId: null
+                  }))
+                }
+              : g
+          )
+        }))
+      }
+    }
+  }
+
+  // Apply displayOrder from template
+  if (template.displayOrder.length > 0) {
+    const mappedOrder = template.displayOrder
+      .map((id) => groupIdMap.get(id) ?? idMap.get(id))
+      .filter((id): id is string => id !== undefined)
+
+    if (mappedOrder.length > 0) {
+      useSessionStore.setState({ displayOrder: mappedOrder })
     }
   }
 }

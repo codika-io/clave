@@ -1,12 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
-import { useSessionStore, type SessionGroup } from '../../store/session-store'
-import { FolderIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import {
+  useSessionStore,
+  type SessionGroup,
+  TERMINAL_COLOR_VALUES
+} from '../../store/session-store'
+import {
+  FolderIcon,
+  ChevronRightIcon,
+  CommandLineIcon,
+  PlusIcon
+} from '@heroicons/react/24/outline'
 
 interface SessionGroupItemProps {
   group: SessionGroup
   onClick: (modifiers: { metaKey: boolean; shiftKey: boolean }) => void
   onContextMenu: (e: React.MouseEvent) => void
+  onTerminalIconClick: (terminalId: string) => void
+  onAddTerminalClick: () => void
+  aliveSessionIds: Set<string>
+  focusedSessionId: string | null
   allSelected?: boolean
   forceEditing?: boolean
   onEditingDone?: () => void
@@ -22,6 +35,10 @@ export function SessionGroupItem({
   group,
   onClick,
   onContextMenu,
+  onTerminalIconClick,
+  onAddTerminalClick,
+  aliveSessionIds,
+  focusedSessionId,
   allSelected,
   forceEditing,
   onEditingDone,
@@ -136,7 +153,7 @@ export function SessionGroupItem({
         onContextMenu={onContextMenu}
         onKeyDown={handleKeyDown}
         className={cn(
-          'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors outline-none',
+          'group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors outline-none',
           allSelected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-100/50',
           isDragging && 'opacity-30'
         )}
@@ -174,10 +191,58 @@ export function SessionGroupItem({
           </span>
         )}
 
-        {/* Session count badge */}
-        <span className="flex-shrink-0 text-[10px] text-text-tertiary bg-surface-100 px-1.5 py-0.5 rounded-full">
-          {group.sessionIds.length}
-        </span>
+        {/* Terminal icons */}
+        {!editing && (
+          <div className="flex items-center gap-0 flex-shrink-0">
+            {/* Add terminal button — on the left */}
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation()
+                onAddTerminalClick()
+              }}
+              className={cn(
+                'p-0.5 rounded transition-all text-text-tertiary hover:text-text-secondary',
+                group.terminals.length === 0
+                  ? ''
+                  : 'opacity-0 group-hover:opacity-100'
+              )}
+              title="Add terminal"
+            >
+              {group.terminals.length === 0 ? (
+                <CommandLineIcon className="w-4 h-4" />
+              ) : (
+                <PlusIcon className="w-3.5 h-3.5" />
+              )}
+            </span>
+            {/* Configured terminals */}
+            {group.terminals.map((t) => {
+              const alive = !!t.sessionId && aliveSessionIds.has(t.sessionId)
+              const focused = !!t.sessionId && t.sessionId === focusedSessionId
+              const colorHex = TERMINAL_COLOR_VALUES[t.color]
+              return (
+                <span
+                  key={t.id}
+                  role="button"
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onTerminalIconClick(t.id)
+                  }}
+                  className={cn(
+                    'p-1 rounded transition-all',
+                    focused && 'bg-surface-200/80'
+                  )}
+                  style={{ color: colorHex, opacity: alive ? 1 : 0.35 }}
+                  title={`${t.command}${alive ? ' (running)' : ''}`}
+                >
+                  <CommandLineIcon className="w-[18px] h-[18px]" />
+                </span>
+              )
+            })}
+          </div>
+        )}
       </button>
       {dropIndicator === 'after' && (
         <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />

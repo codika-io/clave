@@ -100,7 +100,15 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
         name: g.name,
         sessionIds: g.sessionIds
           .map((sid) => sessionIdMap.get(sid))
-          .filter((id): id is string => id !== undefined)
+          .filter((id): id is string => id !== undefined),
+        collapsed: g.collapsed,
+        cwd: g.cwd ?? null,
+        terminals: g.terminals.map((t) => ({
+          id: crypto.randomUUID(),
+          command: t.command,
+          commandMode: t.commandMode,
+          color: t.color
+        }))
       }
     })
 

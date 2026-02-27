@@ -124,10 +124,22 @@ export interface LaunchTemplateSession {
   dangerousMode: boolean
 }
 
+export interface LaunchTemplateGroupTerminal {
+  id: string
+  command: string
+  commandMode: 'prefill' | 'auto'
+  color: string
+}
+
 export interface LaunchTemplateGroup {
   id: string
   name: string
   sessionIds: string[]
+  collapsed?: boolean
+  cwd?: string | null
+  terminals?: LaunchTemplateGroupTerminal[]
+  command?: string | null
+  commandMode?: 'prefill' | 'auto'
 }
 
 export interface LaunchTemplate {
@@ -158,7 +170,7 @@ export interface DownloadProgress {
 }
 
 export interface ElectronAPI {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }) => Promise<SessionInfo>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
   resizeSession: (id: string, cols: number, rows: number) => void
   killSession: (id: string) => Promise<void>

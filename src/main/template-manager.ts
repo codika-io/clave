@@ -10,10 +10,23 @@ export interface LaunchTemplateSession {
   dangerousMode: boolean
 }
 
+export interface LaunchTemplateGroupTerminal {
+  id: string
+  command: string
+  commandMode: 'prefill' | 'auto'
+  color: string
+}
+
 export interface LaunchTemplateGroup {
   id: string
   name: string
   sessionIds: string[]
+  collapsed?: boolean
+  cwd?: string | null
+  terminals?: LaunchTemplateGroupTerminal[]
+  // Backward compat with old single-command templates
+  command?: string | null
+  commandMode?: 'prefill' | 'auto'
 }
 
 export interface LaunchTemplate {

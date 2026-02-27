@@ -243,7 +243,7 @@ export function registerIpcHandlers(): void {
     if (existing) existing.cleanup()
   })
 
-  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }) => {
+  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => {
     const useClaudeMode = options?.claudeMode !== false
     const projectDir = useClaudeMode ? getClaudeProjectDir(cwd) : null
     const existingFiles = projectDir ? snapshotJsonlFiles(projectDir) : new Set<string>()

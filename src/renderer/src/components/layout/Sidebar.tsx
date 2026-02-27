@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSessionStore } from '../../store/session-store'
+import {
+  useSessionStore,
+  GROUP_TERMINAL_COLORS,
+  type GroupTerminalColor
+} from '../../store/session-store'
 import { useBoardStore } from '../../store/board-store'
 import { SessionItem } from '../session/SessionItem'
 import { SessionGroupItem } from '../session/SessionGroupItem'
 import { ContextMenu } from '../ui/ContextMenu'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { GroupCommandDialog } from '../ui/GroupCommandDialog'
 import { cn } from '../../lib/utils'
 import {
   MagnifyingGlassIcon,
@@ -17,7 +22,8 @@ import {
   TrashIcon,
   Squares2X2Icon,
   FolderMinusIcon,
-  ShieldExclamationIcon
+  ShieldExclamationIcon,
+  CommandLineIcon
 } from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
@@ -171,6 +177,7 @@ function SectionHeading({ title, collapsed, onToggle }: { title: string; collaps
 export function Sidebar() {
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
+  const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const selectSession = useSessionStore((s) => s.selectSession)
   const selectSessions = useSessionStore((s) => s.selectSessions)
   const addSession = useSessionStore((s) => s.addSession)
@@ -181,6 +188,9 @@ export function Sidebar() {
   const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
   const deleteGroup = useSessionStore((s) => s.deleteGroup)
   const moveItems = useSessionStore((s) => s.moveItems)
+  const addGroupTerminal = useSessionStore((s) => s.addGroupTerminal)
+  const removeGroupTerminal = useSessionStore((s) => s.removeGroupTerminal)
+  const setGroupTerminalSessionId = useSessionStore((s) => s.setGroupTerminalSessionId)
   const searchQuery = useSessionStore((s) => s.searchQuery)
   const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
   const activeView = useSessionStore((s) => s.activeView)
@@ -193,6 +203,10 @@ export function Sidebar() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null)
+  const [terminalDialogState, setTerminalDialogState] = useState<{
+    groupId: string
+    terminalId: string | null // null = adding new
+  } | null>(null)
 
   // Selection anchor for Cmd+Shift range select (Finder behavior)
   const selectionAnchorRef = useRef<string | null>(null)
@@ -260,6 +274,11 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [createGroup, ungroupSessions])
 
+  const aliveSessionIds = useMemo(
+    () => new Set(sessions.filter((s) => s.alive).map((s) => s.id)),
+    [sessions]
+  )
+
   const filteredSessions = useMemo(() => {
     if (!searchQuery) return null
     const q = searchQuery.toLowerCase()
@@ -302,11 +321,15 @@ export function Sidebar() {
         return null
       })
       .filter(
-        (item): item is NonNullable<typeof item> =>
-          item !== null &&
-          (item.type === 'session' ||
-            (item.type === 'group' &&
-              (groups.find((g) => g.id === item.groupId)?.sessionIds.length ?? 0) > 0))
+        (item): item is NonNullable<typeof item> => {
+          if (item === null) return false
+          if (item.type === 'session') return true
+          if (item.type === 'group') {
+            const group = groups.find((g) => g.id === item.groupId)
+            return !!group && group.sessionIds.length > 0
+          }
+          return false
+        }
       )
   }, [displayOrder, sessions, groups, filteredSessions])
 
@@ -356,6 +379,78 @@ export function Sidebar() {
     [groups, deleteGroup]
   )
 
+  // Spawn a group terminal and auto-focus it
+  const spawnGroupTerminal = useCallback(
+    async (groupId: string, terminalId: string, command: string, commandMode: 'prefill' | 'auto') => {
+      const state = useSessionStore.getState()
+      const group = state.groups.find((g) => g.id === groupId)
+      if (!group) return
+
+      const cwd = group.cwd || state.sessions.find((s) => group.sessionIds.includes(s.id))?.cwd
+      if (!cwd) return
+
+      try {
+        const sessionInfo = await window.electronAPI.spawnSession(cwd, {
+          claudeMode: false,
+          initialCommand: command,
+          autoExecute: commandMode === 'auto'
+        })
+        const newSession = {
+          id: sessionInfo.id,
+          cwd: sessionInfo.cwd,
+          folderName: sessionInfo.folderName,
+          name: `${group.name} terminal`,
+          alive: sessionInfo.alive,
+          activityStatus: 'idle' as const,
+          promptWaiting: null,
+          claudeMode: false,
+          dangerousMode: false
+        }
+
+        const currentState = useSessionStore.getState()
+        useSessionStore.setState({
+          sessions: [...currentState.sessions, newSession],
+          selectedSessionIds: [sessionInfo.id],
+          focusedSessionId: sessionInfo.id
+        })
+        setGroupTerminalSessionId(groupId, terminalId, sessionInfo.id)
+      } catch (err) {
+        console.error('Failed to spawn group terminal:', err)
+      }
+    },
+    [setGroupTerminalSessionId]
+  )
+
+  // Click a colored terminal icon: focus if alive, spawn if dead
+  const handleTerminalIconClick = useCallback(
+    (groupId: string, terminalId: string) => {
+      const state = useSessionStore.getState()
+      const group = state.groups.find((g) => g.id === groupId)
+      const config = group?.terminals.find((t) => t.id === terminalId)
+      if (!config) return
+
+      if (config.sessionId) {
+        const session = state.sessions.find((s) => s.id === config.sessionId && s.alive)
+        if (session) {
+          selectSession(config.sessionId, false)
+          return
+        }
+      }
+
+      spawnGroupTerminal(groupId, terminalId, config.command, config.commandMode)
+    },
+    [selectSession, spawnGroupTerminal]
+  )
+
+  // Click the grey/+ add icon: open dialog in "add" mode
+  const handleAddTerminalClick = useCallback(
+    (groupId: string) => {
+      setTerminalDialogState({ groupId, terminalId: null })
+    },
+    []
+  )
+
+
   const handleSessionContextMenu = useCallback(
     (e: React.MouseEvent, sessionId: string) => {
       e.preventDefault()
@@ -397,6 +492,11 @@ export function Sidebar() {
             label: 'Rename',
             icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
             onClick: () => setRenamingId(groupId)
+          },
+          {
+            label: 'Add terminal',
+            icon: <CommandLineIcon className="w-3.5 h-3.5" />,
+            onClick: () => setTerminalDialogState({ groupId, terminalId: null })
           },
           {
             label: 'Ungroup',
@@ -833,6 +933,10 @@ export function Sidebar() {
                         group={group}
                         onClick={(modifiers) => handleGroupClick(group.id, modifiers)}
                         onContextMenu={(e) => handleGroupContextMenu(e, group.id)}
+                        onTerminalIconClick={(tid) => handleTerminalIconClick(group.id, tid)}
+                        onAddTerminalClick={() => handleAddTerminalClick(group.id)}
+                        aliveSessionIds={aliveSessionIds}
+                        focusedSessionId={focusedSessionId}
                         allSelected={allGroupSelected}
                         forceEditing={renamingId === group.id}
                         onEditingDone={clearRenaming}
@@ -953,6 +1057,64 @@ export function Sidebar() {
           setDeleteConfirmSessionId(null)
         }}
         onCancel={() => setDeleteConfirmSessionId(null)}
+      />
+
+      {/* Group terminal configuration dialog */}
+      <GroupCommandDialog
+        isOpen={terminalDialogState !== null}
+        initialCommand={
+          terminalDialogState?.terminalId
+            ? groups.find((g) => g.id === terminalDialogState.groupId)?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.command
+            : undefined
+        }
+        initialMode={
+          terminalDialogState?.terminalId
+            ? groups.find((g) => g.id === terminalDialogState.groupId)?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.commandMode ?? 'prefill'
+            : 'prefill'
+        }
+        initialColor={(() => {
+          if (terminalDialogState?.terminalId) {
+            return groups.find((g) => g.id === terminalDialogState.groupId)?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.color ?? 'blue'
+          }
+          // Next unused color
+          const group = terminalDialogState ? groups.find((g) => g.id === terminalDialogState.groupId) : null
+          const used = new Set(group?.terminals.map((t) => t.color) ?? [])
+          return (GROUP_TERMINAL_COLORS.find((c) => !used.has(c)) ?? 'blue') as GroupTerminalColor
+        })()}
+        onSave={async (command, mode, color) => {
+          if (!terminalDialogState) return
+          const { groupId, terminalId } = terminalDialogState
+          if (terminalId) {
+            // Editing existing
+            useSessionStore.getState().updateGroupTerminal(groupId, terminalId, { command, commandMode: mode, color })
+          } else {
+            // Adding new — add config, then spawn immediately
+            const newId = `term-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+            addGroupTerminal(groupId, { id: newId, command, commandMode: mode, color })
+            setTerminalDialogState(null)
+            await spawnGroupTerminal(groupId, newId, command, mode)
+            return
+          }
+          setTerminalDialogState(null)
+        }}
+        onCancel={() => setTerminalDialogState(null)}
+        onDelete={
+          terminalDialogState?.terminalId
+            ? () => {
+                if (!terminalDialogState) return
+                const { groupId, terminalId } = terminalDialogState
+                if (terminalId) {
+                  // Kill the session if alive
+                  const config = groups.find((g) => g.id === groupId)?.terminals.find((t) => t.id === terminalId)
+                  if (config?.sessionId) {
+                    window.electronAPI.killSession(config.sessionId).catch(() => {})
+                  }
+                  removeGroupTerminal(groupId, terminalId)
+                }
+                setTerminalDialogState(null)
+              }
+            : undefined
+        }
       />
     </div>
   )

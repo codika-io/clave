@@ -21,18 +21,23 @@ export function TerminalGrid() {
   const orderedSessions = useMemo(() => {
     const order = getDisplayOrder({ sessions, groups, displayOrder })
     const sessionMap = new Map(sessions.map((s) => [s.id, s]))
+    const placed = new Set<string>()
     const result: typeof sessions = []
     for (const id of order) {
       const group = groups.find((g) => g.id === id)
       if (group) {
         for (const sid of group.sessionIds) {
           const session = sessionMap.get(sid)
-          if (session) result.push(session)
+          if (session) { result.push(session); placed.add(sid) }
         }
       } else {
         const session = sessionMap.get(id)
-        if (session) result.push(session)
+        if (session) { result.push(session); placed.add(id) }
       }
+    }
+    // Include hidden terminal sessions (not in displayOrder or group.sessionIds)
+    for (const s of sessions) {
+      if (!placed.has(s.id)) result.push(s)
     }
     return result
   }, [sessions, groups, displayOrder])

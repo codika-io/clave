@@ -4,6 +4,27 @@ export type Theme = 'dark' | 'light' | 'coffee'
 
 export type ActivityStatus = 'active' | 'idle' | 'ended'
 
+export type GroupTerminalColor = 'blue' | 'green' | 'orange' | 'purple' | 'pink' | 'yellow'
+
+export const GROUP_TERMINAL_COLORS: GroupTerminalColor[] = ['blue', 'green', 'orange', 'purple', 'pink', 'yellow']
+
+export const TERMINAL_COLOR_VALUES: Record<GroupTerminalColor, string> = {
+  blue: '#5B8DEF',
+  green: '#4ADE80',
+  orange: '#FB923C',
+  purple: '#A78BFA',
+  pink: '#F472B6',
+  yellow: '#FACC15'
+}
+
+export interface GroupTerminalConfig {
+  id: string
+  command: string
+  commandMode: 'prefill' | 'auto'
+  color: GroupTerminalColor
+  sessionId: string | null
+}
+
 export interface Session {
   id: string
   cwd: string
@@ -21,6 +42,8 @@ export interface SessionGroup {
   name: string
   sessionIds: string[]
   collapsed: boolean
+  cwd: string | null
+  terminals: GroupTerminalConfig[]
 }
 
 export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings'
@@ -59,6 +82,10 @@ interface SessionState {
   deleteGroup: (groupId: string) => void
   renameGroup: (groupId: string, name: string) => void
   toggleGroupCollapsed: (groupId: string) => void
+  addGroupTerminal: (groupId: string, config: Omit<GroupTerminalConfig, 'sessionId'>) => void
+  removeGroupTerminal: (groupId: string, terminalId: string) => void
+  updateGroupTerminal: (groupId: string, terminalId: string, updates: Partial<Pick<GroupTerminalConfig, 'command' | 'commandMode' | 'color'>>) => void
+  setGroupTerminalSessionId: (groupId: string, terminalId: string, sessionId: string | null) => void
   moveItems: (
     itemIds: string[],
     targetId: string,
@@ -148,7 +175,10 @@ export const useSessionStore = create<SessionState>((set) => ({
       const selectedSessionIds = state.selectedSessionIds.filter((sid) => sid !== id)
       const groups = state.groups.map((g) => ({
         ...g,
-        sessionIds: g.sessionIds.filter((sid) => sid !== id)
+        sessionIds: g.sessionIds.filter((sid) => sid !== id),
+        terminals: g.terminals.map((t) =>
+          t.sessionId === id ? { ...t, sessionId: null } : t
+        )
       }))
       const displayOrder = getDisplayOrder(state).filter((did) => did !== id)
 
@@ -196,11 +226,14 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => {
       groupCounter++
       const groupName = name || `Group ${groupCounter}`
+      const firstSession = state.sessions.find((s) => sessionIds.includes(s.id))
       const newGroup: SessionGroup = {
         id: `group-${Date.now()}-${groupCounter}`,
         name: groupName,
         sessionIds: [...sessionIds],
-        collapsed: false
+        collapsed: false,
+        cwd: firstSession?.cwd ?? null,
+        terminals: []
       }
       // Remove these sessions from any existing groups
       const groups = state.groups.map((g) => ({
@@ -250,7 +283,10 @@ export const useSessionStore = create<SessionState>((set) => ({
       const group = state.groups.find((g) => g.id === groupId)
       if (!group) return {}
 
-      const sessionIdsToRemove = new Set(group.sessionIds)
+      const terminalSessionIds = group.terminals
+        .map((t) => t.sessionId)
+        .filter((id): id is string => id !== null)
+      const sessionIdsToRemove = new Set([...group.sessionIds, ...terminalSessionIds])
       const sessions = state.sessions.filter((s) => !sessionIdsToRemove.has(s.id))
       const selectedSessionIds = state.selectedSessionIds.filter(
         (sid) => !sessionIdsToRemove.has(sid)
@@ -288,6 +324,52 @@ export const useSessionStore = create<SessionState>((set) => ({
   toggleGroupCollapsed: (groupId) =>
     set((state) => ({
       groups: state.groups.map((g) => (g.id === groupId ? { ...g, collapsed: !g.collapsed } : g))
+    })),
+
+  addGroupTerminal: (groupId, config) =>
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId
+          ? { ...g, terminals: [...g.terminals, { ...config, sessionId: null }] }
+          : g
+      )
+    })),
+
+  removeGroupTerminal: (groupId, terminalId) =>
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId
+          ? { ...g, terminals: g.terminals.filter((t) => t.id !== terminalId) }
+          : g
+      )
+    })),
+
+  updateGroupTerminal: (groupId, terminalId, updates) =>
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId
+          ? {
+              ...g,
+              terminals: g.terminals.map((t) =>
+                t.id === terminalId ? { ...t, ...updates } : t
+              )
+            }
+          : g
+      )
+    })),
+
+  setGroupTerminalSessionId: (groupId, terminalId, sessionId) =>
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId
+          ? {
+              ...g,
+              terminals: g.terminals.map((t) =>
+                t.id === terminalId ? { ...t, sessionId } : t
+              )
+            }
+          : g
+      )
     })),
 
   moveItems: (itemIds, targetId, position) =>
