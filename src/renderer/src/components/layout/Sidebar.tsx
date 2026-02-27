@@ -235,7 +235,7 @@ export function Sidebar() {
   // Cmd+G to group, Cmd+Shift+G to ungroup
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === 'g') {
+      if (e.metaKey && e.key.toLowerCase() === 'g') {
         e.preventDefault()
         const state = useSessionStore.getState()
         if (e.shiftKey) {
