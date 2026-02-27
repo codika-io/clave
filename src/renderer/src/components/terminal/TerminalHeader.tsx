@@ -23,8 +23,9 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full flex-shrink-0',
-            session.activityStatus === 'active' && 'bg-status-active',
-            session.activityStatus === 'idle' && 'bg-status-waiting',
+            session.activityStatus === 'active' && 'bg-status-working',
+            session.activityStatus === 'idle' && session.promptWaiting && 'bg-status-waiting',
+            session.activityStatus === 'idle' && !session.promptWaiting && 'bg-status-ready',
             session.activityStatus === 'ended' && 'bg-status-inactive'
           )}
           style={session.activityStatus === 'active' ? { animation: 'pulse-dot 1.5s ease-in-out infinite' } : undefined}

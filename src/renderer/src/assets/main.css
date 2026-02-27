@@ -21,7 +21,8 @@
   --color-accent: oklch(0.65 0.2 265);
   --color-accent-hover: oklch(0.7 0.22 265);
 
-  --color-status-active: #22c55e;
+  --color-status-working: #3b82f6;
+  --color-status-ready: #22c55e;
   --color-status-waiting: #f59e0b;
   --color-status-inactive: #6b7280;
 

@@ -6,7 +6,7 @@ import { CommandLineIcon } from '@heroicons/react/24/outline'
 interface SessionItemProps {
   session: Session
   isSelected: boolean
-  onClick: (shiftKey: boolean) => void
+  onClick: (modifiers: { metaKey: boolean; shiftKey: boolean }) => void
   onContextMenu: (e: React.MouseEvent) => void
   grouped?: boolean
   groupSelected?: boolean
@@ -85,7 +85,7 @@ export function SessionItem({
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      onClick(e.shiftKey)
+      onClick({ metaKey: e.metaKey, shiftKey: e.shiftKey })
     },
     [onClick]
   )
@@ -147,8 +147,9 @@ export function SessionItem({
           <span
             className={cn(
               'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-surface-50',
-              session.activityStatus === 'active' && 'bg-status-active',
-              session.activityStatus === 'idle' && 'bg-status-waiting',
+              session.activityStatus === 'active' && 'bg-status-working',
+              session.activityStatus === 'idle' && session.promptWaiting && 'bg-status-waiting',
+              session.activityStatus === 'idle' && !session.promptWaiting && 'bg-status-ready',
               session.activityStatus === 'ended' && 'bg-status-inactive'
             )}
             style={session.activityStatus === 'active' ? { animation: 'pulse-dot 1.5s ease-in-out infinite' } : undefined}

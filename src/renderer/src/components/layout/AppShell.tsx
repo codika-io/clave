@@ -36,6 +36,8 @@ export function AppShell() {
   const previewSource = useSessionStore((s) => s.previewSource)
 
   const addSession = useSessionStore((s) => s.addSession)
+  const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
+  const removeSession = useSessionStore((s) => s.removeSession)
 
   useLaunchTemplate()
 
@@ -148,10 +150,19 @@ export function AppShell() {
         e.preventDefault()
         spawnSessionWithOptions(true, true)
       }
+      // Cmd+Delete: Close focused session
+      if (e.metaKey && e.key === 'Backspace') {
+        e.preventDefault()
+        const sid = useSessionStore.getState().focusedSessionId
+        if (sid) {
+          window.electronAPI.killSession(sid).catch(() => {})
+          removeSession(sid)
+        }
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleFilePalette, toggleFileTree, spawnSessionWithOptions])
+  }, [toggleFilePalette, toggleFileTree, spawnSessionWithOptions, removeSession])
 
   // Sync data-theme attribute to root element
   useEffect(() => {

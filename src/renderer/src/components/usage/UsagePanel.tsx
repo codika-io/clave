@@ -23,7 +23,7 @@ function getModelDisplayName(model: string): string {
 
 const MODEL_COLORS: Record<string, string> = {
   opus: 'var(--color-accent)',
-  sonnet: 'var(--color-status-active)',
+  sonnet: 'var(--color-status-working)',
   haiku: 'var(--color-status-waiting)'
 }
 

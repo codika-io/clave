@@ -192,6 +192,9 @@ export function Sidebar() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
 
+  // Selection anchor for Cmd+Shift range select (Finder behavior)
+  const selectionAnchorRef = useRef<string | null>(null)
+
   // Drag-and-drop state
   const [draggingIds, setDraggingIds] = useState<string[]>([])
   const [dropIndicator, setDropIndicator] = useState<DropIndicatorState | null>(null)
@@ -292,6 +295,22 @@ export function Sidebar() {
       )
   }, [displayOrder, sessions, groups, filteredSessions])
 
+  // Flat ordered list of session IDs for range selection
+  const flatSessionOrder = useMemo(() => {
+    if (filteredSessions) return filteredSessions.map((s) => s.id)
+    if (!displayItems) return sessions.map((s) => s.id)
+    const order: string[] = []
+    for (const item of displayItems) {
+      if (item.type === 'session') {
+        order.push(item.sessionId)
+      } else {
+        const group = groups.find((g) => g.id === item.groupId)
+        if (group) order.push(...group.sessionIds)
+      }
+    }
+    return order
+  }, [filteredSessions, displayItems, sessions, groups])
+
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
       try {
@@ -381,11 +400,56 @@ export function Sidebar() {
     [ungroupSessions, handleDeleteGroup]
   )
 
+  // Finder-style session click: Click=single, Cmd=toggle, Shift=range, Cmd+Shift=range-add
+  const handleSessionClick = useCallback(
+    (sessionId: string, modifiers: { metaKey: boolean; shiftKey: boolean }) => {
+      if (modifiers.shiftKey) {
+        // Range select from anchor
+        const anchorId = selectionAnchorRef.current
+        if (!anchorId) {
+          selectSession(sessionId, false)
+          selectionAnchorRef.current = sessionId
+          return
+        }
+        const anchorIdx = flatSessionOrder.indexOf(anchorId)
+        const targetIdx = flatSessionOrder.indexOf(sessionId)
+        if (anchorIdx === -1 || targetIdx === -1) {
+          selectSession(sessionId, false)
+          selectionAnchorRef.current = sessionId
+          return
+        }
+        const start = Math.min(anchorIdx, targetIdx)
+        const end = Math.max(anchorIdx, targetIdx)
+        const rangeIds = flatSessionOrder.slice(start, end + 1)
+        if (modifiers.metaKey) {
+          // Cmd+Shift: add range to existing selection
+          const state = useSessionStore.getState()
+          const merged = [...new Set([...state.selectedSessionIds, ...rangeIds])]
+          selectSessions(merged)
+        } else {
+          // Shift only: replace selection with range
+          selectSessions(rangeIds)
+        }
+        // Don't update anchor on shift-click
+      } else if (modifiers.metaKey) {
+        // Cmd+Click: toggle individual
+        selectSession(sessionId, true)
+        selectionAnchorRef.current = sessionId
+      } else {
+        // Plain click: single select
+        selectSession(sessionId, false)
+        selectionAnchorRef.current = sessionId
+      }
+    },
+    [flatSessionOrder, selectSession, selectSessions]
+  )
+
   const handleGroupClick = useCallback(
-    (groupId: string, shiftKey: boolean) => {
+    (groupId: string, modifiers: { metaKey: boolean; shiftKey: boolean }) => {
       const group = groups.find((g) => g.id === groupId)
       if (!group) return
-      if (shiftKey) {
+      if (modifiers.metaKey) {
+        // Cmd+Click: toggle all sessions in group
         const state = useSessionStore.getState()
         const allSelected = group.sessionIds.every((id) => state.selectedSessionIds.includes(id))
         if (allSelected) {
@@ -396,8 +460,15 @@ export function Sidebar() {
             ...group.sessionIds.filter((id) => !state.selectedSessionIds.includes(id))
           ])
         }
+        if (group.sessionIds.length > 0) {
+          selectionAnchorRef.current = group.sessionIds[0]
+        }
       } else {
+        // Plain click: select all in group
         selectSessions(group.sessionIds)
+        if (group.sessionIds.length > 0) {
+          selectionAnchorRef.current = group.sessionIds[0]
+        }
       }
     },
     [groups, selectSessions]
@@ -684,7 +755,7 @@ export function Sidebar() {
                     key={session.id}
                     session={session}
                     isSelected={selectedSessionIds.includes(session.id)}
-                    onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                    onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
                     onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
                     forceEditing={renamingId === session.id}
                     onEditingDone={clearRenaming}
@@ -701,7 +772,7 @@ export function Sidebar() {
                       key={session.id}
                       session={session}
                       isSelected={selectedSessionIds.includes(session.id)}
-                      onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                      onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
                       onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
                       forceEditing={renamingId === session.id}
                       onEditingDone={clearRenaming}
@@ -732,7 +803,7 @@ export function Sidebar() {
                       )}
                       <SessionGroupItem
                         group={group}
-                        onClick={(shiftKey) => handleGroupClick(group.id, shiftKey)}
+                        onClick={(modifiers) => handleGroupClick(group.id, modifiers)}
                         onContextMenu={(e) => handleGroupContextMenu(e, group.id)}
                         allSelected={allGroupSelected}
                         forceEditing={renamingId === group.id}
@@ -754,7 +825,7 @@ export function Sidebar() {
                                 key={session.id}
                                 session={session}
                                 isSelected={selectedSessionIds.includes(session.id)}
-                                onClick={(shiftKey) => selectSession(session.id, shiftKey)}
+                                onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
                                 onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
                                 grouped
                                 groupSelected={allGroupSelected}

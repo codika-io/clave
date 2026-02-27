@@ -23,17 +23,6 @@ function detectPrompt(buffer: string): string | null {
   if (/Allow/i.test(tail) && /Deny/i.test(tail)) return 'is asking for permission'
   // Explicit yes/no confirmation
   if (/\(Y\/n\)|\[Y\/n\]|\(y\/N\)|\[y\/N\]/i.test(tail)) return 'is asking a question'
-  // "Do you want to proceed?" style prompts (line ending with ?)
-  // Exclude Claude's "? for shortcuts" hint line and single-char artifact lines
-  const lines = tail.split(/\r?\n/).filter((l) => {
-    const trimmed = l.trim()
-    return (
-      trimmed.length > 3 &&
-      !/^\?\s*(for\s+)?shortcuts/i.test(trimmed) &&
-      !/^[?]$/.test(trimmed)
-    )
-  })
-  if (lines.length > 0 && lines[lines.length - 1].trimEnd().endsWith('?')) return 'is asking a question'
   return null
 }
 

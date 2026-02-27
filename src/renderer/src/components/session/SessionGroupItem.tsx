@@ -5,7 +5,7 @@ import { FolderIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 
 interface SessionGroupItemProps {
   group: SessionGroup
-  onClick: (shiftKey: boolean) => void
+  onClick: (modifiers: { metaKey: boolean; shiftKey: boolean }) => void
   onContextMenu: (e: React.MouseEvent) => void
   allSelected?: boolean
   forceEditing?: boolean
@@ -91,7 +91,7 @@ export function SessionGroupItem({
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      onClick(e.shiftKey)
+      onClick({ metaKey: e.metaKey, shiftKey: e.shiftKey })
     },
     [onClick]
   )
