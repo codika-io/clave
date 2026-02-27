@@ -725,9 +725,15 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50 border-r border-border-subtle">
-      {/* Search row with traffic-light offset */}
-      <div className="pt-11 px-3 pb-2 flex items-center gap-2 flex-shrink-0">
-        <div className="flex-1 relative">
+      {/* Search row with traffic-light offset — top padding is draggable */}
+      <div
+        className="pt-11 px-3 pb-2 flex items-center gap-2 flex-shrink-0"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        <div
+          className="flex-1 relative"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
           <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
           <input
             type="text"
@@ -737,16 +743,18 @@ export function Sidebar() {
             className="w-full h-8 pl-8 pr-3 rounded-lg bg-surface-100 border-none text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors"
           />
         </div>
-        <ClaudeToggle />
-        <DangerousToggle />
-        <button
-          onClick={handleNewSession}
-          disabled={loading}
-          className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-100 hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-50"
-          title="New session"
-        >
-          <PlusIcon className="w-4 h-4" />
-        </button>
+        <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} className="flex items-center gap-2">
+          <ClaudeToggle />
+          <DangerousToggle />
+          <button
+            onClick={handleNewSession}
+            disabled={loading}
+            className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-100 hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-50"
+            title="New session"
+          >
+            <PlusIcon className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Scrollable sections area */}
