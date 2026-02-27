@@ -44,7 +44,7 @@ export interface PtySession {
 class PtyManager {
   private sessions = new Map<string, PtySession>()
 
-  spawn(cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string }): PtySession {
+  spawn(cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }): PtySession {
     const id = randomUUID()
     const folderName = cwd.split('/').pop() || cwd
     const useClaudeMode = options?.claudeMode !== false
@@ -85,6 +85,17 @@ class PtyManager {
     ptyProcess.onExit(() => {
       session.alive = false
     })
+
+    // Write initial command after shell init
+    if (options?.initialCommand) {
+      const cmd = options.initialCommand
+      const execute = options.autoExecute === true
+      setTimeout(() => {
+        if (session.alive) {
+          ptyProcess.write(execute ? cmd + '\r' : cmd)
+        }
+      }, 150)
+    }
 
     return session
   }
