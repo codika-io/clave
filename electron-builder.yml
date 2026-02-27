@@ -26,7 +26,7 @@ mac:
     - target: zip
       arch:
         - universal
-  x64ArchFiles: "Contents/Resources/app.asar.unpacked/node_modules/node-pty/prebuilds/darwin-*/*"
+  x64ArchFiles: "Contents/Resources/app.asar.unpacked/node_modules/node-pty/{prebuilds/darwin-*/*,build/Release/*}"
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
