@@ -99,7 +99,10 @@ export function cancelDownload(): void {
 }
 
 export function installUpdate(): void {
-  // isSilent = true: suppresses the macOS "quit unexpectedly" dialog
-  // isForceRunAfter = true: relaunches the app after installing the update
-  autoUpdater.quitAndInstall(true, true)
+  // MacUpdater.quitAndInstall() ignores isSilent/isForceRunAfter parameters entirely.
+  // On macOS, it delegates to Squirrel.Mac's native quitAndInstall which stages
+  // the update but does NOT reliably relaunch the app (ShipIt often fails silently
+  // with signed/notarized apps). Use app.relaunch() to guarantee the app reopens.
+  app.relaunch()
+  autoUpdater.quitAndInstall()
 }
