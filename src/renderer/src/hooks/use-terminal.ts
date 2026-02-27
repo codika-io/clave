@@ -149,6 +149,16 @@ export function useTerminal(sessionId: string) {
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
+    // Shift+Enter → send newline character to PTY
+    terminal.attachCustomKeyEventHandler((e) => {
+      if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault()
+        window.electronAPI.writeSession(sessionId, '\n')
+        return false
+      }
+      return true
+    })
+
     // Wire terminal input -> PTY
     const inputDisposable = terminal.onData((data) => {
       window.electronAPI.writeSession(sessionId, data)
