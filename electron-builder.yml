@@ -1,5 +1,6 @@
 appId: com.clave.app
 productName: Clave
+copyright: Copyright (c) 2026 Codika
 directories:
   buildResources: build
 files:
@@ -19,6 +20,7 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  category: public.app-category.developer-tools
   target:
     - target: dmg
       arch:

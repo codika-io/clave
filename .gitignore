@@ -25,6 +25,7 @@ Thumbs.db
 
 # Planning docs
 next-features.md
+prd-*.md
 
 # Environment variables
 .env

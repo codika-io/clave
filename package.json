@@ -2,6 +2,13 @@
   "name": "clave",
   "version": "1.8.8",
   "description": "Manage multiple Claude Code sessions from a single desktop app",
+  "author": "Codika <hello@codika.io> (https://codika.io)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codika-io/clave.git"
+  },
+  "homepage": "https://github.com/codika-io/clave",
   "main": "./out/main/index.js",
   "scripts": {
     "format": "prettier --write .",
