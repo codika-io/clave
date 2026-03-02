@@ -1,10 +1,20 @@
-# Clave
+<div align="center">
 
-**A macOS desktop app for managing multiple Claude Code sessions from a single window.**
+<img width="80" height="80" alt="Clave" src="resources/icon.png" />
+
+**Clave is a macOS desktop app for managing multiple Claude Code sessions.**
+
+Open as many sessions as you need, arrange them side-by-side, and switch between them instantly.
+
+[Features](#features) · [Download](#download) · [Build from Source](#build-from-source) · [Contributing](#contributing)
+
+</div>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="Clave demo" width="800" />
+  <video src="assets/demo.mp4" alt="Clave demo" width="800" autoplay loop muted playsinline></video>
 </p>
+
+---
 
 ## Download
 
@@ -13,11 +23,6 @@
 Download the `.dmg`, drag to Applications, done.
 
 Auto-updates are built in — once installed, new versions download silently in the background.
-
-## Why
-
-Claude Code is great in a single terminal. But real work often means juggling multiple sessions across different projects. Clave gives you a dedicated app for that: open as many sessions as you need, arrange them side-by-side, and switch between them instantly.
-
 
 ## Features
 
@@ -47,7 +52,7 @@ npm run build:mac    # build macOS .dmg (requires signing credentials)
 
 ## Tech stack
 
-[Electron](https://www.electronjs.org/) &middot; [React 19](https://react.dev/) &middot; [TypeScript](https://www.typescriptlang.org/) &middot; [xterm.js](https://xtermjs.org/) &middot; [node-pty](https://github.com/microsoft/node-pty) &middot; [Zustand](https://zustand.docs.pmnd.rs/) &middot; [Tailwind CSS v4](https://tailwindcss.com/) &middot; [Framer Motion](https://motion.dev/)
+[Electron](https://www.electronjs.org/) · [React 19](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [Zustand](https://zustand.docs.pmnd.rs/) · [Tailwind CSS v4](https://tailwindcss.com/) · [Framer Motion](https://motion.dev/)
 
 ## Roadmap
 
