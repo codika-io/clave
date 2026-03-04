@@ -99,10 +99,9 @@ export function cancelDownload(): void {
 }
 
 export function installUpdate(): void {
-  // MacUpdater.quitAndInstall() ignores isSilent/isForceRunAfter parameters entirely.
-  // On macOS, it delegates to Squirrel.Mac's native quitAndInstall which stages
-  // the update but does NOT reliably relaunch the app (ShipIt often fails silently
-  // with signed/notarized apps). Use app.relaunch() to guarantee the app reopens.
-  app.relaunch()
+  // Do NOT call app.relaunch() here — it races with Squirrel.Mac's ShipIt process.
+  // app.relaunch() fires immediately on quit, relaunching the OLD binary before
+  // ShipIt has finished replacing it. Let quitAndInstall() handle everything:
+  // Squirrel.Mac's ShipIt waits for the app to quit, replaces the binary, then relaunches.
   autoUpdater.quitAndInstall()
 }
