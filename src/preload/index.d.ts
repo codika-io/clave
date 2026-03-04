@@ -59,18 +59,6 @@ export interface UsageData {
   hourCounts: Record<string, number>
   estimatedCost: number
   totalTokens: number
-  rateLimits: RateLimits | null
-}
-
-export interface RateLimitEntry {
-  label: string
-  percent: number
-  resetInfo: string
-}
-
-export interface RateLimits {
-  entries: RateLimitEntry[]
-  fetchedAt: number
 }
 
 export interface GitFileStatus {
@@ -207,7 +195,6 @@ export interface ElectronAPI {
   templatesSave: (data: LaunchTemplatesData) => Promise<void>
   templatesValidate: (template: LaunchTemplate) => Promise<ValidationResult>
   getUsageStats: () => Promise<UsageData>
-  fetchRateLimits: () => Promise<RateLimits | null>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>
   gitFetch: (cwd: string) => Promise<void>

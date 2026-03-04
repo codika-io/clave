@@ -135,7 +135,6 @@ const electronAPI = {
 
   // Usage
   getUsageStats: () => ipcRenderer.invoke('usage:get-stats'),
-  fetchRateLimits: () => ipcRenderer.invoke('usage:fetch-rate-limits'),
 
   // Git
   gitCheckIgnored: (cwd: string, paths: string[]) =>

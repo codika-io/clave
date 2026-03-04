@@ -44,6 +44,7 @@ export interface SessionGroup {
   collapsed: boolean
   cwd: string | null
   terminals: GroupTerminalConfig[]
+  color?: GroupTerminalColor | null
 }
 
 export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings'
@@ -86,6 +87,7 @@ interface SessionState {
   removeGroupTerminal: (groupId: string, terminalId: string) => void
   updateGroupTerminal: (groupId: string, terminalId: string, updates: Partial<Pick<GroupTerminalConfig, 'command' | 'commandMode' | 'color'>>) => void
   setGroupTerminalSessionId: (groupId: string, terminalId: string, sessionId: string | null) => void
+  setGroupColor: (groupId: string, color: GroupTerminalColor | null) => void
   moveItems: (
     itemIds: string[],
     targetId: string,
@@ -369,6 +371,13 @@ export const useSessionStore = create<SessionState>((set) => ({
               )
             }
           : g
+      )
+    })),
+
+  setGroupColor: (groupId, color) =>
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId ? { ...g, color } : g
       )
     })),
 

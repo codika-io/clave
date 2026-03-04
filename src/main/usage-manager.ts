@@ -1,7 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import * as pty from 'node-pty'
-import { execFileSync } from 'child_process'
+import * as readline from 'readline'
 import { app } from 'electron'
 
 export interface DailyActivity {
@@ -23,17 +22,6 @@ export interface ModelTokenUsage {
   cacheCreationInputTokens: number
 }
 
-export interface RateLimitEntry {
-  label: string
-  percent: number
-  resetInfo: string
-}
-
-export interface RateLimits {
-  entries: RateLimitEntry[]
-  fetchedAt: number
-}
-
 export interface UsageData {
   dailyActivity: DailyActivity[]
   dailyModelTokens: DailyModelTokens[]
@@ -44,14 +32,17 @@ export interface UsageData {
   hourCounts: Record<string, number>
   estimatedCost: number
   totalTokens: number
-  rateLimits: RateLimits | null
 }
 
 // Pricing per 1M tokens (USD)
-const MODEL_PRICING: Record<string, { input: number; output: number; cacheRead: number; cacheCreation: number }> = {
+const MODEL_PRICING: Record<
+  string,
+  { input: number; output: number; cacheRead: number; cacheCreation: number }
+> = {
   'claude-opus-4-5-20251101': { input: 15, output: 75, cacheRead: 1.5, cacheCreation: 18.75 },
   'claude-opus-4-6': { input: 15, output: 75, cacheRead: 1.5, cacheCreation: 18.75 },
   'claude-sonnet-4-5-20250929': { input: 3, output: 15, cacheRead: 0.3, cacheCreation: 3.75 },
+  'claude-sonnet-4-6': { input: 3, output: 15, cacheRead: 0.3, cacheCreation: 3.75 },
   'claude-haiku-4-5-20251001': { input: 0.8, output: 4, cacheRead: 0.08, cacheCreation: 1 }
 }
 
@@ -70,261 +61,494 @@ function computeCost(model: string, usage: ModelTokenUsage): number {
   )
 }
 
-function getLoginShellEnv(): Record<string, string> {
-  try {
-    const shell = process.env.SHELL || '/bin/zsh'
-    const output = execFileSync(shell, ['-lic', 'env -0'], {
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024
-    })
-    const env: Record<string, string> = {}
-    for (const entry of output.split('\0')) {
-      const idx = entry.indexOf('=')
-      if (idx > 0) {
-        env[entry.slice(0, idx)] = entry.slice(idx + 1)
-      }
-    }
-    return Object.keys(env).length > 0 ? env : { ...process.env } as Record<string, string>
-  } catch {
-    return { ...process.env } as Record<string, string>
-  }
-}
+// --- Per-file cache types ---
 
-function stripAnsi(str: string): string {
-  return str
-    // Replace cursor movement codes (e.g. \x1B[1C = move right 1 col) with a space
-    .replace(/\x1B\[\d*C/g, ' ')
-    // Remove all other CSI sequences
-    .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
-    // Remove OSC sequences
-    .replace(/\x1B\]\d*;[^\x07]*\x07/g, '')
-    // Remove DEC private mode sequences
-    .replace(/\x1B\[[\?][0-9;]*[a-zA-Z]/g, '')
-    // Remove remaining control characters (except newline/carriage return)
-    .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, '')
-}
-
-/** Normalize a parsed label to ensure proper spacing */
-function normalizeLabel(raw: string): string {
-  return raw
-    .replace(/\s+/g, ' ')
-    .replace(/Current\s*week\s*\(\s*all\s*models\s*\)/i, 'Current week (all models)')
-    .replace(/Current\s*week\s*\(\s*Sonnet\s*only\s*\)/i, 'Current week (Sonnet only)')
-    .replace(/Current\s*session/i, 'Current session')
-    .trim()
-}
-
-/** Normalize reset info text to ensure proper spacing */
-function normalizeResetInfo(raw: string): string {
-  return raw
-    .replace(/\s+/g, ' ')
-    // Add space before opening parenthesis if missing: "4:59pm(Europe" → "4:59pm (Europe"
-    .replace(/(\w)\(/, '$1 (')
-    // Add space between date parts: "Feb20at1pm" → "Feb 20 at 1pm"
-    .replace(/([A-Za-z])(\d)/g, '$1 $2')
-    .replace(/(\d)([A-Za-z])/g, '$1 $2')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function parseRateLimits(rawOutput: string): RateLimitEntry[] {
-  const clean = stripAnsi(rawOutput)
-  const entries: RateLimitEntry[] = []
-
-  // Split into sections by looking for "Current session" or "Current week" headers
-  const sectionRegex = /(Current\s*session|Current\s*week\s*\([^)]*\))/gi
-
-  // Find all section headers
-  const headers: { label: string; index: number }[] = []
-  let match: RegExpExecArray | null
-  while ((match = sectionRegex.exec(clean)) !== null) {
-    headers.push({ label: normalizeLabel(match[1]), index: match.index })
-  }
-
-  // For each header, extract percent and reset info from the text following it
-  for (let i = 0; i < headers.length; i++) {
-    const start = headers[i].index
-    const end = i + 1 < headers.length ? headers[i + 1].index : clean.length
-    const section = clean.slice(start, end)
-
-    let percent = 0
-    const pMatch = /(\d+)\s*%\s*used/i.exec(section)
-    if (pMatch) {
-      percent = parseInt(pMatch[1], 10)
-    }
-
-    let resetInfo = ''
-    const rMatch = /Resets?\s*([A-Za-z0-9 :,]+\([^)]*\))/i.exec(section)
-    if (rMatch) {
-      resetInfo = normalizeResetInfo('Resets ' + rMatch[1])
-    }
-
-    entries.push({
-      label: headers[i].label,
-      percent,
-      resetInfo
-    })
-  }
-
-  return entries
-}
-
-function fetchRateLimitsFromClaude(): Promise<RateLimits | null> {
-  return new Promise((resolve) => {
-    const timeoutMs = 20000
-    let output = ''
-    let resolved = false
-
-    const done = (result: RateLimits | null) => {
-      if (resolved) return
-      resolved = true
-      try { proc.kill(); } catch { /* ignore */ }
-      resolve(result)
-    }
-
-    const env = getLoginShellEnv()
-    delete env.CLAUDECODE
-
-    const shell = process.env.SHELL || '/bin/zsh'
-    const proc = pty.spawn(shell, ['-l', '-c', 'claude'], {
-      cols: 120,
-      rows: 40,
-      env: { ...env, TERM: 'xterm-256color' }
-    })
-
-    proc.onData((data) => {
-      output += data
-    })
-
-    proc.onExit(() => {
-      if (!resolved) done(null)
-    })
-
-    // After 4s, type /usage
-    setTimeout(() => {
-      if (resolved) return
-      proc.write('/usage')
-    }, 4000)
-
-    // After 5s, dismiss autocomplete with Escape
-    setTimeout(() => {
-      if (resolved) return
-      proc.write('\x1b')
-    }, 5000)
-
-    // After 5.5s, press Enter to execute
-    setTimeout(() => {
-      if (resolved) return
-      proc.write('\r')
-    }, 5500)
-
-    // After 12s, parse output and clean up
-    setTimeout(() => {
-      if (resolved) return
-      const entries = parseRateLimits(output)
-      if (entries.length > 0) {
-        done({ entries, fetchedAt: Date.now() })
-      } else {
-        done(null)
-      }
-    }, 12000)
-
-    // Safety timeout
-    setTimeout(() => done(null), timeoutMs)
-  })
-}
-
-interface StatsCache {
-  dailyActivity: DailyActivity[]
-  dailyModelTokens: DailyModelTokens[]
-  modelUsage: Record<string, ModelTokenUsage>
-  totalSessions: number
-  totalMessages: number
-  firstSessionDate: string
+interface PerFileSummary {
+  mtime: number
+  sessionId: string
+  messages: number
+  toolCalls: number
+  dailyMessages: Record<string, number>
+  dailyToolCalls: Record<string, number>
+  dailySessions: Record<string, boolean>
   hourCounts: Record<string, number>
+  modelUsage: Record<string, ModelTokenUsage>
+  dailyModelTokens: Record<string, Record<string, number>>
+  firstTimestamp: string | null
 }
+
+interface UsageCache {
+  version: 3
+  files: Record<string, PerFileSummary>
+}
+
+// --- JSONL parsing ---
+
+interface ParsedAssistantEntry {
+  model: string
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cache_read_input_tokens: number
+    cache_creation_input_tokens: number
+  }
+  timestamp: string
+}
+
+interface ParsedEntry {
+  type: string
+  timestamp?: string
+  sessionId?: string
+  uuid?: string
+  message?: {
+    id?: string
+    model?: string
+    usage?: {
+      input_tokens?: number
+      output_tokens?: number
+      cache_read_input_tokens?: number
+      cache_creation_input_tokens?: number
+    }
+    content?: unknown[]
+  }
+  // tool use result entries have this key
+  toolUseResult?: unknown
+}
+
+async function parseJsonlFile(
+  filePath: string
+): Promise<{
+  sessionId: string
+  assistantEntries: ParsedAssistantEntry[]
+  userMessageCount: number
+  toolCallCount: number
+  timestamps: string[]
+}> {
+  const assistantMap = new Map<
+    string,
+    { model: string; usage: ParsedAssistantEntry['usage']; timestamp: string }
+  >()
+  let userMessageCount = 0
+  let toolCallCount = 0
+  let sessionId = ''
+  const timestamps: string[] = []
+
+  const stream = fs.createReadStream(filePath, { encoding: 'utf-8' })
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
+
+  for await (const line of rl) {
+    if (!line.trim()) continue
+    let entry: ParsedEntry
+    try {
+      entry = JSON.parse(line)
+    } catch {
+      continue
+    }
+
+    if (!sessionId && entry.sessionId) {
+      sessionId = entry.sessionId
+    }
+
+    if (entry.timestamp) {
+      timestamps.push(entry.timestamp)
+    }
+
+    if (entry.type === 'user') {
+      // Count user text messages (not tool results)
+      if (!entry.toolUseResult) {
+        userMessageCount++
+      }
+      // Count tool_result blocks in message content
+      if (Array.isArray(entry.message?.content)) {
+        for (const block of entry.message!.content) {
+          if (block && typeof block === 'object' && 'type' in block && (block as { type: string }).type === 'tool_result') {
+            toolCallCount++
+          }
+        }
+      }
+    }
+
+    if (entry.type === 'assistant' && entry.message?.usage) {
+      const msgId = entry.message.id || entry.uuid || ''
+      if (!msgId) continue
+
+      const model = entry.message.model || ''
+      if (!model || !model.startsWith('claude-')) continue
+
+      const u = entry.message.usage
+      assistantMap.set(msgId, {
+        model,
+        usage: {
+          input_tokens: u.input_tokens ?? 0,
+          output_tokens: u.output_tokens ?? 0,
+          cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
+          cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0
+        },
+        timestamp: entry.timestamp || ''
+      })
+    }
+  }
+
+  const assistantEntries: ParsedAssistantEntry[] = []
+  for (const val of assistantMap.values()) {
+    assistantEntries.push({
+      model: val.model,
+      usage: val.usage,
+      timestamp: val.timestamp
+    })
+  }
+
+  return { sessionId, assistantEntries, userMessageCount, toolCallCount, timestamps }
+}
+
+function buildFileSummary(parsed: Awaited<ReturnType<typeof parseJsonlFile>>, mtime: number): PerFileSummary {
+  const dailyMessages: Record<string, number> = {}
+  const dailyToolCalls: Record<string, number> = {}
+  const dailySessions: Record<string, boolean> = {}
+  const hourCounts: Record<string, number> = {}
+  const modelUsage: Record<string, ModelTokenUsage> = {}
+  const dailyModelTokens: Record<string, Record<string, number>> = {}
+
+  let firstTimestamp: string | null = null
+  if (parsed.timestamps.length > 0) {
+    firstTimestamp = parsed.timestamps[0]
+  }
+
+  // Distribute user messages across days using timestamps
+  // We use the first and assistant timestamps to build daily distributions
+  for (const ts of parsed.timestamps) {
+    const date = ts.slice(0, 10)
+    if (!dailySessions[date]) {
+      dailySessions[date] = true
+    }
+    const hour = new Date(ts).getHours()
+    hourCounts[String(hour)] = (hourCounts[String(hour)] || 0) + 1
+  }
+
+  // Count messages per day from assistant entries (each deduped assistant entry = 1 API call)
+  // For user messages, distribute proportionally across days the session was active
+  // Simple approach: attribute all user messages to the session's active days
+  const activeDays = Object.keys(dailySessions).sort()
+  if (activeDays.length > 0 && parsed.userMessageCount > 0) {
+    // Distribute user messages: count timestamps per day, use as weight
+    const dayTimestampCounts: Record<string, number> = {}
+    for (const ts of parsed.timestamps) {
+      const d = ts.slice(0, 10)
+      dayTimestampCounts[d] = (dayTimestampCounts[d] || 0) + 1
+    }
+    const totalTs = parsed.timestamps.length || 1
+    let distributed = 0
+    for (let i = 0; i < activeDays.length; i++) {
+      const day = activeDays[i]
+      if (i === activeDays.length - 1) {
+        // Last day gets remainder
+        dailyMessages[day] = parsed.userMessageCount - distributed
+      } else {
+        const share = Math.round(
+          (parsed.userMessageCount * (dayTimestampCounts[day] || 0)) / totalTs
+        )
+        dailyMessages[day] = share
+        distributed += share
+      }
+    }
+  }
+
+  // Distribute tool calls similarly
+  if (activeDays.length > 0 && parsed.toolCallCount > 0) {
+    const dayTimestampCounts: Record<string, number> = {}
+    for (const ts of parsed.timestamps) {
+      const d = ts.slice(0, 10)
+      dayTimestampCounts[d] = (dayTimestampCounts[d] || 0) + 1
+    }
+    const totalTs = parsed.timestamps.length || 1
+    let distributed = 0
+    for (let i = 0; i < activeDays.length; i++) {
+      const day = activeDays[i]
+      if (i === activeDays.length - 1) {
+        dailyToolCalls[day] = parsed.toolCallCount - distributed
+      } else {
+        const share = Math.round(
+          (parsed.toolCallCount * (dayTimestampCounts[day] || 0)) / totalTs
+        )
+        dailyToolCalls[day] = share
+        distributed += share
+      }
+    }
+  }
+
+  // Aggregate assistant entries into model usage and daily model tokens
+  for (const entry of parsed.assistantEntries) {
+    const model = entry.model
+    if (!modelUsage[model]) {
+      modelUsage[model] = {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0
+      }
+    }
+    modelUsage[model].inputTokens += entry.usage.input_tokens
+    modelUsage[model].outputTokens += entry.usage.output_tokens
+    modelUsage[model].cacheReadInputTokens += entry.usage.cache_read_input_tokens
+    modelUsage[model].cacheCreationInputTokens += entry.usage.cache_creation_input_tokens
+
+    const date = entry.timestamp ? entry.timestamp.slice(0, 10) : activeDays[0] || ''
+    if (date) {
+      if (!dailyModelTokens[date]) dailyModelTokens[date] = {}
+      const totalTokens =
+        entry.usage.input_tokens +
+        entry.usage.output_tokens +
+        entry.usage.cache_read_input_tokens +
+        entry.usage.cache_creation_input_tokens
+      dailyModelTokens[date][model] = (dailyModelTokens[date][model] || 0) + totalTokens
+    }
+  }
+
+  return {
+    mtime,
+    sessionId: parsed.sessionId,
+    messages: parsed.userMessageCount,
+    toolCalls: parsed.toolCallCount,
+    dailyMessages,
+    dailyToolCalls,
+    dailySessions,
+    hourCounts,
+    modelUsage,
+    dailyModelTokens,
+    firstTimestamp
+  }
+}
+
+function mergeAllSummaries(files: Record<string, PerFileSummary>): UsageData {
+  const dailyMessagesMap: Record<string, number> = {}
+  const dailySessionsMap: Record<string, Set<string>> = {}
+  const dailyToolCallsMap: Record<string, number> = {}
+  const hourCountsMap: Record<string, number> = {}
+  const modelUsageMap: Record<string, ModelTokenUsage> = {}
+  const dailyModelTokensMap: Record<string, Record<string, number>> = {}
+
+  let totalMessages = 0
+  let totalSessions = 0
+  let firstSessionDate: string | null = null
+  const sessionIds = new Set<string>()
+
+  for (const summary of Object.values(files)) {
+    totalMessages += summary.messages
+
+    if (summary.sessionId && !sessionIds.has(summary.sessionId)) {
+      sessionIds.add(summary.sessionId)
+      totalSessions++
+    }
+
+    if (summary.firstTimestamp) {
+      const date = summary.firstTimestamp.slice(0, 10)
+      if (!firstSessionDate || date < firstSessionDate) {
+        firstSessionDate = date
+      }
+    }
+
+    for (const [date, count] of Object.entries(summary.dailyMessages)) {
+      dailyMessagesMap[date] = (dailyMessagesMap[date] || 0) + count
+    }
+
+    for (const [date, count] of Object.entries(summary.dailyToolCalls)) {
+      dailyToolCallsMap[date] = (dailyToolCallsMap[date] || 0) + count
+    }
+
+    for (const [date] of Object.entries(summary.dailySessions)) {
+      if (!dailySessionsMap[date]) dailySessionsMap[date] = new Set()
+      if (summary.sessionId) dailySessionsMap[date].add(summary.sessionId)
+    }
+
+    for (const [hour, count] of Object.entries(summary.hourCounts)) {
+      hourCountsMap[hour] = (hourCountsMap[hour] || 0) + count
+    }
+
+    for (const [model, usage] of Object.entries(summary.modelUsage)) {
+      if (!modelUsageMap[model]) {
+        modelUsageMap[model] = {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0
+        }
+      }
+      modelUsageMap[model].inputTokens += usage.inputTokens
+      modelUsageMap[model].outputTokens += usage.outputTokens
+      modelUsageMap[model].cacheReadInputTokens += usage.cacheReadInputTokens
+      modelUsageMap[model].cacheCreationInputTokens += usage.cacheCreationInputTokens
+    }
+
+    for (const [date, models] of Object.entries(summary.dailyModelTokens)) {
+      if (!dailyModelTokensMap[date]) dailyModelTokensMap[date] = {}
+      for (const [model, tokens] of Object.entries(models)) {
+        dailyModelTokensMap[date][model] = (dailyModelTokensMap[date][model] || 0) + tokens
+      }
+    }
+  }
+
+  // Build sorted arrays
+  const allDates = new Set([
+    ...Object.keys(dailyMessagesMap),
+    ...Object.keys(dailySessionsMap),
+    ...Object.keys(dailyToolCallsMap)
+  ])
+  const dailyActivity: DailyActivity[] = Array.from(allDates)
+    .sort()
+    .map((date) => ({
+      date,
+      messageCount: dailyMessagesMap[date] || 0,
+      sessionCount: dailySessionsMap[date]?.size || 0,
+      toolCallCount: dailyToolCallsMap[date] || 0
+    }))
+
+  const dailyModelTokens: DailyModelTokens[] = Object.entries(dailyModelTokensMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, tokensByModel]) => ({ date, tokensByModel }))
+
+  let estimatedCost = 0
+  let totalTokens = 0
+  for (const [model, usage] of Object.entries(modelUsageMap)) {
+    estimatedCost += computeCost(model, usage)
+    totalTokens +=
+      usage.inputTokens +
+      usage.outputTokens +
+      usage.cacheReadInputTokens +
+      usage.cacheCreationInputTokens
+  }
+
+  return {
+    dailyActivity,
+    dailyModelTokens,
+    modelUsage: modelUsageMap,
+    totalSessions,
+    totalMessages,
+    firstSessionDate,
+    hourCounts: hourCountsMap,
+    estimatedCost,
+    totalTokens
+  }
+}
+
+// --- Concurrency limiter ---
+
+async function parallelLimit<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length)
+  let idx = 0
+
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++
+      results[i] = await tasks[i]()
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker())
+  await Promise.all(workers)
+  return results
+}
+
+// --- Main manager ---
 
 class UsageManager {
   private cachePath: string
-  private cachedData: UsageData | null = null
-  private cachedMtime: number = 0
-  private cachedRateLimits: RateLimits | null = null
-  private rateLimitFetching = false
+  private cache: UsageCache = { version: 3, files: {} }
+  private cacheLoaded = false
+  private cachedResult: UsageData | null = null
 
   constructor() {
-    this.cachePath = path.join(app.getPath('home'), '.claude', 'stats-cache.json')
+    this.cachePath = path.join(app.getPath('home'), '.claude', 'clave-usage-cache.json')
   }
 
-  getStats(): UsageData {
+  private loadCache(): void {
+    if (this.cacheLoaded) return
     try {
-      const stat = fs.statSync(this.cachePath)
-      const mtime = stat.mtimeMs
-
-      if (this.cachedData && mtime === this.cachedMtime) {
-        return { ...this.cachedData, rateLimits: this.cachedRateLimits }
-      }
-
       const raw = fs.readFileSync(this.cachePath, 'utf-8')
-      const data = JSON.parse(raw) as StatsCache
-
-      let estimatedCost = 0
-      let totalTokens = 0
-
-      for (const [model, usage] of Object.entries(data.modelUsage ?? {})) {
-        estimatedCost += computeCost(model, usage)
-        totalTokens +=
-          usage.inputTokens +
-          usage.outputTokens +
-          usage.cacheReadInputTokens +
-          usage.cacheCreationInputTokens
+      const parsed = JSON.parse(raw)
+      if (parsed && parsed.version === 3 && parsed.files) {
+        this.cache = parsed as UsageCache
       }
-
-      const result: UsageData = {
-        dailyActivity: data.dailyActivity ?? [],
-        dailyModelTokens: data.dailyModelTokens ?? [],
-        modelUsage: data.modelUsage ?? {},
-        totalSessions: data.totalSessions ?? 0,
-        totalMessages: data.totalMessages ?? 0,
-        firstSessionDate: data.firstSessionDate ?? null,
-        hourCounts: data.hourCounts ?? {},
-        estimatedCost,
-        totalTokens,
-        rateLimits: this.cachedRateLimits
-      }
-
-      this.cachedData = result
-      this.cachedMtime = mtime
-      return result
     } catch {
-      return {
-        dailyActivity: [],
-        dailyModelTokens: [],
-        modelUsage: {},
-        totalSessions: 0,
-        totalMessages: 0,
-        firstSessionDate: null,
-        hourCounts: {},
-        estimatedCost: 0,
-        totalTokens: 0,
-        rateLimits: this.cachedRateLimits
-      }
+      // No cache or corrupt — start fresh
+    }
+    this.cacheLoaded = true
+  }
+
+  private saveCache(): void {
+    try {
+      const dir = path.dirname(this.cachePath)
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(this.cachePath, JSON.stringify(this.cache), 'utf-8')
+    } catch {
+      // Non-critical — cache is just an optimization
     }
   }
 
-  async fetchRateLimits(): Promise<RateLimits | null> {
-    if (this.rateLimitFetching) {
-      return this.cachedRateLimits
-    }
-    this.rateLimitFetching = true
+  async getStats(): Promise<UsageData> {
+    this.loadCache()
+
+    const claudeDir = path.join(app.getPath('home'), '.claude', 'projects')
+    let jsonlFiles: string[] = []
     try {
-      const result = await fetchRateLimitsFromClaude()
-      if (result) {
-        this.cachedRateLimits = result
-      }
-      return this.cachedRateLimits
-    } finally {
-      this.rateLimitFetching = false
+      const entries = fs.readdirSync(claudeDir, { recursive: true, encoding: 'utf-8' })
+      jsonlFiles = (entries as string[])
+        .filter((e) => e.endsWith('.jsonl'))
+        .map((e) => path.join(claudeDir, e))
+    } catch {
+      // Directory might not exist
     }
+
+    // Prune cache entries for files that no longer exist
+    const fileSet = new Set(jsonlFiles)
+    for (const cached of Object.keys(this.cache.files)) {
+      if (!fileSet.has(cached)) {
+        delete this.cache.files[cached]
+      }
+    }
+
+    // Find files that need (re-)processing
+    const toProcess: { filePath: string; mtime: number }[] = []
+    for (const filePath of jsonlFiles) {
+      try {
+        const stat = fs.statSync(filePath)
+        const mtime = stat.mtimeMs
+        const existing = this.cache.files[filePath]
+        if (!existing || existing.mtime !== mtime) {
+          toProcess.push({ filePath, mtime })
+        }
+      } catch {
+        // File disappeared between glob and stat
+      }
+    }
+
+    // Process changed/new files with concurrency limit
+    if (toProcess.length > 0) {
+      const tasks = toProcess.map(({ filePath, mtime }) => async () => {
+        try {
+          const parsed = await parseJsonlFile(filePath)
+          const summary = buildFileSummary(parsed, mtime)
+          return { filePath, summary }
+        } catch {
+          return { filePath, summary: null }
+        }
+      })
+
+      const results = await parallelLimit(tasks, 10)
+      for (const { filePath, summary } of results) {
+        if (summary) {
+          this.cache.files[filePath] = summary
+        }
+      }
+
+      this.saveCache()
+    }
+
+    // Merge all summaries
+    this.cachedResult = mergeAllSummaries(this.cache.files)
+    return this.cachedResult
   }
 }
 

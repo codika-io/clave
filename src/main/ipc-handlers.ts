@@ -110,7 +110,6 @@ export function registerIpcHandlers(): void {
 
   // Usage handlers
   ipcMain.handle('usage:get-stats', () => usageManager.getStats())
-  ipcMain.handle('usage:fetch-rate-limits', () => usageManager.fetchRateLimits())
 
   // Git handlers
   ipcMain.handle('git:check-ignored', (_event, cwd: string, paths: string[]) =>

@@ -14,9 +14,10 @@ interface ContextMenuProps {
   x: number
   y: number
   onClose: () => void
+  header?: React.ReactNode
 }
 
-export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
+export function ContextMenu({ items, x, y, onClose, header }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -42,6 +43,12 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
       className="fixed z-50 min-w-[160px] py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
       style={{ left: x, top: y }}
     >
+      {header && (
+        <>
+          <div className="px-3 py-1.5">{header}</div>
+          <div className="border-t border-border-subtle" />
+        </>
+      )}
       {items.map((item) => (
         <button
           key={item.label}

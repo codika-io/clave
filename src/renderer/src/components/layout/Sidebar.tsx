@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   useSessionStore,
   GROUP_TERMINAL_COLORS,
+  TERMINAL_COLOR_VALUES,
   type GroupTerminalColor
 } from '../../store/session-store'
 import { useBoardStore } from '../../store/board-store'
@@ -23,13 +24,15 @@ import {
   Squares2X2Icon,
   FolderMinusIcon,
   ShieldExclamationIcon,
-  CommandLineIcon
+  CommandLineIcon,
+  CheckIcon
 } from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
   x: number
   y: number
   items: { label: string; onClick: () => void; shortcut?: string; disabled?: boolean; icon?: React.ReactNode; danger?: boolean }[]
+  header?: React.ReactNode
 }
 
 interface DropIndicatorState {
@@ -187,6 +190,7 @@ export function Sidebar() {
   const createGroup = useSessionStore((s) => s.createGroup)
   const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
   const deleteGroup = useSessionStore((s) => s.deleteGroup)
+  const setGroupColor = useSessionStore((s) => s.setGroupColor)
   const moveItems = useSessionStore((s) => s.moveItems)
   const addGroupTerminal = useSessionStore((s) => s.addGroupTerminal)
   const removeGroupTerminal = useSessionStore((s) => s.removeGroupTerminal)
@@ -484,9 +488,47 @@ export function Sidebar() {
   const handleGroupContextMenu = useCallback(
     (e: React.MouseEvent, groupId: string) => {
       e.preventDefault()
+      const group = groups.find((g) => g.id === groupId)
+      const currentColor = group?.color ?? null
+      const colorPicker = (
+        <div className="flex items-center gap-1.5">
+          {/* No-color option */}
+          <button
+            onClick={(ev) => {
+              ev.stopPropagation()
+              setGroupColor(groupId, null)
+              setContextMenu(null)
+            }}
+            className="relative w-5 h-5 rounded-full border border-border-subtle bg-surface-200 hover:scale-110 transition-transform flex items-center justify-center"
+            title="No color"
+          >
+            {currentColor === null && (
+              <CheckIcon className="w-3 h-3 text-text-secondary" />
+            )}
+          </button>
+          {GROUP_TERMINAL_COLORS.map((color) => (
+            <button
+              key={color}
+              onClick={(ev) => {
+                ev.stopPropagation()
+                setGroupColor(groupId, color)
+                setContextMenu(null)
+              }}
+              className="relative w-5 h-5 rounded-full hover:scale-110 transition-transform flex items-center justify-center"
+              style={{ backgroundColor: TERMINAL_COLOR_VALUES[color] }}
+              title={color}
+            >
+              {currentColor === color && (
+                <CheckIcon className="w-3 h-3 text-white" />
+              )}
+            </button>
+          ))}
+        </div>
+      )
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
+        header: colorPicker,
         items: [
           {
             label: 'Rename',
@@ -512,7 +554,7 @@ export function Sidebar() {
         ]
       })
     },
-    [ungroupSessions, handleDeleteGroup]
+    [groups, ungroupSessions, handleDeleteGroup, setGroupColor]
   )
 
   // Finder-style session click: Click=single, Cmd=toggle, Shift=range, Cmd+Shift=range-add
@@ -916,15 +958,20 @@ export function Sidebar() {
                   const allGroupSelected =
                     group.sessionIds.length > 0 &&
                     group.sessionIds.every((id) => selectedSessionIds.includes(id))
+                  const groupColorHex = group.color ? TERMINAL_COLOR_VALUES[group.color] : undefined
                   return (
                     <div
                       key={group.id}
                       className={cn(
                         'relative rounded-xl border transition-colors',
-                        allGroupSelected
+                        !groupColorHex && (allGroupSelected
                           ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
-                          : 'bg-surface-100/30 border-border-subtle'
+                          : 'bg-surface-100/30 border-border-subtle')
                       )}
+                      style={groupColorHex ? {
+                        backgroundColor: `${groupColorHex}15`,
+                        borderColor: `${groupColorHex}40`
+                      } : undefined}
                     >
                       {getDropIndicator(group.id) === 'inside' && (
                         <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10" />
@@ -1044,6 +1091,7 @@ export function Sidebar() {
           x={contextMenu.x}
           y={contextMenu.y}
           onClose={() => setContextMenu(null)}
+          header={contextMenu.header}
         />
       )}
 

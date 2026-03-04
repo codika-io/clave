@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react'
-import type { UsageData, RateLimits } from '../../../../preload/index.d'
+import type { UsageData } from '../../../../preload/index.d'
 
 function formatNumber(n: number): string {
   if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
@@ -16,6 +16,7 @@ function formatCost(n: number): string {
 function getModelDisplayName(model: string): string {
   if (model.includes('opus-4-6')) return 'Opus 4.6'
   if (model.includes('opus-4-5')) return 'Opus 4.5'
+  if (model.includes('sonnet-4-6')) return 'Sonnet 4.6'
   if (model.includes('sonnet-4-5')) return 'Sonnet 4.5'
   if (model.includes('haiku-4-5')) return 'Haiku 4.5'
   return model.split('-').slice(1, -1).join(' ')
@@ -40,107 +41,6 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub: st
       <span className="text-xs text-text-tertiary font-medium">{label}</span>
       <span className="text-xl font-semibold text-text-primary">{value}</span>
       <span className="text-[11px] text-text-tertiary">{sub}</span>
-    </div>
-  )
-}
-
-function RateLimitBar({ label, percent, resetInfo }: { label: string; percent: number; resetInfo: string }) {
-  const barColor = percent >= 80
-    ? 'var(--color-status-waiting)'
-    : 'var(--color-accent)'
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs font-medium text-text-primary">{label}</span>
-        {resetInfo && (
-          <span className="text-[11px] text-text-tertiary">{resetInfo}</span>
-        )}
-      </div>
-      <div className="h-2.5 bg-surface-200 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full"
-          style={{
-            width: `${Math.max(percent, 1)}%`,
-            backgroundColor: barColor,
-            transition: 'width 0.3s ease'
-          }}
-        />
-      </div>
-      <span className="text-[11px] text-text-tertiary">{percent}% used</span>
-    </div>
-  )
-}
-
-function RateLimitsSection({ rateLimits, onRefresh, loading }: {
-  rateLimits: RateLimits | null
-  onRefresh: () => void
-  loading: boolean
-}) {
-  if (!rateLimits) {
-    return (
-      <div className="bg-surface-100 border border-border-subtle rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-medium text-text-secondary">Plan limits</span>
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="text-[11px] text-accent hover:text-accent-hover transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Fetching...' : 'Load'}
-          </button>
-        </div>
-        <p className="text-[11px] text-text-tertiary">
-          Click Load to fetch rate limit data from Claude Code.
-        </p>
-      </div>
-    )
-  }
-
-  const age = Date.now() - rateLimits.fetchedAt
-  const ageMinutes = Math.floor(age / 60000)
-  const ageLabel = ageMinutes < 1 ? 'just now' : `${ageMinutes}m ago`
-
-  return (
-    <div className="bg-surface-100 border border-border-subtle rounded-xl p-4">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-xs font-medium text-text-secondary">Plan limits</span>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-text-tertiary">{ageLabel}</span>
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="p-1 rounded-md hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
-            title="Refresh limits"
-          >
-            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className={loading ? 'animate-spin' : ''}>
-              <path
-                d="M12 7A5 5 0 1 1 7 2"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinecap="round"
-              />
-              <path
-                d="M7 0.5L9.5 2L7 3.5"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div className="space-y-4">
-        {rateLimits.entries.map((entry, i) => (
-          <RateLimitBar
-            key={i}
-            label={entry.label}
-            percent={entry.percent}
-            resetInfo={entry.resetInfo}
-          />
-        ))}
-      </div>
     </div>
   )
 }
@@ -319,8 +219,6 @@ export function UsagePanel() {
   const [data, setData] = useState<UsageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [rateLimits, setRateLimits] = useState<RateLimits | null>(null)
-  const [rateLimitsLoading, setRateLimitsLoading] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -332,28 +230,10 @@ export function UsagePanel() {
       }
       const stats = await window.electronAPI.getUsageStats()
       setData(stats)
-      if (stats.rateLimits) {
-        setRateLimits(stats.rateLimits)
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load usage data')
     } finally {
       setLoading(false)
-    }
-  }, [])
-
-  const fetchRateLimits = useCallback(async () => {
-    if (!window.electronAPI?.fetchRateLimits) return
-    setRateLimitsLoading(true)
-    try {
-      const result = await window.electronAPI.fetchRateLimits()
-      if (result) {
-        setRateLimits(result)
-      }
-    } catch (err) {
-      console.error('Failed to fetch rate limits:', err)
-    } finally {
-      setRateLimitsLoading(false)
     }
   }, [])
 
@@ -414,13 +294,6 @@ export function UsagePanel() {
             </svg>
           </button>
         </div>
-
-        {/* Rate limits */}
-        <RateLimitsSection
-          rateLimits={rateLimits}
-          onRefresh={fetchRateLimits}
-          loading={rateLimitsLoading}
-        />
 
         {/* Stat cards */}
         <div className="grid grid-cols-4 gap-3">

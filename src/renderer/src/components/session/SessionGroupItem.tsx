@@ -169,7 +169,10 @@ export function SessionGroupItem({
         </span>
 
         {/* Folder icon */}
-        <FolderIcon className="flex-shrink-0 w-5 h-5 text-text-tertiary" />
+        <FolderIcon
+          className="flex-shrink-0 w-5 h-5 text-text-tertiary"
+          style={group.color ? { color: TERMINAL_COLOR_VALUES[group.color] } : undefined}
+        />
 
         {/* Group name */}
         {editing ? (
