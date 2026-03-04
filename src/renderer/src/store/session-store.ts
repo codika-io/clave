@@ -4,17 +4,19 @@ export type Theme = 'dark' | 'light' | 'coffee'
 
 export type ActivityStatus = 'active' | 'idle' | 'ended'
 
-export type GroupTerminalColor = 'blue' | 'green' | 'orange' | 'purple' | 'pink' | 'yellow'
+export type GroupTerminalColor = 'black' | 'green' | 'teal' | 'blue' | 'purple' | 'yellow' | 'pink' | 'red'
 
-export const GROUP_TERMINAL_COLORS: GroupTerminalColor[] = ['blue', 'green', 'orange', 'purple', 'pink', 'yellow']
+export const GROUP_TERMINAL_COLORS: GroupTerminalColor[] = ['black', 'green', 'teal', 'blue', 'purple', 'yellow', 'pink', 'red']
 
 export const TERMINAL_COLOR_VALUES: Record<GroupTerminalColor, string> = {
-  blue: '#5B8DEF',
-  green: '#4ADE80',
-  orange: '#FB923C',
-  purple: '#A78BFA',
-  pink: '#F472B6',
-  yellow: '#FACC15'
+  black: '#3A3A3C',
+  green: '#34C759',
+  teal: '#5AC8FA',
+  blue: '#007AFF',
+  purple: '#AF52DE',
+  yellow: '#FFD60A',
+  pink: '#FF6482',
+  red: '#FF3B30'
 }
 
 export interface GroupTerminalConfig {
