@@ -2,7 +2,7 @@ import { app, BrowserWindow, shell, nativeImage, nativeTheme } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
-import { ptyManager } from './pty-manager'
+import { ptyManager, preloadLoginShellEnv } from './pty-manager'
 import { initAutoUpdater } from './auto-updater'
 import { initNotificationManager } from './notification-manager'
 
@@ -34,6 +34,11 @@ function createWindow(): void {
     mainWindow.show()
   })
 
+  // Kill orphaned PTYs after the window closes (beforeunload already saved state)
+  mainWindow.on('closed', () => {
+    ptyManager.killAll()
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url).catch(() => {})
     return { action: 'deny' }
@@ -48,6 +53,9 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.clave.app')
+
+  // Pre-cache login shell env asynchronously so PTY spawns don't block the main thread
+  preloadLoginShellEnv()
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -69,6 +77,6 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', () => {
-  ptyManager.killAll()
-})
+// No before-quit handler — Electron automatically closes windows on quit,
+// which triggers beforeunload (renderer saves state) → closed (kills PTYs).
+// Killing PTYs in before-quit would race: PTYs die before state is saved.

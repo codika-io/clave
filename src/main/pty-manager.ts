@@ -1,5 +1,5 @@
 import * as pty from 'node-pty'
-import { execFileSync } from 'child_process'
+import { execFile, execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
 
 let loginShellEnv: Record<string, string> | null = null
@@ -8,25 +8,48 @@ function getUserShell(): string {
   return process.env.SHELL || '/bin/zsh'
 }
 
+function parseEnvOutput(output: string): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const entry of output.split('\0')) {
+    const idx = entry.indexOf('=')
+    if (idx > 0) {
+      env[entry.slice(0, idx)] = entry.slice(idx + 1)
+    }
+  }
+  return env
+}
+
+/**
+ * Pre-cache the login shell environment asynchronously.
+ * Call this at app startup so that by the time the first PTY is spawned,
+ * the env is already cached and no blocking execFileSync is needed.
+ */
+export function preloadLoginShellEnv(): void {
+  if (loginShellEnv !== null) return
+  execFile(getUserShell(), ['-lic', 'env -0'], {
+    encoding: 'utf-8',
+    maxBuffer: 10 * 1024 * 1024
+  }, (err, stdout) => {
+    if (loginShellEnv !== null) return // already set by sync fallback
+    if (err) {
+      loginShellEnv = { ...process.env } as Record<string, string>
+      return
+    }
+    const env = parseEnvOutput(stdout)
+    loginShellEnv = Object.keys(env).length > 0 ? env : { ...process.env } as Record<string, string>
+  })
+}
+
 function getLoginShellEnv(): Record<string, string> {
   if (loginShellEnv !== null) return loginShellEnv
+  // Sync fallback if async preload hasn't finished yet
   try {
     const output = execFileSync(getUserShell(), ['-lic', 'env -0'], {
       encoding: 'utf-8',
       maxBuffer: 10 * 1024 * 1024
     })
-    const env: Record<string, string> = {}
-    for (const entry of output.split('\0')) {
-      const idx = entry.indexOf('=')
-      if (idx > 0) {
-        env[entry.slice(0, idx)] = entry.slice(idx + 1)
-      }
-    }
-    if (Object.keys(env).length > 0) {
-      loginShellEnv = env
-    } else {
-      loginShellEnv = { ...process.env } as Record<string, string>
-    }
+    const env = parseEnvOutput(output)
+    loginShellEnv = Object.keys(env).length > 0 ? env : { ...process.env } as Record<string, string>
   } catch {
     loginShellEnv = { ...process.env } as Record<string, string>
   }

@@ -86,7 +86,8 @@ export function KanbanBoard() {
         activityStatus: 'idle',
         promptWaiting: null,
         claudeMode: true,
-        dangerousMode: state.dangerousMode
+        dangerousMode: state.dangerousMode,
+        claudeSessionId: null
       })
 
       linkSession(task.id, sessionInfo.id)
@@ -180,7 +181,8 @@ export function KanbanBoard() {
         activityStatus: 'idle',
         promptWaiting: null,
         claudeMode: true,
-        dangerousMode: state.dangerousMode
+        dangerousMode: state.dangerousMode,
+        claudeSessionId: null
       })
 
       linkSession(task.id, sessionInfo.id)

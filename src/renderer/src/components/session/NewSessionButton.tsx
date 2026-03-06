@@ -25,7 +25,8 @@ export function NewSessionButton() {
         activityStatus: 'idle',
         promptWaiting: null,
         claudeMode: state.claudeMode,
-        dangerousMode: state.dangerousMode
+        dangerousMode: state.dangerousMode,
+        claudeSessionId: null
       })
     } catch (err) {
       console.error('Failed to create session:', err)

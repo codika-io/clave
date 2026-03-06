@@ -37,6 +37,7 @@ export interface Session {
   promptWaiting: string | null
   claudeMode: boolean
   dangerousMode: boolean
+  claudeSessionId: string | null
 }
 
 export interface SessionGroup {
@@ -74,6 +75,7 @@ interface SessionState {
   sidePanelTab: 'files' | 'git'
   gitViewMode: 'list' | 'tree'
   gitPanelMode: 'changes' | 'log'
+  restoredFromDisk: boolean | null // null = not yet attempted, true/false = result
 
   addSession: (session: Session) => void
   removeSession: (id: string) => void
@@ -115,6 +117,18 @@ interface SessionState {
   setGitViewMode: (mode: 'list' | 'tree') => void
   setGitPanelMode: (mode: 'changes' | 'log') => void
   setPreviewFile: (path: string | null, source?: 'palette' | 'tree', cwd?: string | null) => void
+  setClaudeSessionId: (id: string, claudeSessionId: string) => void
+  setRestoredFromDisk: (value: boolean) => void
+  restoreState: (state: {
+    sessions: Session[]
+    groups: SessionGroup[]
+    displayOrder: string[]
+    focusedSessionId: string | null
+    selectedSessionIds: string[]
+    sidebarOpen: boolean
+    sidebarWidth: number
+    activeView: ActiveView
+  }) => void
 }
 
 let groupCounter = 0
@@ -164,6 +178,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidePanelTab: 'files' as const,
   gitViewMode: 'list' as const,
   gitPanelMode: 'changes' as const,
+  restoredFromDisk: null,
 
   addSession: (session) =>
     set((state) => ({
@@ -498,5 +513,26 @@ export const useSessionStore = create<SessionState>((set) => ({
   setGitPanelMode: (mode) => set({ gitPanelMode: mode }),
 
   setPreviewFile: (path, source, cwd) =>
-    set({ previewFile: path, previewCwd: cwd ?? null, previewSource: source ?? (path ? null : null) })
+    set({ previewFile: path, previewCwd: cwd ?? null, previewSource: source ?? (path ? null : null) }),
+
+  setClaudeSessionId: (id, claudeSessionId) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === id ? { ...s, claudeSessionId } : s
+      )
+    })),
+
+  setRestoredFromDisk: (value) => set({ restoredFromDisk: value }),
+
+  restoreState: (restored) =>
+    set(() => ({
+      sessions: restored.sessions,
+      groups: restored.groups,
+      displayOrder: restored.displayOrder,
+      focusedSessionId: restored.focusedSessionId,
+      selectedSessionIds: restored.selectedSessionIds,
+      sidebarOpen: restored.sidebarOpen,
+      sidebarWidth: restored.sidebarWidth,
+      activeView: restored.activeView
+    }))
 }))

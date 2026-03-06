@@ -9,6 +9,8 @@ import { SettingsPanel } from '../settings/SettingsPanel'
 import { UpdateToast } from '../ui/UpdateToast'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
 import { useLaunchTemplate } from '../../hooks/use-launch-template'
+import { useSessionRestore } from '../../hooks/use-session-restore'
+import { useSessionSave } from '../../hooks/use-session-save'
 import { FilePalette } from '../files/FilePalette'
 import { SidePanel } from '../git/SidePanel'
 import { FilePreview } from '../files/FilePreview'
@@ -40,6 +42,8 @@ export function AppShell() {
   const removeSession = useSessionStore((s) => s.removeSession)
 
   useLaunchTemplate()
+  useSessionRestore()
+  useSessionSave()
 
   const spawnSessionWithOptions = useCallback(
     async (claudeMode: boolean, dangerousMode: boolean) => {
@@ -60,7 +64,8 @@ export function AppShell() {
           activityStatus: 'idle',
           promptWaiting: null,
           claudeMode,
-          dangerousMode
+          dangerousMode,
+          claudeSessionId: null
         })
       } catch (err) {
         console.error('Failed to create session:', err)

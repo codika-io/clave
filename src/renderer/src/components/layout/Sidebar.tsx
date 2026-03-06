@@ -241,7 +241,8 @@ export function Sidebar() {
         activityStatus: 'idle',
         promptWaiting: null,
         claudeMode: state.claudeMode,
-        dangerousMode: state.dangerousMode
+        dangerousMode: state.dangerousMode,
+        claudeSessionId: null
       })
     } catch (err) {
       console.error('Failed to create session:', err)
@@ -408,7 +409,8 @@ export function Sidebar() {
           activityStatus: 'idle' as const,
           promptWaiting: null,
           claudeMode: false,
-          dangerousMode: false
+          dangerousMode: false,
+          claudeSessionId: null
         }
 
         const currentState = useSessionStore.getState()

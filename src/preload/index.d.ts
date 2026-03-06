@@ -150,6 +150,43 @@ export interface ValidationResult {
   missing: LaunchTemplateSession[]
 }
 
+export interface PersistedSessionEntry {
+  id: string
+  cwd: string
+  folderName: string
+  name: string
+  claudeMode: boolean
+  dangerousMode: boolean
+  claudeSessionId: string | null
+}
+
+export interface PersistedGroupEntry {
+  id: string
+  name: string
+  sessionIds: string[]
+  collapsed: boolean
+  cwd: string | null
+  terminals: Array<{
+    id: string
+    command: string
+    commandMode: 'prefill' | 'auto'
+    color: string
+  }>
+  color?: string | null
+}
+
+export interface PersistedSessionState {
+  sessions: PersistedSessionEntry[]
+  groups: PersistedGroupEntry[]
+  displayOrder: string[]
+  focusedSessionId: string | null
+  selectedSessionIds: string[]
+  sidebarOpen: boolean
+  sidebarWidth: number
+  activeView: string
+  theme?: string
+}
+
 export interface DownloadProgress {
   percent: number
   bytesPerSecond: number
@@ -175,6 +212,9 @@ export interface ElectronAPI {
   startDownload: () => Promise<void>
   cancelDownload: () => Promise<void>
   getPathForFile: (file: File) => string
+  saveSessionState: (state: unknown) => Promise<void>
+  saveSessionStateSync: (state: unknown) => boolean
+  loadSessionState: () => Promise<PersistedSessionState | null>
   showNotification: (options: { title: string; body: string; sessionId: string }) => Promise<void>
   onClaudeSessionDetected: (sessionId: string, callback: (claudeSessionId: string) => void) => () => void
   onNotificationClicked: (callback: (sessionId: string) => void) => () => void
