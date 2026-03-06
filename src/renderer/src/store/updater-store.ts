@@ -33,6 +33,26 @@ const initialProgress: DownloadProgress = {
   total: 0
 }
 
+function getDismissedVersion(): string | null {
+  try {
+    return localStorage.getItem('update-dismissed-version')
+  } catch {
+    return null
+  }
+}
+
+function setDismissedVersion(version: string | null): void {
+  try {
+    if (version) {
+      localStorage.setItem('update-dismissed-version', version)
+    } else {
+      localStorage.removeItem('update-dismissed-version')
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export const useUpdaterStore = create<UpdaterState>((set) => ({
   phase: 'idle',
   version: null,
@@ -40,12 +60,27 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
   errorMessage: null,
   dismissed: false,
 
-  setAvailable: (version) => set({ phase: 'available', version, dismissed: false }),
-  setDownloading: () => set({ phase: 'downloading', progress: initialProgress, errorMessage: null }),
+  setAvailable: (version) =>
+    set({
+      phase: 'available',
+      version,
+      dismissed: getDismissedVersion() === version
+    }),
+  setDownloading: () => {
+    setDismissedVersion(null)
+    set({ phase: 'downloading', progress: initialProgress, errorMessage: null, dismissed: false })
+  },
   setProgress: (progress) => set({ progress }),
   setDownloaded: () => set({ phase: 'downloaded' }),
   setError: (message) => set({ phase: 'error', errorMessage: message }),
-  dismiss: () => set({ dismissed: true }),
-  undismiss: () => set({ dismissed: false }),
+  dismiss: () =>
+    set((state) => {
+      if (state.version) setDismissedVersion(state.version)
+      return { dismissed: true }
+    }),
+  undismiss: () => {
+    setDismissedVersion(null)
+    set({ dismissed: false })
+  },
   reset: () => set({ phase: 'available', progress: initialProgress, errorMessage: null })
 }))

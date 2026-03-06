@@ -149,7 +149,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   displayOrder: [],
   sidebarOpen: true,
   sidebarWidth: 260,
-  theme: 'coffee' as Theme,
+  theme: (localStorage.getItem('clave-theme') as Theme) || 'coffee',
   searchQuery: '',
   claudeMode: true,
   dangerousMode: false,
@@ -438,7 +438,10 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setSidebarWidth: (width) => set({ sidebarWidth: Math.max(180, Math.min(480, width)) }),
 
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme) => {
+    localStorage.setItem('clave-theme', theme)
+    set({ theme })
+  },
 
   updateSessionAlive: (id, alive) =>
     set((state) => ({
