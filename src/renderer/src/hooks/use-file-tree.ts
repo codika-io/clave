@@ -120,6 +120,7 @@ export function useFileTree(cwd: string | null) {
   const [rootNodes, setRootNodes] = useState<TreeNode[]>([])
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState('')
+  const [allFiles, setAllFiles] = useState<string[] | null>(null)
   const expansionCache = useRef(new Map<string, Set<string>>())
 
   // Load root directory when cwd changes
@@ -175,6 +176,23 @@ export function useFileTree(cwd: string | null) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cwd])
+
+  // Load full recursive file list when filter is active
+  const hasFilter = filter.length > 0
+  useEffect(() => {
+    if (!cwd || !hasFilter) {
+      setAllFiles(null)
+      return
+    }
+
+    let cancelled = false
+    window.electronAPI?.listFiles(cwd).then((result) => {
+      if (cancelled || !result) return
+      setAllFiles(result.files)
+    })
+
+    return () => { cancelled = true }
+  }, [cwd, hasFilter])
 
   // Watch for file system changes and merge updates into the tree
   useEffect(() => {
@@ -345,13 +363,41 @@ export function useFileTree(cwd: string | null) {
   )
 
   const flatList = useMemo(() => {
-    let nodes = flattenTree(rootNodes)
-    if (filter) {
-      const lowerFilter = filter.toLowerCase()
-      nodes = nodes.filter((n) => n.name.toLowerCase().includes(lowerFilter))
+    if (!filter) return flattenTree(rootNodes)
+
+    const lowerFilter = filter.toLowerCase()
+
+    // Use recursive file list when available for deep search
+    if (allFiles) {
+      return allFiles
+        .filter((f) => f.toLowerCase().includes(lowerFilter))
+        .slice(0, 200)
+        .map((f): FlatTreeNode => {
+          const lastSlash = f.lastIndexOf('/')
+          return {
+            name: lastSlash >= 0 ? f.slice(lastSlash + 1) : f,
+            path: f,
+            type: 'file',
+            expanded: false,
+            loading: false,
+            depth: 0
+          }
+        })
     }
-    return nodes
-  }, [rootNodes, filter])
+
+    // Fallback: search loaded nodes only
+    const matches: FlatTreeNode[] = []
+    function collectMatches(nodes: TreeNode[]): void {
+      for (const node of nodes) {
+        if (node.type === 'file' && node.name.toLowerCase().includes(lowerFilter)) {
+          matches.push({ ...node, depth: 0 })
+        }
+        if (node.children) collectMatches(node.children)
+      }
+    }
+    collectMatches(rootNodes)
+    return matches
+  }, [rootNodes, filter, allFiles])
 
   return { rootNodes, flatList, loading, filter, setFilter, toggleDir, refreshDir }
 }

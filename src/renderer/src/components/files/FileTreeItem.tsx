@@ -102,7 +102,12 @@ export function FileTreeItem({
         className="flex-shrink-0 text-text-tertiary ml-0.5 mr-1.5"
       />
 
-      <span className="truncate text-text-primary text-xs">{node.name}</span>
+      <span className="truncate text-xs">
+        <span className="text-text-primary">{node.name}</span>
+        {node.type === 'file' && node.path.includes('/') && node.depth === 0 && (
+          <span className="text-text-tertiary ml-1.5">{node.path.slice(0, node.path.lastIndexOf('/'))}</span>
+        )}
+      </span>
     </div>
   )
 }
