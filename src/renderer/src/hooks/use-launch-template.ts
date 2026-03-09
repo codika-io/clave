@@ -35,7 +35,39 @@ export function useLaunchTemplate(): void {
   }, [loaded, defaultTemplateId, templates, restoredFromDisk])
 }
 
-async function applyTemplate(template: ReturnType<typeof useTemplateStore.getState>['templates'][0]): Promise<void> {
+/**
+ * Kill all current sessions and optionally apply the default template.
+ * Used by the "Reset Sessions" action.
+ */
+export async function resetToDefaultTemplate(): Promise<void> {
+  const sessions = useSessionStore.getState().sessions
+
+  // Kill all PTYs
+  await Promise.allSettled(
+    sessions.map((s) => window.electronAPI.killSession(s.id).catch(() => {}))
+  )
+
+  // Clear the store
+  useSessionStore.setState({
+    sessions: [],
+    groups: [],
+    displayOrder: [],
+    focusedSessionId: null,
+    selectedSessionIds: [],
+    searchQuery: ''
+  })
+
+  // Apply the default template if not blank
+  const { defaultTemplateId, templates } = useTemplateStore.getState()
+  if (defaultTemplateId === 'blank') return
+
+  const template = templates.find((t) => t.id === defaultTemplateId)
+  if (!template || template.sessions.length === 0) return
+
+  await applyTemplate(template)
+}
+
+export async function applyTemplate(template: ReturnType<typeof useTemplateStore.getState>['templates'][0]): Promise<void> {
   if (!window.electronAPI?.templatesValidate || !window.electronAPI?.spawnSession) return
 
   const { valid } = await window.electronAPI.templatesValidate(template)

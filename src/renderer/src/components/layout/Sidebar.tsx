@@ -6,6 +6,8 @@ import {
   type GroupTerminalColor
 } from '../../store/session-store'
 import { useBoardStore } from '../../store/board-store'
+import { useTemplateStore } from '../../store/template-store'
+import { resetToDefaultTemplate } from '../../hooks/use-launch-template'
 import { SessionItem } from '../session/SessionItem'
 import { SessionGroupItem } from '../session/SessionGroupItem'
 import { ContextMenu } from '../ui/ContextMenu'
@@ -25,7 +27,9 @@ import {
   FolderMinusIcon,
   ShieldExclamationIcon,
   CommandLineIcon,
-  CheckIcon
+  CheckIcon,
+  ArrowPathIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
@@ -207,10 +211,35 @@ export function Sidebar() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null)
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [terminalDialogState, setTerminalDialogState] = useState<{
     groupId: string
     terminalId: string | null // null = adding new
   } | null>(null)
+
+  const defaultTemplateId = useTemplateStore((s) => s.defaultTemplateId)
+  const templates = useTemplateStore((s) => s.templates)
+
+  const defaultTemplateName = useMemo(() => {
+    if (defaultTemplateId === 'blank') return null
+    return templates.find((t) => t.id === defaultTemplateId)?.name ?? null
+  }, [defaultTemplateId, templates])
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (searchOpen) {
+      requestAnimationFrame(() => searchInputRef.current?.focus())
+    } else {
+      setSearchQuery('')
+    }
+  }, [searchOpen, setSearchQuery])
+
+  const handleResetSessions = useCallback(async () => {
+    setResetConfirmOpen(false)
+    await resetToDefaultTemplate()
+  }, [])
 
   // Selection anchor for Cmd+Shift range select (Finder behavior)
   const selectionAnchorRef = useRef<string | null>(null)
@@ -251,7 +280,7 @@ export function Sidebar() {
     }
   }, [addSession])
 
-  // Cmd+G to group, Cmd+Shift+G to ungroup
+  // Cmd+G to group, Cmd+Shift+G to ungroup, Cmd+F to toggle search, Cmd+Shift+Delete to reset
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey && e.key.toLowerCase() === 'g') {
@@ -272,6 +301,18 @@ export function Sidebar() {
           if (state.selectedSessionIds.length >= 1) {
             createGroup(state.selectedSessionIds)
           }
+        }
+      }
+      // Cmd+F: toggle search
+      if (e.metaKey && !e.shiftKey && e.key === 'f') {
+        e.preventDefault()
+        setSearchOpen((prev) => !prev)
+      }
+      // Cmd+Shift+Delete: reset all sessions
+      if (e.metaKey && e.shiftKey && e.key === 'Backspace') {
+        e.preventDefault()
+        if (useSessionStore.getState().sessions.length > 0) {
+          setResetConfirmOpen(true)
         }
       }
     }
@@ -869,36 +910,71 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50 border-r border-border-subtle">
-      {/* Search row with traffic-light offset — top padding is draggable */}
+      {/* Action bar with traffic-light offset — top padding is draggable */}
       <div
         className="pt-11 px-3 pb-2 flex items-center gap-2 flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        <div
-          className="flex-1 relative"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-8 pl-8 pr-3 rounded-lg bg-surface-100 border-none text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors"
-          />
-        </div>
-        <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} className="flex items-center gap-2">
-          <ClaudeToggle />
-          <DangerousToggle />
-          <button
-            onClick={handleNewSession}
-            disabled={loading}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-100 hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-50"
-            title="New session"
+        {searchOpen ? (
+          /* Expanded search — takes over the full row */
+          <div
+            className="flex-1 relative flex items-center gap-1.5"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            <PlusIcon className="w-4 h-4" />
-          </button>
-        </div>
+            <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setSearchOpen(false)
+              }}
+              className="w-full h-8 pl-8 pr-3 rounded-lg bg-surface-100 border-none text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors"
+            />
+            <button
+              onClick={() => setSearchOpen(false)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0"
+              title="Close search"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          /* Collapsed — icon buttons row */
+          <div
+            className="flex-1 flex items-center gap-2"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-100 hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors flex-shrink-0"
+              title="Search sessions (⌘F)"
+            >
+              <MagnifyingGlassIcon className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setResetConfirmOpen(true)}
+              disabled={sessions.length === 0}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-100 hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-30 disabled:pointer-events-none"
+              title="Reset sessions"
+            >
+              <ArrowPathIcon className="w-4 h-4" />
+            </button>
+            <div className="flex-1" />
+            <ClaudeToggle />
+            <DangerousToggle />
+            <button
+              onClick={handleNewSession}
+              disabled={loading}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-100 hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-50"
+              title="New session"
+            >
+              <PlusIcon className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Scrollable sections area */}
@@ -1107,6 +1183,19 @@ export function Sidebar() {
           setDeleteConfirmSessionId(null)
         }}
         onCancel={() => setDeleteConfirmSessionId(null)}
+      />
+
+      {/* Reset sessions confirmation */}
+      <ConfirmDialog
+        isOpen={resetConfirmOpen}
+        title="Reset sessions"
+        message={
+          defaultTemplateName
+            ? `Close all sessions and load "${defaultTemplateName}" template?`
+            : 'Close all sessions and start fresh?'
+        }
+        onConfirm={handleResetSessions}
+        onCancel={() => setResetConfirmOpen(false)}
       />
 
       {/* Group terminal configuration dialog */}

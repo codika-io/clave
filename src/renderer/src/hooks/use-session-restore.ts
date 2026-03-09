@@ -30,9 +30,25 @@ async function restoreSessions(): Promise<void> {
 
   const { restoreState, setClaudeSessionId } = useSessionStore.getState()
 
-  // Spawn all sessions in parallel
+  // Check for existing live PTYs in the main process.
+  // After a renderer crash/reload, PTYs survive in the main process —
+  // reconnect to them instead of spawning duplicates.
+  const livePtys = await window.electronAPI.listSessions()
+  const livePtyMap = new Map(
+    livePtys.filter((p) => p.alive).map((p) => [p.id, p])
+  )
+
+  // Spawn or reconnect all sessions in parallel
   const results = await Promise.allSettled(
     persisted.sessions.map(async (ps) => {
+      // Try to reconnect to an existing live PTY (same ID still alive in main process)
+      const existingPty = livePtyMap.get(ps.id)
+      if (existingPty) {
+        console.log(`[session-restore] Reconnected to live PTY "${ps.name}" (${ps.id})`)
+        return { persisted: ps, sessionInfo: existingPty, reconnected: true }
+      }
+
+      // No live PTY — spawn a new one
       const sessionInfo = await window.electronAPI.spawnSession(ps.cwd, {
         claudeMode: ps.claudeMode,
         dangerousMode: ps.dangerousMode,
@@ -46,11 +62,12 @@ async function restoreSessions(): Promise<void> {
         })
       }
 
-      return { persisted: ps, sessionInfo }
+      console.log(`[session-restore] Spawned new PTY "${ps.name}" (${sessionInfo.id})`)
+      return { persisted: ps, sessionInfo, reconnected: false }
     })
   )
 
-  // Map from old persisted session ID to new PTY session ID
+  // Map from old persisted session ID to new/same PTY session ID
   const idMap = new Map<string, string>()
   const restoredSessions: Session[] = []
 
@@ -59,10 +76,12 @@ async function restoreSessions(): Promise<void> {
       console.error('Failed to restore session:', result.reason)
       continue
     }
-    const { persisted: ps, sessionInfo } = result.value
-    idMap.set(ps.id, sessionInfo.id)
+    const { persisted: ps, sessionInfo, reconnected } = result.value
+    // Reconnected sessions keep the same ID; new sessions get a new ID
+    const newId = reconnected ? ps.id : sessionInfo.id
+    idMap.set(ps.id, newId)
     restoredSessions.push({
-      id: sessionInfo.id,
+      id: newId,
       cwd: sessionInfo.cwd,
       folderName: sessionInfo.folderName,
       name: ps.name,

@@ -118,3 +118,4 @@ The Playwright Electron MCP is configured via `.playwright-electron.config.json`
 - Always build before testing (`npx electron-vite build`). The MCP launches from `out/main/index.js`, not the dev server.
 - The MCP config file (`.playwright-electron.config.json`) contains absolute paths. If the project moves, regenerate it.
 - If `electron_first_window` fails with "Process failed to launch", ensure no other Electron instance is running (kill `npm run dev` first).
+- **NEVER use `pkill`, `killall`, or broad process-matching commands** to kill test Electron instances. These will also kill the user's installed Clave desktop app, causing their active sessions to go blank. Always use `browser_close` from the Playwright Electron MCP to cleanly shut down test instances.
