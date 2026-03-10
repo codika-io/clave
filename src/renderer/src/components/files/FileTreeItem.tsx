@@ -66,7 +66,8 @@ export function FileTreeItem({
       className={`flex items-center h-7 px-2 cursor-pointer select-none transition-colors text-sm ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       } ${node.ignored ? 'opacity-40' : ''}`}
-      style={{ paddingLeft: `${8 + node.depth * 16}px` }}
+      style={{ paddingLeft: `${8 + Math.min(node.depth, 4) * 12}px` }}
+      title={node.name}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
