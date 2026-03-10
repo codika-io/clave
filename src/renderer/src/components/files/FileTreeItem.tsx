@@ -60,13 +60,15 @@ export function FileTreeItem({
     [node, onContextMenu]
   )
 
+  const cappedDepth = Math.min(node.depth, 4)
+
   return (
     <div
       data-tree-item
-      className={`flex items-center h-7 px-2 cursor-pointer select-none transition-colors text-sm ${
+      className={`relative flex items-center h-7 px-2 cursor-pointer select-none transition-colors text-sm ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       } ${node.ignored ? 'opacity-40' : ''}`}
-      style={{ paddingLeft: `${8 + Math.min(node.depth, 4) * 12}px` }}
+      style={{ paddingLeft: `${8 + cappedDepth * 12}px` }}
       title={node.name}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
@@ -74,6 +76,15 @@ export function FileTreeItem({
       draggable
       onDragStart={handleDragStart}
     >
+      {/* Tree indent guides */}
+      {Array.from({ length: cappedDepth }, (_, i) => (
+        <span
+          key={i}
+          className="absolute top-0 bottom-0 w-px bg-border"
+          style={{ left: `${8 + i * 12 + 6}px` }}
+        />
+      ))}
+
       {/* Chevron for directories */}
       {node.type === 'directory' ? (
         <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-text-tertiary">
