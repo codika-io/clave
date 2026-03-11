@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useSessionStore, type Session, type SessionGroup, type ActiveView, type GroupTerminalColor, type Theme } from '../store/session-store'
+import { useSessionStore, type Session, type SessionGroup, type FileTab, type ActiveView, type GroupTerminalColor, type Theme } from '../store/session-store'
 
 export function useSessionRestore(): void {
   const didRun = useRef(false)
@@ -94,7 +94,15 @@ async function restoreSessions(): Promise<void> {
     })
   }
 
-  if (restoredSessions.length === 0) return
+  // Restore file tabs (no PTY needed)
+  const restoredFileTabs: FileTab[] = (persisted.fileTabs ?? []).map((f) => ({
+    id: f.id,
+    filePath: f.filePath,
+    name: f.name
+  }))
+  const fileTabIds = new Set(restoredFileTabs.map((f) => f.id))
+
+  if (restoredSessions.length === 0 && restoredFileTabs.length === 0) return
 
   // Remap group session IDs and display order
   const restoredGroups: SessionGroup[] = persisted.groups
@@ -114,7 +122,7 @@ async function restoreSessions(): Promise<void> {
 
   const restoredGroupIds = new Set(restoredGroups.map((g) => g.id))
   const restoredDisplayOrder = persisted.displayOrder
-    .map((id) => idMap.get(id) ?? (restoredGroupIds.has(id) ? id : null))
+    .map((id) => idMap.get(id) ?? (restoredGroupIds.has(id) ? id : null) ?? (fileTabIds.has(id) ? id : null))
     .filter((id): id is string => id !== null)
 
   // Add any sessions not in the display order
@@ -125,12 +133,19 @@ async function restoreSessions(): Promise<void> {
     }
   }
 
+  // Add any file tabs not in the display order
+  for (const f of restoredFileTabs) {
+    if (!restoredDisplayOrder.includes(f.id)) {
+      restoredDisplayOrder.push(f.id)
+    }
+  }
+
   const focusedSessionId = persisted.focusedSessionId
-    ? (idMap.get(persisted.focusedSessionId) ?? restoredSessions[0]?.id ?? null)
+    ? (idMap.get(persisted.focusedSessionId) ?? (fileTabIds.has(persisted.focusedSessionId) ? persisted.focusedSessionId : null) ?? restoredSessions[0]?.id ?? null)
     : (restoredSessions[0]?.id ?? null)
 
   const selectedSessionIds = persisted.selectedSessionIds
-    .map((sid) => idMap.get(sid))
+    .map((sid) => idMap.get(sid) ?? (fileTabIds.has(sid) ? sid : undefined))
     .filter((sid): sid is string => sid !== undefined)
 
   restoreState({
@@ -141,7 +156,8 @@ async function restoreSessions(): Promise<void> {
     selectedSessionIds: selectedSessionIds.length > 0 ? selectedSessionIds : (focusedSessionId ? [focusedSessionId] : []),
     sidebarOpen: persisted.sidebarOpen,
     sidebarWidth: persisted.sidebarWidth,
-    activeView: (persisted.activeView as ActiveView) || 'terminals'
+    activeView: (persisted.activeView as ActiveView) || 'terminals',
+    fileTabs: restoredFileTabs
   })
 
   useSessionStore.getState().setRestoredFromDisk(true)

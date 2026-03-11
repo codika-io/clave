@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSessionStore } from '../../store/session-store'
+import { useSessionStore, isFileTabId } from '../../store/session-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
 import { KanbanBoard } from '../board/KanbanBoard'
@@ -38,8 +38,8 @@ export function AppShell() {
   const previewSource = useSessionStore((s) => s.previewSource)
 
   const addSession = useSessionStore((s) => s.addSession)
-  const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const removeSession = useSessionStore((s) => s.removeSession)
+  const removeFileTab = useSessionStore((s) => s.removeFileTab)
 
   useLaunchTemplate()
   useSessionRestore()
@@ -155,19 +155,31 @@ export function AppShell() {
         e.preventDefault()
         spawnSessionWithOptions(true, true)
       }
+      // Cmd+W: Close focused file tab
+      if (e.metaKey && e.key === 'w') {
+        const sid = useSessionStore.getState().focusedSessionId
+        if (sid && isFileTabId(sid)) {
+          e.preventDefault()
+          removeFileTab(sid)
+        }
+      }
       // Cmd+Delete: Close focused session
       if (e.metaKey && e.key === 'Backspace') {
         e.preventDefault()
         const sid = useSessionStore.getState().focusedSessionId
         if (sid) {
-          window.electronAPI.killSession(sid).catch(() => {})
-          removeSession(sid)
+          if (isFileTabId(sid)) {
+            removeFileTab(sid)
+          } else {
+            window.electronAPI.killSession(sid).catch(() => {})
+            removeSession(sid)
+          }
         }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleFilePalette, toggleFileTree, spawnSessionWithOptions, removeSession])
+  }, [toggleFilePalette, toggleFileTree, spawnSessionWithOptions, removeSession, removeFileTab])
 
   // Sync data-theme attribute to root element
   useEffect(() => {

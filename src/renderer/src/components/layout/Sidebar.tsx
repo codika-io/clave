@@ -9,6 +9,7 @@ import { useBoardStore } from '../../store/board-store'
 import { useTemplateStore } from '../../store/template-store'
 import { resetToDefaultTemplate } from '../../hooks/use-launch-template'
 import { SessionItem } from '../session/SessionItem'
+import { FileTabItem } from '../session/FileTabItem'
 import { SessionGroupItem } from '../session/SessionGroupItem'
 import { ContextMenu } from '../ui/ContextMenu'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
@@ -199,6 +200,8 @@ export function Sidebar() {
   const addGroupTerminal = useSessionStore((s) => s.addGroupTerminal)
   const removeGroupTerminal = useSessionStore((s) => s.removeGroupTerminal)
   const setGroupTerminalSessionId = useSessionStore((s) => s.setGroupTerminalSessionId)
+  const fileTabs = useSessionStore((s) => s.fileTabs)
+  const removeFileTab = useSessionStore((s) => s.removeFileTab)
   const searchQuery = useSessionStore((s) => s.searchQuery)
   const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
   const activeView = useSessionStore((s) => s.activeView)
@@ -364,12 +367,14 @@ export function Sidebar() {
       .map((id) => {
         if (groups.some((g) => g.id === id)) return { type: 'group' as const, groupId: id }
         if (sessions.some((s) => s.id === id)) return { type: 'session' as const, sessionId: id }
+        if (fileTabs.some((f) => f.id === id)) return { type: 'fileTab' as const, fileTabId: id }
         return null
       })
       .filter(
         (item): item is NonNullable<typeof item> => {
           if (item === null) return false
           if (item.type === 'session') return true
+          if (item.type === 'fileTab') return true
           if (item.type === 'group') {
             const group = groups.find((g) => g.id === item.groupId)
             return !!group && group.sessionIds.length > 0
@@ -377,9 +382,9 @@ export function Sidebar() {
           return false
         }
       )
-  }, [displayOrder, sessions, groups, filteredSessions])
+  }, [displayOrder, sessions, groups, fileTabs, filteredSessions])
 
-  // Flat ordered list of session IDs for range selection
+  // Flat ordered list of session/file tab IDs for range selection
   const flatSessionOrder = useMemo(() => {
     if (filteredSessions) return filteredSessions.map((s) => s.id)
     if (!displayItems) return sessions.map((s) => s.id)
@@ -387,6 +392,8 @@ export function Sidebar() {
     for (const item of displayItems) {
       if (item.type === 'session') {
         order.push(item.sessionId)
+      } else if (item.type === 'fileTab') {
+        order.push(item.fileTabId)
       } else {
         const group = groups.find((g) => g.id === item.groupId)
         if (group) order.push(...group.sessionIds)
@@ -598,6 +605,40 @@ export function Sidebar() {
       })
     },
     [groups, ungroupSessions, handleDeleteGroup, setGroupColor]
+  )
+
+  const handleFileTabContextMenu = useCallback(
+    (e: React.MouseEvent, fileTabId: string) => {
+      e.preventDefault()
+      const fileTab = fileTabs.find((f) => f.id === fileTabId)
+      if (!fileTab) return
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          {
+            label: 'Rename',
+            icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
+            onClick: () => setRenamingId(fileTabId)
+          },
+          {
+            label: 'Copy Path',
+            onClick: () => navigator.clipboard.writeText(fileTab.filePath)
+          },
+          {
+            label: 'Reveal in Finder',
+            onClick: () => window.electronAPI?.showItemInFolder(fileTab.filePath)
+          },
+          {
+            label: 'Close',
+            icon: <XMarkIcon className="w-3.5 h-3.5" />,
+            danger: true,
+            onClick: () => removeFileTab(fileTabId)
+          }
+        ]
+      })
+    },
+    [fileTabs, removeFileTab]
   )
 
   // Finder-style session click: Click=single, Cmd=toggle, Shift=range, Cmd+Shift=range-add
@@ -1009,7 +1050,27 @@ export function Sidebar() {
               )
             ) : displayItems ? (
               displayItems.map((item) => {
-                if (item.type === 'session') {
+                if (item.type === 'fileTab') {
+                  const fileTab = fileTabs.find((f) => f.id === item.fileTabId)
+                  if (!fileTab) return null
+                  return (
+                    <FileTabItem
+                      key={fileTab.id}
+                      fileTab={fileTab}
+                      isSelected={selectedSessionIds.includes(fileTab.id)}
+                      onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
+                      onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
+                      forceEditing={renamingId === fileTab.id}
+                      onEditingDone={clearRenaming}
+                      onDragStart={(e) => handleDragStart(e, fileTab.id, false)}
+                      onDragOver={(e) => handleDragOver(e, fileTab.id, false)}
+                      onDrop={handleDrop}
+                      onDragEnd={handleDragEnd}
+                      dropIndicator={getDropIndicator(fileTab.id) as 'before' | 'after' | null}
+                      isDragging={draggingIds.includes(fileTab.id)}
+                    />
+                  )
+                } else if (item.type === 'session') {
                   const session = sessions.find((s) => s.id === item.sessionId)
                   if (!session) return null
                   return (
@@ -1075,6 +1136,31 @@ export function Sidebar() {
                       {!group.collapsed && (
                         <div className="px-1 pb-1 space-y-0.5">
                           {group.sessionIds.map((sid) => {
+                            // Check if this is a file tab
+                            const fileTab = fileTabs.find((f) => f.id === sid)
+                            if (fileTab) {
+                              return (
+                                <FileTabItem
+                                  key={fileTab.id}
+                                  fileTab={fileTab}
+                                  isSelected={selectedSessionIds.includes(fileTab.id)}
+                                  onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
+                                  onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
+                                  grouped
+                                  groupSelected={allGroupSelected}
+                                  forceEditing={renamingId === fileTab.id}
+                                  onEditingDone={clearRenaming}
+                                  onDragStart={(e) => handleDragStart(e, fileTab.id, false)}
+                                  onDragOver={(e) => handleDragOver(e, fileTab.id, false)}
+                                  onDrop={handleDrop}
+                                  onDragEnd={handleDragEnd}
+                                  dropIndicator={
+                                    getDropIndicator(fileTab.id) as 'before' | 'after' | null
+                                  }
+                                  isDragging={draggingIds.includes(fileTab.id)}
+                                />
+                              )
+                            }
                             const session = sessions.find((s) => s.id === sid)
                             if (!session) return null
                             return (

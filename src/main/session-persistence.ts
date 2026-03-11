@@ -27,6 +27,12 @@ export interface PersistedGroup {
   color?: string | null
 }
 
+export interface PersistedFileTab {
+  id: string
+  filePath: string
+  name: string
+}
+
 export interface PersistedState {
   sessions: PersistedSession[]
   groups: PersistedGroup[]
@@ -37,6 +43,7 @@ export interface PersistedState {
   sidebarWidth: number
   activeView: string
   theme?: string
+  fileTabs?: PersistedFileTab[]
 }
 
 class SessionPersistence {

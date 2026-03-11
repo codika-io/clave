@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import { useSessionStore, getDisplayOrder } from '../../store/session-store'
+import { useSessionStore, getDisplayOrder, isFileTabId } from '../../store/session-store'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { TerminalErrorBoundary } from '../terminal/TerminalErrorBoundary'
+import { FileViewer } from '../files/FileViewer'
 import { EmptyState } from '../ui/EmptyState'
 
 function computeGridLayout(count: number): { cols: number; rows: number } {
@@ -15,6 +16,7 @@ function computeGridLayout(count: number): { cols: number; rows: number } {
 export function TerminalGrid() {
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   const sessions = useSessionStore((s) => s.sessions)
+  const fileTabs = useSessionStore((s) => s.fileTabs)
   const groups = useSessionStore((s) => s.groups)
   const displayOrder = useSessionStore((s) => s.displayOrder)
 
@@ -42,12 +44,17 @@ export function TerminalGrid() {
     return result
   }, [sessions, groups, displayOrder])
 
-  if (sessions.length === 0) {
+  // Separate selected items into sessions and file tabs
+  const selectedFileTabIds = selectedSessionIds.filter((id) => isFileTabId(id))
+  const selectedTerminalIds = selectedSessionIds.filter((id) => !isFileTabId(id))
+
+  if (sessions.length === 0 && fileTabs.length === 0) {
     return <EmptyState />
   }
 
   const hasSelection = selectedSessionIds.length > 0
-  const { cols, rows } = computeGridLayout(selectedSessionIds.length)
+  const visibleCount = selectedSessionIds.length
+  const { cols, rows } = computeGridLayout(visibleCount)
 
   return (
     <div className="flex-1 relative overflow-hidden">
@@ -58,10 +65,7 @@ export function TerminalGrid() {
         </div>
       )}
 
-      {/* Grid always renders ALL terminals to keep them alive.
-          Non-selected ones are hidden via display:none so they
-          don't participate in the grid layout but stay mounted
-          (xterm instance + PTY listener preserved). */}
+      {/* Grid renders ALL terminals to keep them alive + selected file tabs */}
       <div
         className="h-full grid gap-px bg-border-subtle"
         style={{
@@ -70,7 +74,7 @@ export function TerminalGrid() {
         }}
       >
         {orderedSessions.map((session) => {
-          const isSelected = selectedSessionIds.includes(session.id)
+          const isSelected = selectedTerminalIds.includes(session.id)
           return (
             <div
               key={session.id}
@@ -80,6 +84,15 @@ export function TerminalGrid() {
               <TerminalErrorBoundary sessionId={session.id}>
                 <TerminalPanel sessionId={session.id} />
               </TerminalErrorBoundary>
+            </div>
+          )
+        })}
+        {selectedFileTabIds.map((ftId) => {
+          const fileTab = fileTabs.find((f) => f.id === ftId)
+          if (!fileTab) return null
+          return (
+            <div key={fileTab.id} className="min-h-0 min-w-0 h-full">
+              <FileViewer fileTab={fileTab} />
             </div>
           )
         })}

@@ -139,6 +139,7 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
 }) {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const setPreviewFile = useSessionStore((s) => s.setPreviewFile)
+  const addFileTab = useSessionStore((s) => s.addFileTab)
 
   const { flatList, loading, filter, setFilter, toggleDir, refreshDir } = useFileTree(cwd)
 
@@ -224,6 +225,17 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
         items.push({
           label: 'Preview',
           onClick: () => setPreviewFile(node.path, 'tree', cwd)
+        })
+        items.push({
+          label: 'Open in Tab',
+          onClick: () => {
+            const filename = node.path.split('/').pop() ?? node.path
+            addFileTab({
+              id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              filePath: `${cwd}/${node.path}`,
+              name: filename
+            })
+          }
         })
         items.push({
           label: 'Edit',

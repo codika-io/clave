@@ -175,6 +175,12 @@ export interface PersistedGroupEntry {
   color?: string | null
 }
 
+export interface PersistedFileTabEntry {
+  id: string
+  filePath: string
+  name: string
+}
+
 export interface PersistedSessionState {
   sessions: PersistedSessionEntry[]
   groups: PersistedGroupEntry[]
@@ -185,6 +191,7 @@ export interface PersistedSessionState {
   sidebarWidth: number
   activeView: string
   theme?: string
+  fileTabs?: PersistedFileTabEntry[]
 }
 
 export interface DownloadProgress {

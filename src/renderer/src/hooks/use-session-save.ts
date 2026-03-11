@@ -8,6 +8,10 @@ function buildPersistedState() {
   const aliveSessions = state.sessions.filter((s) => s.alive)
   const aliveIds = new Set(aliveSessions.map((s) => s.id))
 
+  // File tab IDs are always valid (no liveness check needed)
+  const fileTabIds = new Set(state.fileTabs.map((f) => f.id))
+  const validIds = new Set([...aliveIds, ...fileTabIds])
+
   return {
     sessions: aliveSessions.map((s) => ({
       id: s.id,
@@ -35,14 +39,19 @@ function buildPersistedState() {
       }))
       .filter((g) => g.sessionIds.length > 0),
     displayOrder: state.displayOrder.filter(
-      (id) => aliveIds.has(id) || state.groups.some((g) => g.id === id && g.sessionIds.some((sid) => aliveIds.has(sid)))
+      (id) => validIds.has(id) || state.groups.some((g) => g.id === id && g.sessionIds.some((sid) => aliveIds.has(sid)))
     ),
-    focusedSessionId: state.focusedSessionId && aliveIds.has(state.focusedSessionId) ? state.focusedSessionId : null,
-    selectedSessionIds: state.selectedSessionIds.filter((sid) => aliveIds.has(sid)),
+    focusedSessionId: state.focusedSessionId && validIds.has(state.focusedSessionId) ? state.focusedSessionId : null,
+    selectedSessionIds: state.selectedSessionIds.filter((sid) => validIds.has(sid)),
     sidebarOpen: state.sidebarOpen,
     sidebarWidth: state.sidebarWidth,
     activeView: state.activeView,
-    theme: state.theme
+    theme: state.theme,
+    fileTabs: state.fileTabs.map((f) => ({
+      id: f.id,
+      filePath: f.filePath,
+      name: f.name
+    }))
   }
 }
 

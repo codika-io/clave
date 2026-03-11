@@ -50,10 +50,17 @@ export interface SessionGroup {
   color?: GroupTerminalColor | null
 }
 
+export interface FileTab {
+  id: string
+  filePath: string
+  name: string
+}
+
 export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings'
 
 interface SessionState {
   sessions: Session[]
+  fileTabs: FileTab[]
   focusedSessionId: string | null
   selectedSessionIds: string[]
   groups: SessionGroup[]
@@ -117,6 +124,9 @@ interface SessionState {
   setGitViewMode: (mode: 'list' | 'tree') => void
   setGitPanelMode: (mode: 'changes' | 'log') => void
   setPreviewFile: (path: string | null, source?: 'palette' | 'tree', cwd?: string | null) => void
+  addFileTab: (tab: FileTab) => void
+  removeFileTab: (id: string) => void
+  renameFileTab: (id: string, name: string) => void
   setClaudeSessionId: (id: string, claudeSessionId: string) => void
   setRestoredFromDisk: (value: boolean) => void
   restoreState: (state: {
@@ -128,6 +138,7 @@ interface SessionState {
     sidebarOpen: boolean
     sidebarWidth: number
     activeView: ActiveView
+    fileTabs?: FileTab[]
   }) => void
 }
 
@@ -155,8 +166,13 @@ export function getDisplayOrder(state: {
   return order
 }
 
+export function isFileTabId(id: string): boolean {
+  return id.startsWith('file-')
+}
+
 export const useSessionStore = create<SessionState>((set) => ({
   sessions: [],
+  fileTabs: [],
   focusedSessionId: null,
   selectedSessionIds: [],
   groups: [],
@@ -515,6 +531,56 @@ export const useSessionStore = create<SessionState>((set) => ({
   setPreviewFile: (path, source, cwd) =>
     set({ previewFile: path, previewCwd: cwd ?? null, previewSource: source ?? (path ? null : null) }),
 
+  addFileTab: (tab) =>
+    set((state) => {
+      // Dedup by filePath
+      const existing = state.fileTabs.find((f) => f.filePath === tab.filePath)
+      if (existing) {
+        return {
+          selectedSessionIds: [existing.id],
+          focusedSessionId: existing.id,
+          activeView: 'terminals' as ActiveView
+        }
+      }
+      return {
+        fileTabs: [...state.fileTabs, tab],
+        displayOrder: [...getDisplayOrder(state), tab.id],
+        selectedSessionIds: [tab.id],
+        focusedSessionId: tab.id,
+        activeView: 'terminals' as ActiveView
+      }
+    }),
+
+  removeFileTab: (id) =>
+    set((state) => {
+      const fileTabs = state.fileTabs.filter((f) => f.id !== id)
+      const selectedSessionIds = state.selectedSessionIds.filter((sid) => sid !== id)
+      const displayOrder = getDisplayOrder(state).filter((did) => did !== id)
+
+      let focusedSessionId = state.focusedSessionId
+      if (focusedSessionId === id) {
+        focusedSessionId = selectedSessionIds[0] ?? state.sessions[state.sessions.length - 1]?.id ?? null
+      }
+      if (selectedSessionIds.length === 0 && state.sessions.length > 0) {
+        const lastId = state.sessions[state.sessions.length - 1].id
+        return {
+          fileTabs,
+          selectedSessionIds: [lastId],
+          focusedSessionId: lastId,
+          displayOrder
+        }
+      }
+
+      return { fileTabs, selectedSessionIds, focusedSessionId, displayOrder }
+    }),
+
+  renameFileTab: (id, name) =>
+    set((state) => ({
+      fileTabs: state.fileTabs.map((f) =>
+        f.id === id ? { ...f, name: name.trim() || f.filePath.split('/').pop() || 'file' } : f
+      )
+    })),
+
   setClaudeSessionId: (id, claudeSessionId) =>
     set((state) => ({
       sessions: state.sessions.map((s) =>
@@ -533,6 +599,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       selectedSessionIds: restored.selectedSessionIds,
       sidebarOpen: restored.sidebarOpen,
       sidebarWidth: restored.sidebarWidth,
-      activeView: restored.activeView
+      activeView: restored.activeView,
+      fileTabs: restored.fileTabs ?? []
     }))
 }))
