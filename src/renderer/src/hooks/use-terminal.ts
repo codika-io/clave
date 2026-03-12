@@ -169,11 +169,7 @@ export function useTerminal(sessionId: string) {
       window.electronAPI.resizeSession(sessionId, cols, rows)
     })
 
-    // Track Claude session ID for persistence
-    const { setSessionActivity, setSessionPromptWaiting, updateSessionAlive, setClaudeSessionId } = useSessionStore.getState()
-    const cleanupClaudeDetect = window.electronAPI.onClaudeSessionDetected(sessionId, (claudeSessionId) => {
-      setClaudeSessionId(sessionId, claudeSessionId)
-    })
+    const { setSessionActivity, setSessionPromptWaiting, updateSessionAlive } = useSessionStore.getState()
 
     // Activity tracking: debounce from active → idle after 2s of silence
     let activityTimer: ReturnType<typeof setTimeout> | null = null
@@ -347,7 +343,6 @@ export function useTerminal(sessionId: string) {
       resizeDisposable.dispose()
       cleanupData()
       cleanupExit()
-      cleanupClaudeDetect()
       resizeObserver.disconnect()
       terminal.dispose()
       terminalRef.current = null

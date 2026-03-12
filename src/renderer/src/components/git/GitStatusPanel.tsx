@@ -396,6 +396,8 @@ function PullButton({
 function CommitBar({
   cwd,
   stagedCount,
+  totalFileCount,
+  allFilePaths,
   ahead,
   behind,
   operating,
@@ -403,12 +405,32 @@ function CommitBar({
 }: {
   cwd: string
   stagedCount: number
+  totalFileCount: number
+  allFilePaths: string[]
   ahead: number
   behind: number
   operating: boolean
   onOperation: (fn: () => Promise<void>) => void
 }) {
   const [commitMessage, setCommitMessage] = useState('')
+  const [generating, setGenerating] = useState(false)
+
+  const handleGenerateMessage = useCallback(async () => {
+    if (totalFileCount === 0 || generating) return
+    setGenerating(true)
+    try {
+      // Stage all files first
+      if (allFilePaths.length > 0) {
+        await window.electronAPI.gitStage(cwd, allFilePaths)
+      }
+      const message = await window.electronAPI.gitGenerateCommitMessage(cwd)
+      setCommitMessage(message)
+    } catch (err) {
+      console.error('Failed to generate commit message:', err)
+    } finally {
+      setGenerating(false)
+    }
+  }, [cwd, totalFileCount, allFilePaths, generating])
 
   const handleCommit = useCallback(() => {
     if (!commitMessage.trim() || stagedCount === 0) return
@@ -437,15 +459,34 @@ function CommitBar({
 
   return (
     <div className="border-t border-border-subtle p-2 flex-shrink-0 flex flex-col gap-1.5">
-      <textarea
-        className="w-full bg-surface-100 text-text-primary text-xs rounded px-2 py-1.5 resize-none outline-none border border-transparent focus:border-accent placeholder:text-text-tertiary"
-        rows={2}
-        placeholder="Commit message..."
-        value={commitMessage}
-        onChange={(e) => setCommitMessage(e.target.value)}
-        onKeyDown={handleKeyDown}
-        disabled={operating}
-      />
+      <div className="relative">
+        <textarea
+          className="w-full bg-surface-100 text-text-primary text-xs rounded px-2 py-1.5 pr-7 resize-none outline-none border border-transparent focus:border-accent placeholder:text-text-tertiary"
+          rows={2}
+          placeholder="Commit message..."
+          value={commitMessage}
+          onChange={(e) => setCommitMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={operating || generating}
+        />
+        <button
+          className="absolute right-1.5 top-1.5 p-0.5 rounded text-text-tertiary hover:text-accent disabled:opacity-30 transition-colors"
+          disabled={totalFileCount === 0 || generating || operating}
+          onClick={handleGenerateMessage}
+          title="Generate commit message with AI"
+        >
+          {generating ? (
+            <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
+            </svg>
+          )}
+        </button>
+      </div>
       <div className="flex items-center gap-1.5">
         <button
           className="flex-1 text-xs font-medium px-2 py-1 rounded bg-accent text-white disabled:opacity-40 transition-opacity"
@@ -933,6 +974,8 @@ function RepoSection({
           <CommitBar
             cwd={cwd}
             stagedCount={0}
+            totalFileCount={0}
+            allFilePaths={[]}
             ahead={status.ahead}
             behind={status.behind}
             operating={operating}
@@ -1062,6 +1105,8 @@ function RepoSection({
       <CommitBar
         cwd={cwd}
         stagedCount={staged.length}
+        totalFileCount={staged.length + unstaged.length + untracked.length}
+        allFilePaths={[...staged, ...unstaged, ...untracked].map((f) => f.path)}
         ahead={status.ahead}
         behind={status.behind}
         operating={operating}

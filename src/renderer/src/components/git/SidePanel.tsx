@@ -21,7 +21,6 @@ function getParentPaths(fullPath: string): { path: string; name: string }[] {
 export function SidePanel() {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const sessions = useSessionStore((s) => s.sessions)
-  const toggleFileTree = useSessionStore((s) => s.toggleFileTree)
   const sidePanelTab = useSessionStore((s) => s.sidePanelTab)
   const setSidePanelTab = useSessionStore((s) => s.setSidePanelTab)
 
@@ -262,21 +261,6 @@ export function SidePanel() {
           )}
         </div>
 
-        {/* Close */}
-        <button
-          onClick={toggleFileTree}
-          className="p-1 rounded hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0"
-          title="Close panel"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path
-              d="M2 2l8 8M10 2l-8 8"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
       </div>
 
       {/* Active tab content */}

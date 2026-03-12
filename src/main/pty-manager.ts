@@ -40,7 +40,7 @@ export function preloadLoginShellEnv(): void {
   })
 }
 
-function getLoginShellEnv(): Record<string, string> {
+export function getLoginShellEnv(): Record<string, string> {
   if (loginShellEnv !== null) return loginShellEnv
   // Sync fallback if async preload hasn't finished yet
   try {
@@ -67,11 +67,13 @@ export interface PtySession {
 class PtyManager {
   private sessions = new Map<string, PtySession>()
 
-  spawn(cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }): PtySession {
+  spawn(cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean }): PtySession & { claudeSessionId?: string } {
     const id = randomUUID()
     const folderName = cwd.split('/').pop() || cwd
     const useClaudeMode = options?.claudeMode !== false
 
+    // For Claude mode: generate a session ID upfront (or reuse one for resume)
+    let claudeSessionId: string | undefined
     let shellArgs: string[]
     if (!useClaudeMode) {
       shellArgs = ['-l']
@@ -79,6 +81,11 @@ class PtyManager {
       const parts = ['claude']
       if (options?.resumeSessionId) {
         parts.push('--resume', options.resumeSessionId)
+        claudeSessionId = options.resumeSessionId
+      } else {
+        // Generate a new Claude session ID and pass it explicitly
+        claudeSessionId = options?.claudeSessionId ?? randomUUID()
+        parts.push('--session-id', claudeSessionId)
       }
       if (options?.dangerousMode) {
         parts.push('--dangerously-skip-permissions')
@@ -102,7 +109,7 @@ class PtyManager {
       })()
     })
 
-    const session: PtySession = { id, cwd, folderName, ptyProcess, alive: true }
+    const session: PtySession & { claudeSessionId?: string } = { id, cwd, folderName, ptyProcess, alive: true, claudeSessionId }
     this.sessions.set(id, session)
 
     ptyProcess.onExit(() => {

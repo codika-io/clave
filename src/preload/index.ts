@@ -161,16 +161,8 @@ const electronAPI = {
     ipcRenderer.invoke('git:commit-files', cwd, hash),
   gitCommitDiff: (cwd: string, hash: string, filePath: string) =>
     ipcRenderer.invoke('git:commit-diff', cwd, hash, filePath),
-
-  onClaudeSessionDetected: (sessionId: string, callback: (claudeSessionId: string) => void) => {
-    const channel = `pty:claude-session-id:${sessionId}`
-    const listener = (_event: Electron.IpcRendererEvent, claudeSessionId: string): void =>
-      callback(claudeSessionId)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  gitGenerateCommitMessage: (cwd: string) =>
+    ipcRenderer.invoke('git:generate-commit-message', cwd),
 
   // Session persistence
   saveSessionState: (state: unknown) => ipcRenderer.invoke('session:save-state', state),

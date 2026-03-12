@@ -28,7 +28,7 @@ async function restoreSessions(): Promise<void> {
     return
   }
 
-  const { restoreState, setClaudeSessionId } = useSessionStore.getState()
+  const { restoreState } = useSessionStore.getState()
 
   // Check for existing live PTYs in the main process.
   // After a renderer crash/reload, PTYs survive in the main process —
@@ -49,20 +49,15 @@ async function restoreSessions(): Promise<void> {
       }
 
       // No live PTY — spawn a new one
+      const resumeId = ps.claudeMode ? (ps.claudeSessionId ?? undefined) : undefined
+      console.log(`[session-restore] Spawning "${ps.name}" claudeMode=${ps.claudeMode} resumeSessionId=${resumeId ?? 'none'}`)
       const sessionInfo = await window.electronAPI.spawnSession(ps.cwd, {
         claudeMode: ps.claudeMode,
         dangerousMode: ps.dangerousMode,
-        resumeSessionId: ps.claudeMode ? (ps.claudeSessionId ?? undefined) : undefined
+        resumeSessionId: resumeId
       })
 
-      // Listen for Claude session ID detection
-      if (ps.claudeMode) {
-        window.electronAPI.onClaudeSessionDetected(sessionInfo.id, (claudeSessionId) => {
-          setClaudeSessionId(sessionInfo.id, claudeSessionId)
-        })
-      }
-
-      console.log(`[session-restore] Spawned new PTY "${ps.name}" (${sessionInfo.id})`)
+      console.log(`[session-restore] Spawned new PTY "${ps.name}" (${sessionInfo.id}) claudeSessionId=${sessionInfo.claudeSessionId ?? 'none'}`)
       return { persisted: ps, sessionInfo, reconnected: false }
     })
   )
@@ -90,7 +85,7 @@ async function restoreSessions(): Promise<void> {
       promptWaiting: null,
       claudeMode: ps.claudeMode,
       dangerousMode: ps.dangerousMode,
-      claudeSessionId: ps.claudeSessionId
+      claudeSessionId: sessionInfo.claudeSessionId ?? ps.claudeSessionId
     })
   }
 

@@ -65,7 +65,7 @@ export function AppShell() {
           promptWaiting: null,
           claudeMode,
           dangerousMode,
-          claudeSessionId: null
+          claudeSessionId: sessionInfo.claudeSessionId
         })
       } catch (err) {
         console.error('Failed to create session:', err)

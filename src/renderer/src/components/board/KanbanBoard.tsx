@@ -87,20 +87,16 @@ export function KanbanBoard() {
         promptWaiting: null,
         claudeMode: true,
         dangerousMode: state.dangerousMode,
-        claudeSessionId: null
+        claudeSessionId: sessionInfo.claudeSessionId
       })
 
       linkSession(task.id, sessionInfo.id)
       moveTask(task.id, 'processing')
 
-      // Listen for Claude Code session ID detection
-      const cleanupDetect = window.electronAPI?.onClaudeSessionDetected(
-        sessionInfo.id,
-        (claudeSessionId) => {
-          linkClaudeSession(task.id, claudeSessionId)
-          cleanupDetect?.()
-        }
-      )
+      // Link the Claude session ID for resume support
+      if (sessionInfo.claudeSessionId) {
+        linkClaudeSession(task.id, sessionInfo.claudeSessionId)
+      }
 
       // Write prompt after Claude Code finishes initializing.
       // Claude Code outputs a burst of data during startup (loading animation,
@@ -182,19 +178,15 @@ export function KanbanBoard() {
         promptWaiting: null,
         claudeMode: true,
         dangerousMode: state.dangerousMode,
-        claudeSessionId: null
+        claudeSessionId: sessionInfo.claudeSessionId
       })
 
       linkSession(task.id, sessionInfo.id)
 
-      // Listen for new Claude session ID (resume creates a new session file)
-      const cleanupDetect = window.electronAPI?.onClaudeSessionDetected(
-        sessionInfo.id,
-        (claudeSessionId) => {
-          linkClaudeSession(task.id, claudeSessionId)
-          cleanupDetect?.()
-        }
-      )
+      // Link the Claude session ID for resume support
+      if (sessionInfo.claudeSessionId) {
+        linkClaudeSession(task.id, sessionInfo.claudeSessionId)
+      }
 
       // Move back to processing if it was done
       if (task.status === 'done') {

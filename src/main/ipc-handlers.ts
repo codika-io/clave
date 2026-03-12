@@ -9,7 +9,6 @@ import { gitManager } from './git-manager'
 import { sessionPersistence, type PersistedState } from './session-persistence'
 import * as fs from 'fs'
 import * as path from 'path'
-import { homedir } from 'os'
 
 const WATCH_IGNORE = new Set([
   'node_modules',
@@ -30,72 +29,6 @@ const fsWatchers = new Map<
   { cwd: string; watcher: fs.FSWatcher; cleanup: () => void }
 >()
 
-function getClaudeProjectDir(cwd: string): string {
-  const encoded = cwd.replace(/[/.]/g, '-')
-  return path.join(homedir(), '.claude', 'projects', encoded)
-}
-
-function snapshotJsonlFiles(dir: string): Set<string> {
-  try {
-    const entries = fs.readdirSync(dir)
-    return new Set(entries.filter((e) => e.endsWith('.jsonl')))
-  } catch {
-    return new Set()
-  }
-}
-
-function detectClaudeSessionId(
-  dir: string,
-  existingFiles: Set<string>
-): Promise<string | null> {
-  return new Promise((resolve) => {
-    let resolved = false
-    let watcher: fs.FSWatcher | null = null
-
-    const done = (id: string | null): void => {
-      if (resolved) return
-      resolved = true
-      watcher?.close()
-      resolve(id)
-    }
-
-    // Check immediately for any new files (might already exist)
-    try {
-      const current = fs.readdirSync(dir).filter((e) => e.endsWith('.jsonl'))
-      for (const file of current) {
-        if (!existingFiles.has(file)) {
-          done(file.replace('.jsonl', ''))
-          return
-        }
-      }
-    } catch {
-      // dir may not exist yet
-    }
-
-    // Ensure directory exists for watching
-    try {
-      fs.mkdirSync(dir, { recursive: true })
-    } catch {
-      // already exists
-    }
-
-    try {
-      watcher = fs.watch(dir, (_eventType, filename) => {
-        if (resolved) return
-        if (filename && filename.endsWith('.jsonl') && !existingFiles.has(filename)) {
-          done(filename.replace('.jsonl', ''))
-        }
-      })
-      watcher.on('error', () => done(null))
-    } catch {
-      done(null)
-      return
-    }
-
-    // 15-second timeout
-    setTimeout(() => done(null), 15000)
-  })
-}
 
 export function registerIpcHandlers(): void {
   // Board handlers
@@ -152,6 +85,9 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('git:commit-diff', (_event, cwd: string, hash: string, filePath: string) =>
     gitManager.getCommitDiff(cwd, hash, filePath)
+  )
+  ipcMain.handle('git:generate-commit-message', (_event, cwd: string) =>
+    gitManager.generateCommitMessage(cwd)
   )
 
   ipcMain.handle('updater:install', () => {
@@ -243,11 +179,7 @@ export function registerIpcHandlers(): void {
     if (existing) existing.cleanup()
   })
 
-  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => {
-    const useClaudeMode = options?.claudeMode !== false
-    const projectDir = useClaudeMode ? getClaudeProjectDir(cwd) : null
-    const existingFiles = projectDir ? snapshotJsonlFiles(projectDir) : new Set<string>()
-
+  ipcMain.handle('pty:spawn', (_event, cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => {
     const session = ptyManager.spawn(cwd, options)
     const win = BrowserWindow.fromWebContents(_event.sender)
 
@@ -263,20 +195,16 @@ export function registerIpcHandlers(): void {
       }
     })
 
-    // Async: detect Claude Code session ID from new .jsonl file
-    if (projectDir) {
-      detectClaudeSessionId(projectDir, existingFiles).then((claudeSessionId) => {
-        if (claudeSessionId && win && !win.isDestroyed()) {
-          win.webContents.send(`pty:claude-session-id:${session.id}`, claudeSessionId)
-        }
-      })
+    if (session.claudeSessionId) {
+      console.log(`[claude-session] PTY ${session.id} → claude session ${session.claudeSessionId}${options?.resumeSessionId ? ' (resumed)' : ' (new)'}`)
     }
 
     return {
       id: session.id,
       cwd: session.cwd,
       folderName: session.folderName,
-      alive: session.alive
+      alive: session.alive,
+      claudeSessionId: session.claudeSessionId ?? null
     }
   })
 

@@ -3,6 +3,7 @@ export interface SessionInfo {
   cwd: string
   folderName: string
   alive: boolean
+  claudeSessionId: string | null
 }
 
 export interface DirEntry {
@@ -202,7 +203,7 @@ export interface DownloadProgress {
 }
 
 export interface ElectronAPI {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => Promise<SessionInfo>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
   resizeSession: (id: string, cols: number, rows: number) => void
   killSession: (id: string) => Promise<void>
@@ -223,7 +224,6 @@ export interface ElectronAPI {
   saveSessionStateSync: (state: unknown) => boolean
   loadSessionState: () => Promise<PersistedSessionState | null>
   showNotification: (options: { title: string; body: string; sessionId: string }) => Promise<void>
-  onClaudeSessionDetected: (sessionId: string, callback: (claudeSessionId: string) => void) => () => void
   onNotificationClicked: (callback: (sessionId: string) => void) => () => void
   listFiles: (cwd: string) => Promise<{ files: string[]; truncated: boolean }>
   readDir: (rootCwd: string, dirPath: string) => Promise<DirEntry[]>
@@ -258,6 +258,7 @@ export interface ElectronAPI {
   gitIncomingCommits: (cwd: string) => Promise<GitLogEntry[]>
   gitCommitFiles: (cwd: string, hash: string) => Promise<GitCommitFileStatus[]>
   gitCommitDiff: (cwd: string, hash: string, filePath: string) => Promise<string>
+  gitGenerateCommitMessage: (cwd: string) => Promise<string>
 }
 
 declare global {

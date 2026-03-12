@@ -274,7 +274,7 @@ export function Sidebar() {
         promptWaiting: null,
         claudeMode: state.claudeMode,
         dangerousMode: state.dangerousMode,
-        claudeSessionId: null
+        claudeSessionId: sessionInfo.claudeSessionId
       })
     } catch (err) {
       console.error('Failed to create session:', err)
@@ -458,7 +458,7 @@ export function Sidebar() {
           promptWaiting: null,
           claudeMode: false,
           dangerousMode: false,
-          claudeSessionId: null
+          claudeSessionId: sessionInfo.claudeSessionId
         }
 
         const currentState = useSessionStore.getState()

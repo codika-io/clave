@@ -1,6 +1,8 @@
 import simpleGit, { type StatusResult } from 'simple-git'
+import { execFile } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
+import { getLoginShellEnv } from './pty-manager'
 
 export interface GitFileStatus {
   path: string
@@ -388,6 +390,54 @@ class GitManager {
         return ''
       }
     }
+  }
+
+  async generateCommitMessage(cwd: string): Promise<string> {
+    const git = simpleGit(cwd)
+
+    // Get staged diff (what will actually be committed)
+    const diff = await git.diff(['--cached', '--stat']).then(async (stat) => {
+      if (!stat.trim()) throw new Error('No staged changes')
+      const fullDiff = await git.diff(['--cached'])
+      // Truncate to ~12k chars to stay within reasonable prompt size
+      return fullDiff.length > 12000 ? fullDiff.slice(0, 12000) + '\n... (diff truncated)' : fullDiff
+    })
+
+    // Get recent commit messages for style context
+    const recentMessages = await this.getLog(cwd, 5).then((entries) =>
+      entries.map((e) => e.message).join('\n')
+    )
+
+    const prompt = `Generate a concise git commit message for the following staged changes. Follow conventional commit style (e.g. "feat:", "fix:", "refactor:", "chore:", "docs:"). Be brief — one line, no quotes, no explanation.
+
+${recentMessages ? `Recent commit messages for style reference:\n${recentMessages}\n\n` : ''}Staged diff:
+${diff}`
+
+    const env = { ...getLoginShellEnv() }
+    // Remove CLAUDECODE to avoid "nested session" detection
+    delete env.CLAUDECODE
+
+    return new Promise<string>((resolve, reject) => {
+      const child = execFile('claude', ['-p', '--model', 'haiku'], {
+        env,
+        encoding: 'utf-8',
+        maxBuffer: 1024 * 1024,
+        timeout: 30000
+      }, (err, stdout, stderr) => {
+        if (err) {
+          reject(new Error(stderr || err.message))
+          return
+        }
+        const message = stdout.trim()
+        if (!message) {
+          reject(new Error('Empty response from Claude'))
+          return
+        }
+        resolve(message)
+      })
+      child.stdin?.write(prompt)
+      child.stdin?.end()
+    })
   }
 
   async getStatus(cwd: string): Promise<GitStatusResult> {
