@@ -4,11 +4,11 @@ export type Theme = 'dark' | 'light' | 'coffee'
 
 export type ActivityStatus = 'active' | 'idle' | 'ended'
 
-export type GroupTerminalColor = 'black' | 'green' | 'teal' | 'blue' | 'purple' | 'yellow' | 'pink' | 'red'
+export type GroupTerminalColor = 'black' | 'green' | 'teal' | 'blue' | 'purple' | 'yellow' | 'pink' | 'red' | (string & {})
 
 export const GROUP_TERMINAL_COLORS: GroupTerminalColor[] = ['black', 'green', 'teal', 'blue', 'purple', 'yellow', 'pink', 'red']
 
-export const TERMINAL_COLOR_VALUES: Record<GroupTerminalColor, string> = {
+export const TERMINAL_COLOR_VALUES: Record<string, string> = {
   black: '#3A3A3C',
   green: '#34C759',
   teal: '#5AC8FA',
@@ -17,6 +17,14 @@ export const TERMINAL_COLOR_VALUES: Record<GroupTerminalColor, string> = {
   yellow: '#FFD60A',
   pink: '#FF6482',
   red: '#FF3B30'
+}
+
+/** Resolve a color name or custom hex string to its hex value */
+export function resolveColorHex(color: GroupTerminalColor | null | undefined): string | undefined {
+  if (!color) return undefined
+  if (color in TERMINAL_COLOR_VALUES) return TERMINAL_COLOR_VALUES[color]
+  if (color.startsWith('#')) return color
+  return undefined
 }
 
 export interface GroupTerminalConfig {

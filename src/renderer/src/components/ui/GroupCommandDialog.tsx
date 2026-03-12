@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  type GroupTerminalColor,
-  GROUP_TERMINAL_COLORS,
-  TERMINAL_COLOR_VALUES
-} from '../../store/session-store'
+import { type GroupTerminalColor } from '../../store/session-store'
+import ColorPicker from './ColorPicker'
 
 interface GroupCommandDialogProps {
   isOpen: boolean
@@ -129,23 +126,13 @@ export function GroupCommandDialog({
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center gap-3">
+                <div className="mt-3 flex flex-col gap-2">
                   <span className="text-xs text-text-secondary">Color:</span>
-                  <div className="flex gap-1.5">
-                    {GROUP_TERMINAL_COLORS.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setColor(c)}
-                        className="w-5 h-5 rounded-full transition-all flex-shrink-0"
-                        style={{
-                          backgroundColor: TERMINAL_COLOR_VALUES[c],
-                          opacity: color === c ? 1 : 0.45,
-                          boxShadow: color === c ? `0 0 0 2px var(--color-surface-0), 0 0 0 3.5px ${TERMINAL_COLOR_VALUES[c]}` : 'none'
-                        }}
-                      />
-                    ))}
-                  </div>
+                  <ColorPicker
+                    value={color}
+                    onChange={(c) => setColor(c ?? 'blue')}
+                    showNoColor={false}
+                  />
                 </div>
               </div>
               <div className="border-t border-border-subtle flex">

@@ -3,7 +3,8 @@ import { cn } from '../../lib/utils'
 import {
   useSessionStore,
   type SessionGroup,
-  TERMINAL_COLOR_VALUES
+  TERMINAL_COLOR_VALUES,
+  resolveColorHex
 } from '../../store/session-store'
 import {
   FolderIcon,
@@ -171,7 +172,7 @@ export function SessionGroupItem({
         {/* Folder icon */}
         <FolderIcon
           className="flex-shrink-0 w-5 h-5 text-text-tertiary"
-          style={group.color ? { color: TERMINAL_COLOR_VALUES[group.color] } : undefined}
+          style={group.color ? { color: resolveColorHex(group.color) } : undefined}
         />
 
         {/* Group name */}
@@ -223,7 +224,7 @@ export function SessionGroupItem({
             {group.terminals.map((t) => {
               const alive = !!t.sessionId && aliveSessionIds.has(t.sessionId)
               const focused = !!t.sessionId && t.sessionId === focusedSessionId
-              const colorHex = TERMINAL_COLOR_VALUES[t.color]
+              const colorHex = resolveColorHex(t.color) ?? TERMINAL_COLOR_VALUES['blue']
               return (
                 <span
                   key={t.id}

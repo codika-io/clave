@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   useSessionStore,
   GROUP_TERMINAL_COLORS,
-  TERMINAL_COLOR_VALUES,
+  resolveColorHex,
   type GroupTerminalColor
 } from '../../store/session-store'
+import ColorPicker from '../ui/ColorPicker'
 import { useBoardStore } from '../../store/board-store'
 import { useTemplateStore } from '../../store/template-store'
 import { resetToDefaultTemplate } from '../../hooks/use-launch-template'
@@ -28,7 +29,6 @@ import {
   FolderMinusIcon,
   ShieldExclamationIcon,
   CommandLineIcon,
-  CheckIcon,
   ArrowPathIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline'
@@ -38,6 +38,19 @@ interface ContextMenuState {
   y: number
   items: { label: string; onClick: () => void; shortcut?: string; disabled?: boolean; icon?: React.ReactNode; danger?: boolean }[]
   header?: React.ReactNode
+}
+
+function GroupColorPickerHeader({ groupId, initialColor }: { groupId: string; initialColor: GroupTerminalColor | null }) {
+  const setGroupColor = useSessionStore((s) => s.setGroupColor)
+  const currentColor = useSessionStore((s) => s.groups.find((g) => g.id === groupId)?.color ?? null)
+
+  return (
+    <ColorPicker
+      value={currentColor ?? initialColor}
+      onChange={(color) => setGroupColor(groupId, color)}
+      showNoColor
+    />
+  )
 }
 
 interface DropIndicatorState {
@@ -540,45 +553,15 @@ export function Sidebar() {
       e.preventDefault()
       const group = groups.find((g) => g.id === groupId)
       const currentColor = group?.color ?? null
-      const colorPicker = (
-        <div className="flex items-center gap-1.5">
-          {/* No-color option */}
-          <button
-            onClick={(ev) => {
-              ev.stopPropagation()
-              setGroupColor(groupId, null)
-              setContextMenu(null)
-            }}
-            className="relative w-5 h-5 rounded-full border border-border-subtle bg-surface-200 hover:scale-110 transition-transform flex items-center justify-center"
-            title="No color"
-          >
-            {currentColor === null && (
-              <CheckIcon className="w-3 h-3 text-text-secondary" />
-            )}
-          </button>
-          {GROUP_TERMINAL_COLORS.map((color) => (
-            <button
-              key={color}
-              onClick={(ev) => {
-                ev.stopPropagation()
-                setGroupColor(groupId, color)
-                setContextMenu(null)
-              }}
-              className="relative w-5 h-5 rounded-full hover:scale-110 transition-transform flex items-center justify-center"
-              style={{ backgroundColor: TERMINAL_COLOR_VALUES[color] }}
-              title={color}
-            >
-              {currentColor === color && (
-                <CheckIcon className="w-3 h-3 text-white" />
-              )}
-            </button>
-          ))}
-        </div>
-      )
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
-        header: colorPicker,
+        header: (
+          <GroupColorPickerHeader
+            groupId={groupId}
+            initialColor={currentColor}
+          />
+        ),
         items: [
           {
             label: 'Rename',
@@ -1105,7 +1088,7 @@ export function Sidebar() {
                   const allGroupSelected =
                     group.sessionIds.length > 0 &&
                     group.sessionIds.every((id) => selectedSessionIds.includes(id))
-                  const groupColorHex = group.color ? TERMINAL_COLOR_VALUES[group.color] : undefined
+                  const groupColorHex = resolveColorHex(group.color)
                   return (
                     <div
                       key={group.id}
