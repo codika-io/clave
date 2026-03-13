@@ -408,9 +408,16 @@ class GitManager {
       entries.map((e) => e.message).join('\n')
     )
 
-    const prompt = `Generate a concise git commit message for the following staged changes. Follow conventional commit style (e.g. "feat:", "fix:", "refactor:", "chore:", "docs:"). Be brief — one line, no quotes, no explanation.
+    const prompt = `Write a git commit message for the staged diff below.
 
-${recentMessages ? `Recent commit messages for style reference:\n${recentMessages}\n\n` : ''}Staged diff:
+Rules:
+- First line: conventional commit prefix (feat/fix/refactor/chore/docs/style/perf/test) + concise summary, max 72 chars
+- If the change is non-trivial, add a blank line then a body (1-3 bullet points) explaining WHAT was done and WHY — not which files were touched
+- Maximize information density: an agent reading git log should understand the intent and scope without reading the diff
+- No quotes around the message, no markdown formatting, no trailing explanation
+- Match the tone and style of recent commits if provided
+
+${recentMessages ? `Recent commits for style reference:\n${recentMessages}\n\n` : ''}Staged diff:
 ${diff}`
 
     const env = { ...getLoginShellEnv() }
