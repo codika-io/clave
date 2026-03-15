@@ -1,6 +1,7 @@
 import * as pty from 'node-pty'
 import { execFile, execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
+import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS, INITIAL_COMMAND_DELAY_MS } from './constants'
 
 let loginShellEnv: Record<string, string> | null = null
 
@@ -95,8 +96,8 @@ class PtyManager {
 
     const ptyProcess = pty.spawn(getUserShell(), shellArgs, {
       name: 'xterm-256color',
-      cols: 80,
-      rows: 24,
+      cols: DEFAULT_TERMINAL_COLS,
+      rows: DEFAULT_TERMINAL_ROWS,
       cwd,
       env: (() => {
         const env: Record<string, string> = {
@@ -124,7 +125,7 @@ class PtyManager {
         if (session.alive) {
           ptyProcess.write(execute ? cmd + '\r' : cmd)
         }
-      }, 150)
+      }, INITIAL_COMMAND_DELAY_MS)
     }
 
     return session

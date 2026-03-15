@@ -8,19 +8,7 @@ import { usageManager } from './usage-manager'
 import { gitManager } from './git-manager'
 import * as fs from 'fs'
 import * as path from 'path'
-
-const WATCH_IGNORE = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  '__pycache__',
-  '.next',
-  '.svelte-kit',
-  '.DS_Store',
-  'coverage',
-  '.cache'
-])
+import { IGNORED_DIRECTORIES_SET, FS_WATCH_DEBOUNCE_MS } from './constants'
 
 // Active file system watchers keyed by webContents id
 const fsWatchers = new Map<
@@ -145,7 +133,7 @@ export function registerIpcHandlers(): void {
 
         // Skip ignored directories
         const segments = filename.split(path.sep)
-        if (segments.some((s) => WATCH_IGNORE.has(s))) return
+        if (segments.some((s) => IGNORED_DIRECTORIES_SET.has(s))) return
 
         const dir = path.dirname(filename)
         changedDirs.add(dir === '.' ? '.' : dir)
@@ -156,7 +144,7 @@ export function registerIpcHandlers(): void {
             win.webContents.send('fs:changed', cwd, Array.from(changedDirs))
           }
           changedDirs.clear()
-        }, 300)
+        }, FS_WATCH_DEBOUNCE_MS)
       })
 
       const cleanup = (): void => {

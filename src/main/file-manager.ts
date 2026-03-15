@@ -1,22 +1,12 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import fg from 'fast-glob'
-
-const ALWAYS_IGNORE = [
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  '__pycache__',
-  '.next',
-  '.svelte-kit',
-  '.DS_Store',
-  'coverage',
-  '.cache'
-]
-
-const MAX_FILES = 50_000
-const MAX_FILE_SIZE = 1024 * 1024 // 1MB
+import {
+  IGNORED_DIRECTORIES,
+  MAX_FILES,
+  MAX_FILE_SIZE,
+  BINARY_PROBE_SIZE
+} from './constants'
 
 export interface DirEntry {
   name: string
@@ -51,7 +41,7 @@ class FileManager {
     const files = await fg('**/*', {
       cwd,
       dot: false,
-      ignore: ALWAYS_IGNORE.map((p) => `**/${p}/**`),
+      ignore: IGNORED_DIRECTORIES.map((p) => `**/${p}/**`),
       onlyFiles: true,
       followSymbolicLinks: false
     })
@@ -68,7 +58,7 @@ class FileManager {
     const entries = await fs.readdir(resolved, { withFileTypes: true })
 
     const filtered = entries.filter((e) => {
-      if (ALWAYS_IGNORE.includes(e.name)) return false
+      if (IGNORED_DIRECTORIES.includes(e.name)) return false
       return true
     })
 
@@ -111,7 +101,7 @@ class FileManager {
     // Check for binary by reading first 8KB
     const fd = await fs.open(resolved, 'r')
     try {
-      const probe = Buffer.alloc(Math.min(8192, stat.size))
+      const probe = Buffer.alloc(Math.min(BINARY_PROBE_SIZE, stat.size))
       const { bytesRead } = await fd.read(probe, 0, probe.length, 0)
       const isBinary = probe.subarray(0, bytesRead).includes(0)
 
