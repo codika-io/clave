@@ -1,6 +1,6 @@
 {
   "name": "clave",
-  "version": "1.13.2",
+  "version": "1.13.3",
   "description": "Manage multiple Claude Code sessions from a single desktop app",
   "author": "Codika <hello@codika.io> (https://codika.io)",
   "license": "MIT",
@@ -32,7 +32,7 @@
     "@fontsource/geist-sans": "^5.2.5",
     "@heroicons/react": "^2.2.0",
     "@xterm/addon-fit": "^0.11.0",
-"@xterm/xterm": "^6.0.0",
+    "@xterm/xterm": "^6.0.0",
     "electron-updater": "^6.7.3",
     "fast-glob": "^3.3.3",
     "framer-motion": "^12.34.0",
