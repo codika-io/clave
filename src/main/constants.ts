@@ -10,7 +10,7 @@ export const IGNORED_DIRECTORIES = [
   '.DS_Store',
   'coverage',
   '.cache'
-] as const
+]
 
 /** Set version for fast lookup in file watchers */
 export const IGNORED_DIRECTORIES_SET = new Set<string>(IGNORED_DIRECTORIES)
