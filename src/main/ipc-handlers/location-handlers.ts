@@ -26,23 +26,25 @@ export function registerLocationHandlers(): void {
     if (!config) return { success: false, error: 'No credentials found' }
     try {
       await sshManager.connect(id, config)
-      // Check for OpenClaw
+      // Check for OpenClaw (use login shell to get full PATH with npm globals, homebrew, etc.)
       let openclawVersion: string | undefined
       let openclawPort: number | undefined
+      let openclawToken: string | undefined
       try {
-        const result = await sshManager.exec(id, 'openclaw --version 2>/dev/null || echo ""')
+        const result = await sshManager.exec(id, 'bash -lc "openclaw --version" 2>/dev/null || echo ""')
         if (result.stdout.trim()) {
           openclawVersion = result.stdout.trim()
-          // Try to detect port from config
-          const portResult = await sshManager.exec(id, 'cat ~/.openclaw/config.json 2>/dev/null || echo "{}"')
+          // Read gateway port and auth token from config
+          const cfgResult = await sshManager.exec(id, 'cat ~/.openclaw/openclaw.json 2>/dev/null || echo "{}"')
           try {
-            const cfg = JSON.parse(portResult.stdout)
-            openclawPort = cfg.claveChannelPort || 3100
-          } catch { openclawPort = 3100 }
+            const cfg = JSON.parse(cfgResult.stdout)
+            openclawPort = cfg.gateway?.port || 18789
+            openclawToken = cfg.gateway?.auth?.token
+          } catch { openclawPort = 18789 }
         }
       } catch { /* no openclaw */ }
       sshManager.disconnect(id)
-      return { success: true, openclawVersion, openclawPort }
+      return { success: true, openclawVersion, openclawPort, openclawToken }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -50,7 +52,15 @@ export function registerLocationHandlers(): void {
 
   ipcMain.handle('location:install-plugin', async (_event, id: string) => {
     try {
-      const result = await sshManager.exec(id, 'npm install -g @codika-io/clave-channel && clave-channel install')
+      // Reconnect SSH — test-connection disconnects after testing
+      if (!sshManager.isConnected(id)) {
+        const config = locationManager.getCredentials(id)
+        if (!config) return { success: false, error: 'No credentials found' }
+        await sshManager.connect(id, config)
+      }
+      // Use login shell to ensure npm/node are in PATH
+      const result = await sshManager.exec(id, 'bash -lc "npm install -g @codika-io/clave-channel && clave-channel install"')
+      sshManager.disconnect(id)
       return { success: result.code === 0, output: result.stdout + result.stderr }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }

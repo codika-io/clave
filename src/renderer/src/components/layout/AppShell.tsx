@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSessionStore, isFileTabId } from '../../store/session-store'
+import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
 import { KanbanBoard } from '../board/KanbanBoard'
@@ -188,6 +189,14 @@ export function AppShell() {
     if (!window.electronAPI?.onNotificationClicked) return
     return window.electronAPI.onNotificationClicked((sessionId) => {
       useSessionStore.getState().selectSession(sessionId, false)
+    })
+  }, [])
+
+  // Subscribe to agent updates from OpenClaw connections
+  useEffect(() => {
+    if (!window.electronAPI?.onAgentsUpdated) return
+    return window.electronAPI.onAgentsUpdated((locationId, agents) => {
+      useAgentStore.getState().setAgents(locationId, agents as never[])
     })
   }, [])
 

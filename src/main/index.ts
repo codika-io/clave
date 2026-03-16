@@ -80,7 +80,7 @@ app.whenReady().then(() => {
           locationManager.setLocationStatus(loc.id, 'connected')
           // Connect OpenClaw if detected
           if (loc.openclawPort && loc.host) {
-            openclawClient.connect(loc.id, `ws://${loc.host}:${loc.openclawPort}`).catch(() => {})
+            openclawClient.connect(loc.id, `ws://${loc.host}:${loc.openclawPort}`, loc.openclawToken).catch(() => {})
           }
         }).catch(() => {
           locationManager.setLocationStatus(loc.id, 'error')

@@ -219,7 +219,7 @@ export interface ElectronAPI {
   locationAdd: (loc: unknown, password?: string) => Promise<import('../shared/remote-types').Location>
   locationUpdate: (id: string, updates: unknown) => Promise<void>
   locationRemove: (id: string) => Promise<void>
-  locationTestConnection: (id: string) => Promise<{ success: boolean; error?: string; openclawVersion?: string; openclawPort?: number }>
+  locationTestConnection: (id: string) => Promise<{ success: boolean; error?: string; openclawVersion?: string; openclawPort?: number; openclawToken?: string }>
   locationInstallPlugin: (id: string) => Promise<{ success: boolean; output?: string; error?: string }>
 
   // SSH / Remote Terminal

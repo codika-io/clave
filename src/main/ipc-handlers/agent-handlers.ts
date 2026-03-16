@@ -28,16 +28,15 @@ export function registerAgentHandlers(): void {
     const loc = locationManager.getLocations().find((l) => l.id === locationId)
     if (!loc?.host || !loc.openclawPort) throw new Error('Location not configured for agents')
     const wsUrl = `ws://${loc.host}:${loc.openclawPort}`
-    await openclawClient.connect(locationId, wsUrl)
+    await openclawClient.connect(locationId, wsUrl, loc.openclawToken)
   })
 
   ipcMain.handle('agent:disconnect', (_event, locationId: string) => {
     openclawClient.disconnect(locationId)
   })
 
-  ipcMain.handle('agent:send', (_event, agentId: string, locationId: string, content: string) => {
-    openclawClient.send(locationId, agentId, content)
-    // Return optimistic message
+  ipcMain.handle('agent:send', async (_event, agentId: string, locationId: string, content: string) => {
+    // Return optimistic message immediately, send async
     const msg: ChatMessage = {
       id: randomUUID(),
       agentId,
@@ -46,6 +45,9 @@ export function registerAgentHandlers(): void {
       timestamp: Date.now(),
       status: 'sending'
     }
+    openclawClient.sendToAgent(locationId, agentId, content).catch(() => {
+      // Message delivery failed — could notify renderer
+    })
     return msg
   })
 }

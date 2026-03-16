@@ -16,6 +16,7 @@ export interface Location {
   lastConnectedAt?: number
   openclawVersion?: string
   openclawPort?: number
+  openclawToken?: string
 }
 
 // ── SSH connection config (subset for encrypted storage) ──
@@ -44,7 +45,7 @@ export interface Agent {
 
 // ── Chat message ──
 
-export type ChatMessageStatus = 'sending' | 'streaming' | 'sent' | 'error'
+export type ChatMessageStatus = 'sending' | 'streaming' | 'sent' | 'delivered' | 'error'
 
 export interface ChatMessage {
   id: string

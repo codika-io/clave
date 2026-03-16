@@ -22,8 +22,9 @@ export function AddLocationDialog({ onClose }: AddLocationDialogProps) {
   const [autoConnect, setAutoConnect] = useState(true)
 
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{ success: boolean; error?: string; openclawVersion?: string; openclawPort?: number } | null>(null)
+  const [testResult, setTestResult] = useState<{ success: boolean; error?: string; openclawVersion?: string; openclawPort?: number; openclawToken?: string } | null>(null)
   const [installing, setInstalling] = useState(false)
+  const [installError, setInstallError] = useState<string | null>(null)
 
   const [createdLocationId, setCreatedLocationId] = useState<string | null>(null)
 
@@ -49,22 +50,54 @@ export function AddLocationDialog({ onClose }: AddLocationDialogProps) {
 
     const result = await window.electronAPI.locationTestConnection(loc.id)
     setTestResult(result)
+    // Save detected OpenClaw config to location
+    if (result.success && (result.openclawPort || result.openclawToken)) {
+      await window.electronAPI.locationUpdate(loc.id, {
+        openclawVersion: result.openclawVersion,
+        openclawPort: result.openclawPort,
+        openclawToken: result.openclawToken
+      })
+    }
     setTesting(false)
   }, [name, host, port, username, authMethod, privateKeyPath, password, autoConnect, addLocation])
 
   const handleInstallPlugin = useCallback(async () => {
     if (!createdLocationId) return
     setInstalling(true)
-    await window.electronAPI.locationInstallPlugin(createdLocationId)
+    setInstallError(null)
+    const installResult = await window.electronAPI.locationInstallPlugin(createdLocationId)
     setInstalling(false)
+    if (!installResult.success) {
+      setInstallError(installResult.error || 'Installation failed')
+      return
+    }
     // Re-test to detect openclaw
     const result = await window.electronAPI.locationTestConnection(createdLocationId)
     setTestResult(result)
   }, [createdLocationId])
 
-  const handleFinish = useCallback(() => {
+  const handleFinish = useCallback(async () => {
+    // Update autoConnect setting
+    if (createdLocationId) {
+      await window.electronAPI.locationUpdate(createdLocationId, { autoConnect })
+      // Connect immediately if autoConnect is enabled
+      if (autoConnect) {
+        try {
+          await window.electronAPI.sshConnect(createdLocationId)
+          // Connect OpenClaw if detected
+          if (testResult?.openclawPort) {
+            try {
+              await window.electronAPI.agentConnect(createdLocationId)
+              await window.electronAPI.agentList(createdLocationId)
+            } catch { /* ok */ }
+          }
+        } catch { /* will show as error in locations list */ }
+        // Reload locations to reflect connected status
+        useLocationStore.getState().loadLocations()
+      }
+    }
     onClose()
-  }, [onClose])
+  }, [onClose, createdLocationId, autoConnect, testResult])
 
   const handleRemoveOnCancel = useCallback(async () => {
     if (createdLocationId) {
@@ -218,6 +251,9 @@ export function AddLocationDialog({ onClose }: AddLocationDialogProps) {
                           >
                             {installing ? 'Installing...' : 'Install Clave Channel Plugin'}
                           </button>
+                          {installError && (
+                            <p className="text-xs text-red-400 mt-1">{installError}</p>
+                          )}
                         </div>
                       )}
                     </>

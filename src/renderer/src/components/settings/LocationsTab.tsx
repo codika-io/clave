@@ -20,6 +20,8 @@ function LocationCard({ location }: { location: Location }) {
 
   const handleConnect = async () => {
     if (location.status === 'connected') {
+      // Disconnect OpenClaw + SSH
+      try { await window.electronAPI.agentDisconnect(location.id) } catch { /* ok */ }
       await window.electronAPI.sshDisconnect(location.id)
       setLocationStatus(location.id, 'disconnected')
     } else {
@@ -27,6 +29,13 @@ function LocationCard({ location }: { location: Location }) {
       try {
         await window.electronAPI.sshConnect(location.id)
         setLocationStatus(location.id, 'connected')
+        // Connect OpenClaw WebSocket for agents if location has openclawPort
+        if (location.openclawPort && location.host) {
+          try {
+            await window.electronAPI.agentConnect(location.id)
+            await window.electronAPI.agentList(location.id)
+          } catch { /* OpenClaw not available — SSH still works */ }
+        }
       } catch {
         setLocationStatus(location.id, 'error')
       }
