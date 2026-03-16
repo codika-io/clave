@@ -16,7 +16,7 @@ interface ConnectionEntry {
   tickIntervalMs: number
   intentionalClose: boolean
   connected: boolean
-  pending: Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>
+  pending: Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; expectFinal?: boolean }>
 }
 
 type MessageCallback = (locationId: string, message: ChatMessage) => void
@@ -107,11 +107,28 @@ class OpenClawClient {
 
   /** Send a message to an agent */
   async sendToAgent(locationId: string, agentId: string, content: string): Promise<void> {
-    await this.request(locationId, 'agent', {
+    const result = await this.request(locationId, 'agent', {
       message: content,
       agentId,
+      idempotencyKey: randomUUID(),
       deliver: false
-    })
+    }, { expectFinal: true }) as { result?: { payloads?: Array<{ text?: string }> } }
+
+    // Extract final text from completed response
+    const text = result?.result?.payloads?.map((p) => p.text).filter(Boolean).join('\n')
+    if (text) {
+      const message: ChatMessage = {
+        id: randomUUID(),
+        agentId,
+        role: 'assistant',
+        content: text,
+        timestamp: Date.now(),
+        status: 'delivered'
+      }
+      for (const cb of this.messageCallbacks) {
+        cb(locationId, message)
+      }
+    }
   }
 
   /** Request agents list from the gateway via health RPC */
@@ -145,7 +162,7 @@ class OpenClawClient {
 
   // ── Private ──
 
-  private request(locationId: string, method: string, params: Record<string, unknown>): Promise<unknown> {
+  private request(locationId: string, method: string, params: Record<string, unknown>, opts?: { expectFinal?: boolean }): Promise<unknown> {
     const entry = this.connections.get(locationId)
     if (!entry || entry.ws.readyState !== WebSocket.OPEN) {
       return Promise.reject(new Error('not connected'))
@@ -155,16 +172,17 @@ class OpenClawClient {
     const frame = { type: 'req', id, method, params }
 
     return new Promise((resolve, reject) => {
-      entry.pending.set(id, { resolve, reject })
+      entry.pending.set(id, { resolve, reject, expectFinal: opts?.expectFinal })
       entry.ws.send(JSON.stringify(frame))
 
-      // Timeout after 30s
+      // Timeout: 30s for normal requests, 120s for agent requests that wait for completion
+      const timeoutMs = opts?.expectFinal ? 120000 : 30000
       setTimeout(() => {
         if (entry.pending.has(id)) {
           entry.pending.delete(id)
           reject(new Error(`request timeout: ${method}`))
         }
-      }, 30000)
+      }, timeoutMs)
     })
   }
 
@@ -232,20 +250,30 @@ class OpenClawClient {
         return
       }
 
-      // Agent response events (streaming)
-      if (event === 'agent.chunk' || event === 'agent.done') {
-        const p = parsed.payload as { agentId?: string; text?: string; content?: string }
-        if (p?.agentId) {
-          const message: ChatMessage = {
-            id: randomUUID(),
-            agentId: p.agentId,
-            role: 'assistant',
-            content: p.text || p.content || '',
-            timestamp: Date.now(),
-            status: event === 'agent.done' ? 'delivered' : 'sending'
-          }
-          for (const cb of this.messageCallbacks) {
-            cb(locationId, message)
+      // Agent streaming events: { stream: "assistant", data: { text, delta }, sessionKey: "agent:<id>:main" }
+      if (event === 'agent') {
+        const p = parsed.payload as {
+          stream?: string
+          data?: { text?: string; delta?: string; phase?: string }
+          sessionKey?: string
+          runId?: string
+        }
+        if (p?.stream === 'assistant' && p.data?.text) {
+          // Extract agentId from sessionKey "agent:<agentId>:main"
+          const parts = p.sessionKey?.split(':')
+          const agentId = parts?.[1]
+          if (agentId) {
+            const message: ChatMessage = {
+              id: p.runId || randomUUID(),
+              agentId,
+              role: 'assistant',
+              content: p.data.text,
+              timestamp: Date.now(),
+              status: 'streaming'
+            }
+            for (const cb of this.messageCallbacks) {
+              cb(locationId, message)
+            }
           }
         }
         return
@@ -275,6 +303,12 @@ class OpenClawClient {
       const id = parsed.id as string
       const pending = entry.pending.get(id)
       if (!pending) return
+
+      // Skip intermediate "accepted" responses when waiting for final
+      const payload = parsed.payload as { status?: string } | undefined
+      if (pending.expectFinal && parsed.ok && payload?.status === 'accepted') {
+        return
+      }
 
       entry.pending.delete(id)
 
