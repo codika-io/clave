@@ -1031,11 +1031,7 @@ export function Sidebar() {
           onToggle={() => setAgentsCollapsed((c) => !c)}
           actions={
             <button
-              onClick={() => {
-                const store = useSessionStore.getState()
-                store.setSettingsTab('locations')
-                store.setActiveView('settings')
-              }}
+              onClick={() => useSessionStore.getState().setActiveView('settings')}
               className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0"
               title="Add location"
             >

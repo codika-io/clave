@@ -35,7 +35,6 @@ interface SessionState {
   previewCwd: string | null
   previewSource: 'palette' | 'tree' | null
   activeView: ActiveView
-  settingsTab: 'general' | 'templates' | 'locations'
   sidePanelTab: 'files' | 'git'
   gitViewMode: 'list' | 'tree'
   gitPanelMode: 'changes' | 'log'
@@ -75,7 +74,6 @@ interface SessionState {
   setFileTreeWidth: (width: number) => void
   setFileTreeWidthOverride: (width: number | null) => void
   setActiveView: (view: ActiveView) => void
-  setSettingsTab: (tab: 'general' | 'templates' | 'locations') => void
   setSidePanelTab: (tab: 'files' | 'git') => void
   setGitViewMode: (mode: 'list' | 'tree') => void
   setGitPanelMode: (mode: 'changes' | 'log') => void
@@ -135,7 +133,6 @@ export const useSessionStore = create<SessionState>((set) => ({
   previewCwd: null,
   previewSource: null,
   activeView: 'terminals' as ActiveView,
-  settingsTab: 'general' as const,
   sidePanelTab: 'files' as const,
   gitViewMode: 'list' as const,
   gitPanelMode: 'changes' as const,
@@ -464,7 +461,6 @@ export const useSessionStore = create<SessionState>((set) => ({
   setFileTreeWidthOverride: (width) => set({ fileTreeWidthOverride: width }),
 
   setActiveView: (view) => set({ activeView: view }),
-  setSettingsTab: (tab) => set({ settingsTab: tab }),
 
   setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
 
