@@ -845,7 +845,7 @@ export function Sidebar() {
                 className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-50"
                 title="New session"
               >
-                <PlusIcon className="w-3 h-3" />
+                <PlusIcon className="w-3.5 h-3.5" />
               </button>
             </>
           }
@@ -1039,7 +1039,7 @@ export function Sidebar() {
               className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0"
               title="Add location"
             >
-              <PlusIcon className="w-3 h-3" />
+              <PlusIcon className="w-3.5 h-3.5" />
             </button>
           }
         />

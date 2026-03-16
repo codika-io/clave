@@ -120,8 +120,8 @@ export function FileTabItem({
         onContextMenu={onContextMenu}
         title={fileTab.filePath.replace(/^\/Users\/[^/]+/, '~')}
         className={cn(
-          'group w-full flex items-center gap-3 py-2.5 rounded-lg text-left transition-all outline-none',
-          grouped ? 'pl-4 pr-2' : 'px-3',
+          'group w-full flex items-center gap-2.5 py-1.5 rounded-lg text-left transition-all outline-none',
+          grouped ? 'pl-4 pr-2' : 'px-2.5',
           groupSelected
             ? 'text-text-primary'
             : isSelected
@@ -133,8 +133,8 @@ export function FileTabItem({
         )}
       >
         {/* Document icon */}
-        <span className="flex-shrink-0 w-5 h-5">
-          <DocumentTextIcon className="w-5 h-5 text-text-tertiary" />
+        <span className="flex-shrink-0 w-4 h-4">
+          <DocumentTextIcon className="w-4 h-4 text-text-tertiary" />
         </span>
 
         {/* Name — double-click to rename */}
@@ -146,10 +146,10 @@ export function FileTabItem({
             onBlur={commitRename}
             onKeyDown={handleInputKeyDown}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 min-w-0 bg-transparent text-sm font-medium text-text-primary outline-none border-none"
+            className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-text-primary outline-none border-none"
           />
         ) : (
-          <span className="flex-1 min-w-0 text-sm font-medium truncate" onDoubleClick={handleDoubleClick}>
+          <span className="flex-1 min-w-0 text-[13px] font-medium truncate" onDoubleClick={handleDoubleClick}>
             {fileTab.name}
           </span>
         )}

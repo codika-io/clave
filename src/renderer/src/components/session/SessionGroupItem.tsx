@@ -154,7 +154,7 @@ export function SessionGroupItem({
         onContextMenu={onContextMenu}
         onKeyDown={handleKeyDown}
         className={cn(
-          'group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors outline-none',
+          'group w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors outline-none',
           allSelected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-100/50',
           isDragging && 'opacity-30'
         )}
@@ -171,7 +171,7 @@ export function SessionGroupItem({
 
         {/* Folder icon */}
         <FolderIcon
-          className="flex-shrink-0 w-5 h-5 text-text-tertiary"
+          className="flex-shrink-0 w-4 h-4 text-text-tertiary"
           style={group.color ? { color: resolveColorHex(group.color) } : undefined}
         />
 
@@ -184,11 +184,11 @@ export function SessionGroupItem({
             onBlur={commitRename}
             onKeyDown={handleInputKeyDown}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 min-w-0 bg-transparent text-sm font-medium text-text-primary outline-none border-none"
+            className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-text-primary outline-none border-none"
           />
         ) : (
           <span
-            className="flex-1 min-w-0 text-sm font-medium truncate"
+            className="flex-1 min-w-0 text-[13px] font-medium truncate"
             onDoubleClick={handleDoubleClick}
           >
             {group.name}

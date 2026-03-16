@@ -17,7 +17,7 @@ export function SectionHeading({
   actions?: React.ReactNode
 }) {
   return (
-    <div className="w-full flex items-center gap-1.5 px-4 pt-4 pb-1.5 flex-shrink-0">
+    <div className="w-full flex items-center gap-1.5 px-3 pt-3.5 pb-1 flex-shrink-0">
       <button onClick={onToggle} className="flex items-center gap-1.5">
         <ChevronRightIcon
           className={cn(
@@ -25,7 +25,7 @@ export function SectionHeading({
             collapsed ? 'rotate-0' : 'rotate-90'
           )}
         />
-        <span className="text-xs font-medium text-text-tertiary">{title}</span>
+        <span className="text-[13px] font-medium text-text-tertiary">{title}</span>
       </button>
       {actions && <div className="ml-auto flex items-center gap-0.5">{actions}</div>}
     </div>
@@ -50,16 +50,16 @@ function WorkspaceButton({
     <button
       onClick={() => setActiveView(view)}
       className={cn(
-        'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+        'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
         activeView === view
           ? 'bg-surface-200 text-text-primary'
           : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
       )}
     >
-      <Icon className="flex-shrink-0 w-5 h-5 text-text-tertiary" />
+      <Icon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />
       <span>{label}</span>
       {badge !== undefined && badge > 0 && (
-        <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent/15 text-accent">
+        <span className="ml-auto text-[12px] text-text-tertiary">
           {badge}
         </span>
       )}
@@ -89,7 +89,7 @@ function AgentItem({
     <button
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
+        'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] transition-colors',
         isActive
           ? 'bg-surface-200 text-text-primary'
           : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
@@ -98,7 +98,7 @@ function AgentItem({
       <div className={cn('w-2 h-2 rounded-full flex-shrink-0', agentStatusColors[agent.status] || 'bg-gray-400')} />
       <span className="truncate">{agent.name}</span>
       {location && location.type === 'remote' && (
-        <span className="ml-auto text-[10px] text-text-tertiary truncate max-w-[60px]">
+        <span className="ml-auto text-[12px] text-text-tertiary truncate max-w-[60px]">
           {location.name}
         </span>
       )}
@@ -116,8 +116,8 @@ export function AgentsSection({ collapsed }: { collapsed: boolean }) {
 
   if (agents.length === 0) {
     return (
-      <div className="px-4 py-3 flex-shrink-0">
-        <p className="text-xs text-text-tertiary">No agents connected</p>
+      <div className="px-3 py-1.5 flex-shrink-0">
+        <p className="text-[13px] text-text-tertiary">No agents connected</p>
       </div>
     )
   }
@@ -146,7 +146,7 @@ export function WorkspaceSection({ collapsed }: { collapsed: boolean }) {
   if (collapsed) return null
 
   return (
-    <div className="px-2 pt-0.5 flex-shrink-0">
+    <div className="px-2 pt-0.5 space-y-0.5 flex-shrink-0">
       <WorkspaceButton view="board" icon={ViewColumnsIcon} label="Board" badge={nonDoneCount} />
       <WorkspaceButton view="usage" icon={ChartBarIcon} label="Usage" />
       <WorkspaceButton view="settings" icon={Cog6ToothIcon} label="Settings" />

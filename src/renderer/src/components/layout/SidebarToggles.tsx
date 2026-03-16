@@ -48,8 +48,8 @@ export function ClaudeToggle({ compact }: { compact?: boolean }) {
         }}
       >
         <svg
-          width={compact ? 10 : 14}
-          height={compact ? 10 : 14}
+          width={compact ? 12 : 14}
+          height={compact ? 12 : 14}
           viewBox="0 0 24 24"
           xmlns="http://www.w3.org/2000/svg"
           style={{ transition: 'opacity 0.2s' }}
@@ -106,7 +106,7 @@ export function DangerousToggle({ compact }: { compact?: boolean }) {
         }}
       >
         <ShieldExclamationIcon
-          className={compact ? 'w-3 h-3' : 'w-4 h-4'}
+          className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'}
           strokeWidth={1.5}
           style={{
             color: dangerousMode ? 'var(--danger-toggle-icon)' : compact ? 'var(--text-tertiary)' : 'var(--text-secondary)',
