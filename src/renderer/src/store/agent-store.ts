@@ -21,8 +21,8 @@ export const useAgentStore = create<AgentState>((set) => ({
   messages: {},
 
   loadAgents: async (locationId) => {
+    if (!window.electronAPI?.agentList) return
     await window.electronAPI.agentList(locationId)
-    // Agents come back via the onAgentsUpdated event, handled by setAgents
   },
 
   setAgents: (locationId, agents) => {

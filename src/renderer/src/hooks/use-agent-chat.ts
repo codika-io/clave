@@ -13,7 +13,7 @@ export function useAgentChat(agentId: string | null) {
   })
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Subscribe to agent messages
+  // Subscribe to agent messages (real mode only)
   useEffect(() => {
     if (!agentId || !window.electronAPI?.onAgentMessage) return
     const cleanup = window.electronAPI.onAgentMessage(agentId, (raw: unknown) => {
@@ -41,11 +41,26 @@ export function useAgentChat(agentId: string | null) {
 
   const sendMessage = useCallback(
     async (content: string) => {
-      if (!agentId || !window.electronAPI?.agentSend) return
-      const agent = useAgentStore.getState().agents.find((a) => a.id === agentId)
-      if (!agent) return
-      const msg = await window.electronAPI.agentSend(agentId, agent.locationId, content)
-      addMessage(agentId, msg as ChatMessage)
+      if (!agentId) return
+
+      // Create user message locally
+      const userMsg: ChatMessage = {
+        id: `user-${Date.now()}`,
+        agentId,
+        role: 'user',
+        content,
+        timestamp: Date.now(),
+        status: 'sent'
+      }
+      addMessage(agentId, userMsg)
+
+      // Send via IPC
+      if (window.electronAPI?.agentSend) {
+        const agent = useAgentStore.getState().agents.find((a) => a.id === agentId)
+        if (agent) {
+          await window.electronAPI.agentSend(agentId, agent.locationId, content)
+        }
+      }
     },
     [agentId, addMessage]
   )
