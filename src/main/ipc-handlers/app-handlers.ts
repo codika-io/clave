@@ -1,9 +1,21 @@
 import { ipcMain, app, nativeImage, BrowserWindow } from 'electron'
 import { join } from 'path'
-import { execFile, execFileSync } from 'child_process'
+import { execFileSync } from 'child_process'
+import * as fs from 'fs'
 import { preferencesManager, type AppIcon } from '../preferences-manager'
 
 const VALID_ICONS = ['dark', 'light', 'claude'] as const
+
+const logPath = join(app.getPath('userData'), 'icon-debug.log')
+
+function debugLog(msg: string): void {
+  const line = `[${new Date().toISOString()}] ${msg}\n`
+  try {
+    fs.appendFileSync(logPath, line)
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Resolve the on-disk path for an icon PNG.
@@ -12,54 +24,36 @@ const VALID_ICONS = ['dark', 'light', 'claude'] as const
  */
 function getIconPath(icon: string): string {
   const base = join(__dirname, '../../resources')
-  // In packaged builds, the asar-unpacked mirror has the same relative layout
   const asarUnpacked = base.replace('app.asar', 'app.asar.unpacked')
   return join(asarUnpacked, `icon-${icon}.png`)
 }
 
 /**
- * Use NSWorkspace.setIcon:forFile: via JXA to persist the dock icon
- * on the .app bundle. This survives quit/relaunch because macOS stores
- * it as an extended attribute, not inside the bundle (no code-sign breakage).
- *
- * Debounced to prevent race conditions when the user clicks through icons
- * quickly — multiple concurrent osascript processes can finish out of order.
+ * Derive the .app bundle path from the executable path.
+ * e.g. /Applications/Clave.app/Contents/MacOS/Clave → /Applications/Clave.app
  */
-let bundleIconTimer: ReturnType<typeof setTimeout> | null = null
-
-function setAppBundleIcon(iconPath: string): void {
-  if (process.platform !== 'darwin' || !app.isPackaged) return
-
-  if (bundleIconTimer) clearTimeout(bundleIconTimer)
-  bundleIconTimer = setTimeout(() => {
-    bundleIconTimer = null
-
-    const exePath = app.getPath('exe')
-    const appPath = exePath.replace(/\/Contents\/MacOS\/.*$/, '')
-    if (!appPath.endsWith('.app')) return
-
-    const script = [
-      `ObjC.import('AppKit')`,
-      `var img = $.NSImage.alloc.initWithContentsOfFile('${iconPath}')`,
-      `$.NSWorkspace.sharedWorkspace.setIconForFileOptions(img, '${appPath}', 0)`
-    ].join('; ')
-
-    execFile('osascript', ['-l', 'JavaScript', '-e', script], (err) => {
-      if (err) console.error('[app-icon] Failed to set bundle icon:', err.message)
-    })
-  }, 500)
+function getAppBundlePath(): string | null {
+  if (process.platform !== 'darwin' || !app.isPackaged) return null
+  const exePath = app.getPath('exe')
+  const appPath = exePath.replace(/\/Contents\/MacOS\/.*$/, '')
+  return appPath.endsWith('.app') ? appPath : null
 }
 
 /**
- * Synchronously set the bundle icon. Used on quit to guarantee
- * the final icon is applied before the process exits.
+ * Synchronously set the .app bundle icon via NSWorkspace JXA.
+ * This persists as a macOS extended attribute (no code-sign breakage).
+ * Synchronous to eliminate all race conditions from concurrent osascript calls.
  */
-function setAppBundleIconSync(iconPath: string): void {
-  if (process.platform !== 'darwin' || !app.isPackaged) return
+function setAppBundleIcon(icon: string): void {
+  const appPath = getAppBundlePath()
+  if (!appPath) return
 
-  const exePath = app.getPath('exe')
-  const appPath = exePath.replace(/\/Contents\/MacOS\/.*$/, '')
-  if (!appPath.endsWith('.app')) return
+  const iconPath = getIconPath(icon)
+  debugLog(`setAppBundleIcon: icon=${icon} iconPath=${iconPath} appPath=${appPath}`)
+
+  const iconExists = fs.existsSync(iconPath)
+  debugLog(`  iconExists=${iconExists}`)
+  if (!iconExists) return
 
   const script = [
     `ObjC.import('AppKit')`,
@@ -68,33 +62,34 @@ function setAppBundleIconSync(iconPath: string): void {
   ].join('; ')
 
   try {
-    execFileSync('osascript', ['-l', 'JavaScript', '-e', script])
+    const result = execFileSync('osascript', ['-l', 'JavaScript', '-e', script], {
+      encoding: 'utf-8',
+      timeout: 5000
+    })
+    debugLog(`  result=${result.trim()}`)
   } catch (err) {
-    console.error('[app-icon] Failed to set bundle icon on quit:', err)
+    debugLog(`  ERROR: ${err}`)
   }
 }
 
 export function applyPersistedIcon(): void {
   const savedIcon = preferencesManager.get('appIcon')
-  const iconPath = getIconPath(savedIcon)
-  setAppBundleIcon(iconPath)
-
-  // Safety net: synchronously set the correct icon right before the app exits
-  app.on('will-quit', () => {
-    if (bundleIconTimer) clearTimeout(bundleIconTimer)
-    const finalIcon = preferencesManager.get('appIcon')
-    const finalPath = getIconPath(finalIcon)
-    setAppBundleIconSync(finalPath)
-  })
+  debugLog(`applyPersistedIcon: savedIcon=${savedIcon}`)
+  setAppBundleIcon(savedIcon)
 }
 
 export function registerAppHandlers(): void {
   ipcMain.handle('app:set-icon', (_event, icon: string) => {
     if (!VALID_ICONS.includes(icon as (typeof VALID_ICONS)[number])) return
 
+    debugLog(`IPC app:set-icon: icon=${icon}`)
+
     const iconPath = getIconPath(icon)
     const image = nativeImage.createFromPath(iconPath)
-    if (image.isEmpty()) return
+    if (image.isEmpty()) {
+      debugLog(`  nativeImage is empty for ${iconPath}`)
+      return
+    }
 
     preferencesManager.set('appIcon', icon as AppIcon)
 
@@ -108,6 +103,6 @@ export function registerAppHandlers(): void {
     }
 
     // Persist to the .app bundle so it survives quit
-    setAppBundleIcon(iconPath)
+    setAppBundleIcon(icon)
   })
 }

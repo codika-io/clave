@@ -185,14 +185,6 @@ export function AppShell() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
-  // Sync saved app icon preference to main process on startup
-  useEffect(() => {
-    const savedIcon = localStorage.getItem('clave-app-icon')
-    if (savedIcon) {
-      window.electronAPI?.setAppIcon(savedIcon)
-    }
-  }, [])
-
   // Handle notification click → switch to session
   useEffect(() => {
     if (!window.electronAPI?.onNotificationClicked) return
