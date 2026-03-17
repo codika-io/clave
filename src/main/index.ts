@@ -8,9 +8,11 @@ import { initNotificationManager } from './notification-manager'
 import { sshManager } from './ssh-manager'
 import { locationManager } from './location-manager'
 import { openclawClient } from './openclaw-client'
+import { preferencesManager } from './preferences-manager'
 
 function createWindow(): void {
-  const icon = nativeImage.createFromPath(join(__dirname, '../../resources/icon-dark.png'))
+  const savedIcon = preferencesManager.get('appIcon')
+  const icon = nativeImage.createFromPath(join(__dirname, `../../resources/icon-${savedIcon}.png`))
 
   const mainWindow = new BrowserWindow({
     width: 1400,
@@ -29,7 +31,7 @@ function createWindow(): void {
     }
   })
 
-  if (is.dev && process.platform === 'darwin') {
+  if (process.platform === 'darwin') {
     app.dock?.setIcon(icon)
   }
 
