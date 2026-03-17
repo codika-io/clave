@@ -1111,8 +1111,8 @@ export function Sidebar() {
                           : 'bg-surface-100/30 border-border-subtle')
                       )}
                       style={groupColorHex ? {
-                        backgroundColor: `${groupColorHex}15`,
-                        borderColor: `${groupColorHex}40`
+                        backgroundColor: allGroupSelected ? `${groupColorHex}25` : `${groupColorHex}15`,
+                        borderColor: allGroupSelected ? `${groupColorHex}50` : `${groupColorHex}40`
                       } : undefined}
                     >
                       {getDropIndicator(group.id) === 'inside' && (
@@ -1179,6 +1179,7 @@ export function Sidebar() {
                                   onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
                                   grouped
                                   groupSelected={allGroupSelected}
+                                  groupColorHex={groupColorHex}
                                   forceEditing={renamingId === session.id}
                                   onEditingDone={clearRenaming}
                                   onDragStart={(e) => handleDragStart(e, session.id, false)}

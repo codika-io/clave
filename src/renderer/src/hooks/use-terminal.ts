@@ -12,14 +12,6 @@ function stripAnsi(str: string): string {
   return str.replace(ANSI_RE, '')
 }
 
-// eslint-disable-next-line no-control-regex
-const LOCALHOST_URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d{1,5})(?:\/\S*)?/i
-
-function detectLocalhostUrl(buffer: string): string | null {
-  const match = buffer.match(LOCALHOST_URL_RE)
-  return match ? match[0] : null
-}
-
 function detectPrompt(buffer: string): string | null {
   // Collapse whitespace for matching (ANSI stripping removes cursor positioning,
   // leaving words glued together or with inconsistent spacing)
@@ -157,11 +149,37 @@ export function useTerminal(sessionId: string) {
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
-    // Shift+Enter → send newline character to PTY
+    // Custom key bindings — bypass xterm.js local processing, send directly to PTY
     terminal.attachCustomKeyEventHandler((e) => {
-      if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey) {
+      if (e.type !== 'keydown') return true
+      // Shift+Enter → newline
+      if (e.key === 'Enter' && e.shiftKey) {
         e.preventDefault()
         window.electronAPI.writeSession(sessionId, '\n')
+        return false
+      }
+      // Option+Backspace → word delete backward
+      if (e.key === 'Backspace' && e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.electronAPI.writeSession(sessionId, '\x1b\x7f')
+        return false
+      }
+      // Option+Delete → forward word delete
+      if (e.key === 'Delete' && e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.electronAPI.writeSession(sessionId, '\x1bd')
+        return false
+      }
+      // Option+Left → word backward
+      if (e.key === 'ArrowLeft' && e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.electronAPI.writeSession(sessionId, '\x1bb')
+        return false
+      }
+      // Option+Right → word forward
+      if (e.key === 'ArrowRight' && e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.electronAPI.writeSession(sessionId, '\x1bf')
         return false
       }
       return true
@@ -177,47 +195,21 @@ export function useTerminal(sessionId: string) {
       window.electronAPI.resizeSession(sessionId, cols, rows)
     })
 
-    const { setSessionActivity, setSessionPromptWaiting, setSessionDetectedUrl, setSessionUnseenActivity, updateSessionAlive } = useSessionStore.getState()
+    const { setSessionActivity, setSessionPromptWaiting, updateSessionAlive } = useSessionStore.getState()
 
-    // Activity tracking: debounce from active → idle after silence
+    // Activity tracking: debounce from active → idle after 2s of silence
     let activityTimer: ReturnType<typeof setTimeout> | null = null
-    let activeStartTimer: ReturnType<typeof setTimeout> | null = null
     let notificationTimer: ReturnType<typeof setTimeout> | null = null
     let outputBuffer = ''
-    let isMarkedActive = false
 
     // Wire PTY output -> terminal
     const cleanupData = window.electronAPI.onSessionData(sessionId, (data) => {
       terminal.write(data)
-
-      // Only mark active after sustained output (50ms) to avoid flicker from cursor blinks etc.
-      if (!isMarkedActive) {
-        if (!activeStartTimer) {
-          activeStartTimer = setTimeout(() => {
-            isMarkedActive = true
-            setSessionActivity(sessionId, 'active')
-            setSessionPromptWaiting(sessionId, null)
-            activeStartTimer = null
-          }, 50)
-        }
-      } else {
-        setSessionPromptWaiting(sessionId, null)
-      }
+      setSessionActivity(sessionId, 'active')
+      setSessionPromptWaiting(sessionId, null)
 
       // Append stripped data to rolling buffer (max 500 chars)
       outputBuffer = (outputBuffer + stripAnsi(data)).slice(-500)
-
-      // Detect localhost URLs in output
-      const detectedUrl = detectLocalhostUrl(outputBuffer)
-      if (detectedUrl) {
-        setSessionDetectedUrl(sessionId, detectedUrl)
-      }
-
-      // Mark unseen activity if this session is not currently selected
-      const { selectedSessionIds } = useSessionStore.getState()
-      if (!selectedSessionIds.includes(sessionId)) {
-        setSessionUnseenActivity(sessionId, true)
-      }
 
       if (activityTimer) clearTimeout(activityTimer)
       if (notificationTimer) {
@@ -226,11 +218,6 @@ export function useTerminal(sessionId: string) {
       }
 
       activityTimer = setTimeout(() => {
-        isMarkedActive = false
-        if (activeStartTimer) {
-          clearTimeout(activeStartTimer)
-          activeStartTimer = null
-        }
         setSessionActivity(sessionId, 'idle')
 
         // Check for prompt patterns after idle detection
@@ -261,7 +248,6 @@ export function useTerminal(sessionId: string) {
         notificationTimer = null
       }
       updateSessionAlive(sessionId, false)
-      setSessionDetectedUrl(sessionId, null)
 
       const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
       const title = session?.name ?? session?.folderName ?? 'Clave'
@@ -378,7 +364,6 @@ export function useTerminal(sessionId: string) {
       container.removeEventListener('drop', handleDrop, true)
       if (resizeTimer) clearTimeout(resizeTimer)
       if (activityTimer) clearTimeout(activityTimer)
-      if (activeStartTimer) clearTimeout(activeStartTimer)
       if (notificationTimer) clearTimeout(notificationTimer)
       inputDisposable.dispose()
       resizeDisposable.dispose()

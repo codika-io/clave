@@ -21,6 +21,7 @@ interface SessionItemProps {
   onContextMenu: (e: React.MouseEvent) => void
   grouped?: boolean
   groupSelected?: boolean
+  groupColorHex?: string
   forceEditing?: boolean
   onEditingDone?: () => void
   onDragStart?: (e: React.DragEvent) => void
@@ -39,6 +40,7 @@ export function SessionItem({
   onContextMenu,
   grouped,
   groupSelected,
+  groupColorHex,
   forceEditing,
   onEditingDone,
   onDragStart,
@@ -150,11 +152,27 @@ export function SessionItem({
             ? 'text-text-primary'
             : isSelected
               ? grouped
-                ? 'bg-surface-200/80 text-text-primary'
+                ? 'text-text-primary'
                 : 'bg-surface-200 text-text-primary shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
-              : 'text-text-secondary hover:bg-surface-100',
+              : groupColorHex
+                ? 'text-text-secondary'
+                : 'text-text-secondary hover:bg-surface-100',
           isDragging && 'opacity-30'
         )}
+        style={groupColorHex && isSelected && !groupSelected && grouped
+          ? { backgroundColor: `${groupColorHex}20` }
+          : undefined
+        }
+        onMouseEnter={(e) => {
+          if (groupColorHex && !isSelected && !groupSelected) {
+            e.currentTarget.style.backgroundColor = `${groupColorHex}18`
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (groupColorHex && !isSelected && !groupSelected) {
+            e.currentTarget.style.backgroundColor = ''
+          }
+        }}
       >
         {/* Session icon with status badge */}
         <span className="relative flex-shrink-0 w-4 h-4">

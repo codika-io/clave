@@ -150,11 +150,37 @@ export function useRemoteTerminal(shellId: string) {
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
-    // Shift+Enter → send newline character to SSH shell
+    // Custom key bindings — bypass xterm.js local processing, send directly to SSH shell
     terminal.attachCustomKeyEventHandler((e) => {
-      if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey) {
+      if (e.type !== 'keydown') return true
+      // Shift+Enter → newline
+      if (e.key === 'Enter' && e.shiftKey) {
         e.preventDefault()
         window.electronAPI.sshShellWrite(shellId, '\n')
+        return false
+      }
+      // Option+Backspace → word delete backward
+      if (e.key === 'Backspace' && e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.electronAPI.sshShellWrite(shellId, '\x1b\x7f')
+        return false
+      }
+      // Option+Delete → forward word delete
+      if (e.key === 'Delete' && e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.electronAPI.sshShellWrite(shellId, '\x1bd')
+        return false
+      }
+      // Option+Left → word backward
+      if (e.key === 'ArrowLeft' && e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.electronAPI.sshShellWrite(shellId, '\x1bb')
+        return false
+      }
+      // Option+Right → word forward
+      if (e.key === 'ArrowRight' && e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.electronAPI.sshShellWrite(shellId, '\x1bf')
         return false
       }
       return true
