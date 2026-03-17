@@ -1,15 +1,10 @@
-import { ipcMain, app, nativeImage, BrowserWindow, type NativeImage } from 'electron'
+import { ipcMain, app, nativeImage, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { execFileSync } from 'child_process'
 import * as fs from 'fs'
 import { preferencesManager, type AppIcon } from '../preferences-manager'
 
-const VALID_ICONS = ['dark', 'light', 'claude', 'ocean', 'emerald', 'violet', 'rose'] as const
-
-// macOS icon grid: icon content at ~824x824 centered in 1024x1024
-const ICON_CANVAS = 1024
-const ICON_CONTENT = 824
-const ICON_PADDING = Math.floor((ICON_CANVAS - ICON_CONTENT) / 2)
+const VALID_ICONS = ['dark', 'light', 'claude'] as const
 
 const logPath = join(app.getPath('userData'), 'icon-debug.log')
 
@@ -31,28 +26,6 @@ function getIconPath(icon: string): string {
   const base = join(__dirname, '../../resources')
   const asarUnpacked = base.replace('app.asar', 'app.asar.unpacked')
   return join(asarUnpacked, `icon-${icon}.png`)
-}
-
-/**
- * Add transparent padding around an icon to match the macOS icon grid.
- * macOS expects app icons at ~824x824 centered in a 1024x1024 canvas.
- * Without this, raw PNGs passed to app.dock.setIcon() appear oversized.
- */
-export function padIconForDock(source: NativeImage): NativeImage {
-  const resized = source.resize({ width: ICON_CONTENT, height: ICON_CONTENT })
-  const srcBitmap = resized.toBitmap()
-  const dstBuffer = Buffer.alloc(ICON_CANVAS * ICON_CANVAS * 4, 0)
-
-  for (let y = 0; y < ICON_CONTENT; y++) {
-    const srcOffset = y * ICON_CONTENT * 4
-    const dstOffset = ((y + ICON_PADDING) * ICON_CANVAS + ICON_PADDING) * 4
-    srcBitmap.copy(dstBuffer, dstOffset, srcOffset, srcOffset + ICON_CONTENT * 4)
-  }
-
-  return nativeImage.createFromBitmap(dstBuffer, {
-    width: ICON_CANVAS,
-    height: ICON_CANVAS
-  })
 }
 
 /**
@@ -84,12 +57,8 @@ function setAppBundleIcon(icon: string): void {
 
   const script = [
     `ObjC.import('AppKit')`,
-    `var src = $.NSImage.alloc.initWithContentsOfFile('${iconPath}')`,
-    `var canvas = $.NSImage.alloc.initWithSize({width: ${ICON_CANVAS}, height: ${ICON_CANVAS}})`,
-    `canvas.lockFocus`,
-    `src.drawInRectFromRectOperationFraction($.NSMakeRect(${ICON_PADDING}, ${ICON_PADDING}, ${ICON_CONTENT}, ${ICON_CONTENT}), $.NSZeroRect, 2, 1.0)`,
-    `canvas.unlockFocus`,
-    `$.NSWorkspace.sharedWorkspace.setIconForFileOptions(canvas, '${appPath}', 0)`
+    `var img = $.NSImage.alloc.initWithContentsOfFile('${iconPath}')`,
+    `$.NSWorkspace.sharedWorkspace.setIconForFileOptions(img, '${appPath}', 0)`
   ].join('; ')
 
   try {
@@ -143,7 +112,7 @@ export function registerAppHandlers(): void {
     preferencesManager.set('appIcon', icon as AppIcon)
 
     if (process.platform === 'darwin') {
-      app.dock?.setIcon(padIconForDock(image))
+      app.dock?.setIcon(image)
     }
 
     const win = BrowserWindow.getAllWindows()[0]

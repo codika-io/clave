@@ -1,6 +1,6 @@
 export type Theme = 'dark' | 'light' | 'coffee'
 
-export type AppIcon = 'dark' | 'light' | 'claude' | 'ocean' | 'emerald' | 'violet' | 'rose'
+export type AppIcon = 'dark' | 'light' | 'claude'
 
 export type ActivityStatus = 'active' | 'idle' | 'ended'
 

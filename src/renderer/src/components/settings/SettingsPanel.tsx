@@ -31,11 +31,7 @@ function IconPreview({ bg, face, depthBack, depthLight, depthDark }: { bg: strin
 const appIcons: { id: AppIcon; label: string; colors: { bg: string; face: string; depthBack: string; depthLight: string; depthDark: string } }[] = [
   { id: 'dark', label: 'Dark', colors: { bg: '#0a0a0a', face: '#ffffff', depthBack: '#2D2D2D', depthLight: '#3A3A3A', depthDark: '#222222' } },
   { id: 'light', label: 'Light', colors: { bg: '#f5f5f5', face: '#1a1a1a', depthBack: '#555555', depthLight: '#666666', depthDark: '#444444' } },
-  { id: 'claude', label: 'Claude', colors: { bg: '#da7756', face: '#ffffff', depthBack: '#A45A41', depthLight: '#B96549', depthDark: '#914F39' } },
-  { id: 'ocean', label: 'Ocean', colors: { bg: '#2563eb', face: '#ffffff', depthBack: '#1b4bba', depthLight: '#2158d4', depthDark: '#1740a5' } },
-  { id: 'emerald', label: 'Emerald', colors: { bg: '#059669', face: '#ffffff', depthBack: '#047353', depthLight: '#05855e', depthDark: '#036448' } },
-  { id: 'violet', label: 'Violet', colors: { bg: '#7c3aed', face: '#ffffff', depthBack: '#5e2cbf', depthLight: '#6e34d6', depthDark: '#5225ab' } },
-  { id: 'rose', label: 'Rose', colors: { bg: '#e11d48', face: '#ffffff', depthBack: '#ab1637', depthLight: '#cc1a41', depthDark: '#961230' } }
+  { id: 'claude', label: 'Claude', colors: { bg: '#da7756', face: '#ffffff', depthBack: '#A45A41', depthLight: '#B96549', depthDark: '#914F39' } }
 ]
 
 const themes: { id: Theme; label: string; colors: { bg: string; surface: string; text: string; border: string } }[] = [

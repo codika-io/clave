@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
 
-export type AppIcon = 'dark' | 'light' | 'claude' | 'ocean' | 'emerald' | 'violet' | 'rose'
+export type AppIcon = 'dark' | 'light' | 'claude'
 
 interface Preferences {
   appIcon: AppIcon
