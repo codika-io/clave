@@ -150,6 +150,16 @@ class OpenClawClient {
     })
   }
 
+  /** Request sessions list from the gateway */
+  async requestSessions(locationId: string): Promise<unknown> {
+    return this.request(locationId, 'sessions.list', {})
+  }
+
+  /** Request chat history for a specific session */
+  async requestChatHistory(locationId: string, sessionKey: string): Promise<unknown> {
+    return this.request(locationId, 'chat.history', { sessionKey })
+  }
+
   onMessage(callback: MessageCallback): () => void {
     this.messageCallbacks.add(callback)
     return () => { this.messageCallbacks.delete(callback) }

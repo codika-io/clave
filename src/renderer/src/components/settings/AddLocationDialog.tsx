@@ -239,7 +239,7 @@ export function AddLocationDialog({ onClose }: AddLocationDialogProps) {
                       <p className="text-sm font-medium text-text-primary">Connection successful!</p>
                       {testResult.openclawVersion ? (
                         <p className="text-xs text-text-secondary">
-                          OpenClaw {testResult.openclawVersion} detected (port {testResult.openclawPort})
+                          {testResult.openclawVersion} detected (port {testResult.openclawPort})
                         </p>
                       ) : (
                         <div className="space-y-2">

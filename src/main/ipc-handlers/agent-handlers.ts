@@ -35,6 +35,14 @@ export function registerAgentHandlers(): void {
     openclawClient.disconnect(locationId)
   })
 
+  ipcMain.handle('agent:sessions', async (_event, locationId: string) => {
+    return openclawClient.requestSessions(locationId)
+  })
+
+  ipcMain.handle('agent:chat-history', async (_event, locationId: string, sessionKey: string) => {
+    return openclawClient.requestChatHistory(locationId, sessionKey)
+  })
+
   ipcMain.handle('agent:send', async (_event, agentId: string, locationId: string, content: string) => {
     // Return optimistic message immediately, send async
     const msg: ChatMessage = {

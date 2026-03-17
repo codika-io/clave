@@ -196,7 +196,13 @@ export function AppShell() {
   useEffect(() => {
     if (!window.electronAPI?.onAgentsUpdated) return
     return window.electronAPI.onAgentsUpdated((locationId, agents) => {
-      useAgentStore.getState().setAgents(locationId, agents as never[])
+      const typedAgents = agents as import('../../../../shared/remote-types').Agent[]
+      useAgentStore.getState().setAgents(locationId, typedAgents)
+      // Load conversation history for newly discovered agents
+      const agentIds = typedAgents.map((a) => a.id)
+      if (agentIds.length > 0) {
+        useAgentStore.getState().loadHistory(locationId, agentIds)
+      }
     })
   }, [])
 

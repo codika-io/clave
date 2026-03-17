@@ -241,6 +241,8 @@ export interface ElectronAPI {
   agentList: (locationId: string) => Promise<import('../shared/remote-types').Agent[]>
   agentConnect: (locationId: string) => Promise<void>
   agentDisconnect: (locationId: string) => Promise<void>
+  agentSessions: (locationId: string) => Promise<unknown>
+  agentChatHistory: (locationId: string, sessionKey: string) => Promise<unknown>
   agentSend: (agentId: string, locationId: string, content: string) => Promise<import('../shared/remote-types').ChatMessage>
   onAgentMessage: (agentId: string, callback: (message: unknown) => void) => () => void
   onAgentsUpdated: (callback: (locationId: string, agents: unknown[]) => void) => () => void

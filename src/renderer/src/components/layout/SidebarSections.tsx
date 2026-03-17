@@ -4,6 +4,7 @@ import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
 import { useBoardStore } from '../../store/board-store'
 import { cn } from '../../lib/utils'
+import { SidebarItem } from './SidebarItem'
 
 export function SectionHeading({
   title,
@@ -32,78 +33,11 @@ export function SectionHeading({
   )
 }
 
-function WorkspaceButton({
-  view,
-  icon: Icon,
-  label,
-  badge
-}: {
-  view: ActiveView
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
-  label: string
-  badge?: number
-}) {
-  const activeView = useSessionStore((s) => s.activeView)
-  const setActiveView = useSessionStore((s) => s.setActiveView)
-
-  return (
-    <button
-      onClick={() => setActiveView(view)}
-      className={cn(
-        'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
-        activeView === view
-          ? 'bg-surface-200 text-text-primary'
-          : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
-      )}
-    >
-      <Icon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />
-      <span>{label}</span>
-      {badge !== undefined && badge > 0 && (
-        <span className="ml-auto text-[12px] text-text-tertiary">
-          {badge}
-        </span>
-      )}
-    </button>
-  )
-}
-
 const agentStatusColors: Record<string, string> = {
   online: 'bg-green-500',
   offline: 'bg-gray-400',
   busy: 'bg-amber-500',
   error: 'bg-red-500'
-}
-
-function AgentItem({
-  agent,
-  isActive,
-  onClick
-}: {
-  agent: { id: string; name: string; status: string; locationId: string }
-  isActive: boolean
-  onClick: () => void
-}) {
-  const location = useLocationStore((s) => s.locations.find((l) => l.id === agent.locationId))
-
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] transition-colors',
-        isActive
-          ? 'bg-surface-200 text-text-primary'
-          : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
-      )}
-    >
-      <div className={cn('w-2 h-2 rounded-full flex-shrink-0', agentStatusColors[agent.status] || 'bg-gray-400')} />
-      <span className="truncate">{agent.name}</span>
-      {location && location.type === 'remote' && (
-        <span className="ml-auto text-[12px] text-text-tertiary truncate max-w-[60px]">
-          {location.name}
-        </span>
-      )}
-    </button>
-  )
 }
 
 export function AgentsSection({ collapsed }: { collapsed: boolean }) {
@@ -123,33 +57,70 @@ export function AgentsSection({ collapsed }: { collapsed: boolean }) {
   }
 
   return (
-    <div className="px-2 pt-0.5 overflow-y-auto max-h-[30vh] flex-shrink-0">
-      {agents.map((agent) => (
-        <AgentItem
-          key={agent.id}
-          agent={agent}
-          isActive={activeAgentId === agent.id}
-          onClick={() => {
-            setActiveAgent(agent.id)
-            setActiveView('agents')
-          }}
-        />
-      ))}
+    <div className="px-2 pt-0.5 space-y-0.5 overflow-y-auto max-h-[30vh] flex-shrink-0">
+      {agents.map((agent) => {
+        const location = useLocationStore.getState().locations.find((l) => l.id === agent.locationId)
+        return (
+          <SidebarItem
+            key={agent.id}
+            icon={
+              <div
+                className={cn(
+                  'w-2 h-2 rounded-full flex-shrink-0',
+                  agentStatusColors[agent.status] || 'bg-gray-400'
+                )}
+              />
+            }
+            label={agent.name}
+            isSelected={activeAgentId === agent.id}
+            onClick={() => {
+              setActiveAgent(agent.id)
+              setActiveView('agents')
+            }}
+            rightContent={
+              location && location.type === 'remote' ? (
+                <span className="text-[12px] text-text-tertiary truncate max-w-[60px]">
+                  {location.name}
+                </span>
+              ) : undefined
+            }
+          />
+        )
+      })}
     </div>
   )
 }
 
 export function WorkspaceSection({ collapsed }: { collapsed: boolean }) {
+  const activeView = useSessionStore((s) => s.activeView)
+  const setActiveView = useSessionStore((s) => s.setActiveView)
   const tasks = useBoardStore((s) => s.tasks)
   const nonDoneCount = tasks.filter((t) => t.status !== 'done').length
 
   if (collapsed) return null
 
+  const items: { view: ActiveView; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string; badge?: number }[] = [
+    { view: 'board', icon: ViewColumnsIcon, label: 'Board', badge: nonDoneCount },
+    { view: 'usage', icon: ChartBarIcon, label: 'Usage' },
+    { view: 'settings', icon: Cog6ToothIcon, label: 'Settings' }
+  ]
+
   return (
     <div className="px-2 pt-0.5 space-y-0.5 flex-shrink-0">
-      <WorkspaceButton view="board" icon={ViewColumnsIcon} label="Board" badge={nonDoneCount} />
-      <WorkspaceButton view="usage" icon={ChartBarIcon} label="Usage" />
-      <WorkspaceButton view="settings" icon={Cog6ToothIcon} label="Settings" />
+      {items.map(({ view, icon: Icon, label, badge }) => (
+        <SidebarItem
+          key={view}
+          icon={<Icon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />}
+          label={label}
+          isSelected={activeView === view}
+          onClick={() => setActiveView(view)}
+          rightContent={
+            badge !== undefined && badge > 0 ? (
+              <span className="text-[12px] text-text-tertiary">{badge}</span>
+            ) : undefined
+          }
+        />
+      ))}
     </div>
   )
 }

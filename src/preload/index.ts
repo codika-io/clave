@@ -226,6 +226,9 @@ const electronAPI = {
   agentList: (locationId: string) => ipcRenderer.invoke('agent:list', locationId),
   agentConnect: (locationId: string) => ipcRenderer.invoke('agent:connect', locationId),
   agentDisconnect: (locationId: string) => ipcRenderer.invoke('agent:disconnect', locationId),
+  agentSessions: (locationId: string) => ipcRenderer.invoke('agent:sessions', locationId),
+  agentChatHistory: (locationId: string, sessionKey: string) =>
+    ipcRenderer.invoke('agent:chat-history', locationId, sessionKey),
   agentSend: (agentId: string, locationId: string, content: string) =>
     ipcRenderer.invoke('agent:send', agentId, locationId, content),
   onAgentMessage: (agentId: string, callback: (message: unknown) => void) => {
