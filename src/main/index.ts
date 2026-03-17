@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell, nativeImage, nativeTheme } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
+import { applyPersistedIcon } from './ipc-handlers/app-handlers'
 import { ptyManager, preloadLoginShellEnv } from './pty-manager'
 import { initAutoUpdater } from './auto-updater'
 import { initNotificationManager } from './notification-manager'
@@ -69,6 +70,7 @@ app.whenReady().then(() => {
 
   registerIpcHandlers()
   initNotificationManager()
+  applyPersistedIcon()
   createWindow()
   initAutoUpdater()
 
