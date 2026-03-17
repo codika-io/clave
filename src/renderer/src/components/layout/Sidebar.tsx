@@ -1025,7 +1025,11 @@ export function Sidebar() {
             />
           }
         />
-        {!sessionsCollapsed && (
+        <div
+          className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
+          style={{ gridTemplateRows: sessionsCollapsed ? '0fr' : '1fr', opacity: sessionsCollapsed ? 0 : 1, transform: sessionsCollapsed ? 'translateY(-4px)' : 'translateY(0)' }}
+        >
+          <div className="overflow-hidden">
           <div
             className="overflow-y-auto px-2 space-y-2"
             style={{ maxHeight: 'calc(60vh - 140px)' }}
@@ -1137,8 +1141,8 @@ export function Sidebar() {
                         isDragging={draggingIds.includes(group.id)}
                       />
                       <div
-                        className="grid transition-[grid-template-rows] duration-200 ease-out"
-                        style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr' }}
+                        className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
+                        style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
                       >
                         <div className="overflow-hidden">
                           <div className="px-1 pb-1 space-y-0.5">
@@ -1203,7 +1207,8 @@ export function Sidebar() {
               })
             ) : null}
           </div>
-        )}
+          </div>
+        </div>
 
         {/* Workspace section */}
         <SectionHeading title="Workspace" collapsed={workspaceCollapsed} onToggle={() => setWorkspaceCollapsed((c) => !c)} />

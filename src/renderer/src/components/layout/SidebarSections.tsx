@@ -37,8 +37,6 @@ export function WorkspaceSection({ collapsed }: { collapsed: boolean }) {
   const tasks = useBoardStore((s) => s.tasks)
   const nonDoneCount = tasks.filter((t) => t.status !== 'done').length
 
-  if (collapsed) return null
-
   const items: { view: ActiveView; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string; badge?: number }[] = [
     { view: 'board', icon: ViewColumnsIcon, label: 'Board', badge: nonDoneCount },
     { view: 'usage', icon: ChartBarIcon, label: 'Usage' },
@@ -46,21 +44,28 @@ export function WorkspaceSection({ collapsed }: { collapsed: boolean }) {
   ]
 
   return (
-    <div className="px-2 pt-0.5 space-y-0.5 flex-shrink-0">
-      {items.map(({ view, icon: Icon, label, badge }) => (
-        <SidebarItem
-          key={view}
-          icon={<Icon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />}
-          label={label}
-          isSelected={activeView === view}
-          onClick={() => setActiveView(view)}
-          rightContent={
-            badge !== undefined && badge > 0 ? (
-              <span className="text-[12px] text-text-tertiary">{badge}</span>
-            ) : undefined
-          }
-        />
-      ))}
+    <div
+      className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out flex-shrink-0"
+      style={{ gridTemplateRows: collapsed ? '0fr' : '1fr', opacity: collapsed ? 0 : 1, transform: collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
+    >
+      <div className="overflow-hidden">
+        <div className="px-2 pt-0.5 space-y-0.5">
+          {items.map(({ view, icon: Icon, label, badge }) => (
+            <SidebarItem
+              key={view}
+              icon={<Icon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />}
+              label={label}
+              isSelected={activeView === view}
+              onClick={() => setActiveView(view)}
+              rightContent={
+                badge !== undefined && badge > 0 ? (
+                  <span className="text-[12px] text-text-tertiary">{badge}</span>
+                ) : undefined
+              }
+            />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
