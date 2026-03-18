@@ -112,7 +112,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: { co
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           em: ({ children }) => <em>{children}</em>,
           del: ({ children }) => <del className="text-text-tertiary">{children}</del>
-        }),
+        }) as import('react-markdown').Components,
     []
   )
 

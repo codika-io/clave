@@ -58,7 +58,6 @@ export function SessionGroupItem({
     editValue,
     inputRef,
     setEditValue,
-    handleDoubleClick,
     handleButtonKeyDown,
     handleInputKeyDown,
     commitRename
