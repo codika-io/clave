@@ -1,31 +1,21 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
+import {
+  flattenTree,
+  findNode,
+  updateNodeChildren,
+  toggleNodeExpanded,
+  setNodeLoading,
+  type BaseTreeNode
+} from '../lib/tree-utils'
 
-export interface TreeNode {
-  name: string
-  path: string
-  type: 'file' | 'directory'
-  size?: number
+export interface TreeNode extends BaseTreeNode {
   children?: TreeNode[]
-  expanded: boolean
-  loading: boolean
-  depth: number
   ignored?: boolean
 }
 
 export interface FlatTreeNode extends TreeNode {
   depth: number
-}
-
-function flattenTree(nodes: TreeNode[], depth = 0): FlatTreeNode[] {
-  const result: FlatTreeNode[] = []
-  for (const node of nodes) {
-    result.push({ ...node, depth })
-    if (node.type === 'directory' && node.expanded && node.children) {
-      result.push(...flattenTree(node.children, depth + 1))
-    }
-  }
-  return result
 }
 
 /** Mark nodes whose paths appear in the ignored set */
@@ -402,55 +392,3 @@ export function useFileTree(cwd: string | null) {
   return { rootNodes, flatList, loading, filter, setFilter, toggleDir, refreshDir }
 }
 
-// Helper functions to update tree immutably
-
-function findNode(nodes: TreeNode[], path: string): TreeNode | null {
-  for (const node of nodes) {
-    if (node.path === path) return node
-    if (node.children) {
-      const found = findNode(node.children, path)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-function updateNodeChildren(
-  nodes: TreeNode[],
-  path: string,
-  children: TreeNode[]
-): TreeNode[] {
-  return nodes.map((node) => {
-    if (node.path === path) {
-      return { ...node, children, loading: false }
-    }
-    if (node.children) {
-      return { ...node, children: updateNodeChildren(node.children, path, children) }
-    }
-    return node
-  })
-}
-
-function toggleNodeExpanded(nodes: TreeNode[], path: string): TreeNode[] {
-  return nodes.map((node) => {
-    if (node.path === path) {
-      return { ...node, expanded: !node.expanded }
-    }
-    if (node.children) {
-      return { ...node, children: toggleNodeExpanded(node.children, path) }
-    }
-    return node
-  })
-}
-
-function setNodeLoading(nodes: TreeNode[], path: string, loading: boolean): TreeNode[] {
-  return nodes.map((node) => {
-    if (node.path === path) {
-      return { ...node, loading }
-    }
-    if (node.children) {
-      return { ...node, children: setNodeLoading(node.children, path, loading) }
-    }
-    return node
-  })
-}

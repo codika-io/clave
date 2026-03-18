@@ -1,29 +1,12 @@
 import { useState, useCallback, useMemo } from 'react'
+import { flattenTree, type BaseTreeNode } from '../lib/tree-utils'
 
-export interface RemoteTreeNode {
-  name: string
-  path: string
-  type: 'file' | 'directory'
-  size?: number
+export interface RemoteTreeNode extends BaseTreeNode {
   children?: RemoteTreeNode[]
-  expanded: boolean
-  loading: boolean
-  depth: number
 }
 
 export interface FlatRemoteTreeNode extends RemoteTreeNode {
   depth: number
-}
-
-function flattenTree(nodes: RemoteTreeNode[], depth = 0): FlatRemoteTreeNode[] {
-  const result: FlatRemoteTreeNode[] = []
-  for (const node of nodes) {
-    result.push({ ...node, depth })
-    if (node.type === 'directory' && node.expanded && node.children) {
-      result.push(...flattenTree(node.children, depth + 1))
-    }
-  }
-  return result
 }
 
 export function useRemoteFileTree(locationId: string | undefined, cwd: string | null) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback } from 'react'
 import { cn } from '../../lib/utils'
 import {
   useSessionStore,
@@ -11,6 +11,7 @@ import {
   CommandLineIcon,
   PlusIcon
 } from '@heroicons/react/24/outline'
+import { useInlineEdit } from '../../hooks/use-inline-edit'
 
 interface SessionGroupItemProps {
   group: SessionGroup
@@ -52,51 +53,21 @@ export function SessionGroupItem({
   const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
   const renameGroup = useSessionStore((s) => s.renameGroup)
 
-  const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState(group.name)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [prevForceEditing, setPrevForceEditing] = useState(false)
-
-  // Adjust editing state when forceEditing prop changes (render-time pattern)
-  if (!!forceEditing !== prevForceEditing) {
-    setPrevForceEditing(!!forceEditing)
-    if (forceEditing && !editing) {
-      setEditValue(group.name)
-      setEditing(true)
-    }
-  }
-
-  useEffect(() => {
-    if (editing) {
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    }
-  }, [editing])
-
-  const commitRename = useCallback(() => {
-    renameGroup(group.id, editValue)
-    setEditing(false)
-    onEditingDone?.()
-  }, [group.id, editValue, renameGroup, onEditingDone])
-
-  const cancelRename = useCallback(() => {
-    setEditValue(group.name)
-    setEditing(false)
-    onEditingDone?.()
-  }, [group.name, onEditingDone])
-
-  const startEditing = useCallback(() => {
-    setEditValue(group.name)
-    setEditing(true)
-  }, [group.name])
-
-  const handleDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      startEditing()
-    },
-    [startEditing]
-  )
+  const {
+    editing,
+    editValue,
+    inputRef,
+    setEditValue,
+    handleDoubleClick,
+    handleButtonKeyDown,
+    handleInputKeyDown,
+    commitRename
+  } = useInlineEdit({
+    name: group.name,
+    onCommit: (newName) => renameGroup(group.id, newName),
+    onEditingDone,
+    forceEditing
+  })
 
   const handleToggleCollapse = useCallback(
     (e: React.MouseEvent) => {
@@ -111,29 +82,6 @@ export function SessionGroupItem({
       onClick({ metaKey: e.metaKey, shiftKey: e.shiftKey })
     },
     [onClick]
-  )
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !editing) {
-        e.preventDefault()
-        startEditing()
-      }
-    },
-    [editing, startEditing]
-  )
-
-  const handleInputKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        commitRename()
-      } else if (e.key === 'Escape') {
-        e.preventDefault()
-        cancelRename()
-      }
-    },
-    [commitRename, cancelRename]
   )
 
   return (
@@ -151,7 +99,7 @@ export function SessionGroupItem({
       <button
         onClick={handleClick}
         onContextMenu={onContextMenu}
-        onKeyDown={handleKeyDown}
+        onKeyDown={handleButtonKeyDown}
         className={cn(
           'group w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors outline-none',
           allSelected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-100/50',

@@ -1,19 +1,18 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { openclawClient } from '../openclaw-client'
 import { locationManager } from '../location-manager'
+import { getMainWindow } from '../window-utils'
 import { randomUUID } from 'crypto'
 import type { ChatMessage } from '../../shared/remote-types'
 
 export function registerAgentHandlers(): void {
   // Set up message forwarding to renderer
   openclawClient.onMessage((_locationId, message) => {
-    const win = BrowserWindow.getAllWindows()[0]
-    win?.webContents.send(`agent:on-message:${message.agentId}`, message)
+    getMainWindow()?.webContents.send(`agent:on-message:${message.agentId}`, message)
   })
 
   openclawClient.onAgentsUpdate((locationId, agents) => {
-    const win = BrowserWindow.getAllWindows()[0]
-    win?.webContents.send('agent:agents-updated', locationId, agents)
+    getMainWindow()?.webContents.send('agent:agents-updated', locationId, agents)
   })
 
   ipcMain.handle('agent:list', async (_event, locationId: string) => {

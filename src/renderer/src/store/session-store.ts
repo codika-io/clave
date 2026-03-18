@@ -43,6 +43,8 @@ interface SessionState {
   sidePanelTab: 'files' | 'git'
   gitViewMode: 'list' | 'tree'
   gitPanelMode: 'changes' | 'log'
+  commitMessages: Record<string, string>
+  generatingCommitCwds: Set<string>
   hiddenAgentIds: Set<string>
   addSession: (session: Session) => void
   removeSession: (id: string) => void
@@ -86,6 +88,8 @@ interface SessionState {
   setSidePanelTab: (tab: 'files' | 'git') => void
   setGitViewMode: (mode: 'list' | 'tree') => void
   setGitPanelMode: (mode: 'changes' | 'log') => void
+  setCommitMessage: (cwd: string, message: string) => void
+  setGeneratingCommit: (cwd: string, generating: boolean) => void
   setPreviewFile: (path: string | null, source?: 'palette' | 'tree', cwd?: string | null, locationId?: string | null) => void
   addFileTab: (tab: FileTab) => void
   removeFileTab: (id: string) => void
@@ -152,16 +156,47 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidePanelTab: 'files' as const,
   gitViewMode: 'list' as const,
   gitPanelMode: 'changes' as const,
+  commitMessages: {} as Record<string, string>,
+  generatingCommitCwds: new Set<string>(),
   hiddenAgentIds: new Set<string>(
     JSON.parse(localStorage.getItem('clave-hidden-agent-ids') || '[]')
   ),
   addSession: (session) =>
-    set((state) => ({
-      sessions: [...state.sessions, { ...session, detectedUrl: session.detectedUrl ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false }],
-      selectedSessionIds: [session.id],
-      focusedSessionId: session.id,
-      displayOrder: [...getDisplayOrder(state), session.id]
-    })),
+    set((state) => {
+      const newSession = { ...session, detectedUrl: session.detectedUrl ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false }
+
+      // Check if selected sessions all belong to a single group
+      const selectedIds = state.selectedSessionIds
+      let targetGroup: SessionGroup | undefined
+      if (selectedIds.length > 0) {
+        const group = state.groups.find((g) =>
+          selectedIds.every((sid) => g.sessionIds.includes(sid))
+        )
+        if (group) targetGroup = group
+      }
+
+      if (targetGroup) {
+        // Add session inside the selected group
+        return {
+          sessions: [...state.sessions, newSession],
+          selectedSessionIds: [session.id],
+          focusedSessionId: session.id,
+          groups: state.groups.map((g) =>
+            g.id === targetGroup!.id
+              ? { ...g, sessionIds: [...g.sessionIds, session.id] }
+              : g
+          ),
+          displayOrder: getDisplayOrder(state)
+        }
+      }
+
+      return {
+        sessions: [...state.sessions, newSession],
+        selectedSessionIds: [session.id],
+        focusedSessionId: session.id,
+        displayOrder: [...getDisplayOrder(state), session.id]
+      }
+    }),
 
   removeSession: (id) =>
     set((state) => {
@@ -520,6 +555,19 @@ export const useSessionStore = create<SessionState>((set) => ({
   setGitViewMode: (mode) => set({ gitViewMode: mode }),
 
   setGitPanelMode: (mode) => set({ gitPanelMode: mode }),
+
+  setCommitMessage: (cwd, message) =>
+    set((state) => ({
+      commitMessages: { ...state.commitMessages, [cwd]: message }
+    })),
+
+  setGeneratingCommit: (cwd, generating) =>
+    set((state) => {
+      const next = new Set(state.generatingCommitCwds)
+      if (generating) next.add(cwd)
+      else next.delete(cwd)
+      return { generatingCommitCwds: next }
+    }),
 
   setPreviewFile: (path, source, cwd, locationId) =>
     set({ previewFile: path, previewCwd: cwd ?? null, previewSource: source ?? (path ? null : null), previewLocationId: locationId ?? null }),

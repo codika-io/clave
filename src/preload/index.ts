@@ -1,5 +1,18 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
+/** Creates a typed IPC event listener with cleanup function. */
+function createIpcListener<T extends unknown[]>(
+  channel: string,
+  callback: (...args: T) => void
+): () => void {
+  const listener = (_event: Electron.IpcRendererEvent, ...args: T): void =>
+    callback(...args)
+  ipcRenderer.on(channel, listener)
+  return (): void => {
+    ipcRenderer.removeListener(channel, listener)
+  }
+}
+
 const electronAPI = {
   spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) =>
     ipcRenderer.invoke('pty:spawn', cwd, options),
@@ -13,24 +26,11 @@ const electronAPI = {
 
   listSessions: () => ipcRenderer.invoke('pty:list'),
 
-  onSessionData: (id: string, callback: (data: string) => void) => {
-    const channel = `pty:data:${id}`
-    const listener = (_event: Electron.IpcRendererEvent, data: string): void => callback(data)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  onSessionData: (id: string, callback: (data: string) => void) =>
+    createIpcListener<[string]>(`pty:data:${id}`, callback),
 
-  onSessionExit: (id: string, callback: (exitCode: number) => void) => {
-    const channel = `pty:exit:${id}`
-    const listener = (_event: Electron.IpcRendererEvent, exitCode: number): void =>
-      callback(exitCode)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  onSessionExit: (id: string, callback: (exitCode: number) => void) =>
+    createIpcListener<[number]>(`pty:exit:${id}`, callback),
 
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
 
@@ -38,25 +38,11 @@ const electronAPI = {
 
   openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
 
-  onUpdateAvailable: (callback: (version: string) => void) => {
-    const channel = 'updater:update-available'
-    const listener = (_event: Electron.IpcRendererEvent, version: string): void =>
-      callback(version)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  onUpdateAvailable: (callback: (version: string) => void) =>
+    createIpcListener<[string]>('updater:update-available', callback),
 
-  onUpdateDownloaded: (callback: (version: string) => void) => {
-    const channel = 'updater:update-downloaded'
-    const listener = (_event: Electron.IpcRendererEvent, version: string): void =>
-      callback(version)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  onUpdateDownloaded: (callback: (version: string) => void) =>
+    createIpcListener<[string]>('updater:update-downloaded', callback),
 
   onDownloadProgress: (
     callback: (progress: {
@@ -65,27 +51,13 @@ const electronAPI = {
       transferred: number
       total: number
     }) => void
-  ) => {
-    const channel = 'updater:download-progress'
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }
-    ): void => callback(progress)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  ) => createIpcListener<[{ percent: number; bytesPerSecond: number; transferred: number; total: number }]>(
+    'updater:download-progress',
+    callback
+  ),
 
-  onDownloadError: (callback: (message: string) => void) => {
-    const channel = 'updater:download-error'
-    const listener = (_event: Electron.IpcRendererEvent, message: string): void =>
-      callback(message)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  onDownloadError: (callback: (message: string) => void) =>
+    createIpcListener<[string]>('updater:download-error', callback),
 
   setAppIcon: (icon: string) => ipcRenderer.invoke('app:set-icon', icon),
 
@@ -115,18 +87,8 @@ const electronAPI = {
   // File system watching
   watchDir: (cwd: string) => ipcRenderer.invoke('fs:watch', cwd),
   unwatchDir: () => ipcRenderer.invoke('fs:unwatch'),
-  onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => {
-    const channel = 'fs:changed'
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      cwd: string,
-      changedDirs: string[]
-    ): void => callback(cwd, changedDirs)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) =>
+    createIpcListener<[string, string[]]>('fs:changed', callback),
 
   // Board
   boardLoad: () => ipcRenderer.invoke('board:load'),
@@ -171,15 +133,8 @@ const electronAPI = {
   showNotification: (options: { title: string; body: string; sessionId: string }) =>
     ipcRenderer.invoke('notification:show', options),
 
-  onNotificationClicked: (callback: (sessionId: string) => void) => {
-    const channel = 'notification:clicked'
-    const listener = (_event: Electron.IpcRendererEvent, sessionId: string): void =>
-      callback(sessionId)
-    ipcRenderer.on(channel, listener)
-    return (): void => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
+  onNotificationClicked: (callback: (sessionId: string) => void) =>
+    createIpcListener<[string]>('notification:clicked', callback),
 
   // ── Locations ──
   locationList: () => ipcRenderer.invoke('location:list'),
@@ -205,24 +160,12 @@ const electronAPI = {
   sshExec: (locationId: string, command: string) =>
     ipcRenderer.invoke('ssh:exec', locationId, command),
   sshShellClose: (shellId: string) => ipcRenderer.invoke('ssh:shell-close', shellId),
-  onSshShellData: (shellId: string, callback: (data: string) => void) => {
-    const channel = `ssh:shell-data:${shellId}`
-    const listener = (_event: Electron.IpcRendererEvent, data: string): void => callback(data)
-    ipcRenderer.on(channel, listener)
-    return (): void => { ipcRenderer.removeListener(channel, listener) }
-  },
-  onSshShellExit: (shellId: string, callback: (exitCode: number) => void) => {
-    const channel = `ssh:shell-exit:${shellId}`
-    const listener = (_event: Electron.IpcRendererEvent, exitCode: number): void => callback(exitCode)
-    ipcRenderer.on(channel, listener)
-    return (): void => { ipcRenderer.removeListener(channel, listener) }
-  },
-  onSshConnectionClosed: (callback: (locationId: string) => void) => {
-    const channel = 'ssh:connection-closed'
-    const listener = (_event: Electron.IpcRendererEvent, locationId: string): void => callback(locationId)
-    ipcRenderer.on(channel, listener)
-    return (): void => { ipcRenderer.removeListener(channel, listener) }
-  },
+  onSshShellData: (shellId: string, callback: (data: string) => void) =>
+    createIpcListener<[string]>(`ssh:shell-data:${shellId}`, callback),
+  onSshShellExit: (shellId: string, callback: (exitCode: number) => void) =>
+    createIpcListener<[number]>(`ssh:shell-exit:${shellId}`, callback),
+  onSshConnectionClosed: (callback: (locationId: string) => void) =>
+    createIpcListener<[string]>('ssh:connection-closed', callback),
 
   // ── Remote FS (SFTP) ──
   sftpReadDir: (locationId: string, dirPath: string) =>
@@ -241,19 +184,10 @@ const electronAPI = {
     ipcRenderer.invoke('agent:chat-history', locationId, sessionKey),
   agentSend: (agentId: string, locationId: string, content: string) =>
     ipcRenderer.invoke('agent:send', agentId, locationId, content),
-  onAgentMessage: (agentId: string, callback: (message: unknown) => void) => {
-    const channel = `agent:on-message:${agentId}`
-    const listener = (_event: Electron.IpcRendererEvent, message: unknown): void => callback(message)
-    ipcRenderer.on(channel, listener)
-    return (): void => { ipcRenderer.removeListener(channel, listener) }
-  },
-  onAgentsUpdated: (callback: (locationId: string, agents: unknown[]) => void) => {
-    const channel = 'agent:agents-updated'
-    const listener = (_event: Electron.IpcRendererEvent, locationId: string, agents: unknown[]): void =>
-      callback(locationId, agents)
-    ipcRenderer.on(channel, listener)
-    return (): void => { ipcRenderer.removeListener(channel, listener) }
-  }
+  onAgentMessage: (agentId: string, callback: (message: unknown) => void) =>
+    createIpcListener<[unknown]>(`agent:on-message:${agentId}`, callback),
+  onAgentsUpdated: (callback: (locationId: string, agents: unknown[]) => void) =>
+    createIpcListener<[string, unknown[]]>('agent:agents-updated', callback)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

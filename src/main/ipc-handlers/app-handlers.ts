@@ -1,4 +1,5 @@
-import { ipcMain, app, nativeImage, BrowserWindow } from 'electron'
+import { ipcMain, app, nativeImage } from 'electron'
+import { getMainWindow } from '../window-utils'
 import { join } from 'path'
 import { execFileSync } from 'child_process'
 import * as fs from 'fs'
@@ -115,7 +116,7 @@ export function registerAppHandlers(): void {
       app.dock?.setIcon(image)
     }
 
-    const win = BrowserWindow.getAllWindows()[0]
+    const win = getMainWindow()
     if (win) {
       win.setIcon(image)
     }

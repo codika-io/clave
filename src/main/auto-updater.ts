@@ -1,5 +1,6 @@
-import { app, BrowserWindow } from 'electron'
+import { app } from 'electron'
 import { autoUpdater, CancellationToken } from 'electron-updater'
+import { getMainWindow } from './window-utils'
 
 const CHECK_INTERVAL = 30 * 60 * 1000 // 30 minutes
 const INITIAL_DELAY = 5000
@@ -10,10 +11,7 @@ let downloadCancelled = false
 let isDownloading = false
 
 function sendToRenderer(channel: string, ...args: unknown[]): void {
-  const win = BrowserWindow.getAllWindows()[0]
-  if (win && !win.isDestroyed()) {
-    win.webContents.send(channel, ...args)
-  }
+  getMainWindow()?.webContents.send(channel, ...args)
 }
 
 export function initAutoUpdater(): void {

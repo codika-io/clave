@@ -1,6 +1,7 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { sshManager } from '../ssh-manager'
 import { locationManager } from '../location-manager'
+import { getMainWindow } from '../window-utils'
 
 export function registerSshHandlers(): void {
   ipcMain.handle('ssh:connect', async (_event, locationId: string) => {
@@ -24,13 +25,11 @@ export function registerSshHandlers(): void {
 
     // Forward shell data to renderer
     channel.on('data', (data: Buffer) => {
-      const win = BrowserWindow.getAllWindows()[0]
-      win?.webContents.send(`ssh:shell-data:${shellId}`, data.toString('utf-8'))
+      getMainWindow()?.webContents.send(`ssh:shell-data:${shellId}`, data.toString('utf-8'))
     })
 
     channel.on('close', () => {
-      const win = BrowserWindow.getAllWindows()[0]
-      win?.webContents.send(`ssh:shell-exit:${shellId}`, 0)
+      getMainWindow()?.webContents.send(`ssh:shell-exit:${shellId}`, 0)
     })
 
     return shellId
@@ -94,14 +93,12 @@ export function registerSshHandlers(): void {
 
   // SSH connection lifecycle — forward close/error to renderer
   sshManager.onClose((locationId) => {
-    const win = BrowserWindow.getAllWindows()[0]
-    win?.webContents.send('ssh:connection-closed', locationId)
+    getMainWindow()?.webContents.send('ssh:connection-closed', locationId)
     locationManager.setLocationStatus(locationId, 'disconnected')
   })
 
   sshManager.onError((locationId) => {
-    const win = BrowserWindow.getAllWindows()[0]
-    win?.webContents.send('ssh:connection-closed', locationId)
+    getMainWindow()?.webContents.send('ssh:connection-closed', locationId)
     locationManager.setLocationStatus(locationId, 'error')
   })
 }
