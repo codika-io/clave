@@ -130,7 +130,6 @@ export function SessionGroupItem({
         ) : (
           <span
             className="flex-1 min-w-0 text-[13px] font-medium truncate"
-            onDoubleClick={handleDoubleClick}
           >
             {group.name}
           </span>

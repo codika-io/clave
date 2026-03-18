@@ -73,6 +73,7 @@ export function Sidebar() {
   const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
   const deleteGroup = useSessionStore((s) => s.deleteGroup)
   const setGroupColor = useSessionStore((s) => s.setGroupColor)
+  const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
   const moveItems = useSessionStore((s) => s.moveItems)
   const addGroupTerminal = useSessionStore((s) => s.addGroupTerminal)
   const removeGroupTerminal = useSessionStore((s) => s.removeGroupTerminal)
@@ -688,9 +689,9 @@ export function Sidebar() {
     (groupId: string, modifiers: { metaKey: boolean; shiftKey: boolean }) => {
       const group = groups.find((g) => g.id === groupId)
       if (!group) return
+      const state = useSessionStore.getState()
       if (modifiers.metaKey) {
         // Cmd+Click: toggle all sessions in group
-        const state = useSessionStore.getState()
         const allSelected = group.sessionIds.every((id) => state.selectedSessionIds.includes(id))
         if (allSelected) {
           selectSessions(state.selectedSessionIds.filter((id) => !group.sessionIds.includes(id)))
@@ -704,14 +705,26 @@ export function Sidebar() {
           selectionAnchorRef.current = group.sessionIds[0]
         }
       } else {
-        // Plain click: select all in group
-        selectSessions(group.sessionIds)
+        const allSelected =
+          group.sessionIds.length > 0 &&
+          group.sessionIds.every((id) => state.selectedSessionIds.includes(id))
+        if (group.collapsed) {
+          // Collapsed group: expand it and select
+          toggleGroupCollapsed(group.id)
+          selectSessions(group.sessionIds)
+        } else if (allSelected) {
+          // Already selected and expanded: collapse it
+          toggleGroupCollapsed(group.id)
+        } else {
+          // Not selected: select it
+          selectSessions(group.sessionIds)
+        }
         if (group.sessionIds.length > 0) {
           selectionAnchorRef.current = group.sessionIds[0]
         }
       }
     },
-    [groups, selectSessions]
+    [groups, selectSessions, toggleGroupCollapsed]
   )
 
   const clearRenaming = useCallback(() => setRenamingId(null), [])
