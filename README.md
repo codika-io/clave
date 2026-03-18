@@ -18,7 +18,7 @@ Open as many sessions as you need, arrange them side-by-side, and switch between
 
 ## Download
 
-[**Download Clave v1.8.8**](https://github.com/codika-io/clave/releases/download/v1.8.8/clave-1.8.8.dmg) (macOS Universal — Apple Silicon & Intel) · [All releases](https://github.com/codika-io/clave/releases)
+[**Download the latest version**](https://github.com/codika-io/clave/releases/latest) (macOS Universal — Apple Silicon & Intel) · [All releases](https://github.com/codika-io/clave/releases)
 
 Download the `.dmg`, drag to Applications, done.
 
@@ -27,11 +27,20 @@ Auto-updates are built in — once installed, new versions download silently in 
 ## Features
 
 - **Multi-session management** — Open unlimited Claude Code sessions, each in its own PTY
+- **Session groups** — Organize sessions into color-coded groups
 - **Flexible layouts** — Single, split (2-panel), or grid (4-panel) view modes
 - **Searchable sidebar** — Filter sessions by name, folder, or path
-- **Session naming** — Double-click or right-click to rename any session
-- **Dark / Light themes** — Full theming for both terminal and UI
-- **Native macOS feel** — Hidden inset titlebar with traffic light controls
+- **Git integration** — Full Git panel with status, diff viewer, commit history, stage/unstage, commit, push, and pull
+- **File browser** — Local and remote file trees with syntax-highlighted preview, markdown rendering, and search palette
+- **SSH / Remote sessions** — Connect to remote hosts via SSH for terminal sessions and SFTP file browsing
+- **Agent support** — Integrated agent chat panel via WebSocket connection to OpenClaw
+- **Kanban board** — Task management with draggable columns and cards
+- **Session templates** — Launch pre-configured sessions with saved directories and modes
+- **Keyboard shortcuts** — Cmd+P (file palette), Cmd+E (file tree), Cmd+T (new terminal), Cmd+N (new Claude session), Cmd+D (dangerous mode), Cmd+W (close tab)
+- **Dark / Light / Coffee themes** — Full theming for both terminal and UI
+- **URL detection** — Detects localhost URLs in terminal output and makes them clickable
+- **Usage tracking** — Monitor API and token usage statistics
+- **Native macOS feel** — Hidden inset titlebar with traffic light controls, native notifications
 - **Auto-updates** — New versions install automatically on quit via `electron-updater`
 - **Signed & notarized** — Passes macOS Gatekeeper without warnings
 
@@ -52,14 +61,7 @@ npm run build:mac    # build macOS .dmg (requires signing credentials)
 
 ## Tech stack
 
-[Electron](https://www.electronjs.org/) · [React 19](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [Zustand](https://zustand.docs.pmnd.rs/) · [Tailwind CSS v4](https://tailwindcss.com/) · [Framer Motion](https://motion.dev/)
-
-## Roadmap
-
-- [ ] Linux support
-- [ ] Windows support
-- [ ] Session persistence across app restarts
-- [ ] Configurable keybindings
+[Electron](https://www.electronjs.org/) · [React 19](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [Zustand](https://zustand.docs.pmnd.rs/) · [Tailwind CSS v4](https://tailwindcss.com/) · [Framer Motion](https://motion.dev/) · [shiki](https://shiki.style/) · [simple-git](https://github.com/steveukx/git-js) · [ssh2](https://github.com/mscdex/ssh2)
 
 ## Contributing
 

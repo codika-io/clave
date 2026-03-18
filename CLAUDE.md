@@ -9,113 +9,53 @@ Mac desktop app for managing multiple Claude Code terminal sessions. Electron + 
 - `npm run build:mac` — build + package macOS universal dmg + zip (signed + notarized)
 - `npm run typecheck` — typecheck only
 - `npm run lint` — eslint
-- `npm run release` — interactive release: bump version, build, tag, publish to GitHub Releases
+- `npm run release -- --patch|--minor|--major` — non-interactive release (see `.claude/rules/release.md`)
 
 ## Architecture
 
-- **Main process** (`src/main/`): Electron window, node-pty management, IPC handlers. PTY spawns `/bin/zsh -l -c claude` per session.
-- **Preload** (`src/preload/`): Typed `window.electronAPI` via contextBridge. All PTY communication goes through IPC.
-- **Renderer** (`src/renderer/src/`): React UI with Zustand state, xterm.js terminals, Tailwind v4, Framer Motion.
+Three-process Electron app:
 
-## Key files
+- **Main** (`src/main/`): Electron window, node-pty, IPC handlers, domain managers. PTY spawns `/bin/zsh -l -c claude` per session. IPC handlers are split into modular files under `ipc-handlers/`.
+- **Preload** (`src/preload/`): Typed `window.electronAPI` via contextBridge. All main↔renderer communication goes through IPC.
+- **Renderer** (`src/renderer/src/`): React + Zustand + xterm.js + Tailwind v4 + Framer Motion.
 
-- `src/main/pty-manager.ts` — PTY lifecycle (spawn/write/resize/kill)
-- `src/main/ipc-handlers.ts` — IPC bridge between main and renderer
-- `src/main/auto-updater.ts` — electron-updater integration (auto-download, native OS notification)
-- `src/renderer/src/store/session-store.ts` — Zustand store (sessions, layout, theme)
-- `src/renderer/src/hooks/use-terminal.ts` — xterm.js + FitAddon + PTY wiring
-- `src/renderer/src/assets/main.css` — Tailwind v4 `@theme` with CSS custom properties for dark/light
-- `scripts/release.sh` — release automation script
+## Conventions
 
-## Release process
+- **Icons**: Use Heroicons (`@heroicons/react/24/outline`) for all UI icons. No hand-rolled SVGs for standard icons. Custom SVGs only for file-type icons in `components/files/file-icons.tsx`.
+- **Themes**: Three themes (dark, light, coffee). CSS vars on `:root` / `[data-theme="light"]` / `[data-theme="coffee"]` in `main.css`. xterm has separate theme objects updated via `terminal.options.theme`.
+- **Stores**: Zustand stores in `src/renderer/src/store/`. `session-store.ts` is the main one (sessions, groups, layout, theme).
 
-Distribution: GitHub Releases on the public repo `codika-io/clave`. Existing users get auto-updates via `electron-updater`.
+## Signing and notarization
 
-### How to release
-
-1. Make sure all changes are committed and pushed to `main`.
-2. Run `npm run release`.
-3. The script will prompt for a version bump (`patch`, `minor`, `major`, or explicit semver like `1.2.3`).
-4. It bumps `package.json`, runs `npm run build:mac` (sources `.env` for signing credentials), verifies artifacts, then asks for confirmation.
-5. On confirmation: commits the version bump, creates an annotated git tag `vX.Y.Z`, pushes to origin, and creates a GitHub Release with the DMG, ZIP, `latest-mac.yml`, and blockmap.
-
-### Build artifacts
-
-`npm run build:mac` produces in `dist/`:
-- `clave-X.Y.Z.dmg` — universal (Intel + Apple Silicon) installer
-- `clave-X.Y.Z-mac.zip` — universal zip (used by electron-updater for silent updates)
-- `latest-mac.yml` — update manifest consumed by electron-updater
-- `clave-X.Y.Z.dmg.blockmap` — differential download metadata
-
-### Auto-updater behavior
-
-- Configured in `src/main/auto-updater.ts`, called from `src/main/index.ts`.
-- Only runs when `app.isPackaged` is true (no-op in dev via `npm run dev`).
-- Checks for updates 5 seconds after app launch.
-- Downloads updates silently in the background.
-- Shows a native macOS notification when an update is downloaded: "Version X.Y.Z will be installed on next restart."
-- Installs automatically on app quit.
-- The updater reads `publish` config from `electron-builder.yml` (provider: github, owner: codika-io, repo: clave). The repo must be public for token-free update checks.
-
-### Signing and notarization
-
-The build requires Apple code signing. Credentials are expected in `.env` (not committed):
+Builds require Apple code signing. Credentials in `.env` (not committed):
 - `CSC_LINK` — base64-encoded .p12 certificate
 - `CSC_KEY_PASSWORD` — certificate password
 - `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` — for notarization
 
-`electron-builder.yml` has `notarize: true` under `mac`.
-
-### Testing a build locally
-
-1. Run `npm run build:mac`.
-2. Open `dist/clave-X.Y.Z.dmg`, drag to Applications, launch.
-3. Check Console.app for `[updater] App is up to date` (or `[updater] Error:` if no release exists yet).
-
-### Testing the full release cycle
-
-1. Release version N via `npm run release`.
-2. Install version N-1 from a previous DMG.
-3. Launch — the app should detect version N, download it, and show a native notification.
-4. Quit and relaunch — the app should now be on version N.
-
-## Icons
-
-Use **Heroicons** (`@heroicons/react/24/outline`) for all UI icons. Do not use hand-rolled inline SVGs for standard icons — always check if a suitable Heroicon exists first. Custom SVGs in `src/renderer/src/components/files/file-icons.tsx` are only for file-type-specific icons (folder, code file, config, image, markdown, generic).
-
 ## Gotchas
 
-- **PATH resolution in packaged app (CRITICAL)**: Packaged Electron apps have a minimal `process.env.PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`). The user's full PATH (with homebrew, npm globals, etc.) must be resolved by spawning a login shell. `getLoginShellPath()` in `pty-manager.ts` handles this. **NEVER use `execSync` for this** — it runs through `/bin/sh` which expands `$PATH` before zsh starts, giving the minimal PATH. Always use `execFileSync('/bin/zsh', ['-lic', 'echo __PATH__$PATH'])` to call zsh directly so `$PATH` is expanded after zsh sources `.zprofile`/`.zshrc`. This is the root cause of `command not found: claude` in packaged builds.
-- electron-updater requires both a `zip` and `dmg` target in `electron-builder.yml` — the zip is used for silent background updates, the dmg is for fresh installs.
-- The repo must be public for electron-updater to check GitHub Releases without an auth token.
-- node-pty's `spawn-helper` binary needs +x permissions — handled by `postinstall` script
-- WebGL addon for xterm was removed (context loss issues) — use canvas renderer only
-- macOS traffic lights: `trafficLightPosition: { x: 16, y: 16 }` with `hiddenInset` titlebar. Toolbar adds `pl-20` when sidebar is closed to avoid overlap.
-- Terminal fit: ResizeObserver guards against zero-size during animations; `FitAddon.fit()` wrapped in try/catch
-- Theme: CSS vars on `:root` (dark) / `[data-theme="light"]`, synced via `document.documentElement.setAttribute`. xterm has separate theme objects updated via `terminal.options.theme`.
+- **PATH resolution in packaged app (CRITICAL)**: Packaged Electron apps have a minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`). The user's full PATH must be resolved by spawning a login shell. **NEVER use `execSync`** — it goes through `/bin/sh` which expands `$PATH` before zsh starts. Always use `execFileSync('/bin/zsh', ['-lic', 'echo __PATH__$PATH'])` so zsh sources `.zprofile`/`.zshrc` first. This is the root cause of `command not found: claude` in packaged builds.
+- **electron-updater targets**: Both `zip` and `dmg` targets are required in `electron-builder.yml` — zip for silent background updates, dmg for fresh installs.
+- **Repo must be public** for electron-updater to check GitHub Releases without an auth token.
+- **node-pty spawn-helper** needs +x permissions — handled by `postinstall` script.
+- **No WebGL**: WebGL addon for xterm was removed (context loss issues) — canvas renderer only.
+- **macOS traffic lights**: `trafficLightPosition: { x: 16, y: 16 }` with `hiddenInset` titlebar. Toolbar adds `pl-20` when sidebar is closed to avoid overlap.
+- **Terminal fit**: ResizeObserver guards against zero-size during animations; `FitAddon.fit()` wrapped in try/catch.
 
 ## Rules
 
-- When using the Playwright MCP server to take screenshots, always delete the screenshot files after you are done using them. Do not leave screenshot files in the repository.
-- After implementing UI or renderer changes, always verify them with the **Playwright Electron MCP** (not the regular Playwright MCP). This launches the real Electron app with full `window.electronAPI` support, so you can actually test features end-to-end.
+- When using the Playwright MCP server to take screenshots, always delete the screenshot files after you are done using them.
+- After implementing UI or renderer changes, always verify them with the **Playwright Electron MCP** (not the regular Playwright MCP). This launches the real Electron app with full `window.electronAPI` support.
+- **NEVER use `pkill`, `killall`, or broad process-matching commands** to kill test Electron instances — these will also kill the user's installed Clave app.
 
 ### Playwright Electron MCP — Verification workflow
 
-The Playwright Electron MCP is configured via `.playwright-electron.config.json` (gitignored). It launches the built Electron app directly, giving access to the full app including IPC, PTY, git, and file system features.
+Config: `.playwright-electron.config.json` (gitignored). Launches the built Electron app directly.
 
-**Steps to verify UI changes:**
+1. Build: `npx electron-vite build` (compiles to `out/`)
+2. Load tools: `ToolSearch` for `+playwright-electron`
+3. Launch: `electron_first_window`
+4. Inspect: `browser_snapshot`, `browser_click`, `browser_console_messages`
+5. Cleanup: `browser_close`, then delete any screenshot files
 
-1. Build the app: `npx electron-vite build` (compiles to `out/`)
-2. Load the Electron tools: `ToolSearch` for `+playwright-electron` to discover available tools
-3. Launch: call `electron_first_window` — this starts the Electron app and returns the first window
-4. Use `browser_snapshot` to inspect the UI, `browser_click` to interact, `browser_console_messages` to check for errors
-5. When done: call `browser_close` to shut down the Electron instance
-6. Delete any screenshot files created during verification
-
-**Why not the regular Playwright MCP?** The regular `playwright` MCP opens `localhost:5173` in Chrome where `window.electronAPI` is undefined. You can only verify that the page loads — you cannot spawn sessions, test git features, or interact with any Electron-dependent functionality.
-
-**Important notes:**
-- Always build before testing (`npx electron-vite build`). The MCP launches from `out/main/index.js`, not the dev server.
-- The MCP config file (`.playwright-electron.config.json`) contains absolute paths. If the project moves, regenerate it.
-- If `electron_first_window` fails with "Process failed to launch", ensure no other Electron instance is running (kill `npm run dev` first).
-- **NEVER use `pkill`, `killall`, or broad process-matching commands** to kill test Electron instances. These will also kill the user's installed Clave desktop app, causing their active sessions to go blank. Always use `browser_close` from the Playwright Electron MCP to cleanly shut down test instances.
+The regular `playwright` MCP opens `localhost:5173` in Chrome where `window.electronAPI` is undefined — useless for testing Electron features.
