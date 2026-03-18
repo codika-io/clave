@@ -1,8 +1,9 @@
+import { memo, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSyntaxHighlight } from '../../hooks/use-syntax-highlight'
 
-function CodeBlock({ lang, code }: { lang: string; code: string }) {
+const CodeBlock = memo(function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const filename = lang ? `file.${lang}` : 'file.txt'
   const { html } = useSyntaxHighlight(code, filename)
 
@@ -20,15 +21,13 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )
-}
+})
 
-export function MarkdownRenderer({ content }: { content: string }) {
-  return (
-    <div className="p-5 prose-preview text-sm leading-relaxed text-text-primary">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        children={content}
-        components={{
+const remarkPlugins = [remarkGfm]
+
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: { content: string }) {
+  const components = useMemo(
+    () => ({
           h1: ({ children }) => (
             <h1 className="text-xl font-bold text-text-primary mt-6 mb-3 first:mt-0 pb-2 border-b border-border-subtle">
               {children}
@@ -113,8 +112,17 @@ export function MarkdownRenderer({ content }: { content: string }) {
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           em: ({ children }) => <em>{children}</em>,
           del: ({ children }) => <del className="text-text-tertiary">{children}</del>
-        }}
+        }),
+    []
+  )
+
+  return (
+    <div className="p-5 prose-preview text-sm leading-relaxed text-text-primary">
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
+        children={content}
+        components={components}
       />
     </div>
   )
-}
+})
