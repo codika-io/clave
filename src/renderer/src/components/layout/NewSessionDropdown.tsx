@@ -5,8 +5,7 @@ import {
   PlusIcon,
   CommandLineIcon,
   ShieldExclamationIcon,
-  BoltIcon,
-  GlobeAltIcon
+  BoltIcon
 } from '@heroicons/react/24/outline'
 import { AgentPickerPopover } from '../agents/AgentPickerPopover'
 

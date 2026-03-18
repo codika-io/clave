@@ -21,6 +21,8 @@ import { NewSessionDropdown } from './NewSessionDropdown'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
+import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds } from '../../store/pinned-store'
+import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
@@ -30,7 +32,8 @@ import {
   CommandLineIcon,
   ArrowPathIcon,
   XMarkIcon,
-  DocumentDuplicateIcon
+  DocumentDuplicateIcon,
+  BookmarkIcon
 } from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
@@ -250,9 +253,14 @@ export function Sidebar() {
     )
   }, [sessions, searchQuery])
 
+  // Track pinned group visibility to filter hidden groups from the sessions list
+  const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
+
   // Build display list from displayOrder (or fall back to creation order)
   const displayItems = useMemo(() => {
     if (filteredSessions) return null
+
+    const hiddenGroupIds = getHiddenGroupIds()
 
     const order =
       displayOrder.length > 0
@@ -288,12 +296,15 @@ export function Sidebar() {
           if (item.type === 'fileTab') return true
           if (item.type === 'group') {
             const group = groups.find((g) => g.id === item.groupId)
-            return !!group && group.sessionIds.length > 0
+            if (!group || group.sessionIds.length === 0) return false
+            // Hide groups toggled off via pinned buttons
+            if (hiddenGroupIds.has(item.groupId)) return false
+            return true
           }
           return false
         }
       )
-  }, [displayOrder, sessions, groups, fileTabs, filteredSessions])
+  }, [displayOrder, sessions, groups, fileTabs, filteredSessions, pinnedGroups])
 
   // Flat ordered list of session/file tab IDs for range selection
   const flatSessionOrder = useMemo(() => {
@@ -560,6 +571,7 @@ export function Sidebar() {
       e.preventDefault()
       const group = groups.find((g) => g.id === groupId)
       const currentColor = group?.color ?? null
+      const existingPin = findPinnedByGroupId(groupId)
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
@@ -570,6 +582,19 @@ export function Sidebar() {
           />
         ),
         items: [
+          existingPin
+            ? isPinnedOutOfSync(groupId)
+              ? {
+                  label: 'Re-sync pin',
+                  icon: <BookmarkIcon className="w-3.5 h-3.5" />,
+                  onClick: () => resyncPinnedGroup(groupId)
+                }
+              : null
+            : {
+                label: 'Pin group',
+                icon: <BookmarkIcon className="w-3.5 h-3.5" />,
+                onClick: () => pinGroupFromCurrent(groupId)
+              },
           {
             label: 'Rename',
             icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
@@ -591,7 +616,7 @@ export function Sidebar() {
             danger: true,
             onClick: () => handleDeleteGroup(groupId)
           }
-        ]
+        ].filter((item): item is NonNullable<typeof item> => item !== null)
       })
     },
     [groups, ungroupSessions, handleDeleteGroup, setGroupColor]
@@ -996,6 +1021,9 @@ export function Sidebar() {
 
       {/* Scrollable sections area */}
       <div className="flex-1 flex flex-col min-h-0">
+        {/* Pinned groups section */}
+        <PinnedSection setContextMenu={setContextMenu} />
+
         {/* Sessions section */}
         <SectionHeading
           title="Sessions"
@@ -1325,5 +1353,55 @@ export function Sidebar() {
         />
       )}
     </div>
+  )
+}
+
+function PinnedSection({ setContextMenu }: { setContextMenu: (menu: ContextMenuState | null) => void }) {
+  const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
+  const pinnedCollapsed = usePinnedStore((s) => s.pinnedCollapsed)
+  const togglePinnedCollapsed = usePinnedStore((s) => s.togglePinnedCollapsed)
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, pinnedId: string) => {
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          {
+            label: 'Rename',
+            icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
+            onClick: () => {
+              const pg = usePinnedStore.getState().pinnedGroups.find((p) => p.id === pinnedId)
+              const newName = window.prompt('Rename pinned group', pg?.name ?? '')
+              if (newName && newName.trim()) {
+                usePinnedStore.getState().renamePinnedGroup(pinnedId, newName.trim())
+              }
+            }
+          },
+          {
+            label: 'Remove',
+            icon: <TrashIcon className="w-3.5 h-3.5" />,
+            danger: true,
+            onClick: () => removePinnedGroupWithCleanup(pinnedId)
+          }
+        ]
+      })
+    },
+    [setContextMenu]
+  )
+
+  if (pinnedGroups.length === 0) return null
+
+  return (
+    <>
+      <SectionHeading
+        title="Pinned"
+        collapsed={pinnedCollapsed}
+        onToggle={togglePinnedCollapsed}
+      />
+      <PinnedGroupsGrid
+        collapsed={pinnedCollapsed}
+        onContextMenu={handleContextMenu}
+      />
+    </>
   )
 }

@@ -91,3 +91,29 @@ export interface FileTab {
 }
 
 export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings' | 'agents'
+
+export interface PinnedGroupSession {
+  cwd: string
+  name: string
+  claudeMode: boolean
+  dangerousMode: boolean
+}
+
+export interface PinnedGroupTerminal {
+  command: string
+  commandMode: 'prefill' | 'auto'
+  color: GroupTerminalColor
+}
+
+export interface PinnedGroup {
+  id: string
+  name: string
+  cwd: string | null
+  color: GroupTerminalColor | null
+  sessions: PinnedGroupSession[]
+  terminals: PinnedGroupTerminal[]
+  createdAt: number
+  // Runtime state (not persisted)
+  activeGroupId: string | null
+  visible: boolean
+}

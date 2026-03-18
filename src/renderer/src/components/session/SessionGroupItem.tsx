@@ -137,8 +137,7 @@ export function SessionGroupItem({
         )}
 
         {/* Terminal icons */}
-        {!editing && (
-          <div className="flex items-center gap-0 flex-shrink-0">
+        <div className={cn('flex items-center gap-0 flex-shrink-0', editing && 'invisible')}>
             {/* Add terminal button — on the left */}
             <span
               role="button"
@@ -187,7 +186,6 @@ export function SessionGroupItem({
               )
             })}
           </div>
-        )}
       </button>
       {dropIndicator === 'after' && (
         <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />
