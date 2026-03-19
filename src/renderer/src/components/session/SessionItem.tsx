@@ -53,11 +53,7 @@ interface SessionItemProps {
   groupColorHex?: string
   forceEditing?: boolean
   onEditingDone?: () => void
-  onDragStart?: (e: React.DragEvent) => void
-  onDragOver?: (e: React.DragEvent) => void
-  onDrop?: (e: React.DragEvent) => void
-  onDragEnd?: (e: React.DragEvent) => void
-  dropIndicator?: 'before' | 'after' | null
+  onPointerDown?: (e: React.PointerEvent) => void
   isDragging?: boolean
   onDelete?: () => void
 }
@@ -72,11 +68,7 @@ export function SessionItem({
   groupColorHex,
   forceEditing,
   onEditingDone,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-  dropIndicator,
+  onPointerDown,
   isDragging,
   onDelete
 }: SessionItemProps) {
@@ -103,11 +95,7 @@ export function SessionItem({
       groupColorHex={groupColorHex}
       forceEditing={forceEditing}
       onEditingDone={onEditingDone}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      dropIndicator={dropIndicator}
+      onPointerDown={onPointerDown}
       isDragging={isDragging}
     />
   )

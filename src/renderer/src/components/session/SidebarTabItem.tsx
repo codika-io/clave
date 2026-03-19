@@ -35,11 +35,7 @@ export interface SidebarTabItemProps {
   onEditingDone?: () => void
 
   // Drag and drop
-  onDragStart?: (e: React.DragEvent) => void
-  onDragOver?: (e: React.DragEvent) => void
-  onDrop?: (e: React.DragEvent) => void
-  onDragEnd?: (e: React.DragEvent) => void
-  dropIndicator?: 'before' | 'after' | null
+  onPointerDown?: (e: React.PointerEvent) => void
   isDragging?: boolean
 }
 
@@ -59,11 +55,7 @@ export function SidebarTabItem({
   groupColorHex,
   forceEditing,
   onEditingDone,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-  dropIndicator,
+  onPointerDown,
   isDragging
 }: SidebarTabItemProps) {
   const {
@@ -92,15 +84,10 @@ export function SidebarTabItem({
   return (
     <div
       className="relative"
-      draggable={!editing}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
+      data-sidebar-item-id={id}
+      data-sidebar-item-type="session"
+      onPointerDown={!editing ? onPointerDown : undefined}
     >
-      {dropIndicator === 'before' && (
-        <div className="absolute top-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />
-      )}
       <button
         onClick={handleClick}
         onContextMenu={onContextMenu}
@@ -173,9 +160,6 @@ export function SidebarTabItem({
           </span>
         )}
       </button>
-      {dropIndicator === 'after' && (
-        <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />
-      )}
     </div>
   )
 }

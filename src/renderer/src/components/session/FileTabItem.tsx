@@ -11,11 +11,7 @@ interface FileTabItemProps {
   groupSelected?: boolean
   forceEditing?: boolean
   onEditingDone?: () => void
-  onDragStart?: (e: React.DragEvent) => void
-  onDragOver?: (e: React.DragEvent) => void
-  onDrop?: (e: React.DragEvent) => void
-  onDragEnd?: (e: React.DragEvent) => void
-  dropIndicator?: 'before' | 'after' | null
+  onPointerDown?: (e: React.PointerEvent) => void
   isDragging?: boolean
 }
 
@@ -28,11 +24,7 @@ export function FileTabItem({
   groupSelected,
   forceEditing,
   onEditingDone,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-  dropIndicator,
+  onPointerDown,
   isDragging
 }: FileTabItemProps) {
   const renameFileTab = useSessionStore((s) => s.renameFileTab)
@@ -57,11 +49,7 @@ export function FileTabItem({
       groupSelected={groupSelected}
       forceEditing={forceEditing}
       onEditingDone={onEditingDone}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      dropIndicator={dropIndicator}
+      onPointerDown={onPointerDown}
       isDragging={isDragging}
     />
   )

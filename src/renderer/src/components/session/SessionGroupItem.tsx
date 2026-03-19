@@ -24,11 +24,7 @@ interface SessionGroupItemProps {
   allSelected?: boolean
   forceEditing?: boolean
   onEditingDone?: () => void
-  onDragStart?: (e: React.DragEvent) => void
-  onDragOver?: (e: React.DragEvent) => void
-  onDrop?: (e: React.DragEvent) => void
-  onDragEnd?: (e: React.DragEvent) => void
-  dropIndicator?: 'before' | 'after' | 'inside' | null
+  onPointerDown?: (e: React.PointerEvent) => void
   isDragging?: boolean
 }
 
@@ -43,11 +39,7 @@ export function SessionGroupItem({
   allSelected,
   forceEditing,
   onEditingDone,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-  dropIndicator,
+  onPointerDown,
   isDragging
 }: SessionGroupItemProps) {
   const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
@@ -86,15 +78,10 @@ export function SessionGroupItem({
   return (
     <div
       className="relative"
-      draggable={!editing}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
+      data-sidebar-item-id={group.id}
+      data-sidebar-item-type="group"
+      onPointerDown={!editing ? onPointerDown : undefined}
     >
-      {dropIndicator === 'before' && (
-        <div className="absolute top-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />
-      )}
       <button
         onClick={handleClick}
         onContextMenu={onContextMenu}
@@ -185,9 +172,6 @@ export function SessionGroupItem({
             })}
           </div>
       </button>
-      {dropIndicator === 'after' && (
-        <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full z-10" />
-      )}
     </div>
   )
 }
