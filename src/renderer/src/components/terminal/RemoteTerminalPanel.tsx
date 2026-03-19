@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useRemoteTerminal } from '../../hooks/use-remote-terminal'
 import { useSessionStore } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
@@ -20,6 +20,25 @@ export function RemoteTerminalPanel({ sessionId, shellId, locationId }: RemoteTe
   const session = useSessionStore((s) => s.sessions.find((s) => s.id === sessionId))
   const isFocused = focusedSessionId === sessionId
   const isClaudeMode = session?.sessionType === 'remote-claude' || session?.claudeMode
+
+  // Auto-focus xterm when this panel becomes the focused session (includes initial mount)
+  useEffect(() => {
+    if (isFocused) {
+      const timer = setTimeout(() => focus(), 50)
+      return () => clearTimeout(timer)
+    }
+  }, [isFocused, focus])
+
+  // Auto-focus xterm when the window regains focus (Cmd+Tab, clicking from another app)
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      if (useSessionStore.getState().focusedSessionId === sessionId) {
+        focus()
+      }
+    }
+    window.addEventListener('focus', handleWindowFocus)
+    return () => window.removeEventListener('focus', handleWindowFocus)
+  }, [sessionId, focus])
 
   const handleClick = useCallback(() => {
     if (focusedSessionId !== sessionId) {
