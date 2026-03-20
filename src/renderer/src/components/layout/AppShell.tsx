@@ -16,6 +16,7 @@ import { SidePanel } from '../git/SidePanel'
 import { FilePreview } from '../files/FilePreview'
 import { GitDiffPreview } from '../git/GitDiffPreview'
 import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { cn } from '../../lib/utils'
 
 const sidebarTransition = {
   duration: 0.2,
@@ -290,9 +291,17 @@ export function AppShell() {
     }
   }, [syncAgentStatus])
 
+  const effectiveFileTreeWidth = fileTreeWidthOverride ?? fileTreeWidth
+
   return (
-    <div className="flex h-screen w-screen bg-surface-0 overflow-hidden transition-colors duration-200">
-      {/* Sidebar */}
+    <div className="flex h-screen w-screen bg-surface-50 overflow-hidden transition-colors duration-200">
+      {/* Title bar drag region — covers the full background area */}
+      <div
+        className="absolute inset-x-0 top-0 h-12 z-0"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      />
+
+      {/* Left sidebar */}
       <AnimatePresence initial={false}>
         {sidebarOpen && (
           <motion.div
@@ -300,7 +309,7 @@ export function AppShell() {
             animate={{ width: sidebarWidth, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={sidebarTransition}
-            className="flex-shrink-0 overflow-hidden relative"
+            className="flex-shrink-0 overflow-hidden relative z-10"
           >
             <Sidebar />
             {/* Resize handle */}
@@ -312,11 +321,18 @@ export function AppShell() {
         )}
       </AnimatePresence>
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar */}
+      {/* Inset main content — rounded card sitting on the background */}
+      <div className={cn(
+        'flex-1 flex flex-col min-w-0 my-2 rounded-xl border border-border bg-surface-0 shadow-sm overflow-hidden z-10 transition-[margin] duration-200',
+        sidebarOpen ? 'ml-0' : 'ml-2',
+        fileTreeOpen ? 'mr-0' : 'mr-2'
+      )}>
+        {/* Toolbar — inside the card */}
         <div
-          className={`h-12 flex items-center justify-between px-4 border-b border-border-subtle flex-shrink-0 ${!sidebarOpen ? 'pl-20' : ''}`}
+          className={cn(
+            'h-12 flex items-center justify-between px-4 border-b border-border-subtle flex-shrink-0',
+            !sidebarOpen && 'pl-[5.5rem]'
+          )}
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <div
@@ -347,9 +363,10 @@ export function AppShell() {
             {/* File tree button */}
             <button
               onClick={toggleFileTree}
-              className={`p-1.5 rounded-md hover:bg-surface-200 transition-colors ${
+              className={cn(
+                'p-1.5 rounded-md hover:bg-surface-200 transition-colors',
                 fileTreeOpen ? 'text-accent' : 'text-text-secondary hover:text-text-primary'
-              }`}
+              )}
               title="File tree (Cmd+E)"
             >
               <Bars3BottomLeftIcon className="w-4 h-4 scale-x-[-1]" />
@@ -359,12 +376,12 @@ export function AppShell() {
 
         {/* Main content: both views always mounted, toggled via display */}
         <div className="flex-1 flex min-h-0">
-          {/* Board view — hidden but stays mounted */}
+          {/* Board view */}
           <div className={activeView === 'board' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <KanbanBoard />
           </div>
 
-          {/* Usage view — hidden but stays mounted */}
+          {/* Usage view */}
           <div className={activeView === 'usage' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <UsagePanel />
           </div>
@@ -374,52 +391,37 @@ export function AppShell() {
             <SettingsPanel />
           </div>
 
-          {/* Agents view — hidden but stays mounted */}
+          {/* Agents view */}
           <div className={activeView === 'agents' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <AgentChatPanel />
-            <AnimatePresence initial={false}>
-              {fileTreeOpen && (
-                <motion.div
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: fileTreeWidthOverride ?? fileTreeWidth, opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  transition={sidebarTransition}
-                  className="flex-shrink-0 overflow-hidden relative"
-                >
-                  <div
-                    onMouseDown={handleTreeResizeStart}
-                    className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/40 active:bg-accent/60 transition-colors z-10"
-                  />
-                  <SidePanel />
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
 
-          {/* Terminal grid + file tree — hidden but stays mounted */}
+          {/* Terminal grid */}
           <div className={activeView === 'terminals' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <TerminalGrid />
-            <AnimatePresence initial={false}>
-              {fileTreeOpen && (
-                <motion.div
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: fileTreeWidthOverride ?? fileTreeWidth, opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  transition={sidebarTransition}
-                  className="flex-shrink-0 overflow-hidden relative"
-                >
-                  {/* Resize handle */}
-                  <div
-                    onMouseDown={handleTreeResizeStart}
-                    className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/40 active:bg-accent/60 transition-colors z-10"
-                  />
-                  <SidePanel />
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         </div>
       </div>
+
+      {/* Right sidebar (file tree / git panel) — outside the card, mirrors left sidebar */}
+      <AnimatePresence initial={false}>
+        {fileTreeOpen && (
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: effectiveFileTreeWidth, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={sidebarTransition}
+            className="flex-shrink-0 overflow-hidden relative z-10"
+          >
+            {/* Resize handle */}
+            <div
+              onMouseDown={handleTreeResizeStart}
+              className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/40 active:bg-accent/60 transition-colors z-10"
+            />
+            <SidePanel />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <FilePalette />
       {previewFile && previewSource === 'tree' && <FilePreview />}

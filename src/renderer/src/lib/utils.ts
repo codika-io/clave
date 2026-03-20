@@ -5,6 +5,10 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
 }
 
+export function fileUrl(absolutePath: string): string {
+  return 'file://' + absolutePath.split('/').map(encodeURIComponent).join('/')
+}
+
 export function shortenPath(fullPath: string, maxLength = 40): string {
   if (fullPath.length <= maxLength) return fullPath
   const parts = fullPath.split('/')

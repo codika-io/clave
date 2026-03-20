@@ -187,11 +187,11 @@ body,
 /* xterm.js overrides */
 .xterm {
   padding: 8px 12px;
-  background-color: var(--surface-50);
+  background-color: var(--surface-0);
 }
 
 .xterm .xterm-viewport {
-  background-color: var(--surface-50) !important;
+  background-color: var(--surface-0) !important;
 }
 
 .xterm-viewport::-webkit-scrollbar {

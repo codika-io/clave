@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { type Theme, type AppIcon, useSessionStore } from '../../store/session-store'
 import { useTemplateStore } from '../../store/template-store'
-import { useUserStore, getInitials } from '../../store/user-store'
+import { useUserStore, USER_ICONS, USER_ICON_COLORS, type UserIcon } from '../../store/user-store'
+import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
+import { CheckIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarOutline, TrashIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LocationsTab } from './LocationsTab'
@@ -55,14 +57,14 @@ const themes: { id: Theme; label: string; colors: { bg: string; surface: string;
 
 function ProfileSection() {
   const name = useUserStore((s) => s.name)
-  const avatarPath = useUserStore((s) => s.avatarPath)
+  const avatarIcon = useUserStore((s) => s.avatarIcon)
+  const avatarColor = useUserStore((s) => s.avatarColor)
   const setName = useUserStore((s) => s.setName)
-  const setAvatarPath = useUserStore((s) => s.setAvatarPath)
+  const setAvatarIcon = useUserStore((s) => s.setAvatarIcon)
+  const setAvatarColor = useUserStore((s) => s.setAvatarColor)
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  const initials = getInitials(name)
 
   const handleStartEdit = () => {
     setEditName(name)
@@ -75,58 +77,17 @@ function ProfileSection() {
     setEditing(false)
   }
 
-  const handleAvatarClick = async () => {
-    const filePath = await window.electronAPI.openFolderDialog()
-    // openFolderDialog returns folders — we need a file picker for images
-    // For now, use a file input approach
-  }
-
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const filePath = window.electronAPI.getPathForFile(file)
-    if (filePath) setAvatarPath(filePath)
-  }
-
   return (
     <section>
       <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-widest mb-3">
         Profile
       </h3>
-      <div className="flex items-center gap-4">
-        {/* Avatar */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="relative w-16 h-16 rounded-2xl bg-surface-200 flex items-center justify-center overflow-hidden group flex-shrink-0"
-          title="Change avatar"
-        >
-          {avatarPath ? (
-            <img
-              src={`file://${avatarPath}`}
-              alt={name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <span className="text-lg font-semibold text-text-secondary">
-              {initials}
-            </span>
-          )}
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <PencilIcon className="w-4 h-4 text-white" />
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleAvatarChange}
-            className="hidden"
-          />
-        </button>
+      <div className="flex items-start gap-4">
+        {/* Avatar preview */}
+        <UserIconDisplay icon={avatarIcon} color={avatarColor} size="lg" />
 
-        {/* Name */}
-        <div className="flex-1 min-w-0">
+        {/* Name + pickers */}
+        <div className="flex-1 min-w-0 space-y-3">
           {editing ? (
             <input
               ref={inputRef}
@@ -148,14 +109,49 @@ function ProfileSection() {
               <PencilIcon className="w-3 h-3 text-text-tertiary" />
             </button>
           )}
-          {avatarPath && (
-            <button
-              onClick={() => setAvatarPath(null)}
-              className="text-xs text-text-tertiary hover:text-text-secondary mt-1 transition-colors"
-            >
-              Remove avatar
-            </button>
-          )}
+
+          {/* Icon picker */}
+          <div>
+            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Icon</span>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {USER_ICONS.map((iconName) => {
+                const Icon = ICON_MAP[iconName]
+                const isSelected = avatarIcon === iconName
+                return (
+                  <button
+                    key={iconName}
+                    onClick={() => setAvatarIcon(iconName)}
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                      isSelected
+                        ? 'bg-accent/15 ring-1 ring-accent'
+                        : 'bg-surface-200 hover:bg-surface-300'
+                    }`}
+                    title={iconName}
+                  >
+                    <Icon className="w-3.5 h-3.5" style={{ color: isSelected ? avatarColor : 'var(--text-secondary)' }} />
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Color picker */}
+          <div>
+            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Color</span>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {USER_ICON_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => setAvatarColor(color)}
+                  className="relative w-5 h-5 rounded-full hover:scale-110 transition-transform flex items-center justify-center"
+                  style={{ backgroundColor: color }}
+                  title={color}
+                >
+                  {avatarColor === color && <CheckIcon className="w-3 h-3 text-white" />}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </section>

@@ -27,7 +27,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
 
   return (
     <>
-      <div className="flex items-center justify-between px-3 py-1.5 bg-surface-100 border-b border-border-subtle flex-shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-surface-0 border-b border-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span
             className={cn(

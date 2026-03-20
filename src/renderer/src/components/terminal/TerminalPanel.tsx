@@ -44,8 +44,8 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
   return (
     <div
       className={cn(
-        'flex flex-col h-full bg-surface-50 transition-shadow',
-        isFocused ? 'ring-1 ring-accent/30' : ''
+        'flex flex-col h-full bg-surface-0 transition-shadow',
+        ''
       )}
       onMouseDown={handleClick}
     >

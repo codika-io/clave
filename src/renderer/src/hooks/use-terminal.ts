@@ -35,10 +35,10 @@ function detectPrompt(buffer: string): string | null {
 }
 
 const DARK_THEME = {
-  background: '#0a0a0a',
+  background: '#000000',
   foreground: 'rgba(255, 255, 255, 0.9)',
   cursor: 'rgba(255, 255, 255, 0.8)',
-  cursorAccent: '#0a0a0a',
+  cursorAccent: '#000000',
   selectionBackground: 'rgba(255, 255, 255, 0.15)',
   selectionForeground: undefined,
   black: '#1a1a1a',
@@ -60,10 +60,10 @@ const DARK_THEME = {
 }
 
 const LIGHT_THEME = {
-  background: '#f9f9f9',
+  background: '#ffffff',
   foreground: 'rgba(0, 0, 0, 0.85)',
   cursor: 'rgba(0, 0, 0, 0.7)',
-  cursorAccent: '#f9f9f9',
+  cursorAccent: '#ffffff',
   selectionBackground: 'rgba(0, 0, 0, 0.12)',
   selectionForeground: undefined,
   black: '#000000',
@@ -85,10 +85,10 @@ const LIGHT_THEME = {
 }
 
 const COFFEE_THEME = {
-  background: '#eeebe5',
+  background: '#f5f1eb',
   foreground: '#1b1610',
   cursor: 'rgba(27, 22, 16, 0.7)',
-  cursorAccent: '#eeebe5',
+  cursorAccent: '#f5f1eb',
   selectionBackground: 'rgba(120, 100, 80, 0.15)',
   selectionForeground: undefined,
   black: '#1b1610',

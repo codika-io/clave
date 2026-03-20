@@ -115,6 +115,19 @@ export function registerAppHandlers(): void {
     }
   })
 
+  ipcMain.handle('app:save-avatar', async (_event, sourcePath: string) => {
+    try {
+      const ext = sourcePath.split('.').pop() || 'png'
+      const destDir = join(app.getPath('userData'), 'avatars')
+      if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true })
+      const destPath = join(destDir, `avatar.${ext}`)
+      fs.copyFileSync(sourcePath, destPath)
+      return destPath
+    } catch {
+      return null
+    }
+  })
+
   ipcMain.handle('app:set-icon', (_event, icon: string) => {
     if (!VALID_ICONS.includes(icon as (typeof VALID_ICONS)[number])) return
 

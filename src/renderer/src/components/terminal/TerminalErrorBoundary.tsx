@@ -27,7 +27,7 @@ export class TerminalErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-full bg-surface-50 text-text-tertiary gap-2 p-4">
+        <div className="flex flex-col items-center justify-center h-full bg-surface-0 text-text-tertiary gap-2 p-4">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
             <path d="M12 8v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

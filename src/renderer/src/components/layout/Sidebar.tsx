@@ -812,7 +812,7 @@ export function Sidebar() {
   }, [])
 
   return (
-    <div className="flex flex-col h-full bg-surface-50 border-r border-border-subtle">
+    <div className="flex flex-col h-full bg-surface-50">
       {/* Action bar with traffic-light offset — top padding is draggable */}
       <div
         className="pt-11 px-3 pb-2 flex items-center gap-1.5 flex-shrink-0"

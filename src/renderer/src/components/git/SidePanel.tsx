@@ -166,9 +166,12 @@ export function SidePanel() {
   }, [pathMenuOpen])
 
   return (
-    <div className="flex flex-col h-full bg-surface-50 border-l border-border">
-      {/* Tabbed header */}
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border-subtle flex-shrink-0">
+    <div className="flex flex-col h-full bg-surface-50">
+      {/* Tabbed header — pt-3 clears the inset gap at the window top */}
+      <div
+        className="flex items-center gap-1.5 px-3 pt-3 pb-2 border-b border-border-subtle flex-shrink-0"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
         <div className="flex items-center gap-px flex-shrink-0">
           <button
             onClick={() => setSidePanelTab('files')}
