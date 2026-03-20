@@ -1241,7 +1241,7 @@ function PinnedSection({
             }
           },
           {
-            label: 'Remove',
+            label: 'Remove Pin',
             icon: <TrashIcon className="w-3.5 h-3.5" />,
             danger: true,
             onClick: () => removePinnedGroupWithCleanup(pinnedId)
