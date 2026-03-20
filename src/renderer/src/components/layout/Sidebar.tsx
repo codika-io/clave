@@ -16,7 +16,7 @@ import { ContextMenu } from '../ui/ContextMenu'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { GroupCommandDialog } from '../ui/GroupCommandDialog'
 import { cn } from '../../lib/utils'
-import { SectionHeading, WorkspaceSection } from './SidebarSections'
+import { SectionHeading, BoardSection } from './SidebarSections'
 import { NewSessionDropdown } from './NewSessionDropdown'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
@@ -24,6 +24,7 @@ import { useLocationStore } from '../../store/location-store'
 import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
+import { SidebarFooter } from './SidebarFooter'
 import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
@@ -111,7 +112,7 @@ export function Sidebar() {
   const searchQuery = useSessionStore((s) => s.searchQuery)
   const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
-  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false)
+  const [boardCollapsed, setBoardCollapsed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -847,8 +848,11 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Scrollable sections area */}
-      <div className="flex-1 flex flex-col min-h-0">
+      {/* Single scrollable area for all sections */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto min-h-0"
+      >
         {/* Pinned groups section */}
         <PinnedSection
           setContextMenu={setContextMenu}
@@ -887,14 +891,11 @@ export function Sidebar() {
           }
         />
         <div
-          className="flex-1 min-h-0 grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
+          className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
           style={{ gridTemplateRows: sessionsCollapsed ? '0fr' : '1fr', opacity: sessionsCollapsed ? 0 : 1, transform: sessionsCollapsed ? 'translateY(-4px)' : 'translateY(0)' }}
         >
-          <div className="overflow-hidden flex flex-col min-h-0">
-          <div
-            ref={scrollContainerRef}
-            className="overflow-y-auto px-2 space-y-2 flex-1"
-          >
+          <div className="overflow-hidden">
+          <div className="px-2 space-y-2">
             {filteredSessions ? (
               filteredSessions.length === 0 ? (
                 <div className="px-3 py-6 text-center text-xs text-text-tertiary">
@@ -1093,11 +1094,13 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Workspace section */}
-        <SectionHeading title="Workspace" collapsed={workspaceCollapsed} onToggle={() => setWorkspaceCollapsed((c) => !c)} />
-        <WorkspaceSection collapsed={workspaceCollapsed} />
-
+        {/* Board section */}
+        <SectionHeading title="Board" collapsed={boardCollapsed} onToggle={() => setBoardCollapsed((c) => !c)} />
+        <BoardSection collapsed={boardCollapsed} />
       </div>
+
+      {/* User footer */}
+      <SidebarFooter />
 
       {/* Context menu */}
       {contextMenu && (

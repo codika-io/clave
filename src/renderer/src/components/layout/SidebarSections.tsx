@@ -1,5 +1,5 @@
-import { ChevronRightIcon, ViewColumnsIcon, ChartBarIcon, Cog6ToothIcon } from '@heroicons/react/24/outline'
-import { useSessionStore, type ActiveView } from '../../store/session-store'
+import { ChevronRightIcon, ViewColumnsIcon } from '@heroicons/react/24/outline'
+import { useSessionStore } from '../../store/session-store'
 import { useBoardStore } from '../../store/board-store'
 import { cn } from '../../lib/utils'
 import { SidebarItem } from './SidebarItem'
@@ -31,17 +31,11 @@ export function SectionHeading({
   )
 }
 
-export function WorkspaceSection({ collapsed }: { collapsed: boolean }) {
+export function BoardSection({ collapsed }: { collapsed: boolean }) {
   const activeView = useSessionStore((s) => s.activeView)
   const setActiveView = useSessionStore((s) => s.setActiveView)
   const tasks = useBoardStore((s) => s.tasks)
   const nonDoneCount = tasks.filter((t) => t.status !== 'done').length
-
-  const items: { view: ActiveView; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string; badge?: number }[] = [
-    { view: 'board', icon: ViewColumnsIcon, label: 'Board', badge: nonDoneCount },
-    { view: 'usage', icon: ChartBarIcon, label: 'Usage' },
-    { view: 'settings', icon: Cog6ToothIcon, label: 'Settings' }
-  ]
 
   return (
     <div
@@ -50,20 +44,17 @@ export function WorkspaceSection({ collapsed }: { collapsed: boolean }) {
     >
       <div className="overflow-hidden">
         <div className="px-2 pt-0.5 pb-2 space-y-0.5">
-          {items.map(({ view, icon: Icon, label, badge }) => (
-            <SidebarItem
-              key={view}
-              icon={<Icon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />}
-              label={label}
-              isSelected={activeView === view}
-              onClick={() => setActiveView(view)}
-              rightContent={
-                badge !== undefined && badge > 0 ? (
-                  <span className="text-[12px] text-text-tertiary">{badge}</span>
-                ) : undefined
-              }
-            />
-          ))}
+          <SidebarItem
+            icon={<ViewColumnsIcon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />}
+            label="Board"
+            isSelected={activeView === 'board'}
+            onClick={() => setActiveView('board')}
+            rightContent={
+              nonDoneCount > 0 ? (
+                <span className="text-[12px] text-text-tertiary">{nonDoneCount}</span>
+              ) : undefined
+            }
+          />
         </div>
       </div>
     </div>

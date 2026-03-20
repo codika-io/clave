@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { type Theme, type AppIcon, useSessionStore } from '../../store/session-store'
 import { useTemplateStore } from '../../store/template-store'
-import { StarIcon as StarOutline, TrashIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { useUserStore, getInitials } from '../../store/user-store'
+import { StarIcon as StarOutline, TrashIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LocationsTab } from './LocationsTab'
 
@@ -51,6 +52,115 @@ const themes: { id: Theme; label: string; colors: { bg: string; surface: string;
     colors: { bg: '#eeebe5', surface: '#ddd9d1', text: '#1b1610', border: 'rgba(120,100,80,0.15)' }
   }
 ]
+
+function ProfileSection() {
+  const name = useUserStore((s) => s.name)
+  const avatarPath = useUserStore((s) => s.avatarPath)
+  const setName = useUserStore((s) => s.setName)
+  const setAvatarPath = useUserStore((s) => s.setAvatarPath)
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState(name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const initials = getInitials(name)
+
+  const handleStartEdit = () => {
+    setEditName(name)
+    setEditing(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  const handleSave = () => {
+    if (editName.trim()) setName(editName.trim())
+    setEditing(false)
+  }
+
+  const handleAvatarClick = async () => {
+    const filePath = await window.electronAPI.openFolderDialog()
+    // openFolderDialog returns folders — we need a file picker for images
+    // For now, use a file input approach
+  }
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const filePath = window.electronAPI.getPathForFile(file)
+    if (filePath) setAvatarPath(filePath)
+  }
+
+  return (
+    <section>
+      <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-widest mb-3">
+        Profile
+      </h3>
+      <div className="flex items-center gap-4">
+        {/* Avatar */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="relative w-16 h-16 rounded-2xl bg-surface-200 flex items-center justify-center overflow-hidden group flex-shrink-0"
+          title="Change avatar"
+        >
+          {avatarPath ? (
+            <img
+              src={`file://${avatarPath}`}
+              alt={name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-lg font-semibold text-text-secondary">
+              {initials}
+            </span>
+          )}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <PencilIcon className="w-4 h-4 text-white" />
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarChange}
+            className="hidden"
+          />
+        </button>
+
+        {/* Name */}
+        <div className="flex-1 min-w-0">
+          {editing ? (
+            <input
+              ref={inputRef}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={handleSave}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSave()
+                if (e.key === 'Escape') setEditing(false)
+              }}
+              className="text-sm text-text-primary bg-surface-200 rounded-lg px-3 py-1.5 w-full outline-none border border-border-subtle focus:border-accent"
+            />
+          ) : (
+            <button
+              onClick={handleStartEdit}
+              className="text-sm font-semibold text-text-primary hover:text-accent transition-colors flex items-center gap-1.5"
+            >
+              {name}
+              <PencilIcon className="w-3 h-3 text-text-tertiary" />
+            </button>
+          )}
+          {avatarPath && (
+            <button
+              onClick={() => setAvatarPath(null)}
+              className="text-xs text-text-tertiary hover:text-text-secondary mt-1 transition-colors"
+            >
+              Remove avatar
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
 
 export function SettingsPanel() {
   const theme = useSessionStore((s) => s.theme)
@@ -104,7 +214,9 @@ export function SettingsPanel() {
       <div className="max-w-xl">
         <h2 className="text-lg font-semibold text-text-primary mb-6">Settings</h2>
 
-        <section>
+        <ProfileSection />
+
+        <section className="mt-8">
           <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-widest mb-3">
             Appearance
           </h3>
