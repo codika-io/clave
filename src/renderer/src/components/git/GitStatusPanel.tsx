@@ -10,6 +10,27 @@ import { CommitBar } from './GitCommitBar'
 import type { GitFileStatus, GitStatusResult } from '../../../../preload/index.d'
 
 // ---------------------------------------------------------------------------
+// Per-cwd expanded directory cache — survives RepoSection unmount/remount
+// ---------------------------------------------------------------------------
+
+interface ExpandedCache {
+  staged: Set<string>
+  unstaged: Set<string>
+  untracked: Set<string>
+}
+
+const expandedCacheMap = new Map<string, ExpandedCache>()
+
+function getExpandedCache(cwd: string): ExpandedCache {
+  let cache = expandedCacheMap.get(cwd)
+  if (!cache) {
+    cache = { staged: new Set(), unstaged: new Set(), untracked: new Set() }
+    expandedCacheMap.set(cwd, cache)
+  }
+  return cache
+}
+
+// ---------------------------------------------------------------------------
 // RepoSection — reusable file list + commit bar + diff view for a single repo
 // ---------------------------------------------------------------------------
 
@@ -32,14 +53,55 @@ function RepoSection({
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [operating, setOperating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [stagedExpanded, setStagedExpanded] = useState<Set<string>>(new Set())
-  const [unstagedExpanded, setUnstagedExpanded] = useState<Set<string>>(new Set())
-  const [untrackedExpanded, setUntrackedExpanded] = useState<Set<string>>(new Set())
+
+  // Restore expanded state from per-cwd cache
+  const cache = getExpandedCache(cwd)
+  const [stagedExpanded, _setStagedExpanded] = useState<Set<string>>(() => cache.staged)
+  const [unstagedExpanded, _setUnstagedExpanded] = useState<Set<string>>(() => cache.unstaged)
+  const [untrackedExpanded, _setUntrackedExpanded] = useState<Set<string>>(() => cache.untracked)
+
+  // Wrap setters to also persist to cache
+  const setStagedExpanded: typeof _setStagedExpanded = useCallback((action) => {
+    _setStagedExpanded((prev) => {
+      const next = typeof action === 'function' ? action(prev) : action
+      getExpandedCache(cwd).staged = next
+      return next
+    })
+  }, [cwd])
+
+  const setUnstagedExpanded: typeof _setUnstagedExpanded = useCallback((action) => {
+    _setUnstagedExpanded((prev) => {
+      const next = typeof action === 'function' ? action(prev) : action
+      getExpandedCache(cwd).unstaged = next
+      return next
+    })
+  }, [cwd])
+
+  const setUntrackedExpanded: typeof _setUntrackedExpanded = useCallback((action) => {
+    _setUntrackedExpanded((prev) => {
+      const next = typeof action === 'function' ? action(prev) : action
+      getExpandedCache(cwd).untracked = next
+      return next
+    })
+  }, [cwd])
+
   const [confirmDiscard, setConfirmDiscard] = useState<{
     files: Array<{ path: string; status: string; staged: boolean }>
     label: string
   } | null>(null)
   const prevViewMode = useRef(gitViewMode)
+  const prevCwdRef = useRef(cwd)
+
+  // Sync expanded state from cache when cwd changes while mounted
+  useEffect(() => {
+    if (prevCwdRef.current !== cwd) {
+      prevCwdRef.current = cwd
+      const c = getExpandedCache(cwd)
+      _setStagedExpanded(c.staged)
+      _setUnstagedExpanded(c.unstaged)
+      _setUntrackedExpanded(c.untracked)
+    }
+  }, [cwd])
 
   const openDiffPreview = useCallback(
     (file: GitFileStatus) => {
