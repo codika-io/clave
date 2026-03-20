@@ -7,7 +7,8 @@ const DOUBLE_CLICK_MS = 300
 interface FileTreeItemProps {
   node: FlatTreeNode
   isSelected: boolean
-  onClickFile: (path: string, metaKey: boolean) => void
+  onClickFile: (path: string) => void
+  onSelect: (path: string, metaKey: boolean) => void
   onDoubleClickFile: (path: string) => void
   onDoubleClickDir: (path: string) => void
   onToggleDir: (path: string) => void
@@ -19,6 +20,7 @@ export function FileTreeItem({
   node,
   isSelected,
   onClickFile,
+  onSelect,
   onDoubleClickFile,
   onDoubleClickDir,
   onToggleDir,
@@ -32,7 +34,6 @@ export function FileTreeItem({
       const now = Date.now()
       const last = lastClickRef.current
       if (last.path === node.path && now - last.time < DOUBLE_CLICK_MS) {
-        // Fast double-click
         lastClickRef.current = { time: 0, path: '' }
         if (node.type === 'file') {
           onDoubleClickFile(node.path)
@@ -42,13 +43,20 @@ export function FileTreeItem({
         return
       }
       lastClickRef.current = { time: now, path: node.path }
+      // Cmd+click: toggle selection (works for both files and directories)
+      if (e.metaKey) {
+        onSelect(node.path, true)
+        return
+      }
+      // Regular click
       if (node.type === 'directory') {
         onToggleDir(node.path)
       } else {
-        onClickFile(node.path, e.metaKey)
+        onClickFile(node.path)
       }
+      onSelect(node.path, false) // clear selection on regular click
     },
-    [node, onClickFile, onToggleDir, onDoubleClickFile, onDoubleClickDir]
+    [node, onClickFile, onSelect, onToggleDir, onDoubleClickFile, onDoubleClickDir]
   )
 
   const handleDragStart = useCallback(

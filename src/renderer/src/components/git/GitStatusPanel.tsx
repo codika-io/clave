@@ -29,6 +29,7 @@ function RepoSection({
   const gitViewMode = useSessionStore((s) => s.gitViewMode)
   const setDiffPreview = useSessionStore((s) => s.setDiffPreview)
   const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [operating, setOperating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [stagedExpanded, setStagedExpanded] = useState<Set<string>>(new Set())
@@ -53,6 +54,24 @@ function RepoSection({
     },
     [cwd, setDiffPreview]
   )
+
+  const handleSelect = useCallback(
+    (path: string, metaKey: boolean) => {
+      if (metaKey) {
+        setSelectedPaths((prev) => {
+          const next = new Set(prev)
+          if (next.has(path)) next.delete(path)
+          else next.add(path)
+          return next
+        })
+      } else {
+        setSelectedPaths(new Set())
+      }
+    },
+    []
+  )
+
+  const repoRoot = status?.repoRoot ?? cwd
 
   // Collapse all when trigger fires
   useEffect(() => {
@@ -246,9 +265,12 @@ function RepoSection({
             {gitViewMode === 'tree' ? (
               <GitTreeSection
                 files={staged}
+                cwd={repoRoot}
+                selectedPaths={selectedPaths}
                 expandedPaths={stagedExpanded}
                 onToggleExpanded={toggleStagedExpanded}
                 onClickFile={openDiffPreview}
+                onSelect={handleSelect}
                 onStageToggle={(f) => unstageFile(f.path)}
                 onDiscard={promptDiscardFile}
                 disabled={operating}
@@ -258,10 +280,14 @@ function RepoSection({
                 <FileRow
                   key={`s-${f.path}`}
                   file={f}
+                  cwd={repoRoot}
+                  isSelected={selectedPaths.has(f.path)}
                   onClickName={() => openDiffPreview(f)}
+                  onSelect={handleSelect}
                   onStageToggle={() => unstageFile(f.path)}
                   onDiscard={() => promptDiscardFile(f)}
                   disabled={operating}
+                  selectedPaths={selectedPaths}
                 />
               ))
             )}
@@ -281,9 +307,12 @@ function RepoSection({
             {gitViewMode === 'tree' ? (
               <GitTreeSection
                 files={unstaged}
+                cwd={repoRoot}
+                selectedPaths={selectedPaths}
                 expandedPaths={unstagedExpanded}
                 onToggleExpanded={toggleUnstagedExpanded}
                 onClickFile={openDiffPreview}
+                onSelect={handleSelect}
                 onStageToggle={(f) => stageFile(f.path)}
                 onDiscard={promptDiscardFile}
                 disabled={operating}
@@ -293,10 +322,14 @@ function RepoSection({
                 <FileRow
                   key={`u-${f.path}`}
                   file={f}
+                  cwd={repoRoot}
+                  isSelected={selectedPaths.has(f.path)}
                   onClickName={() => openDiffPreview(f)}
+                  onSelect={handleSelect}
                   onStageToggle={() => stageFile(f.path)}
                   onDiscard={() => promptDiscardFile(f)}
                   disabled={operating}
+                  selectedPaths={selectedPaths}
                 />
               ))
             )}
@@ -316,9 +349,12 @@ function RepoSection({
             {gitViewMode === 'tree' ? (
               <GitTreeSection
                 files={untracked}
+                cwd={repoRoot}
+                selectedPaths={selectedPaths}
                 expandedPaths={untrackedExpanded}
                 onToggleExpanded={toggleUntrackedExpanded}
                 onClickFile={openDiffPreview}
+                onSelect={handleSelect}
                 onStageToggle={(f) => stageFile(f.path)}
                 onDiscard={promptDiscardFile}
                 disabled={operating}
@@ -328,10 +364,14 @@ function RepoSection({
                 <FileRow
                   key={`t-${f.path}`}
                   file={f}
+                  cwd={repoRoot}
+                  isSelected={selectedPaths.has(f.path)}
                   onClickName={() => openDiffPreview(f)}
+                  onSelect={handleSelect}
                   onStageToggle={() => stageFile(f.path)}
                   onDiscard={() => promptDiscardFile(f)}
                   disabled={operating}
+                  selectedPaths={selectedPaths}
                 />
               ))
             )}
@@ -421,12 +461,18 @@ function MultiRepoSection({
   name,
   repoPath,
   status,
-  refresh
+  refresh,
+  isSelected,
+  onSelect,
+  selectedRepoPaths
 }: {
   name: string
   repoPath: string
   status: GitStatusResult
   refresh: () => void
+  isSelected?: boolean
+  onSelect?: (path: string, metaKey: boolean) => void
+  selectedRepoPaths?: Set<string>
 }) {
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
   const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
@@ -452,12 +498,42 @@ function MultiRepoSection({
     }
   }, [collapseAllTrigger])
 
+  const handleDragStart = useCallback(
+    (e: React.DragEvent) => {
+      if (selectedRepoPaths && selectedRepoPaths.size > 1 && selectedRepoPaths.has(repoPath)) {
+        const paths = Array.from(selectedRepoPaths).join('\n')
+        e.dataTransfer.setData('text/plain', paths)
+      } else {
+        e.dataTransfer.setData('text/plain', repoPath)
+      }
+      e.dataTransfer.effectAllowed = 'copy'
+    },
+    [repoPath, selectedRepoPaths]
+  )
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.metaKey && onSelect) {
+        e.preventDefault()
+        onSelect(repoPath, true)
+        return
+      }
+      onSelect?.(repoPath, false)
+      setExpanded((v) => !v)
+    },
+    [repoPath, onSelect]
+  )
+
   return (
     <div className="border-b border-border-subtle">
       {/* Collapsible header */}
       <button
-        className="w-full flex items-center gap-1.5 px-3 py-1.5 text-xs hover:bg-surface-100 transition-colors"
-        onClick={() => setExpanded((v) => !v)}
+        className={`w-full flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
+          isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
+        }`}
+        onClick={handleClick}
+        draggable
+        onDragStart={handleDragStart}
       >
         {/* Chevron */}
         <svg
@@ -532,6 +608,23 @@ export function MultiRepoGitPanel({
   refresh: () => void
 }) {
   const [nestedDocked, setNestedDocked] = useState(false)
+  const [selectedRepoPaths, setSelectedRepoPaths] = useState<Set<string>>(new Set())
+
+  const handleRepoSelect = useCallback(
+    (path: string, metaKey: boolean) => {
+      if (metaKey) {
+        setSelectedRepoPaths((prev) => {
+          const next = new Set(prev)
+          if (next.has(path)) next.delete(path)
+          else next.add(path)
+          return next
+        })
+      } else {
+        setSelectedRepoPaths(new Set())
+      }
+    },
+    []
+  )
 
   const rootRepo = rootPath ? repos.find((r) => r.path === rootPath) ?? null : null
   const nestedRepos = rootPath ? repos.filter((r) => r.path !== rootPath) : repos
@@ -559,6 +652,9 @@ export function MultiRepoGitPanel({
             repoPath={rootRepo.path}
             status={rootRepo.status}
             refresh={refresh}
+            isSelected={selectedRepoPaths.has(rootRepo.path)}
+            onSelect={handleRepoSelect}
+            selectedRepoPaths={selectedRepoPaths}
           />
         )}
 
@@ -589,6 +685,9 @@ export function MultiRepoGitPanel({
               repoPath={repo.path}
               status={repo.status}
               refresh={refresh}
+              isSelected={selectedRepoPaths.has(repo.path)}
+              onSelect={handleRepoSelect}
+              selectedRepoPaths={selectedRepoPaths}
             />
           ))}
 
@@ -601,6 +700,9 @@ export function MultiRepoGitPanel({
               repoPath={repo.path}
               status={repo.status}
               refresh={refresh}
+              isSelected={selectedRepoPaths.has(repo.path)}
+              onSelect={handleRepoSelect}
+              selectedRepoPaths={selectedRepoPaths}
             />
           ))}
       </div>

@@ -3,7 +3,6 @@ import { useSessionStore } from '../../store/session-store'
 import { useFileTree, type FlatTreeNode } from '../../hooks/use-file-tree'
 import { FileTreeItem } from './FileTreeItem'
 import { ContextMenu } from '../ui/ContextMenu'
-import { shellEscape } from '../../lib/shell'
 
 interface ContextMenuState {
   x: number
@@ -155,16 +154,22 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
   const [inlineCreate, setInlineCreate] = useState<InlineCreateState | null>(null)
 
   const handleClickFile = useCallback(
-    (filePath: string, metaKey: boolean) => {
-      if (!focusedSessionId || !cwd) return
+    (_filePath: string) => {
+      // Plain click on file — no-op here, selection handled by handleSelect
+    },
+    []
+  )
 
+  const handleSelect = useCallback(
+    (path: string, metaKey: boolean) => {
+      if (!focusedSessionId || !cwd) return
       if (metaKey) {
         setSelectedPaths((prev) => {
           const next = new Set(prev)
-          if (next.has(filePath)) {
-            next.delete(filePath)
+          if (next.has(path)) {
+            next.delete(path)
           } else {
-            next.add(filePath)
+            next.add(path)
           }
           return next
         })
@@ -196,8 +201,7 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
       if (selectedPaths.size > 1 && selectedPaths.has(node.path)) {
         const paths = Array.from(selectedPaths)
           .map((p) => `${cwd}/${p}`)
-          .map((p) => shellEscape(p))
-          .join(' ')
+          .join('\n')
         e.dataTransfer.setData('text/plain', paths)
       } else {
         e.dataTransfer.setData('text/plain', `${cwd}/${node.path}`)
@@ -324,6 +328,7 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
           node={node}
           isSelected={selectedPaths.has(node.path)}
           onClickFile={handleClickFile}
+          onSelect={handleSelect}
           onDoubleClickFile={handleDoubleClickFile}
           onDoubleClickDir={handleDoubleClickDir}
           onToggleDir={toggleDir}
@@ -362,7 +367,7 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
     }
 
     return elements
-  }, [flatList, inlineCreate, cwd, selectedPaths, handleClickFile, handleDoubleClickFile, handleDoubleClickDir, toggleDir, handleContextMenu, handleDragStart, handleInlineCreated])
+  }, [flatList, inlineCreate, cwd, selectedPaths, handleClickFile, handleSelect, handleDoubleClickFile, handleDoubleClickDir, toggleDir, handleContextMenu, handleDragStart, handleInlineCreated])
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
