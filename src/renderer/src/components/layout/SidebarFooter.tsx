@@ -38,29 +38,37 @@ export function SidebarFooter() {
             <ChevronUpDownIcon className="w-4 h-4 text-text-tertiary flex-shrink-0" />
           </button>
         </PopoverTrigger>
-        <PopoverContent side="right" align="end" sideOffset={0} alignOffset={6} className="min-w-[200px]">
+        <PopoverContent
+          side="right"
+          align="end"
+          sideOffset={0}
+          alignOffset={6}
+          className="min-w-[220px] p-1.5 shadow-md shadow-black/5"
+        >
           {/* User header */}
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
+          <div className="flex items-center gap-2.5 px-2 py-1.5">
             <UserIconDisplay icon={avatarIcon} color={avatarColor} size="sm" />
             <div className="flex-1 min-w-0">
               <span className="text-[13px] font-semibold text-text-primary truncate block">{name}</span>
             </div>
           </div>
-          <div className="h-px bg-border-subtle" />
+
+          <div className="-mx-1.5 my-1.5 h-px bg-border-subtle" />
+
           {/* Menu items */}
-          <div className="py-1">
+          <div className="space-y-0.5">
             {items.map(({ view, icon: Icon, label }) => (
               <button
                 key={view}
                 onClick={() => setActiveView(view)}
                 className={cn(
-                  'w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors',
+                  'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] transition-colors cursor-default select-none',
                   activeView === view
                     ? 'bg-surface-200 text-text-primary'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-surface-200/50'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-surface-200'
                 )}
               >
-                <Icon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
+                <Icon className="w-4 h-4 flex-shrink-0 opacity-60" />
                 <span>{label}</span>
               </button>
             ))}
