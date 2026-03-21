@@ -108,7 +108,7 @@ export function SidebarTabItem({
           isDragging && 'opacity-30'
         )}
         style={groupColorHex && isSelected && !groupSelected && grouped
-          ? { backgroundColor: `${groupColorHex}20` }
+          ? { backgroundColor: `${groupColorHex}30` }
           : undefined
         }
         onMouseEnter={(e) => {

@@ -986,12 +986,14 @@ export function Sidebar() {
                             'relative rounded-xl border transition-colors',
                             !groupColorHex && (allGroupSelected
                               ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
-                              : 'bg-surface-100/30 border-border-subtle')
+                              : 'bg-surface-100/30 border-border-subtle hover:bg-surface-100/60')
                           )}
                           style={groupColorHex ? {
-                            backgroundColor: allGroupSelected ? `${groupColorHex}25` : `${groupColorHex}15`,
-                            borderColor: allGroupSelected ? `${groupColorHex}50` : `${groupColorHex}40`
+                            backgroundColor: allGroupSelected ? `${groupColorHex}35` : `${groupColorHex}10`,
+                            borderColor: allGroupSelected ? `${groupColorHex}60` : `${groupColorHex}30`
                           } : undefined}
+                          onMouseEnter={(e) => { if (groupColorHex && !allGroupSelected) e.currentTarget.style.backgroundColor = `${groupColorHex}20` }}
+                          onMouseLeave={(e) => { if (groupColorHex) e.currentTarget.style.backgroundColor = allGroupSelected ? `${groupColorHex}35` : `${groupColorHex}10` }}
                         >
                           {dropIndicator?.targetId === group.id && dropIndicator.position === 'inside' && (
                             <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10 transition-opacity duration-150" />
