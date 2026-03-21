@@ -75,6 +75,8 @@ export function SessionGroupItem({
     [onClick]
   )
 
+  const groupColorHex = resolveColorHex(group.color)
+
   return (
     <div
       className="relative"
@@ -88,9 +90,12 @@ export function SessionGroupItem({
         onKeyDown={handleButtonKeyDown}
         className={cn(
           'group w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors outline-none',
-          allSelected ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-100/50',
+          allSelected ? 'text-text-primary' : groupColorHex ? 'text-text-secondary' : 'text-text-secondary hover:bg-surface-100/50',
           isDragging && 'opacity-30'
         )}
+        style={!allSelected && groupColorHex ? { '--hover-bg': `${groupColorHex}20` } as React.CSSProperties : undefined}
+        onMouseEnter={(e) => { if (!allSelected && groupColorHex) e.currentTarget.style.backgroundColor = `${groupColorHex}20` }}
+        onMouseLeave={(e) => { if (!allSelected && groupColorHex) e.currentTarget.style.backgroundColor = '' }}
       >
         {/* Disclosure triangle */}
         <span

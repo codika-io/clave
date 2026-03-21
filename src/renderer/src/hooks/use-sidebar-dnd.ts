@@ -223,8 +223,18 @@ export function useSidebarDnd(opts: {
                   position = 'after'
                 }
               }
+            } else if (isDraggingGroup) {
+              // Never allow a group to land inside another group —
+              // redirect to before/after the parent group
+              if (isFirst && position === 'before') {
+                targetId = parentGroup.id
+                position = 'before'
+              } else {
+                targetId = parentGroup.id
+                position = 'after'
+              }
             } else {
-              // Reordering within group or dragging a group: escape zone only
+              // Reordering within group: escape zone only
               if (isLast && y > height * 0.65) {
                 targetId = parentGroup.id
                 position = 'after'
