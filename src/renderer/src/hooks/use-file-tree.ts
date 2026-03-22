@@ -273,12 +273,15 @@ export function useFileTree(cwd: string | null) {
         const entries = await window.electronAPI?.readDir(rootCwd, dirPath)
         if (!entries) return
 
+        // Check expansion cache to restore expanded state for deeper levels
+        const expanded = expansionCache.current.get(rootCwd) ?? new Set<string>()
+
         const children: TreeNode[] = entries.map((e: DirEntry) => ({
           name: e.name,
           path: e.path,
           type: e.type,
           size: e.size,
-          expanded: false,
+          expanded: e.type === 'directory' && expanded.has(e.path),
           loading: false,
           depth: 0
         }))
@@ -290,6 +293,13 @@ export function useFileTree(cwd: string | null) {
 
         // Check gitignore status for children (async, non-blocking)
         enrichWithIgnored(rootCwd, children, setRootNodes, dirPath)
+
+        // Recursively load children for subdirectories that were previously expanded
+        for (const child of children) {
+          if (child.type === 'directory' && expanded.has(child.path)) {
+            loadChildren(rootCwd, child.path)
+          }
+        }
       } catch (err) {
         console.error('Failed to load children:', err)
       }
