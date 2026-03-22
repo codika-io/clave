@@ -336,7 +336,7 @@ export function AppShell() {
             <div
               onMouseDown={handleResizeStart}
               className={cn(
-                'absolute top-0 right-0 h-full cursor-col-resize transition-all z-10 border-r border-border',
+                'absolute top-0 right-0 h-full cursor-col-resize transition-all z-10 border-r border-border/20',
                 draggingLeft ? 'w-1 bg-accent' : 'w-1.5 hover:w-1 hover:bg-accent/50'
               )}
             />
@@ -439,7 +439,7 @@ export function AppShell() {
             <div
               onMouseDown={handleTreeResizeStart}
               className={cn(
-                'absolute top-0 left-0 h-full cursor-col-resize transition-all z-10 border-l border-border',
+                'absolute top-0 left-0 h-full cursor-col-resize transition-all z-10 border-l border-border/20',
                 draggingRight ? 'w-1 bg-accent' : 'w-1.5 hover:w-1 hover:bg-accent/50'
               )}
             />
