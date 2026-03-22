@@ -336,8 +336,8 @@ export function AppShell() {
             <div
               onMouseDown={handleResizeStart}
               className={cn(
-                'absolute top-0 right-0 h-full cursor-col-resize transition-all z-10 border-r border-border/20',
-                draggingLeft ? 'w-1 bg-accent' : 'w-1.5 hover:w-1 hover:bg-accent/50'
+                'absolute top-0 right-0 w-1.5 h-full cursor-col-resize transition-colors z-10 border-r border-border/20',
+                draggingLeft ? 'bg-accent' : 'hover:bg-accent/50'
               )}
             />
           </motion.div>
@@ -439,8 +439,8 @@ export function AppShell() {
             <div
               onMouseDown={handleTreeResizeStart}
               className={cn(
-                'absolute top-0 left-0 h-full cursor-col-resize transition-all z-10 border-l border-border/20',
-                draggingRight ? 'w-1 bg-accent' : 'w-1.5 hover:w-1 hover:bg-accent/50'
+                'absolute top-0 left-0 w-1.5 h-full cursor-col-resize transition-colors z-10 border-l border-border/20',
+                draggingRight ? 'bg-accent' : 'hover:bg-accent/50'
               )}
             />
             <SidePanel />
