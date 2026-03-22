@@ -66,7 +66,7 @@ export function SidebarFooter() {
                   <ArrowDownTrayIcon className="w-3.5 h-3.5 text-accent" />
                 </div>
                 <p className="text-[12px] font-medium text-text-primary leading-tight">
-                  {version ? `v${version}` : 'Update'} available
+                  {version ? `v${version}` : 'Update'}
                 </p>
               </div>
               <div className="flex items-center gap-1 justify-end">
