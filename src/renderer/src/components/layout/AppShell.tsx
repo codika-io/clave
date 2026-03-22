@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSessionStore, isFileTabId } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
@@ -74,23 +74,35 @@ export function AppShell() {
     [addSession]
   )
 
-  const isResizing = useRef(false)
-  const isResizingTree = useRef(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const fileTreeRef = useRef<HTMLDivElement>(null)
+  const skipTransition = useRef(false)
+  const [draggingLeft, setDraggingLeft] = useState(false)
+  const [draggingRight, setDraggingRight] = useState(false)
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
-      isResizing.current = true
+      setDraggingLeft(true)
+      skipTransition.current = true
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
 
       const onMouseMove = (ev: MouseEvent) => {
-        if (!isResizing.current) return
-        setSidebarWidth(ev.clientX)
+        const w = Math.max(180, Math.min(480, ev.clientX))
+        if (sidebarRef.current) {
+          sidebarRef.current.style.width = `${w}px`
+        }
       }
 
-      const onMouseUp = () => {
-        isResizing.current = false
+      const onMouseUp = (ev: MouseEvent) => {
+        const w = Math.max(180, Math.min(480, ev.clientX))
+        setSidebarWidth(w)
+        // Keep skipTransition true briefly so Framer doesn't animate to the committed value
+        requestAnimationFrame(() => {
+          skipTransition.current = false
+        })
+        setDraggingLeft(false)
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
         window.removeEventListener('mousemove', onMouseMove)
@@ -106,17 +118,25 @@ export function AppShell() {
   const handleTreeResizeStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
-      isResizingTree.current = true
+      setDraggingRight(true)
+      skipTransition.current = true
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
 
       const onMouseMove = (ev: MouseEvent) => {
-        if (!isResizingTree.current) return
-        setFileTreeWidth(window.innerWidth - ev.clientX)
+        const w = Math.max(180, Math.min(400, window.innerWidth - ev.clientX))
+        if (fileTreeRef.current) {
+          fileTreeRef.current.style.width = `${w}px`
+        }
       }
 
-      const onMouseUp = () => {
-        isResizingTree.current = false
+      const onMouseUp = (ev: MouseEvent) => {
+        const w = Math.max(180, Math.min(400, window.innerWidth - ev.clientX))
+        setFileTreeWidth(w)
+        requestAnimationFrame(() => {
+          skipTransition.current = false
+        })
+        setDraggingRight(false)
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
         window.removeEventListener('mousemove', onMouseMove)
@@ -304,17 +324,23 @@ export function AppShell() {
       <AnimatePresence initial={false}>
         {sidebarOpen && (
           <motion.div
+            ref={sidebarRef}
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: sidebarWidth, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={sidebarTransition}
+            transition={skipTransition.current ? { duration: 0 } : sidebarTransition}
             className="flex-shrink-0 overflow-hidden relative z-10"
           >
             <Sidebar />
             {/* Resize handle */}
             <div
               onMouseDown={handleResizeStart}
-              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent-primary/40 active:bg-accent-primary/60 transition-colors z-10"
+              className={cn(
+                'absolute top-0 right-0 w-1.5 h-full cursor-col-resize transition-colors z-10',
+                draggingLeft
+                  ? 'bg-accent-primary/60'
+                  : 'hover:bg-accent-primary/40 active:bg-accent-primary/60'
+              )}
             />
           </motion.div>
         )}
@@ -327,7 +353,7 @@ export function AppShell() {
         fileTreeOpen ? 'mr-0' : 'mr-2'
       )}>
         {/* Toolbar — its own floating card */}
-        <div className="floating-card flex-shrink-0">
+        <div className="floating-card flex-shrink-0 !bg-surface-0/70">
           <div
             className={cn(
               'h-8 flex items-center justify-between px-0.5 flex-shrink-0',
@@ -404,16 +430,22 @@ export function AppShell() {
       <AnimatePresence initial={false}>
         {fileTreeOpen && (
           <motion.div
+            ref={fileTreeRef}
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: effectiveFileTreeWidth, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={sidebarTransition}
+            transition={skipTransition.current ? { duration: 0 } : sidebarTransition}
             className="flex-shrink-0 overflow-hidden relative z-10"
           >
             {/* Resize handle */}
             <div
               onMouseDown={handleTreeResizeStart}
-              className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/40 active:bg-accent/60 transition-colors z-10"
+              className={cn(
+                'absolute top-0 left-0 w-1.5 h-full cursor-col-resize transition-colors z-10',
+                draggingRight
+                  ? 'bg-accent-primary/60'
+                  : 'hover:bg-accent-primary/40 active:bg-accent-primary/60'
+              )}
             />
             <SidePanel />
           </motion.div>
