@@ -70,7 +70,7 @@ export function TerminalGrid() {
 
       {/* Grid renders ALL terminals to keep them alive + selected file tabs */}
       <div
-        className="h-full grid bg-surface-0"
+        className="h-full grid gap-2"
         style={{
           gridTemplateColumns: `repeat(${cols}, 1fr)`,
           gridTemplateRows: `repeat(${rows}, 1fr)`
@@ -83,7 +83,7 @@ export function TerminalGrid() {
           return (
             <div
               key={session.id}
-              className="min-h-0 min-w-0 h-full border-border-subtle [&:not(:first-child)]:border-l"
+              className="min-h-0 min-w-0 h-full floating-card"
               style={{ display: isSelected ? undefined : 'none' }}
             >
               <TerminalErrorBoundary sessionId={session.id}>
@@ -111,7 +111,7 @@ export function TerminalGrid() {
           const fileTab = fileTabs.find((f) => f.id === ftId)
           if (!fileTab) return null
           return (
-            <div key={fileTab.id} className="min-h-0 min-w-0 h-full">
+            <div key={fileTab.id} className="min-h-0 min-w-0 h-full floating-card">
               <FileViewer fileTab={fileTab} />
             </div>
           )

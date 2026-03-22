@@ -320,85 +320,83 @@ export function AppShell() {
         )}
       </AnimatePresence>
 
-      {/* Inset main content — rounded card sitting on the background */}
+      {/* Inset main content — transparent flex container for floating boxes */}
       <div className={cn(
-        'flex-1 flex flex-col min-w-0 my-2 rounded-xl border border-border bg-surface-0 shadow-sm overflow-hidden z-10 transition-[margin] duration-200',
+        'flex-1 flex flex-col min-w-0 my-2 gap-2 z-10 transition-[margin] duration-200',
         sidebarOpen ? 'ml-0' : 'ml-2',
         fileTreeOpen ? 'mr-0' : 'mr-2'
       )}>
-        {/* Toolbar — inside the card */}
-        <div
-          className={cn(
-            'h-12 flex items-center justify-between px-4 border-b border-border-subtle flex-shrink-0',
-            !sidebarOpen && 'pl-[5.5rem]'
-          )}
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
+        {/* Toolbar — its own floating card */}
+        <div className="floating-card flex-shrink-0">
           <div
-            className="flex items-center gap-2"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            className={cn(
+              'h-8 flex items-center justify-between px-0.5 flex-shrink-0',
+              !sidebarOpen && 'pl-[5.5rem]'
+            )}
+            style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
           >
-            <button
-              onClick={toggleSidebar}
-              className="p-1.5 rounded-md hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors"
-              title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            <div
+              className="flex items-center gap-2"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
-              <Bars3BottomLeftIcon className="w-4 h-4" />
-            </button>
-          </div>
+              <button
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-lg hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors"
+                title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+              >
+                <Bars3BottomLeftIcon className="w-4 h-4" />
+              </button>
+            </div>
 
-          <div
-            className="flex items-center gap-2"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            {/* File palette button */}
-            <button
-              onClick={toggleFilePalette}
-              className="p-1.5 rounded-md hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors"
-              title="Search files (Cmd+P)"
+            <div
+              className="flex items-center gap-2"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
-              <MagnifyingGlassIcon className="w-4 h-4" />
-            </button>
-            {/* File tree button */}
-            <button
-              onClick={toggleFileTree}
-              className={cn(
-                'p-1.5 rounded-md hover:bg-surface-200 transition-colors',
-                fileTreeOpen ? 'text-accent' : 'text-text-secondary hover:text-text-primary'
-              )}
-              title="File tree (Cmd+E)"
-            >
-              <Bars3BottomLeftIcon className="w-4 h-4 scale-x-[-1]" />
-            </button>
+              {/* File palette button */}
+              <button
+                onClick={toggleFilePalette}
+                className="p-1.5 rounded-lg hover:bg-surface-200 text-text-secondary hover:text-text-primary transition-colors"
+                title="Search files (Cmd+P)"
+              >
+                <MagnifyingGlassIcon className="w-4 h-4" />
+              </button>
+              {/* File tree button */}
+              <button
+                onClick={toggleFileTree}
+                className={cn(
+                  'p-1.5 rounded-lg hover:bg-surface-200 transition-colors',
+                  fileTreeOpen ? 'text-accent' : 'text-text-secondary hover:text-text-primary'
+                )}
+                title="File tree (Cmd+E)"
+              >
+                <Bars3BottomLeftIcon className="w-4 h-4 scale-x-[-1]" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Main content: both views always mounted, toggled via display */}
-        <div className="flex-1 flex min-h-0">
-          {/* Board view */}
+        {/* Non-terminal views — single floating card */}
+        <div className={cn(
+          'flex-1 min-h-0 floating-card',
+          activeView === 'terminals' ? 'hidden' : 'flex'
+        )}>
           <div className={activeView === 'board' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <KanbanBoard />
           </div>
-
-          {/* Usage view */}
           <div className={activeView === 'usage' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <UsagePanel />
           </div>
-
-          {/* Settings view */}
           <div className={activeView === 'settings' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <SettingsPanel />
           </div>
-
-          {/* Agents view */}
           <div className={activeView === 'agents' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <AgentChatPanel />
           </div>
+        </div>
 
-          {/* Terminal grid */}
-          <div className={activeView === 'terminals' ? 'flex-1 flex min-h-0' : 'hidden'}>
-            <TerminalGrid />
-          </div>
+        {/* Terminal grid — each terminal is its own floating card */}
+        <div className={activeView === 'terminals' ? 'flex-1 flex min-h-0' : 'hidden'}>
+          <TerminalGrid />
         </div>
       </div>
 

@@ -206,3 +206,12 @@ body,
   background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
+
+/* Reusable floating card style for inset UI boxes */
+.floating-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-0);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  overflow: hidden;
+}
