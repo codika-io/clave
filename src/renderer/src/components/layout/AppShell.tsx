@@ -347,8 +347,8 @@ export function AppShell() {
       {/* Inset main content — transparent flex container for floating boxes */}
       <div className={cn(
         'flex-1 flex flex-col min-w-0 my-2 gap-2 z-10 transition-[margin] duration-200',
-        sidebarOpen ? 'ml-0' : 'ml-2',
-        fileTreeOpen ? 'mr-0' : 'mr-2'
+        sidebarOpen ? 'ml-1' : 'ml-2',
+        fileTreeOpen ? 'mr-1' : 'mr-2'
       )}>
         {/* Toolbar — its own floating card */}
         <div className="floating-card flex-shrink-0 !bg-surface-0/70">
