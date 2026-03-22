@@ -332,14 +332,16 @@ export function AppShell() {
             className="flex-shrink-0 overflow-hidden relative z-10"
           >
             <Sidebar />
-            {/* Resize handle */}
+            {/* Resize handle — wide invisible hit area, thin visible line */}
             <div
               onMouseDown={handleResizeStart}
-              className={cn(
-                'absolute top-0 right-0 w-1.5 h-full cursor-col-resize transition-colors z-10 border-r border-border/20',
-                draggingLeft ? 'bg-accent' : 'hover:bg-accent/50'
-              )}
-            />
+              className="absolute top-0 right-0 w-2.5 h-full cursor-col-resize z-10 group/resize"
+            >
+              <div className={cn(
+                'absolute top-0 right-0 w-px h-full transition-colors border-r border-border/20',
+                draggingLeft ? 'bg-accent' : 'group-hover/resize:bg-accent/50'
+              )} />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -436,13 +438,16 @@ export function AppShell() {
             className="flex-shrink-0 overflow-hidden relative z-10"
           >
             {/* Resize handle */}
+            {/* Resize handle — wide invisible hit area, thin visible line */}
             <div
               onMouseDown={handleTreeResizeStart}
-              className={cn(
-                'absolute top-0 left-0 w-1.5 h-full cursor-col-resize transition-colors z-10 border-l border-border/20',
-                draggingRight ? 'bg-accent' : 'hover:bg-accent/50'
-              )}
-            />
+              className="absolute top-0 left-0 w-2.5 h-full cursor-col-resize z-10 group/resize"
+            >
+              <div className={cn(
+                'absolute top-0 left-0 w-px h-full transition-colors border-l border-border/20',
+                draggingRight ? 'bg-accent' : 'group-hover/resize:bg-accent/50'
+              )} />
+            </div>
             <SidePanel />
           </motion.div>
         )}
