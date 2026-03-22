@@ -163,7 +163,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   collapseAllTrigger: 0,
   activeView: 'terminals' as ActiveView,
   sidePanelTab: 'files' as const,
-  gitViewMode: 'list' as const,
+  gitViewMode: (localStorage.getItem('clave-git-view-mode') === 'tree' ? 'tree' : 'list') as 'list' | 'tree',
   gitPanelMode: 'changes' as const,
   commitMessages: {} as Record<string, string>,
   generatingCommitCwds: new Set<string>(),
@@ -561,7 +561,10 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
 
-  setGitViewMode: (mode) => set({ gitViewMode: mode }),
+  setGitViewMode: (mode) => {
+    localStorage.setItem('clave-git-view-mode', mode)
+    set({ gitViewMode: mode })
+  },
 
   setGitPanelMode: (mode) => set({ gitPanelMode: mode }),
 
