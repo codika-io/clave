@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSessionStore, isFileTabId } from '../../store/session-store'
+import { useSessionStore, isFileTabId, getDisplayOrder } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
@@ -160,6 +160,22 @@ export function AppShell() {
         e.preventDefault()
         toggleFileTree()
       }
+      // Cmd+B: Toggle left sidebar
+      if (e.metaKey && !e.shiftKey && e.key === 'b') {
+        e.preventDefault()
+        toggleSidebar()
+      }
+      // Cmd+Shift+G: Open right sidebar with Git tab
+      if (e.metaKey && e.shiftKey && e.key === 'g') {
+        e.preventDefault()
+        const state = useSessionStore.getState()
+        if (state.fileTreeOpen && state.sidePanelTab === 'git') {
+          toggleFileTree()
+        } else {
+          if (!state.fileTreeOpen) toggleFileTree()
+          useSessionStore.getState().setSidePanelTab('git')
+        }
+      }
       // Cmd+T: New terminal session
       if (e.metaKey && e.key === 't') {
         e.preventDefault()
@@ -196,10 +212,70 @@ export function AppShell() {
           }
         }
       }
+      // Cmd+,: Open settings
+      if (e.metaKey && e.key === ',') {
+        e.preventDefault()
+        useSessionStore.getState().setActiveView('settings')
+      }
+      // Cmd+F: Focus sidebar search (open sidebar if closed)
+      if (e.metaKey && !e.shiftKey && e.key === 'f') {
+        e.preventDefault()
+        const state = useSessionStore.getState()
+        if (!state.sidebarOpen) state.toggleSidebar()
+        // Small delay to let sidebar mount before focusing
+        setTimeout(() => {
+          const input = document.querySelector<HTMLInputElement>('[data-sidebar-search]')
+          input?.focus()
+        }, 50)
+      }
+      // Cmd+1-9: Switch to session by index
+      if (e.metaKey && !e.shiftKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault()
+        const state = useSessionStore.getState()
+        const order = getDisplayOrder(state)
+        // Flatten: expand groups into their session IDs
+        const flatIds: string[] = []
+        for (const id of order) {
+          const group = state.groups.find((g) => g.id === id)
+          if (group) {
+            flatIds.push(...group.sessionIds)
+          } else {
+            flatIds.push(id)
+          }
+        }
+        const idx = parseInt(e.key) - 1
+        if (idx < flatIds.length) {
+          state.selectSession(flatIds[idx], false)
+        }
+      }
+      // Cmd+Shift+] / Cmd+Shift+[: Next / previous session
+      if (e.metaKey && e.shiftKey && (e.key === ']' || e.key === '[')) {
+        e.preventDefault()
+        const state = useSessionStore.getState()
+        const order = getDisplayOrder(state)
+        const flatIds: string[] = []
+        for (const id of order) {
+          const group = state.groups.find((g) => g.id === id)
+          if (group) {
+            flatIds.push(...group.sessionIds)
+          } else {
+            flatIds.push(id)
+          }
+        }
+        if (flatIds.length === 0) return
+        const currentIdx = flatIds.indexOf(state.focusedSessionId ?? '')
+        let nextIdx: number
+        if (e.key === ']') {
+          nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % flatIds.length
+        } else {
+          nextIdx = currentIdx < 0 ? flatIds.length - 1 : (currentIdx - 1 + flatIds.length) % flatIds.length
+        }
+        state.selectSession(flatIds[nextIdx], false)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleFilePalette, toggleFileTree, spawnSessionWithOptions, removeSession, removeFileTab])
+  }, [toggleFilePalette, toggleFileTree, toggleSidebar, spawnSessionWithOptions, removeSession, removeFileTab])
 
   // Sync data-theme attribute to root element
   useEffect(() => {

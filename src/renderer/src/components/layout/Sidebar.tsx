@@ -247,33 +247,29 @@ export function Sidebar() {
     }
   }, [addSession])
 
-  // Cmd+G to group, Cmd+Shift+G to ungroup, Cmd+F to toggle search, Cmd+Shift+Delete to reset
+  // Cmd+G to group, Cmd+Alt+G to ungroup, Cmd+F to toggle search, Cmd+Shift+Delete to reset
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key.toLowerCase() === 'g') {
+      if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'g') {
+        // Cmd+G: group selected sessions
         e.preventDefault()
         const state = useSessionStore.getState()
-        if (e.shiftKey) {
-          // Cmd+Shift+G: ungroup — find the group that contains all selected sessions
-          const containingGroup = state.groups.find(
-            (g) =>
-              state.selectedSessionIds.length > 0 &&
-              state.selectedSessionIds.every((sid) => g.sessionIds.includes(sid))
-          )
-          if (containingGroup) {
-            ungroupSessions(containingGroup.id)
-          }
-        } else {
-          // Cmd+G: group selected sessions
-          if (state.selectedSessionIds.length >= 1) {
-            createGroup(state.selectedSessionIds)
-          }
+        if (state.selectedSessionIds.length >= 1) {
+          createGroup(state.selectedSessionIds)
         }
       }
-      // Cmd+F: toggle search
-      if (e.metaKey && !e.shiftKey && e.key === 'f') {
+      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'g') {
+        // Cmd+Alt+G: ungroup
         e.preventDefault()
-        searchInputRef.current?.focus()
+        const state = useSessionStore.getState()
+        const containingGroup = state.groups.find(
+          (g) =>
+            state.selectedSessionIds.length > 0 &&
+            state.selectedSessionIds.every((sid) => g.sessionIds.includes(sid))
+        )
+        if (containingGroup) {
+          ungroupSessions(containingGroup.id)
+        }
       }
       // Cmd+Shift+Delete: reset all sessions
       if (e.metaKey && e.shiftKey && e.key === 'Backspace') {
@@ -825,6 +821,7 @@ export function Sidebar() {
           <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
           <input
             ref={searchInputRef}
+            data-sidebar-search
             type="text"
             placeholder="Search sessions..."
             value={searchQuery}
