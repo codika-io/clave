@@ -1,17 +1,66 @@
 import { useEffect, useRef, useState } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { motion, AnimatePresence } from 'framer-motion'
-import { type GroupTerminalColor } from '../../store/session-store'
+import { type GroupTerminalColor, type GroupTerminalIcon, GROUP_TERMINAL_ICONS } from '../../store/session-store'
 import ColorPicker from './ColorPicker'
+import {
+  FolderIcon,
+  CommandLineIcon,
+  FireIcon,
+  BoltIcon,
+  RocketLaunchIcon,
+  EyeIcon,
+  GlobeAltIcon,
+  CubeIcon,
+  HeartIcon,
+  StarIcon,
+  UserIcon,
+  ShieldCheckIcon,
+  WrenchIcon,
+  BeakerIcon,
+  CpuChipIcon,
+  SignalIcon,
+  BugAntIcon,
+  SparklesIcon,
+  CloudIcon
+} from '@heroicons/react/24/outline'
+import { cn } from '../../lib/utils'
+
+const ICON_COMPONENTS: Record<GroupTerminalIcon, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  terminal: CommandLineIcon,
+  fire: FireIcon,
+  bolt: BoltIcon,
+  rocket: RocketLaunchIcon,
+  eye: EyeIcon,
+  globe: GlobeAltIcon,
+  cube: CubeIcon,
+  heart: HeartIcon,
+  star: StarIcon,
+  user: UserIcon,
+  shield: ShieldCheckIcon,
+  wrench: WrenchIcon,
+  beaker: BeakerIcon,
+  cpu: CpuChipIcon,
+  signal: SignalIcon,
+  bug: BugAntIcon,
+  sparkles: SparklesIcon,
+  cloud: CloudIcon
+}
+
+export function getTerminalIconComponent(icon?: GroupTerminalIcon): React.ComponentType<React.SVGProps<SVGSVGElement>> {
+  return ICON_COMPONENTS[icon ?? 'terminal'] ?? CommandLineIcon
+}
 
 interface GroupCommandDialogProps {
   isOpen: boolean
-  onSave: (command: string, mode: 'prefill' | 'auto', color: GroupTerminalColor) => void
+  onSave: (command: string, mode: 'prefill' | 'auto', color: GroupTerminalColor, cwd: string | null, icon: GroupTerminalIcon) => void
   onCancel: () => void
   onDelete?: () => void
   initialCommand?: string | null
   initialMode?: 'prefill' | 'auto'
   initialColor?: GroupTerminalColor
+  initialCwd?: string | null
+  initialIcon?: GroupTerminalIcon
 }
 
 export function GroupCommandDialog({
@@ -21,11 +70,15 @@ export function GroupCommandDialog({
   onDelete,
   initialCommand,
   initialMode = 'prefill',
-  initialColor = 'blue'
+  initialColor = 'blue',
+  initialCwd = null,
+  initialIcon = 'terminal'
 }: GroupCommandDialogProps) {
   const [command, setCommand] = useState(initialCommand ?? '')
   const [mode, setMode] = useState<'prefill' | 'auto'>(initialMode)
   const [color, setColor] = useState<GroupTerminalColor>(initialColor)
+  const [cwd, setCwd] = useState<string | null>(initialCwd)
+  const [icon, setIcon] = useState<GroupTerminalIcon>(initialIcon)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -33,16 +86,24 @@ export function GroupCommandDialog({
       setCommand(initialCommand ?? '')
       setMode(initialMode)
       setColor(initialColor)
+      setCwd(initialCwd)
+      setIcon(initialIcon)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
-  }, [isOpen, initialCommand, initialMode, initialColor])
+  }, [isOpen, initialCommand, initialMode, initialColor, initialCwd, initialIcon])
 
   const handleSave = () => {
-    const trimmed = command.trim()
-    if (trimmed) {
-      onSave(trimmed, mode, color)
+    onSave(command.trim(), mode, color, cwd, icon)
+  }
+
+  const handlePickFolder = async () => {
+    const folder = await window.electronAPI.openFolderDialog()
+    if (folder) {
+      setCwd(folder)
     }
   }
+
+  const folderName = cwd ? cwd.split('/').pop() || cwd : null
 
   return (
     <DialogPrimitive.Root open={isOpen} onOpenChange={(open) => { if (!open) onCancel() }}>
@@ -76,9 +137,26 @@ export function GroupCommandDialog({
                       {onDelete ? 'Edit terminal' : 'Add terminal'}
                     </DialogPrimitive.Title>
                     <DialogPrimitive.Description className="mt-1 text-xs text-text-secondary">
-                      Set a command to run in this group&apos;s terminal.
+                      Configure a terminal for this group.
                     </DialogPrimitive.Description>
 
+                    {/* Folder picker */}
+                    <button
+                      type="button"
+                      onClick={handlePickFolder}
+                      className="mt-3 w-full h-8 px-3 rounded-lg bg-surface-100 border border-border-subtle flex items-center gap-2 text-xs hover:bg-surface-200 transition-colors group"
+                      title={cwd ?? 'Select folder'}
+                    >
+                      <FolderIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                      <span className="flex-1 min-w-0 truncate text-left text-text-primary">
+                        {folderName ?? 'Select folder...'}
+                      </span>
+                      <span className="text-[10px] text-text-tertiary group-hover:text-text-secondary flex-shrink-0">
+                        Change
+                      </span>
+                    </button>
+
+                    {/* Command input */}
                     <input
                       ref={inputRef}
                       type="text"
@@ -90,8 +168,8 @@ export function GroupCommandDialog({
                           handleSave()
                         }
                       }}
-                      placeholder="e.g., npm run dev"
-                      className="mt-3 w-full h-8 px-3 rounded-lg bg-surface-100 border border-border-subtle text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-accent transition-colors"
+                      placeholder="e.g., npm run dev (optional)"
+                      className="mt-2 w-full h-8 px-3 rounded-lg bg-surface-100 border border-border-subtle text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-accent transition-colors"
                     />
 
                     <div className="mt-3 flex items-center gap-3">
@@ -119,6 +197,32 @@ export function GroupCommandDialog({
                         >
                           Auto-execute
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Icon picker */}
+                    <div className="mt-3 flex flex-col gap-2">
+                      <span className="text-xs text-text-secondary">Icon:</span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {GROUP_TERMINAL_ICONS.map((iconName) => {
+                          const IconComp = ICON_COMPONENTS[iconName]
+                          return (
+                            <button
+                              key={iconName}
+                              type="button"
+                              onClick={() => setIcon(iconName)}
+                              className={cn(
+                                'p-1.5 rounded-lg transition-colors',
+                                icon === iconName
+                                  ? 'bg-surface-200 text-text-primary'
+                                  : 'text-text-tertiary hover:text-text-secondary hover:bg-surface-100'
+                              )}
+                              title={iconName}
+                            >
+                              <IconComp className="w-4 h-4" />
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
 

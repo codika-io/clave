@@ -11,6 +11,7 @@ import {
   CommandLineIcon,
   PlusIcon
 } from '@heroicons/react/24/outline'
+import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
 import { useInlineEdit } from '../../hooks/use-inline-edit'
 
 interface SessionGroupItemProps {
@@ -18,6 +19,7 @@ interface SessionGroupItemProps {
   onClick: (modifiers: { metaKey: boolean; shiftKey: boolean }) => void
   onContextMenu: (e: React.MouseEvent) => void
   onTerminalIconClick: (terminalId: string) => void
+  onTerminalIconContextMenu: (terminalId: string, e: React.MouseEvent) => void
   onAddTerminalClick: () => void
   aliveSessionIds: Set<string>
   focusedSessionId: string | null
@@ -33,6 +35,7 @@ export function SessionGroupItem({
   onClick,
   onContextMenu,
   onTerminalIconClick,
+  onTerminalIconContextMenu,
   onAddTerminalClick,
   aliveSessionIds,
   focusedSessionId,
@@ -152,6 +155,7 @@ export function SessionGroupItem({
               const alive = !!t.sessionId && aliveSessionIds.has(t.sessionId)
               const focused = !!t.sessionId && t.sessionId === focusedSessionId
               const colorHex = resolveColorHex(t.color) ?? TERMINAL_COLOR_VALUES['blue']
+              const IconComp = getTerminalIconComponent(t.icon)
               return (
                 <span
                   key={t.id}
@@ -161,14 +165,19 @@ export function SessionGroupItem({
                     e.stopPropagation()
                     onTerminalIconClick(t.id)
                   }}
+                  onContextMenu={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    onTerminalIconContextMenu(t.id, e)
+                  }}
                   className={cn(
                     'p-1 rounded transition-all',
                     focused && 'bg-surface-200/80'
                   )}
                   style={{ color: colorHex, opacity: alive ? 1 : 0.35 }}
-                  title={`${t.command}${alive ? ' (running)' : ''}`}
+                  title={`${t.command || 'Shell'}${alive ? ' (running)' : ''}`}
                 >
-                  <CommandLineIcon className="w-[18px] h-[18px]" />
+                  <IconComp className="w-[18px] h-[18px]" />
                 </span>
               )
             })}

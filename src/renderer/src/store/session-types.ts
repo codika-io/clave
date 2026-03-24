@@ -47,11 +47,53 @@ export function resolveColorHex(color: GroupTerminalColor | null | undefined): s
   return undefined
 }
 
+export type GroupTerminalIcon =
+  | 'terminal'
+  | 'fire'
+  | 'bolt'
+  | 'rocket'
+  | 'eye'
+  | 'globe'
+  | 'cube'
+  | 'heart'
+  | 'star'
+  | 'user'
+  | 'shield'
+  | 'wrench'
+  | 'beaker'
+  | 'cpu'
+  | 'signal'
+  | 'bug'
+  | 'sparkles'
+  | 'cloud'
+
+export const GROUP_TERMINAL_ICONS: GroupTerminalIcon[] = [
+  'terminal',
+  'fire',
+  'bolt',
+  'rocket',
+  'eye',
+  'globe',
+  'cube',
+  'heart',
+  'star',
+  'user',
+  'shield',
+  'wrench',
+  'beaker',
+  'cpu',
+  'signal',
+  'bug',
+  'sparkles',
+  'cloud'
+]
+
 export interface GroupTerminalConfig {
   id: string
   command: string
   commandMode: 'prefill' | 'auto'
   color: GroupTerminalColor
+  icon?: GroupTerminalIcon
   sessionId: string | null
 }
 
@@ -104,6 +146,7 @@ export interface PinnedGroupTerminal {
   command: string
   commandMode: 'prefill' | 'auto'
   color: GroupTerminalColor
+  icon?: GroupTerminalIcon
 }
 
 export interface PinnedGroup {

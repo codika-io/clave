@@ -126,7 +126,8 @@ export function pinGroupFromCurrent(groupId: string): void {
   const groupTerminals: PinnedGroupTerminal[] = group.terminals.map((t) => ({
     command: t.command,
     commandMode: t.commandMode,
-    color: t.color
+    color: t.color,
+    icon: t.icon
   }))
 
   const pinned: PinnedGroup = {
@@ -242,6 +243,7 @@ async function spawnPinnedGroup(pinnedId: string, pg: PinnedGroup): Promise<void
               command: t.command,
               commandMode: t.commandMode,
               color: t.color as GroupTerminalColor,
+              icon: t.icon,
               sessionId: null
             }))
           }
@@ -320,7 +322,8 @@ export function resyncPinnedGroup(groupId: string): void {
   const updatedTerminals: PinnedGroupTerminal[] = group.terminals.map((t) => ({
     command: t.command,
     commandMode: t.commandMode,
-    color: t.color
+    color: t.color,
+    icon: t.icon
   }))
 
   usePinnedStore.setState((s) => {
@@ -375,7 +378,7 @@ export function isPinnedOutOfSync(groupId: string): boolean {
   for (let i = 0; i < group.terminals.length; i++) {
     const t = group.terminals[i]
     const pt = pg.terminals[i]
-    if (t.command !== pt.command || t.commandMode !== pt.commandMode || t.color !== pt.color) return true
+    if (t.command !== pt.command || t.commandMode !== pt.commandMode || t.color !== pt.color || (t.icon ?? 'terminal') !== (pt.icon ?? 'terminal')) return true
   }
 
   return false

@@ -5,6 +5,7 @@ import type {
   ActivityStatus,
   GroupTerminalConfig,
   GroupTerminalColor,
+  GroupTerminalIcon,
   Session,
   SessionGroup,
   FileTab,
@@ -14,8 +15,8 @@ import type {
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
 
 // Re-export types and constants so existing imports continue to work
-export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, Session, SessionGroup, FileTab, ActiveView, SessionType }
-export { GROUP_TERMINAL_COLORS, TERMINAL_COLOR_VALUES, resolveColorHex } from './session-types'
+export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, Session, SessionGroup, FileTab, ActiveView, SessionType }
+export { GROUP_TERMINAL_COLORS, GROUP_TERMINAL_ICONS, TERMINAL_COLOR_VALUES, resolveColorHex } from './session-types'
 
 interface SessionState {
   sessions: Session[]
@@ -61,8 +62,9 @@ interface SessionState {
   toggleGroupCollapsed: (groupId: string) => void
   addGroupTerminal: (groupId: string, config: Omit<GroupTerminalConfig, 'sessionId'>) => void
   removeGroupTerminal: (groupId: string, terminalId: string) => void
-  updateGroupTerminal: (groupId: string, terminalId: string, updates: Partial<Pick<GroupTerminalConfig, 'command' | 'commandMode' | 'color'>>) => void
+  updateGroupTerminal: (groupId: string, terminalId: string, updates: Partial<Pick<GroupTerminalConfig, 'command' | 'commandMode' | 'color' | 'icon'>>) => void
   setGroupTerminalSessionId: (groupId: string, terminalId: string, sessionId: string | null) => void
+  setGroupCwd: (groupId: string, cwd: string) => void
   setGroupColor: (groupId: string, color: GroupTerminalColor | null) => void
   moveItems: (
     itemIds: string[],
@@ -414,6 +416,13 @@ export const useSessionStore = create<SessionState>((set) => ({
               )
             }
           : g
+      )
+    })),
+
+  setGroupCwd: (groupId, cwd) =>
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId ? { ...g, cwd } : g
       )
     })),
 

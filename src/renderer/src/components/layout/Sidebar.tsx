@@ -108,6 +108,7 @@ export function Sidebar() {
   const addGroupTerminal = useSessionStore((s) => s.addGroupTerminal)
   const removeGroupTerminal = useSessionStore((s) => s.removeGroupTerminal)
   const setGroupTerminalSessionId = useSessionStore((s) => s.setGroupTerminalSessionId)
+  const setGroupCwd = useSessionStore((s) => s.setGroupCwd)
   const fileTabs = useSessionStore((s) => s.fileTabs)
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
   const searchQuery = useSessionStore((s) => s.searchQuery)
@@ -402,19 +403,19 @@ export function Sidebar() {
 
   // Spawn a group terminal and auto-focus it
   const spawnGroupTerminal = useCallback(
-    async (groupId: string, terminalId: string, command: string, commandMode: 'prefill' | 'auto') => {
+    async (groupId: string, terminalId: string, command: string, commandMode: 'prefill' | 'auto', cwdOverride?: string | null) => {
       const state = useSessionStore.getState()
       const group = state.groups.find((g) => g.id === groupId)
       if (!group) return
 
-      const cwd = group.cwd || state.sessions.find((s) => group.sessionIds.includes(s.id))?.cwd
+      const cwd = cwdOverride || group.cwd || state.sessions.find((s) => group.sessionIds.includes(s.id))?.cwd
       if (!cwd) return
 
       try {
         const sessionInfo = await window.electronAPI.spawnSession(cwd, {
           claudeMode: false,
-          initialCommand: command,
-          autoExecute: commandMode === 'auto'
+          initialCommand: command || undefined,
+          autoExecute: command ? commandMode === 'auto' : false
         })
         const newSession = {
           id: sessionInfo.id,
@@ -473,6 +474,38 @@ export function Sidebar() {
     []
   )
 
+  // Right-click a terminal icon: show edit/delete context menu
+  const handleTerminalIconContextMenu = useCallback(
+    (groupId: string, terminalId: string, e: React.MouseEvent) => {
+      const group = groups.find((g) => g.id === groupId)
+      const config = group?.terminals.find((t) => t.id === terminalId)
+      if (!config) return
+
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          {
+            label: 'Edit',
+            icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
+            onClick: () => setTerminalDialogState({ groupId, terminalId })
+          },
+          {
+            label: 'Delete',
+            icon: <TrashIcon className="w-3.5 h-3.5" />,
+            danger: true,
+            onClick: () => {
+              if (config.sessionId) {
+                window.electronAPI.killSession(config.sessionId).catch(() => {})
+              }
+              removeGroupTerminal(groupId, terminalId)
+            }
+          }
+        ]
+      })
+    },
+    [groups, removeGroupTerminal]
+  )
 
   const hideAgentSession = useSessionStore((s) => s.hideAgentSession)
 
@@ -1000,6 +1033,7 @@ export function Sidebar() {
                             onClick={(modifiers) => handleGroupClick(group.id, modifiers)}
                             onContextMenu={(e) => handleGroupContextMenu(e, group.id)}
                             onTerminalIconClick={(tid) => handleTerminalIconClick(group.id, tid)}
+                            onTerminalIconContextMenu={(tid, e) => handleTerminalIconContextMenu(group.id, tid, e)}
                             onAddTerminalClick={() => handleAddTerminalClick(group.id)}
                             aliveSessionIds={aliveSessionIds}
                             focusedSessionId={focusedSessionId}
@@ -1160,18 +1194,38 @@ export function Sidebar() {
           const used = new Set(group?.terminals.map((t) => t.color) ?? [])
           return (GROUP_TERMINAL_COLORS.find((c) => !used.has(c)) ?? 'blue') as GroupTerminalColor
         })()}
-        onSave={async (command, mode, color) => {
+        initialCwd={(() => {
+          if (!terminalDialogState) return null
+          const group = groups.find((g) => g.id === terminalDialogState.groupId)
+          return group?.cwd || sessions.find((s) => group?.sessionIds.includes(s.id))?.cwd || null
+        })()}
+        initialIcon={
+          terminalDialogState?.terminalId
+            ? groups.find((g) => g.id === terminalDialogState.groupId)?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.icon ?? 'terminal'
+            : 'terminal'
+        }
+        onSave={async (command, mode, color, cwd, icon) => {
           if (!terminalDialogState) return
           const { groupId, terminalId } = terminalDialogState
+
+          // Update group cwd if changed
+          if (cwd) {
+            const group = groups.find((g) => g.id === groupId)
+            const currentCwd = group?.cwd || sessions.find((s) => group?.sessionIds.includes(s.id))?.cwd
+            if (cwd !== currentCwd) {
+              setGroupCwd(groupId, cwd)
+            }
+          }
+
           if (terminalId) {
             // Editing existing
-            useSessionStore.getState().updateGroupTerminal(groupId, terminalId, { command, commandMode: mode, color })
+            useSessionStore.getState().updateGroupTerminal(groupId, terminalId, { command, commandMode: mode, color, icon })
           } else {
             // Adding new — add config, then spawn immediately
             const newId = `term-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-            addGroupTerminal(groupId, { id: newId, command, commandMode: mode, color })
+            addGroupTerminal(groupId, { id: newId, command, commandMode: mode, color, icon })
             setTerminalDialogState(null)
-            await spawnGroupTerminal(groupId, newId, command, mode)
+            await spawnGroupTerminal(groupId, newId, command, mode, cwd)
             return
           }
           setTerminalDialogState(null)
