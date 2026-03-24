@@ -60,16 +60,14 @@ export function SidebarFooter() {
             transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
             className="overflow-hidden"
           >
-            <div className="flex flex-col gap-1.5 px-2.5 py-2 mb-1.5 rounded-xl bg-accent/8 border border-accent/15">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center justify-center w-6 h-6 rounded-md bg-accent/12 flex-shrink-0">
-                  <ArrowDownTrayIcon className="w-3.5 h-3.5 text-accent" />
-                </div>
-                <p className="text-[12px] font-medium text-text-primary leading-tight">
-                  {version ? `v${version}` : 'Update'}
-                </p>
+            <div className="flex items-center gap-2 px-2.5 py-2 mb-1.5 rounded-xl bg-accent/8 border border-accent/15">
+              <div className="flex items-center justify-center w-6 h-6 rounded-md bg-accent/12 flex-shrink-0">
+                <ArrowDownTrayIcon className="w-3.5 h-3.5 text-accent" />
               </div>
-              <div className="flex items-center gap-1 justify-end">
+              <p className="text-[12px] font-medium text-text-primary leading-tight">
+                {version ? `v${version}` : 'Update'}
+              </p>
+              <div className="flex items-center gap-1 ml-auto">
                 <button
                   onClick={dismiss}
                   className="px-1.5 py-0.5 text-[11px] font-medium text-text-tertiary hover:text-text-secondary rounded-md hover:bg-surface-200 transition-colors"
