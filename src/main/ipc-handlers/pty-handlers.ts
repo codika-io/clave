@@ -26,17 +26,10 @@ export function registerPtyHandlers(): void {
         // Debounce idle detection for title generation
         if (idleTimer) clearTimeout(idleTimer)
         idleTimer = setTimeout(() => {
-          idleCount++
-          // First idle = startup banner done — clear buffer so title uses only the real conversation
-          if (idleCount === 1) {
-            titleGenerator.resetBuffer(session.id)
-            return
-          }
-          // 2nd+ idle = after first exchange — generate title
-          if (
-            titleGenerator.getBufferLength(session.id) >= MIN_BUFFER_CHARS &&
-            !titleGenerator.isAlreadyTitled(session.id)
-          ) {
+          if (titleGenerator.isAlreadyTitled(session.id)) return
+
+          if (titleGenerator.hasUserMessage(session.id)) {
+            // Primary path: generate from the user's first message (clean signal)
             titleGenerator.generateTitle(session.id).then((title) => {
               if (win && !win.isDestroyed()) {
                 win.webContents.send(`session:auto-title:${session.id}`, title)
@@ -44,6 +37,21 @@ export function registerPtyHandlers(): void {
             }).catch(() => {
               // Silent failure — session keeps its folder name
             })
+          } else {
+            idleCount++
+            // First idle without user message = startup banner done — clear buffer
+            if (idleCount === 1) {
+              titleGenerator.resetBuffer(session.id)
+            } else if (titleGenerator.getBufferLength(session.id) >= MIN_BUFFER_CHARS) {
+              // Fallback: generate from raw buffer if prompt marker extraction failed
+              titleGenerator.generateTitle(session.id).then((title) => {
+                if (win && !win.isDestroyed()) {
+                  win.webContents.send(`session:auto-title:${session.id}`, title)
+                }
+              }).catch(() => {
+                // Silent failure — session keeps its folder name
+              })
+            }
           }
         }, IDLE_DELAY_MS)
       }

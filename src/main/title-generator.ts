@@ -6,23 +6,51 @@ const ANSI_REGEX =
 
 interface SessionBuffer {
   buffer: string
+  userMessage: string | null
   titled: boolean
 }
 
 const sessions = new Map<string, SessionBuffer>()
 
-const MAX_BUFFER = 4000
+const MAX_BUFFER = 8000
 const PROMPT_BUFFER = 3000
 
 export function accumulate(sessionId: string, data: string): void {
   let entry = sessions.get(sessionId)
   if (!entry) {
-    entry = { buffer: '', titled: false }
+    entry = { buffer: '', userMessage: null, titled: false }
     sessions.set(sessionId, entry)
   }
-  if (entry.titled || entry.buffer.length >= MAX_BUFFER) return
+  if (entry.titled || entry.userMessage) return
+  if (entry.buffer.length >= MAX_BUFFER) return
   const stripped = data.replace(ANSI_REGEX, '')
   entry.buffer = (entry.buffer + stripped).slice(0, MAX_BUFFER)
+
+  // Try to extract the user's first message from the prompt marker
+  if (!entry.userMessage) {
+    entry.userMessage = extractUserMessage(entry.buffer)
+  }
+}
+
+/** Extract the user's first message by finding the ❯ prompt marker */
+function extractUserMessage(buffer: string): string | null {
+  const lines = buffer.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    const match = trimmed.match(/^❯\s*(.+)/)
+    if (!match) continue
+    const text = match[1].trim()
+    // Skip empty or slash commands
+    if (!text || text.startsWith('/')) continue
+    // Verify Claude started responding (non-empty lines after this one)
+    const hasResponse = lines.slice(i + 1).some((l) => l.trim().length > 0)
+    if (hasResponse) return text
+  }
+  return null
+}
+
+export function hasUserMessage(sessionId: string): boolean {
+  return !!sessions.get(sessionId)?.userMessage
 }
 
 export function getBufferLength(sessionId: string): number {
@@ -45,16 +73,26 @@ export function generateTitle(sessionId: string): Promise<string> {
 
   entry.titled = true
 
-  const content = entry.buffer.slice(0, PROMPT_BUFFER)
-  const prompt = `Generate a short 3-5 word title for this Claude Code terminal session.
+  const userMessage = entry.userMessage
+  const prompt = userMessage
+    ? `Generate a short 2-4 word title for this Claude Code terminal session based on what the user asked.
 Rules:
 - Return ONLY the title, no quotes, no explanation
 - Be specific about what the user is working on
 - Lowercase, like an IDE tab title
-- Examples: "fix auth middleware", "add dark mode", "refactor user store"
+- Examples: "fix auth middleware", "add dark mode", "refactor store", "debug api"
+
+User's message:
+${userMessage}`
+    : `Generate a short 2-4 word title for this Claude Code terminal session.
+Rules:
+- Return ONLY the title, no quotes, no explanation
+- Be specific about what the user is working on
+- Lowercase, like an IDE tab title
+- Examples: "fix auth middleware", "add dark mode", "refactor store", "debug api"
 
 Session output:
-${content}`
+${entry.buffer.slice(0, PROMPT_BUFFER)}`
 
   const env = { ...getLoginShellEnv() }
   delete env.CLAUDECODE
