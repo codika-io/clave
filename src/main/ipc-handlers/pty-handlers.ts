@@ -42,7 +42,7 @@ export function registerPtyHandlers(): void {
             // First idle without user message = startup banner done — clear buffer
             if (idleCount === 1) {
               titleGenerator.resetBuffer(session.id)
-            } else if (titleGenerator.getBufferLength(session.id) >= MIN_BUFFER_CHARS) {
+            } else if (idleCount >= 3 && titleGenerator.getBufferLength(session.id) >= MIN_BUFFER_CHARS) {
               // Fallback: generate from raw buffer if prompt marker extraction failed
               titleGenerator.generateTitle(session.id).then((title) => {
                 if (win && !win.isDestroyed()) {

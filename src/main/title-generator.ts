@@ -113,6 +113,13 @@ ${entry.buffer.slice(0, PROMPT_BUFFER)}`
           reject(new Error('Empty response from Claude'))
           return
         }
+        // Reject responses that are clearly sentences, not short titles
+        const wordCount = title.split(/\s+/).length
+        if (wordCount > 6 || /^(I |I'm |I'll |The |This |You |It |We |My |Let )/.test(title)) {
+          console.warn(`[title-gen] Rejected bad title for ${sessionId}: "${title}"`)
+          reject(new Error('Response is not a valid title'))
+          return
+        }
         console.log(`[title-gen] Session ${sessionId}: "${title}"`)
         resolve(title)
       }
