@@ -2,9 +2,10 @@ import { useEffect, useState, useRef } from 'react'
 import { type Theme, type AppIcon, useSessionStore } from '../../store/session-store'
 import { useTemplateStore } from '../../store/template-store'
 import { useUserStore, USER_ICONS, USER_ICON_COLORS, type UserIcon } from '../../store/user-store'
+import { useWorkspaceStore } from '../../store/workspace-store'
 import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
 import { CheckIcon } from '@heroicons/react/24/solid'
-import { StarIcon as StarOutline, TrashIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
+import { StarIcon as StarOutline, TrashIcon, PlusIcon, PencilIcon, FolderIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LocationsTab } from './LocationsTab'
 
@@ -286,6 +287,8 @@ export function SettingsPanel() {
           </div>
         </section>
 
+        <WorkspacesSection />
+
         <section className="mt-8">
           <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-widest mb-3">
             Launch Templates
@@ -419,5 +422,75 @@ export function SettingsPanel() {
         </section>
       </div>
     </div>
+  )
+}
+
+function WorkspacesSection() {
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const addWorkspace = useWorkspaceStore((s) => s.addWorkspace)
+  const removeWorkspace = useWorkspaceStore((s) => s.removeWorkspace)
+  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
+
+  const handleAddWorkspace = async () => {
+    const folder = await window.electronAPI?.openFolderDialog()
+    if (!folder) return
+    const added = await addWorkspace(folder)
+    if (!added) {
+      // Could show an error — for now, silent (either no workspace.clave or already registered)
+    }
+  }
+
+  return (
+    <section className="mt-8">
+      <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-widest mb-3">
+        Workspaces
+      </h3>
+      <p className="text-[11px] text-text-tertiary mb-3">
+        Register folders containing a <code className="text-text-secondary">workspace.clave</code> file.
+        The active workspace auto-loads its groups as pins.
+      </p>
+      <div className="space-y-1.5">
+        {workspaces.map((ws) => {
+          const isActive = ws.id === activeWorkspaceId
+          return (
+            <div
+              key={ws.id}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-accent/10 border-accent/30 text-text-primary'
+                  : 'bg-surface-100/50 border-border-subtle text-text-secondary hover:bg-surface-200'
+              }`}
+              onClick={() => setActiveWorkspace(isActive ? null : ws.id)}
+            >
+              <FolderIcon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium truncate">{ws.name}</div>
+                <div className="text-[10px] text-text-tertiary truncate" title={ws.path}>{ws.path}</div>
+              </div>
+              {isActive && (
+                <div className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  removeWorkspace(ws.id)
+                }}
+                className="p-1 rounded text-text-tertiary hover:text-red-400 transition-colors flex-shrink-0"
+              >
+                <TrashIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      <button
+        onClick={handleAddWorkspace}
+        className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border-subtle text-text-tertiary hover:text-text-secondary hover:border-border hover:bg-surface-100 transition-all text-[12px] font-medium w-full justify-center"
+      >
+        <PlusIcon className="w-3.5 h-3.5" />
+        Add Workspace
+      </button>
+    </section>
   )
 }
