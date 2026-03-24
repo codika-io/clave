@@ -10,6 +10,7 @@ import { registerShellHandlers } from './shell-handlers'
 import { registerLocationHandlers } from './location-handlers'
 import { registerSshHandlers } from './ssh-handlers'
 import { registerAgentHandlers } from './agent-handlers'
+import { registerClaveFileHandlers } from './clave-file-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -24,4 +25,5 @@ export function registerIpcHandlers(): void {
   registerLocationHandlers()
   registerSshHandlers()
   registerAgentHandlers()
+  registerClaveFileHandlers()
 }
