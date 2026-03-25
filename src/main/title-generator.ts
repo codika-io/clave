@@ -53,10 +53,6 @@ export function hasUserMessage(sessionId: string): boolean {
   return !!sessions.get(sessionId)?.userMessage
 }
 
-export function getBufferLength(sessionId: string): number {
-  return sessions.get(sessionId)?.buffer.length ?? 0
-}
-
 /** Clear the buffer (e.g. after startup banner, before real conversation starts) */
 export function resetBuffer(sessionId: string): void {
   const entry = sessions.get(sessionId)

@@ -3,7 +3,6 @@ import { ptyManager, type PtySpawnOptions } from '../pty-manager'
 import * as titleGenerator from '../title-generator'
 
 const IDLE_DELAY_MS = 2000
-const MIN_BUFFER_CHARS = 200
 
 export function registerPtyHandlers(): void {
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: PtySpawnOptions) => {
@@ -29,7 +28,7 @@ export function registerPtyHandlers(): void {
           if (titleGenerator.isAlreadyTitled(session.id)) return
 
           if (titleGenerator.hasUserMessage(session.id)) {
-            // Primary path: generate from the user's first message (clean signal)
+            // Generate title only from the user's first message (clean signal)
             titleGenerator.generateTitle(session.id).then((title) => {
               if (win && !win.isDestroyed()) {
                 win.webContents.send(`session:auto-title:${session.id}`, title)
@@ -42,15 +41,6 @@ export function registerPtyHandlers(): void {
             // First idle without user message = startup banner done — clear buffer
             if (idleCount === 1) {
               titleGenerator.resetBuffer(session.id)
-            } else if (idleCount >= 3 && titleGenerator.getBufferLength(session.id) >= MIN_BUFFER_CHARS) {
-              // Fallback: generate from raw buffer if prompt marker extraction failed
-              titleGenerator.generateTitle(session.id).then((title) => {
-                if (win && !win.isDestroyed()) {
-                  win.webContents.send(`session:auto-title:${session.id}`, title)
-                }
-              }).catch(() => {
-                // Silent failure — session keeps its folder name
-              })
             }
           }
         }, IDLE_DELAY_MS)
