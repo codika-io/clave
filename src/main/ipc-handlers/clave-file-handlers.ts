@@ -2,6 +2,24 @@ import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 
+function readImageAsDataUrl(absolutePath: string): string | null {
+  try {
+    if (!fs.existsSync(absolutePath)) return null
+    const ext = path.extname(absolutePath).toLowerCase().slice(1)
+    const mime = ext === 'svg' ? 'image/svg+xml'
+      : ext === 'png' ? 'image/png'
+      : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+      : ext === 'gif' ? 'image/gif'
+      : ext === 'webp' ? 'image/webp'
+      : ext === 'ico' ? 'image/x-icon'
+      : 'application/octet-stream'
+    const data = fs.readFileSync(absolutePath)
+    return `data:${mime};base64,${data.toString('base64')}`
+  } catch {
+    return null
+  }
+}
+
 /** Active .clave file watchers keyed by absolute file path */
 const claveWatchers = new Map<string, { watcher: fs.FSWatcher; cleanup: () => void }>()
 
@@ -13,8 +31,9 @@ interface ClaveGroupData {
   cwd: string
   color: string | null
   toolbar?: boolean
+  logo?: string
   sessions: { cwd: string; name: string; claudeMode: boolean; dangerousMode: boolean }[]
-  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[]
+  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; autoLaunchLocalhost?: boolean }[]
 }
 
 interface ClaveFileRaw {
@@ -26,12 +45,14 @@ interface ClaveFileRaw {
   sessions?: ClaveGroupData['sessions']
   terminals?: ClaveGroupData['terminals']
   toolbar?: boolean
+  logo?: string
   // Multi-group format
   groups?: Array<{
     name: string
     cwd?: string
     color?: string | null
     toolbar?: boolean
+    logo?: string
     sessions?: ClaveGroupData['sessions']
     terminals?: ClaveGroupData['terminals']
   }>
@@ -45,23 +66,28 @@ interface ClaveFileWriteData {
   name?: string
   cwd?: string | null
   color?: string | null
+  logo?: string
   sessions?: ClaveGroupData['sessions']
   terminals?: ClaveGroupData['terminals']
   groups?: Array<{
     name: string
     cwd: string | null
     color: string | null
+    logo?: string
     sessions: ClaveGroupData['sessions']
     terminals: ClaveGroupData['terminals']
   }>
 }
 
-function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null; toolbar?: boolean; sessions?: ClaveGroupData['sessions']; terminals?: ClaveGroupData['terminals'] }, dir: string, fallbackName: string): ClaveGroupData {
+function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null; toolbar?: boolean; logo?: string; sessions?: ClaveGroupData['sessions']; terminals?: ClaveGroupData['terminals'] }, dir: string, fallbackName: string): ClaveGroupData {
   return {
     name: raw.name || fallbackName,
     cwd: path.resolve(dir, raw.cwd || '.'),
     color: raw.color ?? null,
     toolbar: raw.toolbar ?? undefined,
+    logo: raw.logo
+      ? raw.logo.startsWith('data:') ? raw.logo : readImageAsDataUrl(path.resolve(dir, raw.logo)) ?? undefined
+      : undefined,
     sessions: (raw.sessions || []).map((s) => ({
       cwd: path.resolve(dir, s.cwd || '.'),
       name: s.name,
@@ -72,7 +98,8 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
       command: t.command || '',
       commandMode: t.commandMode || 'prefill',
       color: t.color || 'blue',
-      icon: t.icon
+      icon: t.icon,
+      autoLaunchLocalhost: t.autoLaunchLocalhost ?? undefined
     }))
   }
 }
@@ -121,11 +148,12 @@ export function registerClaveFileHandlers(): void {
           return rel === '' ? '.' : rel
         }
 
-        const serializeGroup = (g: { name: string; cwd: string | null; color: string | null; toolbar?: boolean; sessions: ClaveGroupData['sessions']; terminals: ClaveGroupData['terminals'] }) => ({
+        const serializeGroup = (g: { name: string; cwd: string | null; color: string | null; toolbar?: boolean; logo?: string; sessions: ClaveGroupData['sessions']; terminals: ClaveGroupData['terminals'] }) => ({
           name: g.name,
           cwd: toRelative(g.cwd),
           color: g.color,
           ...(g.toolbar ? { toolbar: true } : {}),
+          ...(g.logo ? { logo: g.logo.startsWith('data:') ? g.logo : toRelative(g.logo) } : {}),
           sessions: g.sessions.map((s) => ({
             cwd: toRelative(s.cwd),
             name: s.name,
@@ -136,7 +164,8 @@ export function registerClaveFileHandlers(): void {
             command: t.command,
             commandMode: t.commandMode,
             color: t.color,
-            ...(t.icon ? { icon: t.icon } : {})
+            ...(t.icon ? { icon: t.icon } : {}),
+            ...(t.autoLaunchLocalhost ? { autoLaunchLocalhost: true } : {})
           }))
         })
 
@@ -156,6 +185,7 @@ export function registerClaveFileHandlers(): void {
               name: pinned.name || '',
               cwd: pinned.cwd || null,
               color: pinned.color || null,
+              logo: pinned.logo,
               sessions: pinned.sessions || [],
               terminals: pinned.terminals || []
             })
@@ -243,6 +273,11 @@ export function registerClaveFileHandlers(): void {
   // Get the Downloads folder path
   ipcMain.handle('app:get-downloads-path', () => app.getPath('downloads'))
   ipcMain.handle('app:get-user-data-path', () => app.getPath('userData'))
+
+  // Read an image file and return as data URL
+  ipcMain.handle('clave:read-image', (_event, absolutePath: string): string | null => {
+    return readImageAsDataUrl(absolutePath)
+  })
 
   // Preferences get/set
   ipcMain.handle('preferences:get', (_event, key: string) => {

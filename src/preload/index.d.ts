@@ -3,8 +3,9 @@ export interface ClaveFileGroupData {
   cwd: string
   color: string | null
   toolbar?: boolean
+  logo?: string
   sessions: { cwd: string; name: string; claudeMode: boolean; dangerousMode: boolean }[]
-  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[]
+  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; autoLaunchLocalhost?: boolean }[]
 }
 
 export type ClaveFileReadResult =
@@ -22,8 +23,9 @@ export interface ClaveFileWriteData {
     cwd: string | null
     color: string | null
     toolbar?: boolean
+    logo?: string
     sessions: { cwd: string; name: string; claudeMode: boolean; dangerousMode: boolean }[]
-    terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[]
+    terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; autoLaunchLocalhost?: boolean }[]
   }>
 }
 
@@ -291,6 +293,7 @@ export interface ElectronAPI {
   getDownloadsPath: () => Promise<string>
   getUserDataPath: () => Promise<string>
   claveFileExists: (absolutePath: string) => Promise<boolean>
+  readImageAsDataUrl: (absolutePath: string) => Promise<string | null>
   preferencesGet: (key: string) => Promise<unknown>
   preferencesSet: (key: string, value: unknown) => Promise<void>
 }

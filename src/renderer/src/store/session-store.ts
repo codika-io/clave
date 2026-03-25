@@ -526,6 +526,18 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => {
       const session = state.sessions.find((s) => s.id === id)
       if (!session || session.detectedUrl === url) return state
+
+      // Auto-launch localhost if the session's terminal config has the flag
+      if (url && window.electronAPI?.openExternal) {
+        const group = state.groups.find((g) =>
+          g.terminals.some((t) => t.sessionId === id)
+        )
+        const terminal = group?.terminals.find((t) => t.sessionId === id)
+        if (terminal?.autoLaunchLocalhost) {
+          window.electronAPI.openExternal(url)
+        }
+      }
+
       return {
         sessions: state.sessions.map((s) =>
           s.id === id ? { ...s, detectedUrl: url } : s

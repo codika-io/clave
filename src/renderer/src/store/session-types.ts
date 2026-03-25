@@ -94,6 +94,7 @@ export interface GroupTerminalConfig {
   commandMode: 'prefill' | 'auto'
   color: GroupTerminalColor
   icon?: GroupTerminalIcon
+  autoLaunchLocalhost?: boolean
   sessionId: string | null
 }
 
@@ -147,6 +148,7 @@ export interface PinnedGroupTerminal {
   commandMode: 'prefill' | 'auto'
   color: GroupTerminalColor
   icon?: GroupTerminalIcon
+  autoLaunchLocalhost?: boolean
 }
 
 export interface PinnedGroup {
@@ -160,6 +162,7 @@ export interface PinnedGroup {
   filePath?: string | null
   groupIndex?: number  // Position in multi-group .clave file (0-based)
   toolbar?: boolean    // Show this group's terminals as toolbar quick-actions
+  logo?: string | null // Absolute path to logo image
   // Runtime state (not persisted)
   activeGroupId: string | null
   visible: boolean

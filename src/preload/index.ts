@@ -211,6 +211,8 @@ const electronAPI = {
   getUserDataPath: () => ipcRenderer.invoke('app:get-user-data-path') as Promise<string>,
   claveFileExists: (absolutePath: string) =>
     ipcRenderer.invoke('clave:file-exists', absolutePath) as Promise<boolean>,
+  readImageAsDataUrl: (absolutePath: string) =>
+    ipcRenderer.invoke('clave:read-image', absolutePath) as Promise<string | null>,
   preferencesGet: (key: string) =>
     ipcRenderer.invoke('preferences:get', key),
   preferencesSet: (key: string, value: unknown) =>
