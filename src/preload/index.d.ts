@@ -133,6 +133,14 @@ export interface GitCommitFileStatus {
   deletions: number
 }
 
+export type MagicSyncStep = 'pulling' | 'staging' | 'generating' | 'committing' | 'pushing'
+
+export interface MagicSyncResult {
+  repoPath: string
+  actions: string[]
+  error: string | null
+}
+
 export interface LaunchTemplateSession {
   id: string
   cwd: string
@@ -243,6 +251,8 @@ export interface ElectronAPI {
   gitCommitFiles: (cwd: string, hash: string) => Promise<GitCommitFileStatus[]>
   gitCommitDiff: (cwd: string, hash: string, filePath: string) => Promise<string>
   gitGenerateCommitMessage: (cwd: string) => Promise<string>
+  gitMagicSync: (repoPaths: string[]) => Promise<MagicSyncResult[]>
+  onMagicSyncProgress: (callback: (repoPath: string, step: MagicSyncStep) => void) => () => void
 
   // Locations
   locationList: () => Promise<import('../shared/remote-types').Location[]>

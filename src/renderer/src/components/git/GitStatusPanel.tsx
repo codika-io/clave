@@ -5,7 +5,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { buildGitTree, compactTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import { GitLogView } from './GitLogView'
 import { FileRow, GitTreeSection } from './GitFileRows'
-import { SectionHeader, BranchHeader, ErrorBanner, PanelModeToggle, ViewModeToggle, CollapseAllButton } from './GitPanelControls'
+import { SectionHeader, BranchHeader, ErrorBanner, MagicSyncButton, PanelModeToggle, ViewModeToggle, CollapseAllButton } from './GitPanelControls'
 import { CommitBar } from './GitCommitBar'
 import type { GitFileStatus, GitStatusResult } from '../../../../preload/index.d'
 
@@ -500,7 +500,7 @@ export function GitStatusPanel({ cwd, isActive, filterPrefix }: { cwd: string | 
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <BranchHeader branch={status.branch} ahead={status.ahead} behind={status.behind} />
+      <BranchHeader branch={status.branch} ahead={status.ahead} behind={status.behind} cwd={cwd} onSyncDone={refresh} />
       {gitPanelMode === 'log' ? (
         <GitLogView
           cwd={cwd}
@@ -699,9 +699,12 @@ export function MultiRepoGitPanel({
 
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
 
+  const allRepoPaths = useMemo(() => repos.map((r) => r.path), [repos])
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center justify-end gap-0.5 px-3 py-1 border-b border-border-subtle flex-shrink-0">
+        <MagicSyncButton repoPaths={allRepoPaths} onDone={refresh} />
         <PanelModeToggle />
         {gitPanelMode === 'changes' && <ViewModeToggle />}
         <CollapseAllButton />

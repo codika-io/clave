@@ -47,6 +47,14 @@ export interface GitCommitFileStatus {
   deletions: number
 }
 
+export type MagicSyncStep = 'pulling' | 'staging' | 'generating' | 'committing' | 'pushing'
+
+export interface MagicSyncResult {
+  repoPath: string
+  actions: string[]
+  error: string | null
+}
+
 /** Format object for simple-git log calls */
 const GIT_LOG_FORMAT = {
   hash: '%H',
@@ -440,6 +448,73 @@ ${diff}`
       child.stdin?.write(prompt)
       child.stdin?.end()
     })
+  }
+
+  async magicSync(
+    repoPaths: string[],
+    onProgress?: (repoPath: string, step: MagicSyncStep) => void
+  ): Promise<MagicSyncResult[]> {
+    const results: MagicSyncResult[] = []
+
+    for (const repoPath of repoPaths) {
+      const result: MagicSyncResult = { repoPath, actions: [], error: null }
+      try {
+        const status = await this.getStatus(repoPath)
+        if (!status.isRepo) {
+          result.error = 'Not a git repository'
+          results.push(result)
+          continue
+        }
+
+        // 1. Pull if behind
+        if (status.behind > 0) {
+          onProgress?.(repoPath, 'pulling')
+          await this.pull(repoPath, 'auto')
+          result.actions.push('pulled')
+        }
+
+        // Re-check status after pull (files may have changed)
+        const postPullStatus = status.behind > 0 ? await this.getStatus(repoPath) : status
+        const files = postPullStatus.files
+
+        if (files.length === 0) {
+          // Nothing to commit — but maybe we pulled, so check if we need to push
+          if (postPullStatus.ahead > 0) {
+            onProgress?.(repoPath, 'pushing')
+            await this.push(repoPath)
+            result.actions.push('pushed')
+          }
+          results.push(result)
+          continue
+        }
+
+        // 2. Stage all files
+        onProgress?.(repoPath, 'staging')
+        const allPaths = files.map((f) => f.path)
+        await this.stage(repoPath, allPaths)
+        result.actions.push('staged')
+
+        // 3. Generate commit message
+        onProgress?.(repoPath, 'generating')
+        const message = await this.generateCommitMessage(repoPath)
+        result.actions.push('generated')
+
+        // 4. Commit
+        onProgress?.(repoPath, 'committing')
+        await this.commit(repoPath, message)
+        result.actions.push('committed')
+
+        // 5. Push
+        onProgress?.(repoPath, 'pushing')
+        await this.push(repoPath)
+        result.actions.push('pushed')
+      } catch (err) {
+        result.error = err instanceof Error ? err.message : String(err)
+      }
+      results.push(result)
+    }
+
+    return results
   }
 
   async getStatus(cwd: string): Promise<GitStatusResult> {

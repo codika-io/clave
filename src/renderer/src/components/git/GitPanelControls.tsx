@@ -1,5 +1,7 @@
+import { useState, useCallback, useEffect } from 'react'
 import { useSessionStore } from '../../store/session-store'
-import { ListBulletIcon, Bars3BottomLeftIcon } from '@heroicons/react/24/outline'
+import { ListBulletIcon, Bars3BottomLeftIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import type { MagicSyncStep } from '../../../../preload/index.d'
 
 export function SectionHeader({
   label,
@@ -124,14 +126,98 @@ export function PanelModeToggle() {
   )
 }
 
+const STEP_LABELS: Record<MagicSyncStep, string> = {
+  pulling: 'Pulling',
+  staging: 'Staging',
+  generating: 'Generating message',
+  committing: 'Committing',
+  pushing: 'Pushing'
+}
+
+export function MagicSyncButton({
+  repoPaths,
+  onDone
+}: {
+  repoPaths: string[]
+  onDone?: () => void
+}) {
+  const [syncing, setSyncing] = useState(false)
+  const [currentStep, setCurrentStep] = useState<string | null>(null)
+  const [resultMessage, setResultMessage] = useState<string | null>(null)
+
+  // Listen for progress events
+  useEffect(() => {
+    if (!syncing) return
+    const cleanup = window.electronAPI.onMagicSyncProgress((_repoPath, step) => {
+      setCurrentStep(STEP_LABELS[step as MagicSyncStep] ?? step)
+    })
+    return cleanup
+  }, [syncing])
+
+  // Auto-clear result message
+  useEffect(() => {
+    if (!resultMessage) return
+    const timer = setTimeout(() => setResultMessage(null), 4000)
+    return () => clearTimeout(timer)
+  }, [resultMessage])
+
+  const handleSync = useCallback(async () => {
+    if (syncing || repoPaths.length === 0) return
+    setSyncing(true)
+    setCurrentStep(null)
+    setResultMessage(null)
+    try {
+      const results = await window.electronAPI.gitMagicSync(repoPaths)
+      const synced = results.filter((r) => r.actions.length > 0 && !r.error)
+      const errors = results.filter((r) => r.error)
+      const skipped = results.filter((r) => r.actions.length === 0 && !r.error)
+
+      const parts: string[] = []
+      if (synced.length > 0) parts.push(`${synced.length} synced`)
+      if (skipped.length > 0) parts.push(`${skipped.length} clean`)
+      if (errors.length > 0) parts.push(`${errors.length} failed`)
+      setResultMessage(parts.join(', '))
+    } catch (err) {
+      setResultMessage('Sync failed')
+      console.error('[magic-sync]', err)
+    } finally {
+      setSyncing(false)
+      setCurrentStep(null)
+      onDone?.()
+    }
+  }, [syncing, repoPaths, onDone])
+
+  return (
+    <div className="relative flex items-center">
+      <button
+        onClick={handleSync}
+        disabled={syncing || repoPaths.length === 0}
+        className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors flex-shrink-0 disabled:opacity-40"
+        title={syncing ? (currentStep ?? 'Syncing...') : 'Magic Sync — pull, commit & push all repos'}
+      >
+        <ArrowPathIcon className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+      </button>
+      {(syncing || resultMessage) && (
+        <span className="ml-1 text-[10px] text-text-tertiary whitespace-nowrap">
+          {syncing ? (currentStep ?? 'Syncing...') : resultMessage}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export function BranchHeader({
   branch,
   ahead,
-  behind
+  behind,
+  cwd,
+  onSyncDone
 }: {
   branch: string
   ahead: number
   behind: number
+  cwd?: string | null
+  onSyncDone?: () => void
 }) {
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
   return (
@@ -167,6 +253,7 @@ export function BranchHeader({
             )}
           </span>
         )}
+        {cwd && <MagicSyncButton repoPaths={[cwd]} onDone={onSyncDone} />}
         <PanelModeToggle />
         {gitPanelMode === 'changes' && <ViewModeToggle />}
         <CollapseAllButton />

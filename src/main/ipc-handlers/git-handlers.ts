@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { gitManager } from '../git-manager'
+import type { MagicSyncStep } from '../git-manager'
 
 export function registerGitHandlers(): void {
   ipcMain.handle('git:check-ignored', (_event, cwd: string, paths: string[]) =>
@@ -48,5 +49,10 @@ export function registerGitHandlers(): void {
   )
   ipcMain.handle('git:generate-commit-message', (_event, cwd: string) =>
     gitManager.generateCommitMessage(cwd)
+  )
+  ipcMain.handle('git:magic-sync', (event, repoPaths: string[]) =>
+    gitManager.magicSync(repoPaths, (repoPath: string, step: MagicSyncStep) => {
+      event.sender.send('git:magic-sync-progress', repoPath, step)
+    })
   )
 }

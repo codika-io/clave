@@ -134,6 +134,10 @@ const electronAPI = {
     ipcRenderer.invoke('git:commit-diff', cwd, hash, filePath),
   gitGenerateCommitMessage: (cwd: string) =>
     ipcRenderer.invoke('git:generate-commit-message', cwd),
+  gitMagicSync: (repoPaths: string[]) =>
+    ipcRenderer.invoke('git:magic-sync', repoPaths),
+  onMagicSyncProgress: (callback: (repoPath: string, step: string) => void) =>
+    createIpcListener<[string, string]>('git:magic-sync-progress', callback),
 
   showNotification: (options: { title: string; body: string; sessionId: string }) =>
     ipcRenderer.invoke('notification:show', options),
