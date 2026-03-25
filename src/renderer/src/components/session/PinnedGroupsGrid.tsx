@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useMemo, useState } from 'react'
 import { usePinnedStore, getPinnedState, togglePinnedGroup, findPinnedByGroupId, importClaveFile, type PinnedGroup } from '../../store/pinned-store'
 import { resolveColorHex } from '../../store/session-types'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import { useSessionStore } from '../../store/session-store'
 import { DocumentIcon } from '@heroicons/react/24/outline'
 
@@ -159,7 +160,7 @@ function PinnedGroupButton({
           : { backgroundColor: `${colorHex}10`, borderColor: `${colorHex}15` }
     : {}
 
-  return (
+  const button = (
     <button
       onClick={handleClick}
       onContextMenu={(e) => {
@@ -181,7 +182,15 @@ function PinnedGroupButton({
       `}
       style={bgStyle}
     >
-      <span className="truncate">{pinnedGroup.name}</span>
+      {pinnedGroup.logo ? (
+        <img
+          src={pinnedGroup.logo}
+          alt=""
+          className="w-7 h-7 rounded-sm object-contain flex-shrink-0"
+        />
+      ) : (
+        <span className="truncate">{pinnedGroup.name}</span>
+      )}
       {state === 'active-hidden' && !highlighted && (
         <div
           className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -190,4 +199,15 @@ function PinnedGroupButton({
       )}
     </button>
   )
+
+  if (pinnedGroup.logo) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="top">{pinnedGroup.name}</TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return button
 }
