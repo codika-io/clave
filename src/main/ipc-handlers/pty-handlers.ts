@@ -9,26 +9,30 @@ export function registerPtyHandlers(): void {
     const session = ptyManager.spawn(cwd, options)
     const win = BrowserWindow.fromWebContents(_event.sender)
     const isClaudeMode = options?.claudeMode !== false
+    const isResumed = !!options?.resumeSessionId
+
+    // Initialize title tracking for new Claude-mode sessions only
+    if (isClaudeMode && !isResumed) {
+      if (options?.initialCommand) {
+        titleGenerator.init(session.id, options.initialCommand, options.autoExecute === true)
+      } else {
+        titleGenerator.init(session.id)
+      }
+    }
 
     let idleTimer: ReturnType<typeof setTimeout> | null = null
-    let idleCount = 0 // Track idle transitions: 1st = startup banner, 2nd = after first exchange
 
     session.ptyProcess.onData((data) => {
       if (win && !win.isDestroyed()) {
         win.webContents.send(`pty:data:${session.id}`, data)
       }
 
-      // Accumulate output for auto-title generation (Claude mode only)
+      // Idle detection for auto-title generation
       if (isClaudeMode && !titleGenerator.isAlreadyTitled(session.id)) {
-        titleGenerator.accumulate(session.id, data)
-
-        // Debounce idle detection for title generation
         if (idleTimer) clearTimeout(idleTimer)
         idleTimer = setTimeout(() => {
           if (titleGenerator.isAlreadyTitled(session.id)) return
-
-          if (titleGenerator.hasUserMessage(session.id)) {
-            // Generate title only from the user's first message (clean signal)
+          if (titleGenerator.onIdle(session.id)) {
             titleGenerator.generateTitle(session.id).then((title) => {
               if (win && !win.isDestroyed()) {
                 win.webContents.send(`session:auto-title:${session.id}`, title)
@@ -36,12 +40,6 @@ export function registerPtyHandlers(): void {
             }).catch(() => {
               // Silent failure — session keeps its folder name
             })
-          } else {
-            idleCount++
-            // First idle without user message = startup banner done — clear buffer
-            if (idleCount === 1) {
-              titleGenerator.resetBuffer(session.id)
-            }
           }
         }, IDLE_DELAY_MS)
       }
@@ -71,6 +69,7 @@ export function registerPtyHandlers(): void {
   })
 
   ipcMain.on('pty:write', (_event, id: string, data: string) => {
+    titleGenerator.registerInput(id, data)
     ptyManager.write(id, data)
   })
 
