@@ -459,11 +459,12 @@ export function AppShell() {
               Codika
             </span>
 
-            {/* Right — quick actions + divider + search + file tree */}
+            {/* Right — active URLs + quick actions + divider + search + file tree */}
             <div
               className="flex items-center gap-0.5"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
+              <ToolbarActiveUrls />
               <ToolbarQuickActions />
               {/* File palette button */}
               <button
@@ -620,6 +621,55 @@ function ToolbarQuickActions() {
             )
           })}
         </div>
+      ))}
+      <div className="w-px h-3.5 bg-border-subtle mx-0.5" />
+    </>
+  )
+}
+
+function ToolbarActiveUrls() {
+  const sessions = useSessionStore((s) => s.sessions)
+  const groups = useSessionStore((s) => s.groups)
+
+  // Collect sessions with detected URLs, grouped by their parent group
+  const urlEntries: { url: string; port: string; groupName: string; groupColor: string | undefined }[] = []
+
+  for (const session of sessions) {
+    if (!session.detectedUrl || !session.alive) continue
+    try {
+      const port = new URL(session.detectedUrl).port
+      // Find which group this session belongs to
+      const group = groups.find((g) =>
+        g.sessionIds.includes(session.id) ||
+        g.terminals.some((t) => t.sessionId === session.id)
+      )
+      urlEntries.push({
+        url: session.detectedUrl,
+        port,
+        groupName: group?.name || session.name,
+        groupColor: resolveColorHex(group?.color)
+      })
+    } catch {
+      // invalid URL
+    }
+  }
+
+  if (urlEntries.length === 0) return null
+
+  return (
+    <>
+      {urlEntries.map((entry, i) => (
+        <button
+          key={`${entry.url}-${i}`}
+          onClick={() => window.electronAPI.openExternal(entry.url)}
+          className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-100 hover:bg-surface-200 transition-colors"
+          title={entry.url}
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+          <span className="text-[10px] font-medium whitespace-nowrap text-text-primary">
+            {entry.groupName}
+          </span>
+        </button>
       ))}
       <div className="w-px h-3.5 bg-border-subtle mx-0.5" />
     </>
