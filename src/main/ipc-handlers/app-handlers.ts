@@ -20,7 +20,7 @@ function debugLog(msg: string): void {
 }
 
 /**
- * Resolve the on-disk path for an icon PNG.
+ * Resolve the on-disk path for an icon PNG (fallback for dev mode).
  * In packaged builds, resources are asar-unpacked so osascript can read them.
  * In dev, __dirname is src/main/ → ../../resources/ works directly.
  */
@@ -28,6 +28,15 @@ function getIconPath(icon: string): string {
   const base = join(__dirname, '../../resources')
   const asarUnpacked = base.replace('app.asar', 'app.asar.unpacked')
   return join(asarUnpacked, `icon-${icon}.png`)
+}
+
+/**
+ * Resolve the on-disk path for an .icon bundle.
+ */
+function getIconBundlePath(icon: string): string {
+  const base = join(__dirname, '../../resources')
+  const asarUnpacked = base.replace('app.asar', 'app.asar.unpacked')
+  return join(asarUnpacked, `AppIcon-${icon}.icon`)
 }
 
 /**
@@ -42,38 +51,53 @@ function getAppBundlePath(): string | null {
 }
 
 /**
- * Synchronously set the .app bundle icon via NSWorkspace JXA.
- * This persists as a macOS extended attribute (no code-sign breakage).
- * Synchronous to eliminate all race conditions from concurrent osascript calls.
+ * Copy a directory recursively (sync).
  */
-function setAppBundleIcon(icon: string): void {
+function copyDirSync(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true })
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = join(src, entry.name)
+    const destPath = join(dest, entry.name)
+    if (entry.isDirectory()) {
+      copyDirSync(srcPath, destPath)
+    } else {
+      fs.copyFileSync(srcPath, destPath)
+    }
+  }
+}
+
+/**
+ * Copy the selected .icon bundle into the .app's Contents/Resources,
+ * then refresh the Dock so macOS re-renders with the native Tahoe glass effect.
+ *
+ * This replaces the build-time AppIcon.icon with the selected variant.
+ * The glass/translucency/shadow metadata in the .icon bundle is preserved,
+ * so macOS renders the icon natively (including the Tahoe glow effect).
+ */
+function setAppBundleIconBundle(icon: string): void {
   const appPath = getAppBundlePath()
   if (!appPath) return
 
-  const iconPath = getIconPath(icon)
-  debugLog(`setAppBundleIcon: icon=${icon} iconPath=${iconPath} appPath=${appPath}`)
+  const srcBundle = getIconBundlePath(icon)
+  const destBundle = join(appPath, 'Contents', 'Resources', 'AppIcon.icon')
 
-  const iconExists = fs.existsSync(iconPath)
-  debugLog(`  iconExists=${iconExists}`)
-  if (!iconExists) return
+  debugLog(`setAppBundleIconBundle: icon=${icon} src=${srcBundle} dest=${destBundle}`)
 
-  const script = [
-    `ObjC.import('AppKit')`,
-    `var img = $.NSImage.alloc.initWithContentsOfFile('${iconPath}')`,
-    `$.NSWorkspace.sharedWorkspace.setIconForFileOptions(img, '${appPath}', 0)`
-  ].join('; ')
+  if (!fs.existsSync(srcBundle)) {
+    debugLog(`  source bundle not found: ${srcBundle}`)
+    return
+  }
 
   try {
-    const result = execFileSync('osascript', ['-l', 'JavaScript', '-e', script], {
-      encoding: 'utf-8',
-      timeout: 5000
-    })
-    debugLog(`  result=${result.trim()}`)
+    // Remove old bundle and copy new one
+    if (fs.existsSync(destBundle)) {
+      fs.rmSync(destBundle, { recursive: true, force: true })
+    }
+    copyDirSync(srcBundle, destBundle)
+    debugLog(`  copied .icon bundle`)
 
     // Bust macOS Dock icon cache: touch the .app to update mtime,
     // then force Launch Services to re-read app metadata.
-    // Without this, the Dock shows a stale cached icon after auto-updates
-    // replace the .app bundle (which wipes the custom icon extended attribute).
     const now = new Date()
     fs.utimesSync(appPath, now, now)
 
@@ -87,6 +111,21 @@ function setAppBundleIcon(icon: string): void {
         debugLog(`  lsregister ERROR: ${lsErr}`)
       }
     }
+
+    // Also clear any NSWorkspace custom icon that might override the bundle icon
+    const clearScript = [
+      `ObjC.import('AppKit')`,
+      `$.NSWorkspace.sharedWorkspace.setIconForFileOptions(null, '${appPath}', 0)`
+    ].join('; ')
+    try {
+      execFileSync('osascript', ['-l', 'JavaScript', '-e', clearScript], {
+        encoding: 'utf-8',
+        timeout: 5000
+      })
+      debugLog(`  cleared NSWorkspace custom icon`)
+    } catch {
+      // Not critical — the bundle icon takes precedence if no custom icon is set
+    }
   } catch (err) {
     debugLog(`  ERROR: ${err}`)
   }
@@ -95,7 +134,7 @@ function setAppBundleIcon(icon: string): void {
 export function applyPersistedIcon(): void {
   const savedIcon = preferencesManager.get('appIcon')
   debugLog(`applyPersistedIcon: savedIcon=${savedIcon}`)
-  setAppBundleIcon(savedIcon)
+  setAppBundleIconBundle(savedIcon)
 }
 
 export function registerAppHandlers(): void {
@@ -133,25 +172,28 @@ export function registerAppHandlers(): void {
 
     debugLog(`IPC app:set-icon: icon=${icon}`)
 
-    const iconPath = getIconPath(icon)
-    const image = nativeImage.createFromPath(iconPath)
-    if (image.isEmpty()) {
-      debugLog(`  nativeImage is empty for ${iconPath}`)
-      return
-    }
-
     preferencesManager.set('appIcon', icon as AppIcon)
 
-    if (process.platform === 'darwin') {
-      app.dock?.setIcon(image)
-    }
+    if (app.isPackaged && process.platform === 'darwin') {
+      // Packaged macOS: copy .icon bundle for native Tahoe glass effect
+      setAppBundleIconBundle(icon)
+    } else {
+      // Dev mode: use flat PNG (no .app bundle to modify)
+      const iconPath = getIconPath(icon)
+      const image = nativeImage.createFromPath(iconPath)
+      if (image.isEmpty()) {
+        debugLog(`  nativeImage is empty for ${iconPath}`)
+        return
+      }
 
-    const win = getMainWindow()
-    if (win) {
-      win.setIcon(image)
-    }
+      if (process.platform === 'darwin') {
+        app.dock?.setIcon(image)
+      }
 
-    // Persist to the .app bundle so it survives quit
-    setAppBundleIcon(icon)
+      const win = getMainWindow()
+      if (win) {
+        win.setIcon(image)
+      }
+    }
   })
 }

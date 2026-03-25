@@ -32,7 +32,10 @@ function createWindow(): void {
     }
   })
 
-  if (process.platform === 'darwin') {
+  // In dev mode, set dock icon from PNG. In packaged mode, let macOS
+  // render from the .icon bundle (which supports Tahoe glass effect).
+  // applyPersistedIcon() handles copying the right .icon bundle on startup.
+  if (process.platform === 'darwin' && !app.isPackaged) {
     app.dock?.setIcon(icon)
   }
 
