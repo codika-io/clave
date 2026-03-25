@@ -195,10 +195,10 @@ const electronAPI = {
     createIpcListener<[string, unknown[]]>('agent:agents-updated', callback),
 
   // ── .clave files ──
-  readClaveFile: (absolutePath: string) =>
-    ipcRenderer.invoke('clave:read-file', absolutePath),
-  writeClaveFile: (absolutePath: string, data: unknown) =>
-    ipcRenderer.invoke('clave:write-file', absolutePath, data),
+  readClaveFile: (absolutePath: string, rootDir?: string) =>
+    ipcRenderer.invoke('clave:read-file', absolutePath, rootDir),
+  writeClaveFile: (absolutePath: string, data: unknown, rootDir?: string) =>
+    ipcRenderer.invoke('clave:write-file', absolutePath, data, rootDir),
   watchClaveFile: (absolutePath: string) =>
     ipcRenderer.invoke('clave:watch-file', absolutePath),
   unwatchClaveFile: (absolutePath: string) =>
@@ -211,6 +211,8 @@ const electronAPI = {
   getUserDataPath: () => ipcRenderer.invoke('app:get-user-data-path') as Promise<string>,
   claveFileExists: (absolutePath: string) =>
     ipcRenderer.invoke('clave:file-exists', absolutePath) as Promise<boolean>,
+  discoverClaveFiles: (folderPath: string) =>
+    ipcRenderer.invoke('clave:discover-files', folderPath) as Promise<{ name: string; path: string; rootDir: string | null }[]>,
   readImageAsDataUrl: (absolutePath: string) =>
     ipcRenderer.invoke('clave:read-image', absolutePath) as Promise<string | null>,
   preferencesGet: (key: string) =>

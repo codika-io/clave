@@ -106,13 +106,14 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
 
 export function registerClaveFileHandlers(): void {
   // Read a .clave file and resolve relative paths to absolute
+  // Optional rootDir overrides the default (file's parent dir) for path resolution
   ipcMain.handle(
     'clave:read-file',
-    async (_event, absolutePath: string): Promise<ClaveFileReadResult | null> => {
+    async (_event, absolutePath: string, rootDir?: string): Promise<ClaveFileReadResult | null> => {
       try {
         const raw = fs.readFileSync(absolutePath, 'utf-8')
         const data: ClaveFileRaw = JSON.parse(raw)
-        const dir = path.dirname(absolutePath)
+        const dir = rootDir || path.dirname(absolutePath)
         const fallbackName = path.basename(absolutePath, '.clave')
 
         // Multi-group format
@@ -136,11 +137,12 @@ export function registerClaveFileHandlers(): void {
   )
 
   // Write a .clave file, converting absolute paths to relative
+  // Optional rootDir overrides the default (file's parent dir) for path resolution
   ipcMain.handle(
     'clave:write-file',
-    async (_event, absolutePath: string, pinned: ClaveFileWriteData): Promise<void> => {
+    async (_event, absolutePath: string, pinned: ClaveFileWriteData, rootDir?: string): Promise<void> => {
       try {
-        const dir = path.dirname(absolutePath)
+        const dir = rootDir || path.dirname(absolutePath)
 
         const toRelative = (abs: string | null): string => {
           if (!abs) return '.'
@@ -200,6 +202,44 @@ export function registerClaveFileHandlers(): void {
       } catch (err) {
         console.error('[clave] Failed to write .clave file:', absolutePath, err)
       }
+    }
+  )
+
+  // Discover .clave files in a folder (legacy workspace.clave + .clave/workspaces/*.clave)
+  // rootDir: the folder paths should be resolved relative to (= the selected folder)
+  // For legacy workspace.clave, rootDir is null (same as file's parent dir)
+  // For .clave/workspaces/*.clave, rootDir is the selected folder
+  ipcMain.handle(
+    'clave:discover-files',
+    async (_event, folderPath: string): Promise<{ name: string; path: string; rootDir: string | null }[]> => {
+      const results: { name: string; path: string; rootDir: string | null }[] = []
+
+      // Legacy: direct workspace.clave in the folder (paths relative to its own dir = folderPath)
+      const directFile = path.join(folderPath, 'workspace.clave')
+      if (fs.existsSync(directFile)) {
+        results.push({ name: 'workspace', path: directFile, rootDir: null })
+      }
+
+      // New: scan .clave/workspaces/*.clave (paths relative to the root folder)
+      const workspacesDir = path.join(folderPath, '.clave', 'workspaces')
+      try {
+        if (fs.existsSync(workspacesDir) && fs.statSync(workspacesDir).isDirectory()) {
+          const entries = fs.readdirSync(workspacesDir)
+          for (const entry of entries) {
+            if (entry.endsWith('.clave')) {
+              results.push({
+                name: path.basename(entry, '.clave'),
+                path: path.join(workspacesDir, entry),
+                rootDir: folderPath
+              })
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[clave] Failed to scan workspaces dir:', workspacesDir, err)
+      }
+
+      return results
     }
   )
 

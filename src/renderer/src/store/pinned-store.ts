@@ -157,7 +157,9 @@ function syncToClaveFile(pg: PinnedGroup): void {
         ? { groups: pinsForFile.map(serializePin) }
         : serializePin(pinsForFile[0])
 
-      window.electronAPI?.writeClaveFile(fp, writeData)
+      // Use rootDir from the first pin for this file (all pins from same file share rootDir)
+      const rootDirForFile = pinsForFile[0].rootDir ?? undefined
+      window.electronAPI?.writeClaveFile(fp, writeData, rootDirForFile)
         .catch((err) => console.error('[clave] Failed to write .clave file:', err))
     }
     pendingSyncs.clear()
@@ -170,7 +172,8 @@ function syncToClaveFile(pg: PinnedGroup): void {
 function createPinnedFromGroup(
   g: { name: string; cwd: string; color: string | null; toolbar?: boolean; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; dangerousMode: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[] },
   filePath: string,
-  groupIndex?: number
+  groupIndex?: number,
+  rootDir?: string | null
 ): PinnedGroup {
   return {
     id: crypto.randomUUID(),
@@ -181,6 +184,7 @@ function createPinnedFromGroup(
     terminals: groupDataToPinnedTerminals(g.terminals),
     createdAt: Date.now(),
     filePath,
+    rootDir: rootDir ?? null,
     groupIndex,
     toolbar: g.toolbar,
     logo: g.logo,
@@ -201,8 +205,9 @@ function groupDataToPinnedTerminals(terminals: { command: string; commandMode: '
 
 /** Import a .clave file as pinned group(s) and optionally auto-launch.
  *  Returns info about the first pin, and whether it already existed. */
-export async function importClaveFile(filePath: string, options?: { autoLaunch?: boolean }): Promise<{ pinnedId: string; alreadyExists: boolean } | null> {
-  const result = await window.electronAPI?.readClaveFile(filePath)
+export async function importClaveFile(filePath: string, options?: { autoLaunch?: boolean; rootDir?: string }): Promise<{ pinnedId: string; alreadyExists: boolean } | null> {
+  const rootDir = options?.rootDir
+  const result = await window.electronAPI?.readClaveFile(filePath, rootDir)
   if (!result) return null
 
   const autoLaunch = options?.autoLaunch ?? true
@@ -241,7 +246,7 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
     // Add any new groups that weren't in existing pins
     for (let i = existingPins.length; i < groups.length; i++) {
       const g = groups[i]
-      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined)
+      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir)
       usePinnedStore.getState().addPinnedGroup(pinned)
       if (autoLaunch) await togglePinnedGroup(pinned.id)
     }
@@ -254,7 +259,7 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
   let firstId: string | null = null
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i]
-    const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined)
+    const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir)
     usePinnedStore.getState().addPinnedGroup(pinned)
     if (!firstId) firstId = pinned.id
     if (autoLaunch) await togglePinnedGroup(pinned.id)
@@ -318,7 +323,9 @@ export function initClaveFileWatchers(): () => void {
     const pinsForFile = usePinnedStore.getState().pinnedGroups.filter((p) => p.filePath === filePath)
     if (pinsForFile.length === 0) return
 
-    const result = await window.electronAPI?.readClaveFile(filePath)
+    // Use rootDir from the first pin for this file
+    const rootDirForFile = pinsForFile[0].rootDir ?? undefined
+    const result = await window.electronAPI?.readClaveFile(filePath, rootDirForFile)
     if (!result) return
 
     // Normalize to array of groups

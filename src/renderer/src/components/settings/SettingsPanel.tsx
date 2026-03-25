@@ -429,16 +429,74 @@ function WorkspacesSection() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const addWorkspace = useWorkspaceStore((s) => s.addWorkspace)
+  const addWorkspaceFiles = useWorkspaceStore((s) => s.addWorkspaceFiles)
   const removeWorkspace = useWorkspaceStore((s) => s.removeWorkspace)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
 
+  const [discoveredFiles, setDiscoveredFiles] = useState<{ name: string; path: string; rootDir: string | null }[] | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null)
+
   const handleAddWorkspace = async () => {
+    setDiscoveryError(null)
+    setDiscoveredFiles(null)
+
     const folder = await window.electronAPI?.openFolderDialog()
     if (!folder) return
-    const added = await addWorkspace(folder)
-    if (!added) {
-      // Could show an error — for now, silent (either no workspace.clave or already registered)
+
+    // Try discovery first
+    const files = await window.electronAPI?.discoverClaveFiles(folder)
+
+    if (!files || files.length === 0) {
+      // Legacy fallback: try direct workspace.clave
+      const added = await addWorkspace(folder)
+      if (!added) {
+        setDiscoveryError('No .clave files found in this folder.')
+        setTimeout(() => setDiscoveryError(null), 3000)
+      }
+      return
     }
+
+    if (files.length === 1) {
+      // Single file — auto-add
+      const added = await addWorkspaceFiles(files)
+      if (!added) {
+        setDiscoveryError('Workspace already registered.')
+        setTimeout(() => setDiscoveryError(null), 3000)
+      }
+      return
+    }
+
+    // Multiple files — show picker
+    setDiscoveredFiles(files)
+    setSelectedFiles(new Set(files.map((f) => f.path)))
+  }
+
+  const handleConfirmSelection = async () => {
+    if (!discoveredFiles) return
+    const toAdd = discoveredFiles.filter((f) => selectedFiles.has(f.path))
+    if (toAdd.length > 0) {
+      await addWorkspaceFiles(toAdd)
+    }
+    setDiscoveredFiles(null)
+    setSelectedFiles(new Set())
+  }
+
+  const handleCancelDiscovery = () => {
+    setDiscoveredFiles(null)
+    setSelectedFiles(new Set())
+  }
+
+  const toggleFile = (filePath: string) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev)
+      if (next.has(filePath)) {
+        next.delete(filePath)
+      } else {
+        next.add(filePath)
+      }
+      return next
+    })
   }
 
   return (
@@ -447,7 +505,7 @@ function WorkspacesSection() {
         Workspaces
       </h3>
       <p className="text-[11px] text-text-tertiary mb-3">
-        Register folders containing a <code className="text-text-secondary">workspace.clave</code> file.
+        Select a folder to discover <code className="text-text-secondary">.clave</code> workspace files.
         The active workspace auto-loads its groups as pins.
       </p>
       <div className="space-y-1.5">
@@ -466,7 +524,7 @@ function WorkspacesSection() {
               <FolderIcon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-medium truncate">{ws.name}</div>
-                <div className="text-[10px] text-text-tertiary truncate" title={ws.path}>{ws.path}</div>
+                <div className="text-[10px] text-text-tertiary truncate" title={ws.claveFilePath}>{ws.claveFilePath}</div>
               </div>
               {isActive && (
                 <div className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
@@ -484,6 +542,66 @@ function WorkspacesSection() {
           )
         })}
       </div>
+
+      {/* Discovery picker */}
+      {discoveredFiles && (
+        <div className="mt-2 p-3 rounded-lg border border-accent/30 bg-accent/5">
+          <p className="text-[11px] text-text-secondary mb-2 font-medium">
+            Found {discoveredFiles.length} workspace files:
+          </p>
+          <div className="space-y-1">
+            {discoveredFiles.map((file) => {
+              const isSelected = selectedFiles.has(file.path)
+              const alreadyRegistered = workspaces.some((w) => w.claveFilePath === file.path)
+              return (
+                <label
+                  key={file.path}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors ${
+                    alreadyRegistered
+                      ? 'opacity-40 cursor-default'
+                      : isSelected
+                        ? 'bg-accent/10'
+                        : 'hover:bg-surface-200'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    disabled={alreadyRegistered}
+                    onChange={() => toggleFile(file.path)}
+                    className="rounded border-border text-accent focus:ring-accent/30 w-3.5 h-3.5"
+                  />
+                  <span className="text-[12px] text-text-primary font-medium">{file.name}</span>
+                  {alreadyRegistered && (
+                    <span className="text-[10px] text-text-tertiary">(already added)</span>
+                  )}
+                </label>
+              )
+            })}
+          </div>
+          <div className="flex gap-2 mt-2.5">
+            <button
+              onClick={handleConfirmSelection}
+              disabled={selectedFiles.size === 0}
+              className="flex-1 px-3 py-1.5 rounded-md bg-accent text-white text-[11px] font-medium hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-default"
+            >
+              Add Selected
+            </button>
+            <button
+              onClick={handleCancelDiscovery}
+              className="px-3 py-1.5 rounded-md border border-border-subtle text-text-tertiary text-[11px] font-medium hover:bg-surface-200 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error message */}
+      {discoveryError && (
+        <p className="mt-2 text-[11px] text-red-400 px-1">{discoveryError}</p>
+      )}
+
       <button
         onClick={handleAddWorkspace}
         className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border-subtle text-text-tertiary hover:text-text-secondary hover:border-border hover:bg-surface-100 transition-all text-[12px] font-medium w-full justify-center"

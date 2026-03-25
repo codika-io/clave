@@ -280,8 +280,8 @@ export interface ElectronAPI {
   onAgentsUpdated: (callback: (locationId: string, agents: unknown[]) => void) => () => void
 
   // .clave files
-  readClaveFile: (absolutePath: string) => Promise<ClaveFileReadResult | null>
-  writeClaveFile: (absolutePath: string, data: ClaveFileWriteData) => Promise<void>
+  readClaveFile: (absolutePath: string, rootDir?: string) => Promise<ClaveFileReadResult | null>
+  writeClaveFile: (absolutePath: string, data: ClaveFileWriteData, rootDir?: string) => Promise<void>
   watchClaveFile: (absolutePath: string) => Promise<void>
   unwatchClaveFile: (absolutePath: string) => Promise<void>
   onClaveFileChanged: (callback: (filePath: string) => void) => () => void
@@ -289,6 +289,7 @@ export interface ElectronAPI {
   getDownloadsPath: () => Promise<string>
   getUserDataPath: () => Promise<string>
   claveFileExists: (absolutePath: string) => Promise<boolean>
+  discoverClaveFiles: (folderPath: string) => Promise<{ name: string; path: string; rootDir: string | null }[]>
   readImageAsDataUrl: (absolutePath: string) => Promise<string | null>
   preferencesGet: (key: string) => Promise<unknown>
   preferencesSet: (key: string, value: unknown) => Promise<void>

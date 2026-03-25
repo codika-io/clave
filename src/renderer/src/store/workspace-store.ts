@@ -5,7 +5,8 @@ import { importClaveFile } from './pinned-store'
 export interface ClaveWorkspace {
   id: string
   name: string
-  path: string // Absolute path to the folder containing workspace.clave
+  claveFilePath: string // Absolute path to the .clave file itself
+  rootDir?: string | null // Root dir for resolving relative paths (null = file's parent dir)
 }
 
 interface WorkspaceState {
@@ -13,6 +14,7 @@ interface WorkspaceState {
   activeWorkspaceId: string | null
   loaded: boolean
   addWorkspace: (folderPath: string) => Promise<boolean>
+  addWorkspaceFiles: (files: { name: string; path: string }[]) => Promise<boolean>
   removeWorkspace: (id: string) => void
   setActiveWorkspace: (id: string | null) => Promise<void>
 }
@@ -23,19 +25,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   loaded: false,
 
   addWorkspace: async (folderPath: string) => {
-    // Check if workspace.clave exists
     const claveFilePath = `${folderPath}/workspace.clave`
     const exists = await window.electronAPI?.claveFileExists(claveFilePath)
     if (!exists) return false
 
     // Check if already registered
-    if (get().workspaces.some((w) => w.path === folderPath)) return false
+    if (get().workspaces.some((w) => w.claveFilePath === claveFilePath)) return false
 
     const name = folderPath.split('/').pop() || folderPath
     const workspace: ClaveWorkspace = {
       id: crypto.randomUUID(),
       name,
-      path: folderPath
+      claveFilePath
     }
 
     set((s) => {
@@ -47,20 +48,45 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return true
   },
 
+  addWorkspaceFiles: async (files: { name: string; path: string; rootDir?: string | null }[]) => {
+    const existing = get().workspaces
+    const newWorkspaces: ClaveWorkspace[] = []
+
+    for (const file of files) {
+      if (existing.some((w) => w.claveFilePath === file.path)) continue
+      if (newWorkspaces.some((w) => w.claveFilePath === file.path)) continue
+      newWorkspaces.push({
+        id: crypto.randomUUID(),
+        name: file.name.charAt(0).toUpperCase() + file.name.slice(1),
+        claveFilePath: file.path,
+        rootDir: file.rootDir ?? null
+      })
+    }
+
+    if (newWorkspaces.length === 0) return false
+
+    set((s) => {
+      const next = [...s.workspaces, ...newWorkspaces]
+      persistWorkspaces(next, s.activeWorkspaceId)
+      return { workspaces: next }
+    })
+    return true
+  },
+
   removeWorkspace: (id: string) => {
     set((s) => {
       const next = s.workspaces.filter((w) => w.id !== id)
       const newActiveId = s.activeWorkspaceId === id ? null : s.activeWorkspaceId
-      persistWorkspaces(next, newActiveId)
 
       // If removing the active workspace, unload its pins
       if (s.activeWorkspaceId === id) {
         const workspace = s.workspaces.find((w) => w.id === id)
         if (workspace) {
-          removeWorkspacePins(`${workspace.path}/workspace.clave`)
+          removeWorkspacePins(workspace.claveFilePath)
         }
       }
 
+      persistWorkspaces(next, newActiveId)
       return { workspaces: next, activeWorkspaceId: newActiveId }
     })
   },
@@ -78,7 +104,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (previousId && previousId !== id) {
       const prev = state.workspaces.find((w) => w.id === previousId)
       if (prev) {
-        removeWorkspacePins(`${prev.path}/workspace.clave`)
+        removeWorkspacePins(prev.claveFilePath)
       }
     }
 
@@ -89,7 +115,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (id) {
       const workspace = state.workspaces.find((w) => w.id === id)
       if (workspace) {
-        await importClaveFile(`${workspace.path}/workspace.clave`, { autoLaunch: false })
+        await importClaveFile(workspace.claveFilePath, {
+          autoLaunch: false,
+          rootDir: workspace.rootDir ?? undefined
+        })
       }
     }
   }
@@ -121,7 +150,7 @@ async function saveInitWorkspace(): Promise<void> {
 
     // Check if Init workspace already exists
     const store = useWorkspaceStore.getState()
-    if (store.workspaces.some((w) => w.path === userDataPath)) return
+    if (store.workspaces.some((w) => w.claveFilePath === initFilePath)) return
 
     // Write current pins as a multi-group .clave file
     const groups = pins.map((pg) => ({
@@ -149,7 +178,7 @@ async function saveInitWorkspace(): Promise<void> {
     const initWorkspace: ClaveWorkspace = {
       id: crypto.randomUUID(),
       name: 'Init',
-      path: userDataPath
+      claveFilePath: initFilePath
     }
 
     useWorkspaceStore.setState((s) => {
@@ -162,22 +191,45 @@ async function saveInitWorkspace(): Promise<void> {
   }
 }
 
+/** Migrate old workspace format (path → claveFilePath) */
+function migrateWorkspaces(workspaces: unknown[]): ClaveWorkspace[] {
+  return workspaces.map((ws: any) => {
+    if (ws.claveFilePath) return ws as ClaveWorkspace
+    // Old format: path was the folder, file was workspace.clave inside it
+    return {
+      id: ws.id,
+      name: ws.name,
+      claveFilePath: `${ws.path}/workspace.clave`
+    } as ClaveWorkspace
+  })
+}
+
 /** Load workspace config from preferences (call once on app start) */
 export async function loadWorkspaces(): Promise<void> {
-  const workspaces = (await window.electronAPI?.preferencesGet('workspaces')) as ClaveWorkspace[] | null
+  const raw = (await window.electronAPI?.preferencesGet('workspaces')) as unknown[] | null
   const activeId = (await window.electronAPI?.preferencesGet('activeWorkspaceId')) as string | null
 
+  const workspaces = raw ? migrateWorkspaces(raw) : []
+
+  // Persist migrated data back
+  if (raw && raw.some((ws: any) => !ws.claveFilePath)) {
+    window.electronAPI?.preferencesSet('workspaces', workspaces).catch(() => {})
+  }
+
   useWorkspaceStore.setState({
-    workspaces: workspaces || [],
+    workspaces,
     activeWorkspaceId: activeId || null,
     loaded: true
   })
 
   // Auto-load active workspace pins (idle, no auto-launch)
-  if (activeId && workspaces) {
+  if (activeId && workspaces.length > 0) {
     const workspace = workspaces.find((w) => w.id === activeId)
     if (workspace) {
-      await importClaveFile(`${workspace.path}/workspace.clave`, { autoLaunch: false })
+      await importClaveFile(workspace.claveFilePath, {
+        autoLaunch: false,
+        rootDir: workspace.rootDir ?? undefined
+      })
     }
   }
 }

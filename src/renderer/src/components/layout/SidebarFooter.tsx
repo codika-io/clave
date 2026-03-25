@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronUpDownIcon,
@@ -39,6 +39,8 @@ export function SidebarFooter() {
     setDownloading()
     window.electronAPI?.startDownload()
   }
+
+  const [popoverOpen, setPopoverOpen] = useState(false)
 
   const showUpdateBanner = phase === 'available' && !dismissed
   const showUpdateDot = dismissed && version !== null && phase === 'available'
@@ -86,7 +88,7 @@ export function SidebarFooter() {
         )}
       </AnimatePresence>
 
-      <Popover>
+      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>
           <button
             className={cn(
@@ -137,7 +139,10 @@ export function SidebarFooter() {
             {items.map(({ view, icon: Icon, label }) => (
               <button
                 key={view}
-                onClick={() => setActiveView(view)}
+                onClick={() => {
+                  setActiveView(view)
+                  setPopoverOpen(false)
+                }}
                 className={cn(
                   'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] transition-colors cursor-default select-none',
                   activeView === view

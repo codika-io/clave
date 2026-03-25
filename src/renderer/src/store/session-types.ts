@@ -160,6 +160,7 @@ export interface PinnedGroup {
   terminals: PinnedGroupTerminal[]
   createdAt: number
   filePath?: string | null
+  rootDir?: string | null  // Root dir for resolving paths (null = file's parent dir)
   groupIndex?: number  // Position in multi-group .clave file (0-based)
   toolbar?: boolean    // Show this group's terminals as toolbar quick-actions
   logo?: string | null // Absolute path to logo image
