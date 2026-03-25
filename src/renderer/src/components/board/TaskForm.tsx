@@ -12,26 +12,26 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
   const addTask = useBoardStore((s) => s.addTask)
   const updateTask = useBoardStore((s) => s.updateTask)
 
-  const [title, setTitle] = useState('')
   const [prompt, setPrompt] = useState('')
   const [cwd, setCwd] = useState('')
   const [dangerousMode, setDangerousMode] = useState(false)
-  const titleRef = useRef<HTMLInputElement>(null)
+  const [title, setTitle] = useState('')
+  const promptRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     if (isOpen) {
       if (editTask) {
-        setTitle(editTask.title)
         setPrompt(editTask.prompt)
         setCwd(editTask.cwd)
         setDangerousMode(editTask.dangerousMode)
+        setTitle(editTask.title)
       } else {
-        setTitle('')
         setPrompt('')
         setCwd('')
         setDangerousMode(false)
+        setTitle('')
       }
-      setTimeout(() => titleRef.current?.focus(), 50)
+      setTimeout(() => promptRef.current?.focus(), 50)
     }
   }, [isOpen, editTask])
 
@@ -55,7 +55,7 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault()
-      if (!title.trim() || !cwd.trim()) return
+      if (!prompt.trim() || !cwd.trim()) return
 
       if (editTask) {
         updateTask(editTask.id, { title: title.trim(), prompt: prompt.trim(), cwd: cwd.trim(), dangerousMode })
@@ -110,20 +110,9 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
 
                 <div className="px-5 space-y-3 pb-4">
                   <div>
-                    <label className="block text-xs text-text-secondary mb-1">Title</label>
-                    <input
-                      ref={titleRef}
-                      type="text"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="What needs to be done"
-                      className="w-full h-8 px-3 rounded-lg bg-surface-200 border-none text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors"
-                    />
-                  </div>
-
-                  <div>
                     <label className="block text-xs text-text-secondary mb-1">Prompt</label>
                     <textarea
+                      ref={promptRef}
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder="Instructions for Claude Code..."
@@ -166,6 +155,17 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
                       Skip permissions
                     </span>
                   </label>
+
+                  <div>
+                    <label className="block text-xs text-text-tertiary mb-1">Title (optional)</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Short label for the task"
+                      className="w-full h-8 px-3 rounded-lg bg-surface-200 border-none text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors"
+                    />
+                  </div>
                 </div>
 
                 <div className="px-5 py-3 border-t border-border-subtle flex items-center justify-between">
@@ -182,7 +182,7 @@ export function TaskForm({ isOpen, onClose, editTask }: TaskFormProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={!title.trim() || !cwd.trim()}
+                      disabled={!prompt.trim() || !cwd.trim()}
                       className="h-7 px-4 rounded-lg text-xs font-medium bg-accent text-white hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {editTask ? 'Save' : 'Create'}

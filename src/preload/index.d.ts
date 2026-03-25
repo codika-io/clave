@@ -63,12 +63,8 @@ export interface BoardTask {
   prompt: string
   cwd: string
   dangerousMode: boolean
-  status: 'todo' | 'processing' | 'done'
-  sessionId: string | null
-  claudeSessionId: string | null
   createdAt: number
   updatedAt: number
-  order: number
 }
 
 export interface BoardData {

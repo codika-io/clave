@@ -7,12 +7,9 @@ export interface BoardTask {
   title: string
   prompt: string
   cwd: string
-  status: 'todo' | 'processing' | 'done'
-  sessionId: string | null
-  claudeSessionId: string | null
+  dangerousMode: boolean
   createdAt: number
   updatedAt: number
-  order: number
 }
 
 export interface BoardData {
@@ -30,11 +27,20 @@ class BoardManager {
     try {
       const raw = fs.readFileSync(this.filePath, 'utf-8')
       const data = JSON.parse(raw) as BoardData
-      // Normalize old tasks that don't have claudeSessionId
-      data.tasks = data.tasks.map((t) => ({
-        ...t,
-        claudeSessionId: t.claudeSessionId ?? null
-      }))
+      // Migrate old kanban tasks: only keep unrun tasks (status 'todo' or no status)
+      // and strip removed fields
+      const raw_tasks = data.tasks as Array<Record<string, unknown>>
+      data.tasks = raw_tasks
+        .filter((t) => !t.status || t.status === 'todo')
+        .map((t) => ({
+          id: t.id as string,
+          title: (t.title as string) ?? '',
+          prompt: (t.prompt as string) ?? '',
+          cwd: t.cwd as string,
+          dangerousMode: t.dangerousMode === true,
+          createdAt: t.createdAt as number,
+          updatedAt: t.updatedAt as number
+        }))
       return data
     } catch {
       return { tasks: [] }

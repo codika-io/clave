@@ -17,7 +17,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { GroupCommandDialog } from '../ui/GroupCommandDialog'
 import { ExportClaveDialog } from '../ui/ExportClaveDialog'
 import { cn } from '../../lib/utils'
-import { SectionHeading, BoardSection } from './SidebarSections'
+import { SectionHeading, TaskQueueSection } from './SidebarSections'
 import { NewSessionDropdown } from './NewSessionDropdown'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
@@ -1169,9 +1169,9 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Board section */}
-        <SectionHeading title="Board" collapsed={boardCollapsed} onToggle={() => setBoardCollapsed((c) => !c)} />
-        <BoardSection collapsed={boardCollapsed} />
+        {/* Workflows section */}
+        <SectionHeading title="Workflows" collapsed={boardCollapsed} onToggle={() => setBoardCollapsed((c) => !c)} />
+        <TaskQueueSection collapsed={boardCollapsed} />
       </ScrollArea>
 
       {/* User footer */}

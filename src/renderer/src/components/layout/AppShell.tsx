@@ -4,7 +4,7 @@ import { useSessionStore, isFileTabId, getDisplayOrder } from '../../store/sessi
 import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
-import { KanbanBoard } from '../board/KanbanBoard'
+import { TaskQueue } from '../board/KanbanBoard'
 import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
@@ -495,7 +495,7 @@ export function AppShell() {
           activeView === 'terminals' ? 'hidden' : 'flex'
         )}>
           <div className={activeView === 'board' ? 'flex-1 flex min-h-0' : 'hidden'}>
-            <KanbanBoard />
+            <TaskQueue />
           </div>
           <div className={activeView === 'usage' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <UsagePanel />
