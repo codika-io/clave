@@ -36,6 +36,8 @@ const electronAPI = {
     createIpcListener<[string]>(`session:auto-title:${sessionId}`, callback),
 
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  checkPort: (port: number) =>
+    ipcRenderer.invoke('net:check-port', port) as Promise<boolean>,
 
   openPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 

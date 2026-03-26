@@ -216,6 +216,7 @@ export function useTerminal(sessionId: string) {
     let notificationTimer: ReturnType<typeof setTimeout> | null = null
     let outputBuffer = ''
     let isMarkedActive = false
+    let portCheckFailures = 0
 
     // Wire PTY output -> terminal
     const cleanupData = window.electronAPI.onSessionData(sessionId, (data) => {
@@ -236,12 +237,31 @@ export function useTerminal(sessionId: string) {
       }
 
       // Append stripped data to rolling buffer (max 500 chars)
-      outputBuffer = (outputBuffer + stripAnsi(data)).slice(-500)
+      const stripped = stripAnsi(data)
+      outputBuffer = (outputBuffer + stripped).slice(-500)
 
       // Detect localhost URLs in output
       const detectedUrl = detectLocalhostUrl(outputBuffer)
       if (detectedUrl) {
         setSessionDetectedUrl(sessionId, detectedUrl)
+        portCheckFailures = 0
+      }
+
+      // If a URL is set and we see signals the server was killed, verify immediately
+      const currentUrl = useSessionStore.getState().sessions.find((s) => s.id === sessionId)?.detectedUrl
+      if (currentUrl && /(\^C|SIGINT|SIGTERM|EADDRINUSE)/.test(stripped)) {
+        const port = Number(new URL(currentUrl).port)
+        if (port) {
+          // Small delay — let the process actually die
+          setTimeout(() => {
+            window.electronAPI.checkPort(port).then((alive) => {
+              if (!alive) {
+                setSessionDetectedUrl(sessionId, null)
+                portCheckFailures = 0
+              }
+            })
+          }, 500)
+        }
       }
 
       // Mark unseen activity if this session is not currently selected
@@ -404,9 +424,33 @@ export function useTerminal(sessionId: string) {
     container.addEventListener('dragover', handleDragOver, true)
     container.addEventListener('drop', handleDrop, true)
 
+    // Periodically verify detected localhost URL is still reachable (fallback for missed signals)
+    const portCheckInterval = setInterval(() => {
+      if (!document.hasFocus()) return
+      const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
+      if (!session?.detectedUrl) { portCheckFailures = 0; return }
+      try {
+        const port = Number(new URL(session.detectedUrl).port)
+        if (port) {
+          window.electronAPI.checkPort(port).then((alive) => {
+            if (alive) {
+              portCheckFailures = 0
+            } else {
+              portCheckFailures++
+              if (portCheckFailures >= 2) {
+                setSessionDetectedUrl(sessionId, null)
+                portCheckFailures = 0
+              }
+            }
+          })
+        }
+      } catch { /* invalid URL */ }
+    }, 3000)
+
     return () => {
       container.removeEventListener('dragover', handleDragOver, true)
       container.removeEventListener('drop', handleDrop, true)
+      clearInterval(portCheckInterval)
       if (resizeTimer) clearTimeout(resizeTimer)
       if (activityTimer) clearTimeout(activityTimer)
       if (activeStartTimer) clearTimeout(activeStartTimer)

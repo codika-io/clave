@@ -1,8 +1,31 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
+import net from 'node:net'
 
 export function registerShellHandlers(): void {
   ipcMain.handle('shell:openExternal', (_event, url: string) => {
     return shell.openExternal(url)
+  })
+
+  ipcMain.handle('net:check-port', (_event, port: number) => {
+    const tryConnect = (host: string): Promise<boolean> =>
+      new Promise((resolve) => {
+        const socket = net.createConnection({ port, host, timeout: 2000 })
+        socket.once('connect', () => {
+          socket.destroy()
+          resolve(true)
+        })
+        socket.once('error', () => {
+          socket.destroy()
+          resolve(false)
+        })
+        socket.once('timeout', () => {
+          socket.destroy()
+          resolve(false)
+        })
+      })
+
+    // Try IPv4 first, then IPv6 — covers servers bound to 127.0.0.1, ::1, or 0.0.0.0
+    return tryConnect('127.0.0.1').then((ok) => (ok ? true : tryConnect('::1')))
   })
 
   ipcMain.handle('shell:openPath', (_event, filePath: string) => {

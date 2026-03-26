@@ -204,6 +204,7 @@ export interface ElectronAPI {
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void
   openExternal: (url: string) => Promise<void>
+  checkPort: (port: number) => Promise<boolean>
   openPath: (filePath: string) => Promise<string>
   openFolderDialog: () => Promise<string | null>
   onUpdateAvailable: (callback: (version: string) => void) => () => void
