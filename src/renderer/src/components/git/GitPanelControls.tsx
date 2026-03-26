@@ -68,61 +68,45 @@ export function CollapseAllButton() {
 export function ViewModeToggle() {
   const gitViewMode = useSessionStore((s) => s.gitViewMode)
   const setGitViewMode = useSessionStore((s) => s.setGitViewMode)
+  const isTree = gitViewMode === 'tree'
   return (
-    <div className="flex items-center bg-surface-100 rounded p-0.5 gap-0.5">
-      <button
-        className={`p-0.5 rounded transition-colors ${
-          gitViewMode === 'list'
-            ? 'bg-surface-200 text-text-primary'
-            : 'text-text-tertiary hover:text-text-secondary'
-        }`}
-        onClick={() => setGitViewMode('list')}
-        title="List view"
-      >
+    <button
+      onClick={() => setGitViewMode(isTree ? 'list' : 'tree')}
+      className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors flex-shrink-0"
+      title={isTree ? 'Switch to list view' : 'Switch to tree view'}
+    >
+      {isTree ? (
         <ListBulletIcon className="w-3 h-3" />
-      </button>
-      <button
-        className={`p-0.5 rounded transition-colors ${
-          gitViewMode === 'tree'
-            ? 'bg-surface-200 text-text-primary'
-            : 'text-text-tertiary hover:text-text-secondary'
-        }`}
-        onClick={() => setGitViewMode('tree')}
-        title="Tree view"
-      >
+      ) : (
         <Bars3BottomLeftIcon className="w-3 h-3" />
-      </button>
-    </div>
+      )}
+    </button>
   )
 }
 
 export function PanelModeToggle() {
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
   const setGitPanelMode = useSessionStore((s) => s.setGitPanelMode)
+  const isLog = gitPanelMode === 'log'
   return (
-    <div className="flex items-center gap-0.5 text-[10px] font-medium">
-      <button
-        className={`px-1 py-0.5 rounded transition-colors ${
-          gitPanelMode === 'changes'
-            ? 'text-text-primary'
-            : 'text-text-tertiary hover:text-text-secondary'
-        }`}
-        onClick={() => setGitPanelMode('changes')}
-      >
-        Changes
-      </button>
-      <span className="text-text-tertiary/50">|</span>
-      <button
-        className={`px-1 py-0.5 rounded transition-colors ${
-          gitPanelMode === 'log'
-            ? 'text-text-primary'
-            : 'text-text-tertiary hover:text-text-secondary'
-        }`}
-        onClick={() => setGitPanelMode('log')}
-      >
-        Log
-      </button>
-    </div>
+    <button
+      onClick={() => setGitPanelMode(isLog ? 'changes' : 'log')}
+      className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors flex-shrink-0"
+      title={isLog ? 'Switch to changes' : 'Switch to commit log'}
+    >
+      {isLog ? (
+        /* Changes/diff icon */
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2 3h8M2 6h5M2 9h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      ) : (
+        /* Log/history icon */
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M6 3.5V6l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </button>
   )
 }
 
