@@ -54,26 +54,61 @@ export function SidePanel() {
   }, [remoteLocationId])
 
   const [customCwd, _setCustomCwd] = useState<string | null>(null)
-  const navMapRef = useRef(new Map<string, string>())
+  const navMapRef = useRef(new Map<string, string>())        // sessionId -> current customCwd
+  const navStackRef = useRef(new Map<string, string[]>())    // sessionId -> back stack
   const prevSessionIdRef = useRef(focusedSessionId)
+  const [canGoBack, setCanGoBack] = useState(false)
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const pathButtonRef = useRef<HTMLButtonElement>(null)
   const pathMenuRef = useRef<HTMLDivElement>(null)
 
-  // Wrapper that also stores/clears entries in the per-session nav map
+  const updateCanGoBack = useCallback(() => {
+    if (!focusedSessionId) { setCanGoBack(false); return }
+    const stack = navStackRef.current.get(focusedSessionId)
+    setCanGoBack(!!stack && stack.length > 0)
+  }, [focusedSessionId])
+
+  // Navigate forward — pushes current cwd onto the back stack
   const setCustomCwd = useCallback(
     (path: string | null) => {
-      _setCustomCwd(path)
       if (focusedSessionId) {
         if (path) {
+          // Push current location onto the back stack before navigating
+          const currentCwd = customCwd ?? sessionCwd
+          if (currentCwd && currentCwd !== path) {
+            const stack = navStackRef.current.get(focusedSessionId) ?? []
+            stack.push(currentCwd)
+            navStackRef.current.set(focusedSessionId, stack)
+          }
           navMapRef.current.set(focusedSessionId, path)
         } else {
+          // Reset to root — clear everything
+          navStackRef.current.delete(focusedSessionId)
           navMapRef.current.delete(focusedSessionId)
         }
       }
+      _setCustomCwd(path)
+      updateCanGoBack()
     },
-    [focusedSessionId]
+    [focusedSessionId, customCwd, sessionCwd, updateCanGoBack]
   )
+
+  // Navigate back — pops from the stack
+  const goBack = useCallback(() => {
+    if (!focusedSessionId) return
+    const stack = navStackRef.current.get(focusedSessionId)
+    if (!stack || stack.length === 0) return
+    const prev = stack.pop()!
+    if (stack.length === 0) navStackRef.current.delete(focusedSessionId)
+    const newCwd = prev === sessionCwd ? null : prev
+    _setCustomCwd(newCwd)
+    if (newCwd) {
+      navMapRef.current.set(focusedSessionId, newCwd)
+    } else {
+      navMapRef.current.delete(focusedSessionId)
+    }
+    updateCanGoBack()
+  }, [focusedSessionId, sessionCwd, updateCanGoBack])
 
   // Restore from nav map when focused session changes
   useEffect(() => {
@@ -81,8 +116,9 @@ export function SidePanel() {
       prevSessionIdRef.current = focusedSessionId
       const saved = focusedSessionId ? navMapRef.current.get(focusedSessionId) ?? null : null
       _setCustomCwd(saved)
+      updateCanGoBack()
     }
-  }, [focusedSessionId])
+  }, [focusedSessionId, updateCanGoBack])
 
   const cwd = customCwd ?? sessionCwd
   const isCustom = customCwd !== null
@@ -118,7 +154,7 @@ export function SidePanel() {
     if (folderPath) {
       setCustomCwd(folderPath)
     }
-  }, [])
+  }, [setCustomCwd])
 
   const handleResetFolder = useCallback(() => {
     setCustomCwd(null)
@@ -190,8 +226,23 @@ export function SidePanel() {
         className="flex flex-col border-b border-border-subtle flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* Row 1: Centered segmented control */}
-        <div className="flex justify-center px-3 pt-3 pb-1.5">
+        {/* Row 1: Back button + centered segmented control */}
+        <div className="flex items-center px-3 pt-3 pb-1.5">
+          {/* Back button — fixed width so the segmented control stays centered */}
+          <div className="w-6 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            {canGoBack && (
+              <button
+                onClick={goBack}
+                className="w-6 h-6 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors"
+                title="Go back"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            )}
+          </div>
+          <div className="flex-1 flex justify-center">
           <div
             className="flex items-center bg-surface-100 rounded p-0.5 gap-0.5"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -231,6 +282,8 @@ export function SidePanel() {
               </button>
             )}
           </div>
+          </div>
+          <div className="w-6 flex-shrink-0" />
         </div>
 
         {/* Row 2: Left-aligned path display + optional branch badge */}

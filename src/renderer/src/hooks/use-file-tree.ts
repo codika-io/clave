@@ -164,7 +164,7 @@ export function useFileTree(cwd: string | null) {
         // Auto-expand previously expanded dirs
         for (const node of nodes) {
           if (node.type === 'directory' && expanded.has(node.path)) {
-            loadChildren(cwd, node.path, nodes)
+            loadChildren(cwd, node.path)
           }
         }
       } catch (err) {
