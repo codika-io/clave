@@ -50,7 +50,7 @@ Builds require Apple code signing. Credentials in `.env` (not committed):
 
 ### Playwright Electron MCP — Verification workflow
 
-Config: `.playwright-electron.config.json` (gitignored). Launches the built Electron app directly.
+Config: `.playwright-electron.config.json` (gitignored). Launches the built Electron app directly with an isolated `--user-data-dir` to avoid conflicts with the running installed Clave app. The engineering plugin's `.mcp.json` passes `--config .playwright-electron.config.json` so this file is actually loaded by the MCP server.
 
 1. Build: `npx electron-vite build` (compiles to `out/`)
 2. Load tools: `ToolSearch` for `+playwright-electron`

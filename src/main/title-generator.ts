@@ -14,6 +14,7 @@ interface SessionEntry {
   jsonlPath: string
   titleDone: boolean
   planDetected: boolean
+  pendingClear: boolean
   dirWatcher: ReturnType<typeof watch> | null
 }
 
@@ -63,7 +64,7 @@ export function scheduleTitleGeneration(
   const jsonlPath = getJsonlPath(cwd, claudeSessionId)
   const entry: SessionEntry = {
     cwd, claudeSessionId, win, jsonlPath,
-    titleDone: false, planDetected: false, dirWatcher: null
+    titleDone: false, planDetected: false, pendingClear: false, dirWatcher: null
   }
   sessions.set(sessionId, entry)
 
@@ -76,10 +77,12 @@ export function scheduleTitleGeneration(
       if (eventType !== 'rename' || !filename?.endsWith('.jsonl')) return
       const newFile = join(projectDir, filename)
       if (newFile === entry.jsonlPath || !existsSync(newFile)) return
+      // Only process if this session is expecting a /clear (set via notifyClear from PTY input)
+      if (!entry.pendingClear) return
 
       // Small delay — file may not be fully written yet when the watch event fires
       setTimeout(() => {
-        if (!existsSync(newFile)) return
+        if (!existsSync(newFile) || !entry.pendingClear) return
         // Check if this new JSONL is a /clear continuation
         try {
           const head = readFileSync(newFile, { encoding: 'utf-8', flag: 'r' })
@@ -87,6 +90,7 @@ export function scheduleTitleGeneration(
         } catch { return }
 
         console.log(`[title-gen] Session ${sessionId}: /clear detected (new JSONL: ${filename})`)
+        entry.pendingClear = false
 
         // Stop watching old JSONL, switch to new one
         try { unwatchFile(entry.jsonlPath) } catch { /* ignore */ }
@@ -132,6 +136,15 @@ export function cleanup(sessionId: string): void {
   if (queueIdx !== -1) {
     titleQueue[queueIdx].reject(new Error('Session cleaned up'))
     titleQueue.splice(queueIdx, 1)
+  }
+}
+
+/** Mark a session as expecting a /clear — called when PTY input contains /clear */
+export function notifyClear(sessionId: string): void {
+  const entry = sessions.get(sessionId)
+  if (entry) {
+    entry.pendingClear = true
+    console.log(`[title-gen] Session ${sessionId}: /clear pending`)
   }
 }
 

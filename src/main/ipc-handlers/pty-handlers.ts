@@ -22,6 +22,7 @@ export function registerPtyHandlers(): void {
 
     session.ptyProcess.onExit(({ exitCode }) => {
       titleGenerator.cleanup(session.id)
+      inputBuffers.delete(session.id)
       if (win && !win.isDestroyed()) {
         win.webContents.send(`pty:exit:${session.id}`, exitCode)
       }
@@ -42,7 +43,30 @@ export function registerPtyHandlers(): void {
     }
   })
 
+  // Buffer PTY input per session to detect /clear command
+  const inputBuffers = new Map<string, string>()
+
   ipcMain.on('pty:write', (_event, id: string, data: string) => {
+    // Track input to detect /clear command
+    let buf = inputBuffers.get(id) ?? ''
+    for (const ch of data) {
+      if (ch === '\r' || ch === '\n') {
+        // Enter pressed — check if the buffered line is /clear
+        if (/^\/clear\s*$/.test(buf.trim())) {
+          titleGenerator.notifyClear(id)
+        }
+        buf = ''
+      } else if (ch === '\x7f' || ch === '\b') {
+        buf = buf.slice(0, -1)
+      } else if (ch === '\x03' || ch === '\x15') {
+        // Ctrl+C or Ctrl+U — clear buffer
+        buf = ''
+      } else if (ch >= ' ') {
+        buf += ch
+      }
+    }
+    inputBuffers.set(id, buf)
+
     ptyManager.write(id, data)
   })
 
