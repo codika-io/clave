@@ -647,7 +647,7 @@ function ToolbarActiveUrls() {
         sessionId: session.id,
         url: session.detectedUrl,
         port,
-        groupName: group?.name || session.name,
+        groupName: session.cwd.split('/').pop() || session.name,
         groupColor: resolveColorHex(group?.color),
         serverStatus: session.serverStatus,
         serverCommand: session.serverCommand

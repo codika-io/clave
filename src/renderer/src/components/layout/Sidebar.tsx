@@ -460,7 +460,7 @@ export function Sidebar() {
           id: sessionInfo.id,
           cwd: sessionInfo.cwd,
           folderName: sessionInfo.folderName,
-          name: `${group.name} terminal`,
+          name: sessionInfo.folderName,
           alive: sessionInfo.alive,
           activityStatus: 'idle' as const,
           promptWaiting: null,
