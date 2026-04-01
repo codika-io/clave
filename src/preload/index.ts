@@ -152,6 +152,10 @@ const electronAPI = {
     ipcRenderer.invoke('git:magic-sync', repoPaths),
   onMagicSyncProgress: (callback: (repoPath: string, step: string) => void) =>
     createIpcListener<[string, string]>('git:magic-sync-progress', callback),
+  gitJourney: (cwd: string, maxCount?: number) =>
+    ipcRenderer.invoke('git:journey', cwd, maxCount),
+  gitSummarizePush: (cwd: string, commitMessages: string[], diffStats: string) =>
+    ipcRenderer.invoke('git:summarize-push', cwd, commitMessages, diffStats),
 
   showNotification: (options: { title: string; body: string; sessionId: string }) =>
     ipcRenderer.invoke('notification:show', options),

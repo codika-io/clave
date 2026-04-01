@@ -55,4 +55,12 @@ export function registerGitHandlers(): void {
       event.sender.send('git:magic-sync-progress', repoPath, step)
     })
   )
+  ipcMain.handle('git:journey', (_event, cwd: string, maxCount?: number) =>
+    gitManager.getJourney(cwd, maxCount)
+  )
+  ipcMain.handle(
+    'git:summarize-push',
+    (_event, cwd: string, commitMessages: string[], diffStats: string) =>
+      gitManager.summarizePushGroup(cwd, commitMessages, diffStats)
+  )
 }

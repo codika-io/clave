@@ -51,6 +51,7 @@ export function GitDiffPreview() {
   const triggerGitRefresh = useSessionStore((s) => s.triggerGitRefresh)
   const fileTreeOpen = useSessionStore((s) => s.fileTreeOpen)
   const fileTreeWidth = useSessionStore((s) => s.fileTreeWidth)
+  const journeyPanel = useSessionStore((s) => s.journeyPanel)
 
   const [diff, setDiff] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -197,7 +198,8 @@ export function GitDiffPreview() {
   if (!diffPreview) return null
 
   const filename = diffPreview.file.split('/').pop() ?? ''
-  const rightOffset = fileTreeOpen ? fileTreeWidth + 8 : 16
+  const baseRight = fileTreeOpen ? fileTreeWidth + 8 : 16
+  const rightOffset = journeyPanel ? baseRight + 480 + 8 : baseRight
   const panelWidth = 520
 
   return (

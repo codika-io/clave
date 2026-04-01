@@ -571,6 +571,7 @@ function MultiRepoSection({
   selectedRepoPaths?: Set<string>
 }) {
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
+  const openJourneyPanel = useSessionStore((s) => s.openJourneyPanel)
   const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
   const changeCount = status.files.length
   const hasChanges = changeCount > 0
@@ -628,6 +629,10 @@ function MultiRepoSection({
           isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
         }`}
         onClick={handleClick}
+        onDoubleClick={(e) => {
+          e.stopPropagation()
+          openJourneyPanel(repoPath, name)
+        }}
         draggable
         onDragStart={handleDragStart}
       >
@@ -690,6 +695,7 @@ function MultiRepoSection({
           )}
         </div>
       )}
+
     </div>
   )
 }

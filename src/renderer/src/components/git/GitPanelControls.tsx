@@ -196,12 +196,14 @@ export function BranchHeader({
   ahead,
   behind,
   cwd,
+  repoName,
   onSyncDone
 }: {
   branch: string
   ahead: number
   behind: number
   cwd?: string | null
+  repoName?: string
   onSyncDone?: () => void
 }) {
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
@@ -243,11 +245,31 @@ export function BranchHeader({
       <div className="flex items-center gap-1 px-3 py-1 border-t border-border-subtle/50">
         {cwd && <MagicSyncButton repoPaths={[cwd]} onDone={onSyncDone} />}
         <span className="flex-1" />
+        {cwd && <JourneyButton cwd={cwd} repoName={repoName || branch} />}
         <PanelModeToggle />
         {gitPanelMode === 'changes' && <ViewModeToggle />}
         <CollapseAllButton />
       </div>
     </div>
+  )
+}
+
+export function JourneyButton({ cwd, repoName }: { cwd: string; repoName: string }) {
+  const openJourneyPanel = useSessionStore((s) => s.openJourneyPanel)
+  return (
+    <IconButton
+      onClick={() => openJourneyPanel(cwd, repoName)}
+      className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors flex-shrink-0"
+      tooltip="Journey"
+    >
+      {/* Timeline/route icon */}
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <circle cx="3" cy="2.5" r="1.3" stroke="currentColor" strokeWidth="1.1" />
+        <circle cx="9" cy="6" r="1.3" stroke="currentColor" strokeWidth="1.1" />
+        <circle cx="3" cy="9.5" r="1.3" stroke="currentColor" strokeWidth="1.1" />
+        <path d="M3 3.8v4.4M4.3 2.8l3.4 2.5M7.7 6.7l-3.4 2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+      </svg>
+    </IconButton>
   )
 }
 

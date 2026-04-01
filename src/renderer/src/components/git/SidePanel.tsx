@@ -5,7 +5,7 @@ import { useLocationStore } from '../../store/location-store'
 import { FileTree } from '../files/FileTree'
 import { RemoteFileTree } from '../files/RemoteFileTree'
 import { GitStatusPanel, MultiRepoGitPanel } from './GitStatusPanel'
-import { MagicSyncButton, ViewModeToggle, PanelModeToggle, CollapseAllButton } from './GitPanelControls'
+import { MagicSyncButton, ViewModeToggle, PanelModeToggle, CollapseAllButton, JourneyButton } from './GitPanelControls'
 import { useMultiRepoStatus } from '../../hooks/use-multi-repo-status'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { shortenPath } from '../../lib/utils'
@@ -415,6 +415,9 @@ export function SidePanel() {
           )}
           <span className="flex-1" />
           <MagicSyncButton repoPaths={allRepoPaths} onDone={gitRefresh} />
+          {isSingleRepo && cwd && (
+            <JourneyButton cwd={cwd} repoName={cwd.split('/').pop() ?? cwd} />
+          )}
           <PanelModeToggle />
           <ViewModeToggle />
           <CollapseAllButton />

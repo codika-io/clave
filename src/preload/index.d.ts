@@ -135,6 +135,24 @@ export interface GitCommitFileStatus {
   deletions: number
 }
 
+export interface GitPushGroup {
+  id: string
+  pushedAt: string
+  commits: GitLogEntry[]
+  summary?: {
+    title: string
+    description: string
+  }
+}
+
+export interface GitJourneyResult {
+  local: GitLogEntry[]
+  pushGroups: GitPushGroup[]
+  fallbackMode: boolean
+  branch: string
+  hasMore: boolean
+}
+
 export type MagicSyncStep = 'pulling' | 'staging' | 'generating' | 'committing' | 'pushing'
 
 export interface MagicSyncResult {
@@ -260,6 +278,8 @@ export interface ElectronAPI {
   gitGenerateCommitMessage: (cwd: string) => Promise<string>
   gitMagicSync: (repoPaths: string[]) => Promise<MagicSyncResult[]>
   onMagicSyncProgress: (callback: (repoPath: string, step: MagicSyncStep) => void) => () => void
+  gitJourney: (cwd: string, maxCount?: number) => Promise<GitJourneyResult>
+  gitSummarizePush: (cwd: string, commitMessages: string[], diffStats: string) => Promise<{ title: string; description: string }>
 
   // Locations
   locationList: () => Promise<import('../shared/remote-types').Location[]>

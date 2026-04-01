@@ -47,6 +47,7 @@ interface SessionState {
   sidePanelTab: 'files' | 'git'
   gitViewMode: 'list' | 'tree'
   gitPanelMode: 'changes' | 'log'
+  journeyPanel: { cwd: string; repoName: string } | null
   commitMessages: Record<string, string>
   generatingCommitCwds: Set<string>
   hiddenAgentIds: Set<string>
@@ -98,6 +99,8 @@ interface SessionState {
   setSidePanelTab: (tab: 'files' | 'git') => void
   setGitViewMode: (mode: 'list' | 'tree') => void
   setGitPanelMode: (mode: 'changes' | 'log') => void
+  openJourneyPanel: (cwd: string, repoName: string) => void
+  closeJourneyPanel: () => void
   setCommitMessage: (cwd: string, message: string) => void
   setGeneratingCommit: (cwd: string, generating: boolean) => void
   setPreviewFile: (path: string | null, source?: 'palette' | 'tree', cwd?: string | null, locationId?: string | null) => void
@@ -172,6 +175,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidePanelTab: 'files' as const,
   gitViewMode: (localStorage.getItem('clave-git-view-mode') === 'tree' ? 'tree' : 'list') as 'list' | 'tree',
   gitPanelMode: 'changes' as const,
+  journeyPanel: null,
   commitMessages: {} as Record<string, string>,
   generatingCommitCwds: new Set<string>(),
   hiddenAgentIds: new Set<string>(
@@ -630,6 +634,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 
   setGitPanelMode: (mode) => set({ gitPanelMode: mode }),
+
+  openJourneyPanel: (cwd, repoName) =>
+    set({ journeyPanel: { cwd, repoName }, previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null }),
+
+  closeJourneyPanel: () => set({ journeyPanel: null }),
 
   setCommitMessage: (cwd, message) =>
     set((state) => ({

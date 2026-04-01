@@ -47,6 +47,24 @@ export interface GitCommitFileStatus {
   deletions: number
 }
 
+export interface GitPushGroup {
+  id: string
+  pushedAt: string
+  commits: GitLogEntry[]
+  summary?: {
+    title: string
+    description: string
+  }
+}
+
+export interface GitJourneyResult {
+  local: GitLogEntry[]
+  pushGroups: GitPushGroup[]
+  fallbackMode: boolean
+  branch: string
+  hasMore: boolean
+}
+
 export type MagicSyncStep = 'pulling' | 'staging' | 'generating' | 'committing' | 'pushing'
 
 export interface MagicSyncResult {
@@ -517,6 +535,157 @@ ${diff}`
     }
 
     return results
+  }
+
+  async getJourney(cwd: string, maxCount: number = 200): Promise<GitJourneyResult> {
+    try {
+      const git = simpleGit(cwd)
+      const branch = (await git.status()).current
+      if (!branch) return { local: [], pushGroups: [], fallbackMode: false, branch: '' }
+
+      // Fetch outgoing (unpushed) commits and full log in parallel
+      const [local, log] = await Promise.all([
+        this.getOutgoingCommits(cwd),
+        this.getLog(cwd, maxCount)
+      ])
+
+      const localHashes = new Set(local.map((c) => c.hash))
+      const pushedCommits = log.filter((c) => !localHashes.has(c.hash))
+
+      // Try reflog-based grouping
+      let pushGroups: GitPushGroup[] = []
+      let fallbackMode = false
+
+      try {
+        const reflogRaw = await git.raw([
+          'reflog', 'show', `origin/${branch}`,
+          '--format=%H|%aI|%gs',
+          '-n', '200'
+        ])
+
+        const pushEvents: Array<{ hash: string; date: string }> = []
+        for (const line of reflogRaw.trim().split('\n')) {
+          if (!line.trim()) continue
+          const parts = line.split('|')
+          if (parts.length < 3) continue
+          const gs = parts.slice(2).join('|')
+          if (gs.includes('update by push')) {
+            pushEvents.push({ hash: parts[0], date: parts[1] })
+          }
+        }
+
+        if (pushEvents.length > 0) {
+          const assigned = new Set<string>()
+
+          // For each push event, walk from its tip backwards to find commits in this push
+          for (let i = 0; i < pushEvents.length; i++) {
+            const pushEvent = pushEvents[i]
+            const nextPushHash = i + 1 < pushEvents.length ? pushEvents[i + 1].hash : null
+
+            const groupCommits: GitLogEntry[] = []
+            let collecting = false
+
+            for (const commit of pushedCommits) {
+              if (assigned.has(commit.hash)) continue
+
+              if (commit.hash === pushEvent.hash) collecting = true
+
+              if (collecting) {
+                groupCommits.push(commit)
+                assigned.add(commit.hash)
+                if (nextPushHash && commit.hash === nextPushHash) break
+              }
+            }
+
+            if (groupCommits.length > 0) {
+              pushGroups.push({
+                id: pushEvent.hash.slice(0, 12),
+                pushedAt: pushEvent.date,
+                commits: groupCommits
+              })
+            }
+          }
+
+          // Any remaining unassigned commits go into an "older" group
+          const remaining = pushedCommits.filter((c) => !assigned.has(c.hash))
+          if (remaining.length > 0) {
+            pushGroups.push({
+              id: 'older',
+              pushedAt: remaining[0].date,
+              commits: remaining
+            })
+          }
+        } else {
+          fallbackMode = true
+        }
+      } catch {
+        fallbackMode = true
+      }
+
+      // Fallback: group by day
+      if (fallbackMode) {
+        const dayMap = new Map<string, GitLogEntry[]>()
+        for (const commit of pushedCommits) {
+          const day = commit.date.split('T')[0]
+          if (!dayMap.has(day)) dayMap.set(day, [])
+          dayMap.get(day)!.push(commit)
+        }
+        pushGroups = Array.from(dayMap.entries()).map(([day, commits]) => ({
+          id: day,
+          pushedAt: commits[0].date,
+          commits
+        }))
+      }
+
+      const hasMore = log.length >= maxCount
+      return { local, pushGroups, fallbackMode, branch, hasMore }
+    } catch (err) {
+      console.warn('[git] getJourney failed:', (err as Error).message)
+      return { local: [], pushGroups: [], fallbackMode: false, branch: '', hasMore: false }
+    }
+  }
+
+  async summarizePushGroup(
+    _cwd: string,
+    commitMessages: string[],
+    diffStats: string
+  ): Promise<{ title: string; description: string }> {
+    const prompt = `Summarize this group of git commits that were pushed together.
+
+Commit messages:
+${commitMessages.map((m) => `- ${m}`).join('\n')}
+
+Diff stats:
+${diffStats}
+
+Respond with exactly two lines:
+Line 1: A short title (max 60 chars) describing what was accomplished
+Line 2: A 1-2 sentence description explaining what changed and why
+
+No quotes, no markdown, no extra formatting. Just two lines of plain text.`
+
+    const env = { ...getLoginShellEnv() }
+    delete env.CLAUDECODE
+
+    return new Promise<{ title: string; description: string }>((resolve, reject) => {
+      const child = execFile('claude', ['-p', '--model', 'haiku'], {
+        env,
+        encoding: 'utf-8',
+        maxBuffer: 1024 * 1024,
+        timeout: 30000
+      }, (err, stdout, stderr) => {
+        if (err) {
+          reject(new Error(stderr || err.message))
+          return
+        }
+        const lines = stdout.trim().split('\n').filter(Boolean)
+        const title = lines[0] || 'Changes'
+        const description = lines.slice(1).join(' ').trim() || ''
+        resolve({ title, description })
+      })
+      child.stdin?.write(prompt)
+      child.stdin?.end()
+    })
   }
 
   async getStatus(cwd: string): Promise<GitStatusResult> {

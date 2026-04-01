@@ -14,6 +14,7 @@ import { FilePalette } from '../files/FilePalette'
 import { SidePanel } from '../git/SidePanel'
 import { FilePreview } from '../files/FilePreview'
 import { GitDiffPreview } from '../git/GitDiffPreview'
+import { GitJourneyPanel } from '../git/GitJourneyPanel'
 import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { cn } from '../../lib/utils'
 import { usePinnedStore } from '../../store/pinned-store'
@@ -544,6 +545,7 @@ export function AppShell() {
       <FilePalette />
       {previewFile && previewSource === 'tree' && <FilePreview />}
       <GitDiffPreview />
+      <GitJourneyPanel />
       <UpdateOverlay />
     </div>
   )

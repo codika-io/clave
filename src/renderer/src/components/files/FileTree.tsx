@@ -189,11 +189,10 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
   )
 
   const handleDoubleClickDir = useCallback(
-    (dirPath: string) => {
-      if (!cwd) return
-      onNavigateToFolder(`${cwd}/${dirPath}`)
+    (_dirPath: string) => {
+      // Navigation on double-click removed — use "Open as Root" from context menu instead
     },
-    [cwd, onNavigateToFolder]
+    []
   )
 
   const handleDragStart = useCallback(
@@ -266,6 +265,13 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
         items.push({
           label: 'Open as Root',
           onClick: () => onNavigateToFolder(absPath)
+        })
+        items.push({
+          label: 'Journey',
+          onClick: () => {
+            const folderName = node.path.split('/').pop() ?? node.path
+            useSessionStore.getState().openJourneyPanel(absPath, folderName)
+          }
         })
         items.push({
           label: 'New File...',
