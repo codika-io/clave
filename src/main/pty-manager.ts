@@ -3,9 +3,14 @@ import { execFile, execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
 import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS, INITIAL_COMMAND_DELAY_MS } from './constants'
 
+const isWindows = process.platform === 'win32'
+
 let loginShellEnv: Record<string, string> | null = null
 
 function getUserShell(): string {
+  if (isWindows) {
+    return process.env.COMSPEC || 'cmd.exe'
+  }
   return process.env.SHELL || '/bin/zsh'
 }
 
@@ -22,11 +27,17 @@ function parseEnvOutput(output: string): Record<string, string> {
 
 /**
  * Pre-cache the login shell environment asynchronously.
- * Call this at app startup so that by the time the first PTY is spawned,
- * the env is already cached and no blocking execFileSync is needed.
+ * On Windows, we just use the current process env (no login shell concept).
+ * On macOS/Linux, call the login shell so that PATH and other vars are populated.
  */
 export function preloadLoginShellEnv(): void {
   if (loginShellEnv !== null) return
+
+  if (isWindows) {
+    loginShellEnv = { ...process.env } as Record<string, string>
+    return
+  }
+
   execFile(getUserShell(), ['-lic', 'env -0'], {
     encoding: 'utf-8',
     maxBuffer: 10 * 1024 * 1024
@@ -43,6 +54,12 @@ export function preloadLoginShellEnv(): void {
 
 export function getLoginShellEnv(): Record<string, string> {
   if (loginShellEnv !== null) return loginShellEnv
+
+  if (isWindows) {
+    loginShellEnv = { ...process.env } as Record<string, string>
+    return loginShellEnv
+  }
+
   // Sync fallback if async preload hasn't finished yet
   try {
     const output = execFileSync(getUserShell(), ['-lic', 'env -0'], {
@@ -79,32 +96,54 @@ class PtyManager {
 
   spawn(cwd: string, options?: PtySpawnOptions): PtySession & { claudeSessionId?: string } {
     const id = randomUUID()
-    const folderName = cwd.split('/').pop() || cwd
+    const folderName = (isWindows ? cwd.split('\\') : cwd.split('/')).pop() || cwd
     const useClaudeMode = options?.claudeMode !== false
 
     // For Claude mode: generate a session ID upfront (or reuse one for resume)
     let claudeSessionId: string | undefined
     let shellArgs: string[]
-    if (!useClaudeMode) {
-      shellArgs = ['-l']
-    } else {
-      const parts = ['claude']
-      if (options?.resumeSessionId) {
-        parts.push('--resume', options.resumeSessionId)
-        claudeSessionId = options.resumeSessionId
+    if (isWindows) {
+      // On Windows, use cmd.exe with /c to launch claude, or just start shell directly
+      if (!useClaudeMode) {
+        shellArgs = []
       } else {
-        // Generate a new Claude session ID and pass it explicitly
-        claudeSessionId = options?.claudeSessionId ?? randomUUID()
-        parts.push('--session-id', claudeSessionId)
+        const parts = ['claude']
+        if (options?.resumeSessionId) {
+          parts.push('--resume', options.resumeSessionId)
+          claudeSessionId = options.resumeSessionId
+        } else {
+          claudeSessionId = options?.claudeSessionId ?? randomUUID()
+          parts.push('--session-id', claudeSessionId)
+        }
+        if (options?.dangerousMode) {
+          parts.push('--dangerously-skip-permissions')
+        }
+        shellArgs = ['/c', parts.join(' ')]
       }
-      if (options?.dangerousMode) {
-        parts.push('--dangerously-skip-permissions')
+    } else {
+      if (!useClaudeMode) {
+        shellArgs = ['-l']
+      } else {
+        const parts = ['claude']
+        if (options?.resumeSessionId) {
+          parts.push('--resume', options.resumeSessionId)
+          claudeSessionId = options.resumeSessionId
+        } else {
+          claudeSessionId = options?.claudeSessionId ?? randomUUID()
+          parts.push('--session-id', claudeSessionId)
+        }
+        if (options?.dangerousMode) {
+          parts.push('--dangerously-skip-permissions')
+        }
+        shellArgs = ['-l', '-c', parts.join(' ')]
       }
-      shellArgs = ['-l', '-c', parts.join(' ')]
     }
 
-    const ptyProcess = pty.spawn(getUserShell(), shellArgs, {
-      name: 'xterm-256color',
+    const shellName = getUserShell()
+    const ptyName = isWindows ? undefined : 'xterm-256color'
+
+    const ptyProcess = pty.spawn(shellName, shellArgs, {
+      name: ptyName,
       cols: DEFAULT_TERMINAL_COLS,
       rows: DEFAULT_TERMINAL_ROWS,
       cwd,

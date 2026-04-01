@@ -32,7 +32,9 @@ export function initNotificationManager(): void {
       })
 
       notification.show()
-      app.dock?.bounce('informational')
+      if (process.platform === 'darwin') {
+        app.dock?.bounce('informational')
+      }
     }
   )
 }

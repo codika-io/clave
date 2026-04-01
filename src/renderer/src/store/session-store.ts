@@ -716,7 +716,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   renameFileTab: (id, name) =>
     set((state) => ({
       fileTabs: state.fileTabs.map((f) =>
-        f.id === id ? { ...f, name: name.trim() || f.filePath.split('/').pop() || 'file' } : f
+        f.id === id ? { ...f, name: name.trim() || f.filePath.split(/[\\/]/).pop() || 'file' } : f
       )
     })),
 

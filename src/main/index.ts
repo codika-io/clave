@@ -24,9 +24,12 @@ function createWindow(): void {
     show: false,
     icon,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#ffffff',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
-    vibrancy: undefined,
+    ...(process.platform === 'darwin'
+      ? {
+          titleBarStyle: 'hiddenInset' as const,
+          trafficLightPosition: { x: 16, y: 16 }
+        }
+      : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false

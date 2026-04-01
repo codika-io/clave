@@ -13,7 +13,12 @@ files:
 asarUnpack:
   - resources/**
 win:
+  icon: build/icon.ico
   executableName: clave
+  target:
+    - target: nsis
+      arch:
+        - x64
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

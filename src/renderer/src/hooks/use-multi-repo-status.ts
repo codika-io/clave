@@ -36,7 +36,7 @@ export function useMultiRepoStatus(
       }
 
       // Always show all repos when nested repos exist
-      const rootName = cwd.split('/').pop() ?? cwd
+      const rootName = cwd.split(/[\\/]/).pop() ?? cwd
       const allRepoEntries = [{ name: rootName, path: cwd }, ...nestedRepos]
       const repoStatuses = await Promise.all(
         allRepoEntries.map(async (repo) => {

@@ -32,7 +32,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // Check if already registered
     if (get().workspaces.some((w) => w.claveFilePath === claveFilePath)) return false
 
-    const name = folderPath.split('/').pop() || folderPath
+    const name = folderPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || folderPath
     const workspace: ClaveWorkspace = {
       id: crypto.randomUUID(),
       name,
@@ -141,10 +141,10 @@ async function discoverAndLoadRepoFiles(workspace: ClaveWorkspace): Promise<void
   if (!adConfig?.enabled) return
 
   // Derive workspaceId from the workspace file name (e.g. "romain.clave" → "romain")
-  const fileName = workspace.claveFilePath.split('/').pop()?.replace('.clave', '') ?? undefined
+  const fileName = workspace.claveFilePath.split(/[\\/]/).pop()?.replace('.clave', '') ?? undefined
   const workspaceId = fileName && fileName !== 'default' ? fileName : undefined
 
-  const rootDir = workspace.rootDir || workspace.claveFilePath.replace(/\/[^/]+$/, '')
+  const rootDir = workspace.rootDir || workspace.claveFilePath.replace(/[\\/][^\\/]+$/, '')
   const discovered = await window.electronAPI?.discoverClaveFilesRecursive(rootDir, { ...adConfig, workspaceId })
   if (!discovered?.length) return
 

@@ -12,7 +12,7 @@ type CredentialsStore = Record<string, EncryptedCredentials>
 
 const LOCAL_LOCATION: Location = {
   id: 'local',
-  name: 'This Mac',
+  name: process.platform === 'darwin' ? 'This Mac' : 'This PC',
   type: 'local',
   status: 'connected'
 }

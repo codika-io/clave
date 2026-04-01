@@ -132,6 +132,7 @@ function setAppBundleIconBundle(icon: string): void {
 }
 
 export function applyPersistedIcon(): void {
+  if (process.platform !== 'darwin') return
   const savedIcon = preferencesManager.get('appIcon')
   debugLog(`applyPersistedIcon: savedIcon=${savedIcon}`)
   setAppBundleIconBundle(savedIcon)

@@ -202,20 +202,23 @@ function processJsonl(sessionId: string, entry: SessionEntry): void {
 
 }
 
-/** Use grep to search the file without loading it into memory */
+/** Search the file for lines containing a pattern — pure JS, no external CLI needed */
 function grepFile(filePath: string, pattern: string, firstMatchOnly: boolean): Promise<string | null> {
   return new Promise((resolve) => {
-    const args = firstMatchOnly
-      ? ['-m', '1', pattern, filePath]
-      : [pattern, filePath]
-
-    execFile('grep', args, { encoding: 'utf-8', timeout: 5000 }, (err, stdout) => {
-      if (err || !stdout.trim()) {
-        resolve(null)
-        return
+    try {
+      const content = readFileSync(filePath, { encoding: 'utf-8' })
+      const lines = content.split('\n')
+      const matches: string[] = []
+      for (const line of lines) {
+        if (line.includes(pattern)) {
+          matches.push(line)
+          if (firstMatchOnly) break
+        }
       }
-      resolve(stdout.trim())
-    })
+      resolve(matches.length > 0 ? matches.join('\n') : null)
+    } catch {
+      resolve(null)
+    }
   })
 }
 
