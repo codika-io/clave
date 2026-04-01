@@ -78,8 +78,6 @@ export function SessionGroupItem({
     [onClick]
   )
 
-  const groupColorHex = resolveColorHex(group.color)
-
   return (
     <div
       className="relative"

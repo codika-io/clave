@@ -201,6 +201,7 @@ export const useSessionStore = create<SessionState>((set) => ({
           sessions: [...state.sessions, newSession],
           selectedSessionIds: [session.id],
           focusedSessionId: session.id,
+          activeView: 'terminals',
           groups: state.groups.map((g) =>
             g.id === targetGroup!.id
               ? { ...g, sessionIds: [...g.sessionIds, session.id] }
@@ -214,6 +215,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         sessions: [...state.sessions, newSession],
         selectedSessionIds: [session.id],
         focusedSessionId: session.id,
+        activeView: 'terminals',
         displayOrder: [...getDisplayOrder(state), session.id]
       }
     }),

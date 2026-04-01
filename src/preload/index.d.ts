@@ -39,6 +39,52 @@ export interface SessionInfo {
   claudeSessionId: string | null
 }
 
+export interface ClaudeHistoryProject {
+  id: string
+  name: string
+  cwd: string
+  storagePath: string
+  encodedName: string
+  sessionCount: number
+  lastModified: string
+}
+
+export interface ClaudeHistorySession {
+  id: string
+  projectId: string
+  projectName: string
+  sessionId: string
+  sourcePath: string
+  cwd: string
+  title: string
+  summary: string
+  createdAt: string
+  lastModified: string
+  messageCount: number
+}
+
+export interface ClaudeHistoryMessage {
+  id: string
+  sessionId: string
+  role: 'user' | 'assistant' | 'tool' | 'system' | 'unknown'
+  content: string
+  timestamp: string
+}
+
+export interface ClaudeHistorySearchResult {
+  id: string
+  projectId: string
+  projectName: string
+  sessionId: string
+  sessionTitle: string
+  sourcePath: string
+  messageId: string
+  role: 'user' | 'assistant' | 'tool' | 'system' | 'unknown'
+  preview: string
+  content: string
+  timestamp: string
+}
+
 export interface DirEntry {
   name: string
   path: string
@@ -227,6 +273,10 @@ export interface ElectronAPI {
   onClearDetected: (sessionId: string, callback: () => void) => () => void
   saveDiscussion: (cwd: string, claudeSessionId: string, sessionName: string) => Promise<{ success: boolean; error?: string }>
   savePlan: (cwd: string, claudeSessionId: string, sessionName: string) => Promise<{ success: boolean; error?: string }>
+  historyListProjects: () => Promise<ClaudeHistoryProject[]>
+  historyLoadSessions: (projectId: string) => Promise<ClaudeHistorySession[]>
+  historyLoadMessages: (sourcePath: string) => Promise<ClaudeHistoryMessage[]>
+  historySearch: (query: string, roleFilter?: 'all' | 'user' | 'assistant') => Promise<ClaudeHistorySearchResult[]>
   openExternal: (url: string) => Promise<void>
   checkPort: (port: number) => Promise<boolean>
   openPath: (filePath: string) => Promise<string>
@@ -236,6 +286,7 @@ export interface ElectronAPI {
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
   onDownloadError: (callback: (message: string) => void) => () => void
   setAppIcon: (icon: string) => Promise<void>
+  getUsername: () => Promise<string | null>
   installUpdate: () => Promise<void>
   startDownload: () => Promise<void>
   cancelDownload: () => Promise<void>

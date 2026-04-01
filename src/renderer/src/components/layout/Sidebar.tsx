@@ -27,6 +27,7 @@ import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
 import { SidebarFooter } from './SidebarFooter'
 import { ScrollArea } from '../ui/scroll-area'
+import { HistorySidebarSection } from '../history/HistorySidebarSection'
 import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
@@ -328,25 +329,75 @@ export function Sidebar() {
     [sessions]
   )
 
+  // Track pinned group visibility to filter hidden groups from the sessions list
+  const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
+  const hiddenGroupIds = useMemo(() => getHiddenGroupIds(), [pinnedGroups])
+
+  const orderedVisibleSessions = useMemo(() => {
+    const order =
+      displayOrder.length > 0
+        ? displayOrder
+        : (() => {
+            const items: string[] = []
+            const placedGroups = new Set<string>()
+            for (const session of sessions) {
+              const group = groups.find((g) => g.sessionIds.includes(session.id))
+              if (group) {
+                if (!placedGroups.has(group.id)) {
+                  placedGroups.add(group.id)
+                  items.push(group.id)
+                }
+              } else {
+                items.push(session.id)
+              }
+            }
+            return items
+          })()
+
+    const ordered: typeof sessions = []
+    for (const id of order) {
+      const group = groups.find((g) => g.id === id)
+      if (group) {
+        if (group.sessionIds.length === 0 || hiddenGroupIds.has(group.id)) continue
+        for (const sessionId of group.sessionIds) {
+          const session = sessions.find((s) => s.id === sessionId)
+          if (session) ordered.push(session)
+        }
+        continue
+      }
+
+      const session = sessions.find((s) => s.id === id)
+      if (session) {
+        ordered.push(session)
+      }
+    }
+
+    const seen = new Set(ordered.map((session) => session.id))
+    for (const session of sessions) {
+      if (!seen.has(session.id)) {
+        ordered.push(session)
+      }
+    }
+
+    return ordered
+  }, [displayOrder, groups, hiddenGroupIds, sessions])
+
   const filteredSessions = useMemo(() => {
     if (!searchQuery) return null
     const q = searchQuery.toLowerCase()
-    return sessions.filter(
+    return orderedVisibleSessions.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         s.folderName.toLowerCase().includes(q) ||
         s.cwd.toLowerCase().includes(q)
     )
-  }, [sessions, searchQuery])
+  }, [orderedVisibleSessions, searchQuery])
 
-  // Track pinned group visibility to filter hidden groups from the sessions list
-  const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
+  const isSearchMode = searchQuery.trim().length > 0
 
   // Build display list from displayOrder (or fall back to creation order)
   const displayItems = useMemo(() => {
     if (filteredSessions) return null
-
-    const hiddenGroupIds = getHiddenGroupIds()
 
     const order =
       displayOrder.length > 0
@@ -390,7 +441,7 @@ export function Sidebar() {
           return false
         }
       )
-  }, [displayOrder, sessions, groups, fileTabs, filteredSessions, pinnedGroups])
+  }, [displayOrder, sessions, groups, fileTabs, filteredSessions, hiddenGroupIds])
 
   // Flat ordered list of session/file tab IDs for range selection
   const flatSessionOrder = useMemo(() => {
@@ -895,7 +946,7 @@ export function Sidebar() {
             ref={searchInputRef}
             data-sidebar-search
             type="text"
-            placeholder="Search sessions..."
+            placeholder="Search sessions & Claude history..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -932,241 +983,247 @@ export function Sidebar() {
           isFileDragOver={isFileDragOverWindow}
         />
 
-        {/* Sessions section */}
-        <SectionHeading
-          title="Sessions"
-          collapsed={sessionsCollapsed}
-          onToggle={() => setSessionsCollapsed((c) => !c)}
-          actions={
-            <NewSessionDropdown
-              onNewSession={({ claudeMode, dangerousMode, locationId }) => {
-                if (locationId) {
-                  // Remote: open directory picker
-                  const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
-                  setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode })
-                } else {
-                  // Local: existing flow (temporary mode override -> handleNewSession)
-                  const store = useSessionStore.getState()
-                  const prevClaude = store.claudeMode
-                  const prevDangerous = store.dangerousMode
-                  if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode })
-                  if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode })
-                  handleNewSession().finally(() => {
-                    if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode: prevClaude })
-                    if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode: prevDangerous })
-                  })
-                }
-              }}
-              loading={loading}
+        {!isSearchMode && (
+          <>
+            {/* Sessions section */}
+            <SectionHeading
+              title="当前活跃"
+              collapsed={sessionsCollapsed}
+              onToggle={() => setSessionsCollapsed((c) => !c)}
+              actions={
+                <NewSessionDropdown
+                  onNewSession={({ claudeMode, dangerousMode, locationId }) => {
+                    if (locationId) {
+                      // Remote: open directory picker
+                      const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
+                      setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode })
+                    } else {
+                      // Local: existing flow (temporary mode override -> handleNewSession)
+                      const store = useSessionStore.getState()
+                      const prevClaude = store.claudeMode
+                      const prevDangerous = store.dangerousMode
+                      if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode })
+                      if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode })
+                      handleNewSession().finally(() => {
+                        if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode: prevClaude })
+                        if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode: prevDangerous })
+                      })
+                    }
+                  }}
+                  loading={loading}
+                />
+              }
             />
-          }
-        />
-        <div
-          className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
-          style={{ gridTemplateRows: sessionsCollapsed ? '0fr' : '1fr', opacity: sessionsCollapsed ? 0 : 1, transform: sessionsCollapsed ? 'translateY(-4px)' : 'translateY(0)' }}
-        >
-          <div className="overflow-hidden">
-          <div className="px-2 space-y-2">
-            {filteredSessions ? (
-              filteredSessions.length === 0 ? (
-                <div className="px-3 py-6 text-center text-xs text-text-tertiary">
-                  No matching sessions
-                </div>
-              ) : (
-                filteredSessions.map((session) => (
-                  <SessionItem
-                    key={session.id}
-                    session={session}
-                    isSelected={selectedSessionIds.includes(session.id)}
-                    onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
-                    onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
-                    forceEditing={renamingId === session.id}
-                    onEditingDone={clearRenaming}
-                    onDelete={() => setDeleteConfirmSessionId(session.id)}
-                  />
-                ))
-              )
-            ) : displayItems ? (
-              <>
-                {displayItems.map((item, index) => {
-                  const itemId = getItemId(item)
-                  const prevItemId = index > 0 ? getItemId(displayItems[index - 1]) : null
-                  const isLastItem = index === displayItems.length - 1
-                  const gapBefore = isDragging && shouldShowGapBefore(dropIndicator, itemId, prevItemId)
+            <div
+              className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
+              style={{ gridTemplateRows: sessionsCollapsed ? '0fr' : '1fr', opacity: sessionsCollapsed ? 0 : 1, transform: sessionsCollapsed ? 'translateY(-4px)' : 'translateY(0)' }}
+            >
+              <div className="overflow-hidden">
+              <div className="px-2 space-y-2">
+                {filteredSessions ? (
+                  filteredSessions.length === 0 ? (
+                    <div className="px-3 py-6 text-center text-xs text-text-tertiary">
+                      No matching sessions
+                    </div>
+                  ) : (
+                    filteredSessions.map((session) => (
+                      <SessionItem
+                        key={session.id}
+                        session={session}
+                        isSelected={selectedSessionIds.includes(session.id)}
+                        onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
+                        onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                        forceEditing={renamingId === session.id}
+                        onEditingDone={clearRenaming}
+                        onDelete={() => setDeleteConfirmSessionId(session.id)}
+                      />
+                    ))
+                  )
+                ) : displayItems ? (
+                  <>
+                    {displayItems.map((item, index) => {
+                      const itemId = getItemId(item)
+                      const prevItemId = index > 0 ? getItemId(displayItems[index - 1]) : null
+                      const isLastItem = index === displayItems.length - 1
+                      const gapBefore = isDragging && shouldShowGapBefore(dropIndicator, itemId, prevItemId)
 
-                  if (item.type === 'fileTab') {
-                    const fileTab = fileTabs.find((f) => f.id === item.fileTabId)
-                    if (!fileTab) return null
-                    return (
-                      <div key={fileTab.id}>
-                        <DropGap active={gapBefore} />
-                        <FileTabItem
-                          fileTab={fileTab}
-                          isSelected={selectedSessionIds.includes(fileTab.id)}
-                          onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
-                          onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
-                          forceEditing={renamingId === fileTab.id}
-                          onEditingDone={clearRenaming}
-                          onPointerDown={(e) => handlePointerDown(e, fileTab.id, false)}
-                          isDragging={draggedIds.includes(fileTab.id)}
-                        />
-                        {isLastItem && (
-                          <DropGap
-                            active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
-                          />
-                        )}
-                      </div>
-                    )
-                  } else if (item.type === 'session') {
-                    const session = sessions.find((s) => s.id === item.sessionId)
-                    if (!session) return null
-                    return (
-                      <div key={session.id}>
-                        <DropGap active={gapBefore} />
-                        <SessionItem
-                          session={session}
-                          isSelected={selectedSessionIds.includes(session.id)}
-                          onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
-                          onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
-                          forceEditing={renamingId === session.id}
-                          onEditingDone={clearRenaming}
-                          onPointerDown={(e) => handlePointerDown(e, session.id, false)}
-                          isDragging={draggedIds.includes(session.id)}
-                          onDelete={() => setDeleteConfirmSessionId(session.id)}
-                        />
-                        {isLastItem && (
-                          <DropGap
-                            active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
-                          />
-                        )}
-                      </div>
-                    )
-                  } else {
-                    const group = groups.find((g) => g.id === item.groupId)
-                    if (!group || group.sessionIds.length === 0) return null
-                    const allGroupSelected =
-                      group.sessionIds.length > 0 &&
-                      group.sessionIds.every((id) => selectedSessionIds.includes(id))
-                    const groupColorHex = resolveColorHex(group.color)
-                    return (
-                      <div key={group.id}>
-                        <DropGap active={gapBefore} />
-                        <div
-                          className={cn(
-                            'relative rounded-xl border transition-colors',
-                            !groupColorHex && (allGroupSelected
-                              ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
-                              : 'bg-surface-100/30 border-border-subtle hover:bg-surface-100/60')
-                          )}
-                          style={groupColorHex ? {
-                            backgroundColor: allGroupSelected ? `${groupColorHex}35` : `${groupColorHex}10`,
-                            borderColor: allGroupSelected ? `${groupColorHex}60` : `${groupColorHex}30`
-                          } : undefined}
-                          onMouseEnter={(e) => { if (groupColorHex && !allGroupSelected) e.currentTarget.style.backgroundColor = `${groupColorHex}20` }}
-                          onMouseLeave={(e) => { if (groupColorHex) e.currentTarget.style.backgroundColor = allGroupSelected ? `${groupColorHex}35` : `${groupColorHex}10` }}
-                        >
-                          {dropIndicator?.targetId === group.id && dropIndicator.position === 'inside' && (
-                            <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10 transition-opacity duration-150" />
-                          )}
-                          <SessionGroupItem
-                            group={group}
-                            onClick={(modifiers) => handleGroupClick(group.id, modifiers)}
-                            onContextMenu={(e) => handleGroupContextMenu(e, group.id)}
-                            onTerminalIconClick={(tid) => handleTerminalIconClick(group.id, tid)}
-                            onTerminalIconContextMenu={(tid, e) => handleTerminalIconContextMenu(group.id, tid, e)}
-                            onAddTerminalClick={() => handleAddTerminalClick(group.id)}
-                            aliveSessionIds={aliveSessionIds}
-                            focusedSessionId={focusedSessionId}
-                            allSelected={allGroupSelected}
-                            forceEditing={renamingId === group.id}
-                            onEditingDone={clearRenaming}
-                            onPointerDown={(e) => handlePointerDown(e, group.id, true)}
-                            isDragging={draggedIds.includes(group.id)}
-                          />
-                          <div
-                            className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
-                            style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
-                          >
-                            <div className="overflow-hidden">
-                              <div className="px-1 pb-1 space-y-0.5">
-                                {group.sessionIds.map((sid, sIdx) => {
-                                  const prevSid = sIdx > 0 ? group.sessionIds[sIdx - 1] : null
-                                  const isLastInGroup = sIdx === group.sessionIds.length - 1
-                                  const childGapBefore = isDragging && shouldShowGapBefore(dropIndicator, sid, prevSid)
+                      if (item.type === 'fileTab') {
+                        const fileTab = fileTabs.find((f) => f.id === item.fileTabId)
+                        if (!fileTab) return null
+                        return (
+                          <div key={fileTab.id}>
+                            <DropGap active={gapBefore} />
+                            <FileTabItem
+                              fileTab={fileTab}
+                              isSelected={selectedSessionIds.includes(fileTab.id)}
+                              onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
+                              onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
+                              forceEditing={renamingId === fileTab.id}
+                              onEditingDone={clearRenaming}
+                              onPointerDown={(e) => handlePointerDown(e, fileTab.id, false)}
+                              isDragging={draggedIds.includes(fileTab.id)}
+                            />
+                            {isLastItem && (
+                              <DropGap
+                                active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
+                              />
+                            )}
+                          </div>
+                        )
+                      } else if (item.type === 'session') {
+                        const session = sessions.find((s) => s.id === item.sessionId)
+                        if (!session) return null
+                        return (
+                          <div key={session.id}>
+                            <DropGap active={gapBefore} />
+                            <SessionItem
+                              session={session}
+                              isSelected={selectedSessionIds.includes(session.id)}
+                              onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
+                              onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                              forceEditing={renamingId === session.id}
+                              onEditingDone={clearRenaming}
+                              onPointerDown={(e) => handlePointerDown(e, session.id, false)}
+                              isDragging={draggedIds.includes(session.id)}
+                              onDelete={() => setDeleteConfirmSessionId(session.id)}
+                            />
+                            {isLastItem && (
+                              <DropGap
+                                active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
+                              />
+                            )}
+                          </div>
+                        )
+                      } else {
+                        const group = groups.find((g) => g.id === item.groupId)
+                        if (!group || group.sessionIds.length === 0) return null
+                        const allGroupSelected =
+                          group.sessionIds.length > 0 &&
+                          group.sessionIds.every((id) => selectedSessionIds.includes(id))
+                        const groupColorHex = resolveColorHex(group.color)
+                        return (
+                          <div key={group.id}>
+                            <DropGap active={gapBefore} />
+                            <div
+                              className={cn(
+                                'relative rounded-xl border transition-colors',
+                                !groupColorHex && (allGroupSelected
+                                  ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
+                                  : 'bg-surface-100/30 border-border-subtle hover:bg-surface-100/60')
+                              )}
+                              style={groupColorHex ? {
+                                backgroundColor: allGroupSelected ? `${groupColorHex}35` : `${groupColorHex}10`,
+                                borderColor: allGroupSelected ? `${groupColorHex}60` : `${groupColorHex}30`
+                              } : undefined}
+                              onMouseEnter={(e) => { if (groupColorHex && !allGroupSelected) e.currentTarget.style.backgroundColor = `${groupColorHex}20` }}
+                              onMouseLeave={(e) => { if (groupColorHex) e.currentTarget.style.backgroundColor = allGroupSelected ? `${groupColorHex}35` : `${groupColorHex}10` }}
+                            >
+                              {dropIndicator?.targetId === group.id && dropIndicator?.position === 'inside' && (
+                                <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10 transition-opacity duration-150" />
+                              )}
+                              <SessionGroupItem
+                                group={group}
+                                onClick={(modifiers) => handleGroupClick(group.id, modifiers)}
+                                onContextMenu={(e) => handleGroupContextMenu(e, group.id)}
+                                onTerminalIconClick={(tid) => handleTerminalIconClick(group.id, tid)}
+                                onTerminalIconContextMenu={(tid, e) => handleTerminalIconContextMenu(group.id, tid, e)}
+                                onAddTerminalClick={() => handleAddTerminalClick(group.id)}
+                                aliveSessionIds={aliveSessionIds}
+                                focusedSessionId={focusedSessionId}
+                                allSelected={allGroupSelected}
+                                forceEditing={renamingId === group.id}
+                                onEditingDone={clearRenaming}
+                                onPointerDown={(e) => handlePointerDown(e, group.id, true)}
+                                isDragging={draggedIds.includes(group.id)}
+                              />
+                              <div
+                                className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
+                                style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
+                              >
+                                <div className="overflow-hidden">
+                                  <div className="px-1 pb-1 space-y-0.5">
+                                    {group.sessionIds.map((sid, sIdx) => {
+                                      const prevSid = sIdx > 0 ? group.sessionIds[sIdx - 1] : null
+                                      const isLastInGroup = sIdx === group.sessionIds.length - 1
+                                      const childGapBefore = isDragging && shouldShowGapBefore(dropIndicator, sid, prevSid)
 
-                                  // Check if this is a file tab
-                                  const fileTab = fileTabs.find((f) => f.id === sid)
-                                  if (fileTab) {
-                                    return (
-                                      <div key={fileTab.id}>
-                                        <DropGap active={childGapBefore} />
-                                        <FileTabItem
-                                          fileTab={fileTab}
-                                          isSelected={selectedSessionIds.includes(fileTab.id)}
-                                          onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
-                                          onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
-                                          grouped
-                                          groupSelected={allGroupSelected}
-                                          forceEditing={renamingId === fileTab.id}
-                                          onEditingDone={clearRenaming}
-                                          onPointerDown={(e) => handlePointerDown(e, fileTab.id, false)}
-                                          isDragging={draggedIds.includes(fileTab.id)}
-                                        />
-                                        {isLastInGroup && (
-                                          <DropGap
-                                            active={isDragging && dropIndicator?.targetId === sid && dropIndicator?.position === 'after'}
+                                      // Check if this is a file tab
+                                      const fileTab = fileTabs.find((f) => f.id === sid)
+                                      if (fileTab) {
+                                        return (
+                                          <div key={fileTab.id}>
+                                            <DropGap active={childGapBefore} />
+                                            <FileTabItem
+                                              fileTab={fileTab}
+                                              isSelected={selectedSessionIds.includes(fileTab.id)}
+                                              onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
+                                              onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
+                                              grouped
+                                              groupSelected={allGroupSelected}
+                                              forceEditing={renamingId === fileTab.id}
+                                              onEditingDone={clearRenaming}
+                                              onPointerDown={(e) => handlePointerDown(e, fileTab.id, false)}
+                                              isDragging={draggedIds.includes(fileTab.id)}
+                                            />
+                                            {isLastInGroup && (
+                                              <DropGap
+                                                active={isDragging && dropIndicator?.targetId === sid && dropIndicator?.position === 'after'}
+                                              />
+                                            )}
+                                          </div>
+                                        )
+                                      }
+                                      const session = sessions.find((s) => s.id === sid)
+                                      if (!session) return null
+                                      return (
+                                        <div key={session.id}>
+                                          <DropGap active={childGapBefore} />
+                                          <SessionItem
+                                            session={session}
+                                            isSelected={selectedSessionIds.includes(session.id)}
+                                            onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
+                                            onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                                            grouped
+                                            groupSelected={allGroupSelected}
+                                            groupColorHex={groupColorHex}
+                                            forceEditing={renamingId === session.id}
+                                            onEditingDone={clearRenaming}
+                                            onPointerDown={(e) => handlePointerDown(e, session.id, false)}
+                                            isDragging={draggedIds.includes(session.id)}
+                                            onDelete={() => setDeleteConfirmSessionId(session.id)}
                                           />
-                                        )}
-                                      </div>
-                                    )
-                                  }
-                                  const session = sessions.find((s) => s.id === sid)
-                                  if (!session) return null
-                                  return (
-                                    <div key={session.id}>
-                                      <DropGap active={childGapBefore} />
-                                      <SessionItem
-                                        session={session}
-                                        isSelected={selectedSessionIds.includes(session.id)}
-                                        onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
-                                        onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
-                                        grouped
-                                        groupSelected={allGroupSelected}
-                                        groupColorHex={groupColorHex}
-                                        forceEditing={renamingId === session.id}
-                                        onEditingDone={clearRenaming}
-                                        onPointerDown={(e) => handlePointerDown(e, session.id, false)}
-                                        isDragging={draggedIds.includes(session.id)}
-                                        onDelete={() => setDeleteConfirmSessionId(session.id)}
-                                      />
-                                      {isLastInGroup && (
-                                        <DropGap
-                                          active={isDragging && dropIndicator?.targetId === sid && dropIndicator?.position === 'after'}
-                                        />
-                                      )}
-                                    </div>
-                                  )
-                                })}
+                                          {isLastInGroup && (
+                                            <DropGap
+                                              active={isDragging && dropIndicator?.targetId === sid && dropIndicator?.position === 'after'}
+                                            />
+                                          )}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
                               </div>
                             </div>
+                            {isLastItem && (
+                              <DropGap
+                                active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
+                              />
+                            )}
                           </div>
-                        </div>
-                        {isLastItem && (
-                          <DropGap
-                            active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
-                          />
-                        )}
-                      </div>
-                    )
-                  }
-                })}
-                {/* Bottom drop zone — generous target for dropping at the very end */}
-                {isDragging && <div className="min-h-[60px]" />}
-              </>
-            ) : null}
-          </div>
-          </div>
-        </div>
+                        )
+                      }
+                    })}
+                    {/* Bottom drop zone — generous target for dropping at the very end */}
+                    {isDragging && <div className="min-h-[60px]" />}
+                  </>
+                ) : null}
+              </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        <HistorySidebarSection />
 
         {/* Workflows section */}
         <SectionHeading title="Workflows" collapsed={boardCollapsed} onToggle={() => setBoardCollapsed((c) => !c)} />

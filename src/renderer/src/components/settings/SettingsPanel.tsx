@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { type Theme, type AppIcon, useSessionStore } from '../../store/session-store'
 import { useTemplateStore } from '../../store/template-store'
-import { useUserStore, USER_ICONS, USER_ICON_COLORS, type UserIcon } from '../../store/user-store'
+import { useUserStore, USER_ICONS, USER_ICON_COLORS } from '../../store/user-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
 import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
 import { CheckIcon } from '@heroicons/react/24/solid'

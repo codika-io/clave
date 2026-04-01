@@ -21,6 +21,7 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
       const timer = setTimeout(() => focus(), 50)
       return () => clearTimeout(timer)
     }
+    return undefined
   }, [isFocused, focus])
 
   // Auto-focus xterm when the window regains focus (Cmd+Tab, clicking from another app)

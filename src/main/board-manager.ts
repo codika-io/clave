@@ -29,7 +29,7 @@ class BoardManager {
       const data = JSON.parse(raw) as BoardData
       // Migrate old kanban tasks: only keep unrun tasks (status 'todo' or no status)
       // and strip removed fields
-      const raw_tasks = data.tasks as Array<Record<string, unknown>>
+      const raw_tasks = data.tasks as unknown as Array<Record<string, unknown>>
       data.tasks = raw_tasks
         .filter((t) => !t.status || t.status === 'todo')
         .map((t) => ({
