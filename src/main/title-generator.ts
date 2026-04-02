@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { existsSync, watchFile, unwatchFile, watch, readFileSync, type Stats } from 'fs'
+import { existsSync, watchFile, unwatchFile, watch, readFileSync, promises as fsPromises, type Stats } from 'fs'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { BrowserWindow } from 'electron'
@@ -203,23 +203,21 @@ function processJsonl(sessionId: string, entry: SessionEntry): void {
 }
 
 /** Search the file for lines containing a pattern — pure JS, no external CLI needed */
-function grepFile(filePath: string, pattern: string, firstMatchOnly: boolean): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      const content = readFileSync(filePath, { encoding: 'utf-8' })
-      const lines = content.split('\n')
-      const matches: string[] = []
-      for (const line of lines) {
-        if (line.includes(pattern)) {
-          matches.push(line)
-          if (firstMatchOnly) break
-        }
+async function grepFile(filePath: string, pattern: string, firstMatchOnly: boolean): Promise<string | null> {
+  try {
+    const content = await fsPromises.readFile(filePath, { encoding: 'utf-8' })
+    const lines = content.split('\n')
+    const matches: string[] = []
+    for (const line of lines) {
+      if (line.includes(pattern)) {
+        matches.push(line)
+        if (firstMatchOnly) break
       }
-      resolve(matches.length > 0 ? matches.join('\n') : null)
-    } catch {
-      resolve(null)
     }
-  })
+    return matches.length > 0 ? matches.join('\n') : null
+  } catch {
+    return null
+  }
 }
 
 // --- Parsing ---

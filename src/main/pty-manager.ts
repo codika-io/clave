@@ -103,7 +103,7 @@ class PtyManager {
     let claudeSessionId: string | undefined
     let shellArgs: string[]
     if (isWindows) {
-      // On Windows, use cmd.exe with /c to launch claude, or just start shell directly
+      // On Windows, use cmd.exe with /k to launch claude (keeps shell alive on exit/error)
       if (!useClaudeMode) {
         shellArgs = []
       } else {
@@ -118,7 +118,7 @@ class PtyManager {
         if (options?.dangerousMode) {
           parts.push('--dangerously-skip-permissions')
         }
-        shellArgs = ['/c', parts.join(' ')]
+        shellArgs = ['/k', ...parts]
       }
     } else {
       if (!useClaudeMode) {

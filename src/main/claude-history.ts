@@ -68,7 +68,7 @@ interface ParsedJsonLine {
   }
 }
 
-const CLAUDE_PROJECTS_ROOT = path.join(homedir(), '.claude', 'projects')
+export const CLAUDE_PROJECTS_ROOT = path.join(homedir(), '.claude', 'projects')
 const SEARCH_RESULT_LIMIT = 100
 const SEARCH_ALL_ROLES: ClaudeHistoryRole[] = ['user', 'assistant']
 

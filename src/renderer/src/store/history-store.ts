@@ -67,7 +67,7 @@ interface HistoryState {
   targetMessageId: string | null
   refresh: () => Promise<void>
   loadProjectSessions: (projectId: string) => Promise<HistorySession[]>
-  selectSession: (session: HistorySession, options?: { targetMessageId?: string | null }) => Promise<void>
+  selectSession: (session: HistorySession, options?: { targetMessageId?: string | null; skipViewSwitch?: boolean }) => Promise<void>
   setSearchQuery: (query: string) => void
   setSearchRoleFilter: (roleFilter: HistoryRoleFilter) => void
   searchMessages: (query: string, roleFilter?: HistoryRoleFilter) => Promise<void>
@@ -132,7 +132,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       })
 
       if (selectedSession) {
-        await get().selectSession(selectedSession, { targetMessageId: get().targetMessageId })
+        await get().selectSession(selectedSession, { targetMessageId: get().targetMessageId, skipViewSwitch: true })
       } else {
         set({ messages: [] })
       }
@@ -163,7 +163,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       isLoadingMessages: true,
       targetMessageId: options?.targetMessageId ?? null
     })
-    useSessionStore.getState().setActiveView('history')
+    if (!options?.skipViewSwitch) {
+      useSessionStore.getState().setActiveView('history')
+    }
 
     try {
       const messages = await window.electronAPI.historyLoadMessages(session.sourcePath)
