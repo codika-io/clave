@@ -541,7 +541,7 @@ ${diff}`
     try {
       const git = simpleGit(cwd)
       const branch = (await git.status()).current
-      if (!branch) return { local: [], pushGroups: [], fallbackMode: false, branch: '' }
+      if (!branch) return { local: [], pushGroups: [], fallbackMode: false, branch: '', hasMore: false }
 
       // Fetch outgoing (unpushed) commits and full log in parallel
       const [local, log] = await Promise.all([
