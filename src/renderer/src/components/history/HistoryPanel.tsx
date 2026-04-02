@@ -83,7 +83,7 @@ function ToolMessageContent({
           onClick={() => setExpanded((value) => !value)}
           className="mt-2 text-xs font-medium text-text-tertiary hover:text-text-primary transition-colors"
         >
-          {expanded ? '收起' : '展开'}
+          {expanded ? 'Collapse' : 'Expand'}
         </button>
       )}
     </div>
@@ -165,7 +165,7 @@ export function HistoryPanel() {
       <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-4 border-b border-border bg-surface-100/80">
         <div className="min-w-0 flex-1 basis-0">
           <div className="text-xs uppercase tracking-[0.18em] text-text-tertiary mb-1">
-            历史对话
+            Claude History
           </div>
           <h2 className="text-lg font-semibold text-text-primary truncate">
             {selectedSession.title}
@@ -187,7 +187,7 @@ export function HistoryPanel() {
             className="h-9 px-3 rounded-lg border border-border text-sm text-text-secondary hover:text-text-primary hover:bg-surface-200 transition-colors inline-flex items-center gap-2"
           >
             <ArrowPathIcon className="w-4 h-4" />
-            刷新
+            Refresh
           </button>
           <button
             type="button"
@@ -195,7 +195,7 @@ export function HistoryPanel() {
             className="h-9 px-3 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-2"
           >
             <PlayIcon className="w-4 h-4" />
-            恢复会话
+            Resume
           </button>
         </div>
       </div>

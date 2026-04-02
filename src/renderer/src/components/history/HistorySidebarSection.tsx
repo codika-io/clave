@@ -195,7 +195,7 @@ export function HistorySidebarSection() {
   return (
     <div className="pb-3">
       <SectionHeading
-        title={isSearchMode ? '对话' : '历史对话'}
+        title={isSearchMode ? 'Conversations' : 'Claude History'}
         collapsed={sectionCollapsed}
         onToggle={() => setSectionCollapsed((value) => !value)}
         actions={
@@ -259,10 +259,10 @@ export function HistorySidebarSection() {
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-text-primary">
-                          正在加载 Claude Code 历史对话
+                          Loading Claude Code History
                         </div>
                         <div className="mt-1 text-xs leading-5 text-text-tertiary">
-                          首次打开会扫描本机的工作目录和 session，通常需要几秒钟，请稍等一下。
+                          Scanning local working directories and sessions. This usually takes a few seconds.
                         </div>
                       </div>
                     </div>

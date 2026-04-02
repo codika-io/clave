@@ -987,7 +987,7 @@ export function Sidebar() {
           <>
             {/* Sessions section */}
             <SectionHeading
-              title="当前活跃"
+              title="Active Sessions"
               collapsed={sessionsCollapsed}
               onToggle={() => setSessionsCollapsed((c) => !c)}
               actions={
