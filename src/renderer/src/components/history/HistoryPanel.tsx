@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowPathIcon, ClockIcon, PlayIcon } from '@heroicons/react/24/outline'
 import { cn } from '../../lib/utils'
+import { MarkdownRenderer } from '../files/MarkdownRenderer'
 import { useHistoryStore } from '../../store/history-store'
 import { useSessionStore } from '../../store/session-store'
 
@@ -21,7 +22,7 @@ function highlightText(content: string, needle: string): ReactNode {
     <>
       {parts.map((part, index) =>
         part.toLowerCase() === needle.toLowerCase() ? (
-          <mark key={`${part}-${index}`} className="bg-yellow-300/70 text-current rounded px-0.5">
+          <mark key={`${part}-${index}`} className="bg-yellow-300/70 text-current rounded">
             {part}
           </mark>
         ) : (
@@ -112,14 +113,40 @@ export function HistoryPanel() {
 
   useEffect(() => {
     if (!targetMessageId) return
-    const target = messageRefs.current[targetMessageId]
-    if (!target) return
+    const card = messageRefs.current[targetMessageId]
+    if (!card) return
 
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // Prefer scrolling to the highlighted <mark> inside the card (for long messages),
+    // fall back to the card itself if no highlight exists.
+    const scrollTarget = card.querySelector('mark') ?? card
+
+    let cancelled = false
+    const scrollContainer = card.closest('.overflow-y-auto')
+
+    const isInView = () => {
+      if (!scrollContainer) return false
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const rect = scrollTarget.getBoundingClientRect()
+      return rect.top >= containerRect.top && rect.bottom <= containerRect.bottom
+    }
+
+    const attemptScroll = (remaining: number) => {
+      if (cancelled) return
+      scrollTarget.scrollIntoView({ behavior: 'instant', block: 'center' })
+      if (remaining > 0 && !isInView()) {
+        setTimeout(() => attemptScroll(remaining - 1), 100)
+      }
+    }
+
+    requestAnimationFrame(() => attemptScroll(3))
+
     const timer = window.setTimeout(() => {
       clearTargetMessage()
     }, 1800)
-    return () => window.clearTimeout(timer)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
   }, [targetMessageId, clearTargetMessage, messages])
 
   const restoreSession = async () => {
@@ -315,6 +342,10 @@ export function HistoryPanel() {
                   content={message.content}
                   renderedContent={highlightText(message.content, searchQuery)}
                 />
+              ) : message.role === 'assistant' && !searchQuery.trim() ? (
+                <div className="text-sm leading-6 text-text-primary prose-sm max-w-none">
+                  <MarkdownRenderer content={message.content} />
+                </div>
               ) : (
                 <div className="text-sm leading-6 text-text-primary whitespace-pre-wrap break-words">
                   {highlightText(message.content, searchQuery)}

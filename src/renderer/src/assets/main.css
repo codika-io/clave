@@ -164,6 +164,13 @@ body,
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.2s, color 0.2s;
+  /* Disable Chromium's CJK punctuation compression and auto-spacing.
+     These features cause text selection offsets when the primary font
+     (Geist Sans) falls back to a system CJK font — the compressed
+     glyph positions drift from the selection rectangles, making the
+     first character after CJK punctuation invisible when selected. */
+  text-spacing-trim: space-all;
+  text-autospace: no-autospace;
 }
 
 /* Custom scrollbar */
