@@ -945,7 +945,7 @@ export function Sidebar() {
             ref={searchInputRef}
             data-sidebar-search
             type="text"
-            placeholder="Search sessions & Claude history..."
+            placeholder=""
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
