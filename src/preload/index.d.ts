@@ -200,10 +200,17 @@ export interface GitJourneyResult {
 }
 
 export type MagicSyncStep = 'pulling' | 'staging' | 'generating' | 'committing' | 'pushing'
+export type MagicPullStep = 'fetching' | 'pulling'
 
 export interface MagicSyncResult {
   repoPath: string
   actions: string[]
+  error: string | null
+}
+
+export interface MagicPullResult {
+  repoPath: string
+  pulled: boolean
   error: string | null
 }
 
@@ -329,6 +336,8 @@ export interface ElectronAPI {
   gitGenerateCommitMessage: (cwd: string) => Promise<string>
   gitMagicSync: (repoPaths: string[]) => Promise<MagicSyncResult[]>
   onMagicSyncProgress: (callback: (repoPath: string, step: MagicSyncStep) => void) => () => void
+  gitMagicPull: (repoPaths: string[]) => Promise<MagicPullResult[]>
+  onMagicPullProgress: (callback: (repoPath: string, step: MagicPullStep) => void) => () => void
   gitJourney: (cwd: string, maxCount?: number) => Promise<GitJourneyResult>
   gitSummarizePush: (cwd: string, commitMessages: string[], diffStats: string) => Promise<{ title: string; description: string }>
 

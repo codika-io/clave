@@ -66,10 +66,17 @@ export interface GitJourneyResult {
 }
 
 export type MagicSyncStep = 'pulling' | 'staging' | 'generating' | 'committing' | 'pushing'
+export type MagicPullStep = 'fetching' | 'pulling'
 
 export interface MagicSyncResult {
   repoPath: string
   actions: string[]
+  error: string | null
+}
+
+export interface MagicPullResult {
+  repoPath: string
+  pulled: boolean
   error: string | null
 }
 
@@ -528,6 +535,44 @@ ${diff}`
         onProgress?.(repoPath, 'pushing')
         await this.push(repoPath)
         result.actions.push('pushed')
+      } catch (err) {
+        result.error = err instanceof Error ? err.message : String(err)
+      }
+      results.push(result)
+    }
+
+    return results
+  }
+
+  async magicPull(
+    repoPaths: string[],
+    onProgress?: (repoPath: string, step: MagicPullStep) => void
+  ): Promise<MagicPullResult[]> {
+    const results: MagicPullResult[] = []
+
+    for (const repoPath of repoPaths) {
+      const result: MagicPullResult = { repoPath, pulled: false, error: null }
+      try {
+        const status = await this.getStatus(repoPath)
+        if (!status.isRepo) {
+          result.error = 'Not a git repository'
+          results.push(result)
+          continue
+        }
+
+        // 1. Fetch to update remote refs
+        onProgress?.(repoPath, 'fetching')
+        await this.fetch(repoPath)
+
+        // Re-check status after fetch to see if there are incoming commits
+        const postFetchStatus = await this.getStatus(repoPath)
+
+        // 2. Pull if behind
+        if (postFetchStatus.behind > 0) {
+          onProgress?.(repoPath, 'pulling')
+          await this.pull(repoPath, 'auto')
+          result.pulled = true
+        }
       } catch (err) {
         result.error = err instanceof Error ? err.message : String(err)
       }

@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useSessionStore } from '../../store/session-store'
-import { ListBulletIcon, Bars3BottomLeftIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import { ListBulletIcon, Bars3BottomLeftIcon, ArrowPathIcon, ArrowDownIcon } from '@heroicons/react/24/outline'
 import { IconButton } from '../ui/tooltip'
-import type { MagicSyncStep } from '../../../../preload/index.d'
+import type { MagicSyncStep, MagicPullStep } from '../../../../preload/index.d'
 
 export function SectionHeader({
   label,
@@ -191,6 +191,81 @@ export function MagicSyncButton({
   )
 }
 
+const PULL_STEP_LABELS: Record<MagicPullStep, string> = {
+  fetching: 'Fetching',
+  pulling: 'Pulling'
+}
+
+export function MagicPullButton({
+  repoPaths,
+  onDone
+}: {
+  repoPaths: string[]
+  onDone?: () => void
+}) {
+  const [pulling, setPulling] = useState(false)
+  const [currentStep, setCurrentStep] = useState<string | null>(null)
+  const [resultMessage, setResultMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!pulling) return
+    const cleanup = window.electronAPI.onMagicPullProgress((_repoPath, step) => {
+      setCurrentStep(PULL_STEP_LABELS[step as MagicPullStep] ?? step)
+    })
+    return cleanup
+  }, [pulling])
+
+  useEffect(() => {
+    if (!resultMessage) return
+    const timer = setTimeout(() => setResultMessage(null), 4000)
+    return () => clearTimeout(timer)
+  }, [resultMessage])
+
+  const handlePull = useCallback(async () => {
+    if (pulling || repoPaths.length === 0) return
+    setPulling(true)
+    setCurrentStep(null)
+    setResultMessage(null)
+    try {
+      const results = await window.electronAPI.gitMagicPull(repoPaths)
+      const pulled = results.filter((r) => r.pulled && !r.error)
+      const upToDate = results.filter((r) => !r.pulled && !r.error)
+      const errors = results.filter((r) => r.error)
+
+      const parts: string[] = []
+      if (pulled.length > 0) parts.push(`${pulled.length} pulled`)
+      if (upToDate.length > 0) parts.push(`${upToDate.length} up to date`)
+      if (errors.length > 0) parts.push(`${errors.length} failed`)
+      setResultMessage(parts.join(', '))
+    } catch (err) {
+      setResultMessage('Pull failed')
+      console.error('[magic-pull]', err)
+    } finally {
+      setPulling(false)
+      setCurrentStep(null)
+      onDone?.()
+    }
+  }, [pulling, repoPaths, onDone])
+
+  return (
+    <div className="relative flex items-center">
+      <IconButton
+        onClick={handlePull}
+        disabled={pulling || repoPaths.length === 0}
+        className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors flex-shrink-0 disabled:opacity-40"
+        tooltip={pulling ? (currentStep ?? 'Pulling...') : 'Pull all'}
+      >
+        <ArrowDownIcon className={`w-3 h-3 ${pulling ? 'animate-bounce' : ''}`} />
+      </IconButton>
+      {(pulling || resultMessage) && (
+        <span className="ml-1 text-[10px] text-text-tertiary whitespace-nowrap">
+          {pulling ? (currentStep ?? 'Pulling...') : resultMessage}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export function BranchHeader({
   branch,
   ahead,
@@ -243,6 +318,7 @@ export function BranchHeader({
       </div>
       {/* Row 2: Toolbar controls */}
       <div className="flex items-center gap-1 px-3 py-1 border-t border-border-subtle/50">
+        {cwd && <MagicPullButton repoPaths={[cwd]} onDone={onSyncDone} />}
         {cwd && <MagicSyncButton repoPaths={[cwd]} onDone={onSyncDone} />}
         <span className="flex-1" />
         {cwd && <JourneyButton cwd={cwd} repoName={repoName || branch} />}
