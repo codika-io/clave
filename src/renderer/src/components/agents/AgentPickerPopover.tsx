@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
 import { useSessionStore } from '../../store/session-store'
@@ -94,7 +95,7 @@ export function AgentPickerPopover({ anchorRef, onClose }: AgentPickerPopoverPro
   }
 
   if (agents.length === 0) {
-    return (
+    return createPortal(
       <div
         ref={menuRef}
         className="fixed z-50 min-w-[220px] py-3 px-3 bg-surface-100 border border-border rounded-lg shadow-xl"
@@ -108,11 +109,12 @@ export function AgentPickerPopover({ anchorRef, onClose }: AgentPickerPopoverPro
           <br />
           Connect a location in Settings.
         </p>
-      </div>
+      </div>,
+      document.body
     )
   }
 
-  return (
+  return createPortal(
     <div
       ref={menuRef}
       className="fixed z-50 min-w-[220px] max-h-[50vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
@@ -154,6 +156,7 @@ export function AgentPickerPopover({ anchorRef, onClose }: AgentPickerPopoverPro
           </div>
         )
       })}
-    </div>
+    </div>,
+    document.body
   )
 }

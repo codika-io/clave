@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { FolderIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 
 interface RemoteDirectoryPickerProps {
@@ -109,7 +110,7 @@ export function RemoteDirectoryPicker({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onCancel])
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-[480px] max-h-[500px] flex flex-col bg-surface-100 border border-border rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
@@ -223,6 +224,7 @@ export function RemoteDirectoryPicker({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

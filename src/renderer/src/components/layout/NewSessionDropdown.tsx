@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
 import {
@@ -38,7 +38,7 @@ interface NewSessionDropdownProps {
 export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdownProps) {
   const [open, setOpen] = useState(false)
   const [agentPickerOpen, setAgentPickerOpen] = useState(false)
-  const btnRef = { current: null as HTMLButtonElement | null }
+  const btnRef = useRef<HTMLButtonElement | null>(null)
   const agents = useAgentStore((s) => s.agents)
   const locations = useLocationStore((s) => s.locations)
 
@@ -131,7 +131,7 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
 
       {agentPickerOpen && (
         <AgentPickerPopover
-          anchorRef={{ current: btnRef.current }}
+          anchorRef={btnRef}
           onClose={() => setAgentPickerOpen(false)}
         />
       )}
