@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils'
 import type { BoardTask, BoardColumn } from '../../../../preload/index.d'
 import { TagPill } from './TagPill'
 import { useBoardStore } from '../../store/board-store'
+import { useHistoryStore } from '../../store/history-store'
 
 function shortenCwd(cwd: string): string {
   const parts = cwd.split('/')
@@ -66,6 +67,15 @@ export function KanbanCard({
     const sess = s.sessions.find((ss) => ss.id === task.sessionId)
     return sess?.promptWaiting ?? null
   })
+  const historySession = useHistoryStore((s) => {
+    if (!task.claudeSessionId) return null
+    for (const sessions of Object.values(s.sessionsByProject)) {
+      const match = sessions.find((sess) => sess.sessionId === task.claudeSessionId)
+      if (match) return match
+    }
+    return null
+  })
+
   const label = task.title || task.notes.split('\n')[0] || task.prompt.split('\n')[0] || 'Untitled'
   const canResume = (linkedSession != null && !sessionAlive) || (!linkedSession && !!task.claudeSessionId)
   const canRun =
@@ -193,6 +203,18 @@ export function KanbanCard({
               View
             </button>
           )}
+        </div>
+      )}
+
+      {/* History summary for completed tasks */}
+      {!sessionAlive && task.claudeSessionId && historySession && (
+        <div className="mt-2 pt-2 border-t border-border-subtle">
+          <p className="text-[11px] text-text-tertiary line-clamp-2">
+            {historySession.summary || 'No summary available'}
+          </p>
+          <span className="text-[10px] text-text-tertiary">
+            {historySession.messageCount} messages
+          </span>
         </div>
       )}
     </div>
