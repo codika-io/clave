@@ -1,4 +1,4 @@
-import { FolderIcon, CommandLineIcon } from '@heroicons/react/24/outline'
+import { FolderIcon, CommandLineIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { cn } from '../../lib/utils'
 import type { BoardTask, BoardColumn } from '../../../../preload/index.d'
 
@@ -28,6 +28,7 @@ interface KanbanCardProps {
   onRun: (task: BoardTask) => void
   onClick: (task: BoardTask) => void
   onContextMenu: (e: React.MouseEvent, task: BoardTask) => void
+  onViewSession?: (sessionId: string) => void
   isDragging?: boolean
   onPointerDown?: (e: React.PointerEvent) => void
 }
@@ -38,6 +39,7 @@ export function KanbanCard({
   onRun,
   onClick,
   onContextMenu,
+  onViewSession,
   isDragging,
   onPointerDown
 }: KanbanCardProps) {
@@ -107,11 +109,22 @@ export function KanbanCard({
         </div>
       )}
 
-      {/* Active session indicator */}
+      {/* Active session indicator + view button */}
       {task.sessionId && column.behavior === 'active' && (
         <div className="mt-2 flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
           <span className="text-[11px] text-green-400">Running</span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onViewSession?.(task.sessionId!)
+            }}
+            className="ml-auto h-6 px-2 rounded text-[11px] font-medium bg-accent/10 hover:bg-accent/20 text-accent transition-colors flex items-center gap-1"
+            title="View session"
+          >
+            <ArrowTopRightOnSquareIcon className="w-3 h-3" />
+            View
+          </button>
         </div>
       )}
     </div>
