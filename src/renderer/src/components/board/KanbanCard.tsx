@@ -1,4 +1,5 @@
 import { FolderIcon, CommandLineIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
+import { useSessionStore } from '../../store/session-store'
 import { cn } from '../../lib/utils'
 import type { BoardTask, BoardColumn } from '../../../../preload/index.d'
 
@@ -43,8 +44,18 @@ export function KanbanCard({
   isDragging,
   onPointerDown
 }: KanbanCardProps) {
+  const linkedSession = useSessionStore((s) =>
+    task.sessionId ? s.sessions.find((sess) => sess.id === task.sessionId) : undefined
+  )
+
+  const sessionAlive = linkedSession?.alive === true
+  const activityStatus = linkedSession?.activityStatus ?? null
+  const promptWaiting = linkedSession?.promptWaiting ?? null
   const label = task.title || task.notes.split('\n')[0] || task.prompt.split('\n')[0] || 'Untitled'
-  const canRun = column.behavior !== 'terminal' && column.behavior !== 'active'
+  const canResume = linkedSession != null && !sessionAlive
+  const canRun =
+    column.behavior !== 'terminal' &&
+    (column.behavior !== 'active' || canResume)
   const hasPrompt = task.prompt.trim().length > 0
   const notesPreview = task.notes.trim() ? task.notes.split('\n').slice(0, 2).join(' ') : null
 
@@ -104,27 +115,52 @@ export function KanbanCard({
             <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
               <path d="M3 1.5L10 6L3 10.5V1.5Z" fill="currentColor" />
             </svg>
-            Run
+            {canResume ? 'Resume' : 'Run'}
           </button>
         </div>
       )}
 
-      {/* Active session indicator + view button */}
-      {task.sessionId && column.behavior === 'active' && (
+      {/* Session indicator */}
+      {task.sessionId && (
         <div className="mt-2 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-[11px] text-green-400">Running</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onViewSession?.(task.sessionId!)
-            }}
-            className="ml-auto h-6 px-2 rounded text-[11px] font-medium bg-accent/10 hover:bg-accent/20 text-accent transition-colors flex items-center gap-1"
-            title="View session"
-          >
-            <ArrowTopRightOnSquareIcon className="w-3 h-3" />
-            View
-          </button>
+          {sessionAlive && promptWaiting ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-[11px] text-amber-400 truncate">
+                {promptWaiting === 'is asking for permission'
+                  ? 'Needs permission'
+                  : 'Waiting for input'}
+              </span>
+            </>
+          ) : sessionAlive && activityStatus === 'active' ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-[11px] text-green-400">Working</span>
+            </>
+          ) : sessionAlive && activityStatus === 'idle' ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              <span className="text-[11px] text-blue-400">Idle</span>
+            </>
+          ) : (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-text-tertiary" />
+              <span className="text-[11px] text-text-tertiary">Session ended</span>
+            </>
+          )}
+          {linkedSession && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onViewSession?.(task.sessionId!)
+              }}
+              className="ml-auto h-6 px-2 rounded text-[11px] font-medium bg-accent/10 hover:bg-accent/20 text-accent transition-colors flex items-center gap-1"
+              title="View session"
+            >
+              <ArrowTopRightOnSquareIcon className="w-3 h-3" />
+              View
+            </button>
+          )}
         </div>
       )}
     </div>
