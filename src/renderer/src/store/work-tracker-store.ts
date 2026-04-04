@@ -186,6 +186,7 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
       if (!currentStreakStartedAt) currentStreakStartedAt = now
     } else if (lastActivityAt && now - lastActivityAt > BREAK_GAP_MS) {
       currentStreakStartedAt = null
+      lastActivityAt = null
     }
 
     const streakMs = currentStreakStartedAt ? now - currentStreakStartedAt : 0
@@ -244,6 +245,7 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     const yesterdayActivity = activityByDate.get(yesterday)
     const yesterdaySummary: YesterdaySummary | null = yesterdayActivity
       ? {
+          // Rough estimate: ~2 min per message exchange. Not actual tracked time.
           totalMinutes: yesterdayActivity.messageCount * 2,
           sessionCount: yesterdayActivity.sessionCount,
           topProjects: []
@@ -253,6 +255,7 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     // Weekly summary
     const dailyMinutes = weekDates.map((date) => {
       const activity = activityByDate.get(date)
+      // Rough estimate: ~2 min per message exchange
       return activity ? activity.messageCount * 2 : 0
     })
     const activeDays = dailyMinutes.filter((m) => m > 0).length
@@ -342,6 +345,7 @@ export function useWorkTracker(): void {
     // Fetch historical data
     const fetchHistorical = async () => {
       try {
+        if (!window.electronAPI?.getUsageStats) return
         const stats = await window.electronAPI.getUsageStats()
         useWorkTrackerStore.getState().updateHistoricalData(stats)
       } catch {
