@@ -54,6 +54,9 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
+    if (details.url.startsWith('clave://')) {
+      return { action: 'deny' }
+    }
     shell.openExternal(details.url).catch(() => {})
     return { action: 'deny' }
   })
