@@ -117,6 +117,11 @@ export interface BoardColumn {
   color?: string
 }
 
+export interface TagDefinition {
+  name: string    // Normalized: lowercase, trimmed, no leading #
+  color: string   // Color ID from palette (e.g., 'blue', 'green', 'amber')
+}
+
 export interface BoardTask {
   id: string
   title: string
@@ -129,11 +134,13 @@ export interface BoardTask {
   columnId: string
   order: number
   sessionId?: string
+  tags: string[]
 }
 
 export interface BoardData {
   tasks: BoardTask[]
   columns: BoardColumn[]
+  tags: TagDefinition[]
 }
 
 export interface ModelTokenUsage {

@@ -14,6 +14,11 @@ export interface BoardColumn {
   color?: string
 }
 
+export interface TagDefinition {
+  name: string
+  color: string
+}
+
 export interface BoardTask {
   id: string
   title: string
@@ -26,11 +31,13 @@ export interface BoardTask {
   columnId: string
   order: number
   sessionId?: string
+  tags: string[]
 }
 
 export interface BoardData {
   tasks: BoardTask[]
   columns: BoardColumn[]
+  tags: TagDefinition[]
 }
 
 function createDefaultColumns(): BoardColumn[] {
@@ -85,12 +92,15 @@ class BoardManager {
           updatedAt: t.updatedAt as number,
           columnId: (t.columnId as string) ?? inboxColumn.id,
           order: typeof t.order === 'number' ? (t.order as number) : index,
-          sessionId: (t.sessionId as string) ?? undefined
+          sessionId: (t.sessionId as string) ?? undefined,
+          tags: Array.isArray(t.tags) ? (t.tags as string[]) : []
         }))
 
-      return { tasks, columns }
+      const tags: TagDefinition[] = Array.isArray(data.tags) ? (data.tags as TagDefinition[]) : []
+
+      return { tasks, columns, tags }
     } catch {
-      return { tasks: [], columns: createDefaultColumns() }
+      return { tasks: [], columns: createDefaultColumns(), tags: [] }
     }
   }
 
