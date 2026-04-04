@@ -6,7 +6,14 @@ interface TaskFormProps {
   isOpen: boolean
   onClose: () => void
   columnId?: string
-  editTask?: { id: string; title: string; prompt: string; notes: string; cwd: string; dangerousMode: boolean } | null
+  editTask?: {
+    id: string
+    title: string
+    prompt: string
+    notes: string
+    cwd: string
+    dangerousMode: boolean
+  } | null
 }
 
 export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps) {
@@ -195,9 +202,13 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
                     onClick={() => setDangerousMode(!dangerousMode)}
                     className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 ${dangerousMode ? 'bg-red-500' : 'bg-surface-300'}`}
                   >
-                    <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${dangerousMode ? 'translate-x-[14px]' : ''}`} />
+                    <span
+                      className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${dangerousMode ? 'translate-x-[14px]' : ''}`}
+                    />
                   </button>
-                  <span className={`text-xs transition-colors ${dangerousMode ? 'text-red-400' : 'text-text-secondary group-hover:text-text-primary'}`}>
+                  <span
+                    className={`text-xs transition-colors ${dangerousMode ? 'text-red-400' : 'text-text-secondary group-hover:text-text-primary'}`}
+                  >
                     Skip permissions
                   </span>
                 </label>
@@ -205,7 +216,10 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
 
               <div className="px-5 py-3 border-t border-border-subtle flex items-center justify-between">
                 <span className="text-[11px] text-text-tertiary">
-                  <kbd className="px-1 py-0.5 rounded bg-surface-200 text-text-secondary">Cmd+Enter</kbd> submit
+                  <kbd className="px-1 py-0.5 rounded bg-surface-200 text-text-secondary">
+                    Cmd+Enter
+                  </kbd>{' '}
+                  submit
                 </span>
                 <div className="flex gap-2">
                   <button

@@ -110,7 +110,9 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
               <div className="px-5 space-y-4 pb-5">
                 {/* Notes */}
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Notes</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                    Notes
+                  </label>
                   <textarea
                     ref={notesRef}
                     value={notes}
@@ -125,7 +127,10 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
                 {/* Prompt */}
                 <div>
                   <label className="block text-xs font-medium text-text-secondary mb-1">
-                    Prompt <span className="font-normal text-text-tertiary">(sent to Claude Code on run)</span>
+                    Prompt{' '}
+                    <span className="font-normal text-text-tertiary">
+                      (sent to Claude Code on run)
+                    </span>
                   </label>
                   <textarea
                     value={prompt}
@@ -139,7 +144,9 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
 
                 {/* Folder */}
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Folder</label>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                    Folder
+                  </label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -170,9 +177,13 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
                     }}
                     className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 ${dangerousMode ? 'bg-red-500' : 'bg-surface-300'}`}
                   >
-                    <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${dangerousMode ? 'translate-x-[14px]' : ''}`} />
+                    <span
+                      className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${dangerousMode ? 'translate-x-[14px]' : ''}`}
+                    />
                   </button>
-                  <span className={`text-xs transition-colors ${dangerousMode ? 'text-red-400' : 'text-text-secondary group-hover:text-text-primary'}`}>
+                  <span
+                    className={`text-xs transition-colors ${dangerousMode ? 'text-red-400' : 'text-text-secondary group-hover:text-text-primary'}`}
+                  >
                     Skip permissions
                   </span>
                 </label>

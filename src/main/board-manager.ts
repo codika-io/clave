@@ -35,7 +35,13 @@ export interface BoardData {
 
 function createDefaultColumns(): BoardColumn[] {
   return [
-    { id: crypto.randomUUID(), title: 'Backlog', order: 0, builtIn: true, behavior: 'default-inbox' },
+    {
+      id: crypto.randomUUID(),
+      title: 'Backlog',
+      order: 0,
+      builtIn: true,
+      behavior: 'default-inbox'
+    },
     { id: crypto.randomUUID(), title: 'Ready', order: 1, builtIn: true, behavior: 'none' },
     { id: crypto.randomUUID(), title: 'Running', order: 2, builtIn: true, behavior: 'active' },
     { id: crypto.randomUUID(), title: 'Done', order: 3, builtIn: true, behavior: 'terminal' }

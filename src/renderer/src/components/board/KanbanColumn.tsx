@@ -1,5 +1,11 @@
 import { useState, useCallback } from 'react'
-import { PlusIcon, EllipsisHorizontalIcon, InboxIcon, PlayIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import {
+  PlusIcon,
+  EllipsisHorizontalIcon,
+  InboxIcon,
+  PlayIcon,
+  CheckCircleIcon
+} from '@heroicons/react/24/outline'
 import { KanbanCard } from './KanbanCard'
 import { ContextMenu } from '../ui/ContextMenu'
 import { cn } from '../../lib/utils'
@@ -7,8 +13,8 @@ import type { BoardTask, BoardColumn as BoardColumnType } from '../../../../prel
 
 const BEHAVIOR_ICONS: Record<string, typeof InboxIcon> = {
   'default-inbox': InboxIcon,
-  'active': PlayIcon,
-  'terminal': CheckCircleIcon
+  active: PlayIcon,
+  terminal: CheckCircleIcon
 }
 
 interface KanbanColumnProps {
@@ -75,9 +81,7 @@ export function KanbanColumn({
     >
       {/* Column header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border-subtle">
-        {BehaviorIcon && (
-          <BehaviorIcon className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0" />
-        )}
+        {BehaviorIcon && <BehaviorIcon className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0" />}
 
         {isEditingTitle ? (
           <input

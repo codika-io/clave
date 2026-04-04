@@ -34,14 +34,12 @@ export function TaskQueue() {
   const [search, setSearch] = useState('')
 
   const [contextMenu, setContextMenu] = useState<{
-    x: number; y: number
+    x: number
+    y: number
     items: { label: string; onClick: () => void; danger?: boolean }[]
   } | null>(null)
 
-  const sortedColumns = useMemo(
-    () => [...columns].sort((a, b) => a.order - b.order),
-    [columns]
-  )
+  const sortedColumns = useMemo(() => [...columns].sort((a, b) => a.order - b.order), [columns])
 
   const inboxColumnCount = useMemo(
     () => columns.filter((c) => c.behavior === 'default-inbox').length,
@@ -239,10 +237,7 @@ export function TaskQueue() {
         editTask={editTask}
       />
 
-      <TaskDetailPanel
-        task={detailTask}
-        onClose={handleCloseDetail}
-      />
+      <TaskDetailPanel task={detailTask} onClose={handleCloseDetail} />
 
       {contextMenu && (
         <ContextMenu
