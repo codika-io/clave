@@ -302,7 +302,12 @@ export function TaskQueue() {
         editTask={editTask}
       />
 
-      <TaskDetailPanel task={detailTask} onClose={handleCloseDetail} />
+      <TaskDetailPanel
+        task={detailTask}
+        onClose={handleCloseDetail}
+        onRunTask={runTask}
+        onViewSession={handleViewSession}
+      />
 
       {contextMenu && (
         <ContextMenu

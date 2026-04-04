@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { useBoardStore } from '../../store/board-store'
+import { useSessionStore } from '../../store/session-store'
 import type { BoardTask } from '../../../../preload/index.d'
 
 function formatFullDate(ts: number): string {
@@ -16,10 +18,19 @@ function formatFullDate(ts: number): string {
 interface TaskDetailPanelProps {
   task: BoardTask | null
   onClose: () => void
+  onRunTask?: (task: BoardTask) => void
+  onViewSession?: (sessionId: string) => void
 }
 
-export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
+export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: TaskDetailPanelProps) {
   const updateTask = useBoardStore((s) => s.updateTask)
+  const linkedSession = useSessionStore((s) =>
+    task?.sessionId ? s.sessions.find((sess) => sess.id === task.sessionId) : undefined
+  )
+  const sessionAlive = linkedSession?.alive === true
+  const activityStatus = linkedSession?.activityStatus ?? null
+  const promptWaiting = linkedSession?.promptWaiting ?? null
+  const canResume = linkedSession != null && !sessionAlive
 
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
@@ -187,6 +198,92 @@ export function TaskDetailPanel({ task, onClose }: TaskDetailPanelProps) {
                     Skip permissions
                   </span>
                 </label>
+
+                {/* Session status & actions */}
+                {task.sessionId && (
+                  <div className="pt-3 border-t border-border-subtle">
+                    <div className="flex items-center gap-2">
+                      {sessionAlive && promptWaiting ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                          <span className="text-xs text-amber-400">
+                            {promptWaiting === 'is asking for permission'
+                              ? 'Needs permission'
+                              : 'Waiting for input'}
+                          </span>
+                        </>
+                      ) : sessionAlive && activityStatus === 'active' ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                          <span className="text-xs text-green-400">Working</span>
+                        </>
+                      ) : sessionAlive && activityStatus === 'idle' ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-blue-400" />
+                          <span className="text-xs text-blue-400">Idle</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-text-tertiary" />
+                          <span className="text-xs text-text-tertiary">Session ended</span>
+                        </>
+                      )}
+
+                      <div className="ml-auto flex items-center gap-2">
+                        {linkedSession && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              save()
+                              onClose()
+                              onViewSession?.(task.sessionId!)
+                            }}
+                            className="h-7 px-3 rounded-lg text-xs font-medium bg-accent/10 hover:bg-accent/20 text-accent transition-colors flex items-center gap-1"
+                          >
+                            <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+                            View
+                          </button>
+                        )}
+                        {canResume && onRunTask && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              save()
+                              onClose()
+                              onRunTask(task)
+                            }}
+                            className="h-7 px-3 rounded-lg text-xs font-medium bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-colors flex items-center gap-1"
+                          >
+                            <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                              <path d="M3 1.5L10 6L3 10.5V1.5Z" fill="currentColor" />
+                            </svg>
+                            Resume
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Run button for tasks without a session */}
+                {!task.sessionId && task.prompt.trim() && onRunTask && (
+                  <div className="pt-3 border-t border-border-subtle">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        save()
+                        onClose()
+                        onRunTask(task)
+                      }}
+                      className="h-7 px-3 rounded-lg text-xs font-medium bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-colors flex items-center gap-1"
+                    >
+                      <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                        <path d="M3 1.5L10 6L3 10.5V1.5Z" fill="currentColor" />
+                      </svg>
+                      Run
+                    </button>
+                  </div>
+                )}
 
                 {/* Metadata */}
                 <div className="pt-2 border-t border-border-subtle text-[11px] text-text-tertiary space-y-0.5">
