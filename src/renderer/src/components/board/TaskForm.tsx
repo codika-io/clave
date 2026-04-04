@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBoardStore } from '../../store/board-store'
+import { TagInput } from './TagInput'
 
 interface TaskFormProps {
   isOpen: boolean
@@ -13,6 +14,7 @@ interface TaskFormProps {
     notes: string
     cwd: string
     dangerousMode: boolean
+    tags?: string[]
   } | null
 }
 
@@ -25,6 +27,7 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
   const [prompt, setPrompt] = useState('')
   const [cwd, setCwd] = useState('')
   const [dangerousMode, setDangerousMode] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
   const titleRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -35,12 +38,14 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
         setPrompt(editTask.prompt)
         setCwd(editTask.cwd)
         setDangerousMode(editTask.dangerousMode)
+        setTags(editTask.tags ?? [])
       } else {
         setTitle('')
         setNotes('')
         setPrompt('')
         setCwd('')
         setDangerousMode(false)
+        setTags([])
       }
       setTimeout(() => titleRef.current?.focus(), 50)
     }
@@ -74,7 +79,8 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
           notes: notes.trim(),
           prompt: prompt.trim(),
           cwd: cwd.trim(),
-          dangerousMode
+          dangerousMode,
+          tags
         })
       } else {
         addTask({
@@ -83,13 +89,13 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
           prompt: prompt.trim(),
           cwd: cwd.trim(),
           dangerousMode,
-          tags: [],
+          tags,
           columnId
         })
       }
       onClose()
     },
-    [title, notes, prompt, cwd, dangerousMode, columnId, editTask, addTask, updateTask, onClose]
+    [title, notes, prompt, cwd, dangerousMode, tags, columnId, editTask, addTask, updateTask, onClose]
   )
 
   const handleKeyDown = useCallback(
@@ -213,6 +219,12 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
                     Skip permissions
                   </span>
                 </label>
+
+                {/* Tags */}
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Tags</label>
+                  <TagInput tags={tags} onChange={setTags} />
+                </div>
               </div>
 
               <div className="px-5 py-3 border-t border-border-subtle flex items-center justify-between">
