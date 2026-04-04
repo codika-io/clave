@@ -64,7 +64,10 @@ export function WhatsNewBanner(): React.ReactNode {
   if (!visible || !entry) return null
 
   return (
-    <div className="mx-2 mb-1 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 flex items-center gap-2 text-xs">
+    <div
+      className="mx-2 mb-1 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 flex items-center gap-2 text-xs"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+    >
       <span className="text-text-secondary flex-1">
         <span className="font-medium text-text-primary">New in {entry.version}:</span> {entry.title}{' '}
         — {entry.description}
