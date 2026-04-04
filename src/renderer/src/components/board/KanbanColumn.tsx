@@ -8,6 +8,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { KanbanCard } from './KanbanCard'
 import { ContextMenu } from '../ui/ContextMenu'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { cn } from '../../lib/utils'
 import type { BoardTask, BoardColumn as BoardColumnType } from '../../../../preload/index.d'
 
@@ -28,6 +29,9 @@ interface KanbanColumnProps {
   onRenameColumn: (columnId: string, title: string) => void
   onDeleteColumn: (columnId: string) => void
   onAddColumnAfter: (columnId: string) => void
+  onMoveColumn: (columnId: string, direction: 'left' | 'right') => void
+  isFirst: boolean
+  isLast: boolean
   isOnlyInbox: boolean
   draggingTaskId?: string | null
   dropTarget?: { columnId: string; order: number } | null
@@ -45,6 +49,9 @@ export function KanbanColumn({
   onRenameColumn,
   onDeleteColumn,
   onAddColumnAfter,
+  onMoveColumn,
+  isFirst,
+  isLast,
   isOnlyInbox,
   draggingTaskId,
   dropTarget,
@@ -53,6 +60,7 @@ export function KanbanColumn({
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editTitle, setEditTitle] = useState(column.title)
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   const sortedTasks = [...tasks].sort((a, b) => a.order - b.order)
   const BehaviorIcon = BEHAVIOR_ICONS[column.behavior]
@@ -165,12 +173,18 @@ export function KanbanColumn({
                 setIsEditingTitle(true)
               }
             },
+            ...(!isFirst
+              ? [{ label: 'Move left', onClick: () => onMoveColumn(column.id, 'left') }]
+              : []),
+            ...(!isLast
+              ? [{ label: 'Move right', onClick: () => onMoveColumn(column.id, 'right') }]
+              : []),
             {
               label: 'Add column after',
               onClick: () => onAddColumnAfter(column.id)
             },
             ...(canDelete
-              ? [{ label: 'Delete column', onClick: () => onDeleteColumn(column.id), danger: true }]
+              ? [{ label: 'Delete column', onClick: () => setDeleteConfirm(true), danger: true }]
               : [])
           ]}
           x={menuPos.x}
@@ -178,6 +192,27 @@ export function KanbanColumn({
           onClose={() => setMenuPos(null)}
         />
       )}
+
+      {/* Delete column confirmation */}
+      <ConfirmDialog
+        isOpen={deleteConfirm}
+        title={`Delete "${column.title}"?`}
+        message={
+          tasks.length > 0
+            ? `This column has ${tasks.length} task${tasks.length > 1 ? 's' : ''}. Move all tasks to another column before deleting.`
+            : 'This column will be permanently removed.'
+        }
+        confirmLabel={tasks.length > 0 ? 'Got it' : 'Delete'}
+        onConfirm={() => {
+          if (tasks.length > 0) {
+            setDeleteConfirm(false)
+          } else {
+            setDeleteConfirm(false)
+            onDeleteColumn(column.id)
+          }
+        }}
+        onCancel={() => setDeleteConfirm(false)}
+      />
     </div>
   )
 }
