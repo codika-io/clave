@@ -51,7 +51,7 @@ function createDefaultColumns(): BoardColumn[] {
       behavior: 'default-inbox'
     },
     { id: crypto.randomUUID(), title: 'Ready', order: 1, builtIn: true, behavior: 'none' },
-    { id: crypto.randomUUID(), title: 'Running', order: 2, builtIn: true, behavior: 'active' },
+    { id: crypto.randomUUID(), title: 'Running', order: 2, builtIn: true, behavior: 'active', locked: true },
     { id: crypto.randomUUID(), title: 'Done', order: 3, builtIn: true, behavior: 'terminal' }
   ]
 }
@@ -75,6 +75,11 @@ class BoardManager {
       } else {
         columns = createDefaultColumns()
       }
+
+      // Migration: lock the active-behavior column
+      columns = columns.map((c) =>
+        c.behavior === 'active' && !c.locked ? { ...c, locked: true } : c
+      )
 
       const inboxColumn = columns.find((c) => c.behavior === 'default-inbox') ?? columns[0]
 
