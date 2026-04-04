@@ -80,9 +80,11 @@ export function WorkTrackerExpanded() {
               style={{
                 width: `${streakPercent}%`,
                 background:
-                  breakSuggestion !== 'none'
-                    ? 'var(--color-wellbeing-gentle)'
-                    : 'var(--color-accent)'
+                  breakSuggestion === 'strong'
+                    ? 'var(--color-wellbeing-strong)'
+                    : breakSuggestion === 'gentle'
+                      ? 'var(--color-wellbeing-gentle)'
+                      : 'var(--color-accent)'
               }}
             />
           </div>
