@@ -1,10 +1,12 @@
 import { create } from 'zustand'
-import type { BoardTask, BoardData, BoardColumn, ColumnBehavior } from '../../../preload/index.d'
+import type { BoardTask, BoardData, BoardColumn, ColumnBehavior, TagDefinition } from '../../../preload/index.d'
 
 interface BoardState {
   tasks: BoardTask[]
   columns: BoardColumn[]
   loaded: boolean
+  tags: TagDefinition[]
+  activeTagFilter: string | null
 
   loadBoard: () => Promise<void>
   addTask: (
@@ -15,7 +17,7 @@ interface BoardState {
   updateTask: (
     id: string,
     updates: Partial<
-      Pick<BoardTask, 'title' | 'prompt' | 'notes' | 'cwd' | 'dangerousMode' | 'sessionId'>
+      Pick<BoardTask, 'title' | 'prompt' | 'notes' | 'cwd' | 'dangerousMode' | 'sessionId' | 'tags'>
     >
   ) => void
   deleteTask: (id: string) => void
@@ -28,27 +30,43 @@ interface BoardState {
 
   getColumnByBehavior: (behavior: ColumnBehavior) => BoardColumn | undefined
   getInboxColumn: () => BoardColumn
+
+  addTag: (name: string, color?: string) => void
+  removeTag: (name: string) => void
+  updateTagColor: (name: string, color: string) => void
+  setActiveTagFilter: (tagName: string | null) => void
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
-function debouncedSave(state: { tasks: BoardTask[]; columns: BoardColumn[] }): void {
+function debouncedSave(state: { tasks: BoardTask[]; columns: BoardColumn[]; tags: TagDefinition[] }): void {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    const data: BoardData = { tasks: state.tasks, columns: state.columns }
+    const data: BoardData = { tasks: state.tasks, columns: state.columns, tags: state.tags }
     window.electronAPI?.boardSave?.(data)
   }, 300)
+}
+
+const TAG_COLORS = [
+  'blue', 'green', 'amber', 'red', 'purple', 'pink', 'cyan', 'orange'
+] as const
+
+function nextTagColor(existingTags: TagDefinition[]): string {
+  const usedColors = new Set(existingTags.map((t) => t.color))
+  return TAG_COLORS.find((c) => !usedColors.has(c)) ?? TAG_COLORS[existingTags.length % TAG_COLORS.length]
 }
 
 export const useBoardStore = create<BoardState>((set, get) => ({
   tasks: [],
   columns: [],
   loaded: false,
+  tags: [],
+  activeTagFilter: null,
 
   loadBoard: async () => {
     if (!window.electronAPI?.boardLoad) return
     const data = await window.electronAPI.boardLoad()
-    set({ tasks: data.tasks, columns: data.columns, loaded: true })
+    set({ tasks: data.tasks, columns: data.columns, tags: data.tags ?? [], loaded: true })
   },
 
   addTask: (partial) => {
@@ -64,6 +82,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       notes: partial.notes,
       cwd: partial.cwd,
       dangerousMode: partial.dangerousMode,
+      tags: partial.tags ?? [],
       createdAt: now,
       updatedAt: now,
       columnId,
@@ -72,7 +91,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
     const newTasks = [...state.tasks, task]
     set({ tasks: newTasks })
-    debouncedSave({ tasks: newTasks, columns: state.columns })
+    debouncedSave({ tasks: newTasks, columns: state.columns, tags: state.tags })
   },
 
   updateTask: (id, updates) => {
@@ -81,14 +100,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       t.id === id ? { ...t, ...updates, updatedAt: Date.now() } : t
     )
     set({ tasks: newTasks })
-    debouncedSave({ tasks: newTasks, columns: state.columns })
+    debouncedSave({ tasks: newTasks, columns: state.columns, tags: state.tags })
   },
 
   deleteTask: (id) => {
     const state = get()
     const newTasks = state.tasks.filter((t) => t.id !== id)
     set({ tasks: newTasks })
-    debouncedSave({ tasks: newTasks, columns: state.columns })
+    debouncedSave({ tasks: newTasks, columns: state.columns, tags: state.tags })
   },
 
   moveTask: (taskId, toColumnId, toOrder) => {
@@ -120,7 +139,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     })
 
     set({ tasks: newTasks })
-    debouncedSave({ tasks: newTasks, columns: state.columns })
+    debouncedSave({ tasks: newTasks, columns: state.columns, tags: state.tags })
   },
 
   addColumn: (title, afterColumnId) => {
@@ -146,14 +165,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     })
 
     set({ columns: newColumns })
-    debouncedSave({ tasks: state.tasks, columns: newColumns })
+    debouncedSave({ tasks: state.tasks, columns: newColumns, tags: state.tags })
   },
 
   updateColumn: (id, updates) => {
     const state = get()
     const newColumns = state.columns.map((c) => (c.id === id ? { ...c, ...updates } : c))
     set({ columns: newColumns })
-    debouncedSave({ tasks: state.tasks, columns: newColumns })
+    debouncedSave({ tasks: state.tasks, columns: newColumns, tags: state.tags })
   },
 
   deleteColumn: (id) => {
@@ -182,7 +201,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       .map((c, i) => ({ ...c, order: i }))
 
     set({ tasks: newTasks, columns: newColumns })
-    debouncedSave({ tasks: newTasks, columns: newColumns })
+    debouncedSave({ tasks: newTasks, columns: newColumns, tags: state.tags })
   },
 
   reorderColumns: (columnIds) => {
@@ -192,7 +211,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return newOrder >= 0 ? { ...c, order: newOrder } : c
     })
     set({ columns: newColumns })
-    debouncedSave({ tasks: state.tasks, columns: newColumns })
+    debouncedSave({ tasks: state.tasks, columns: newColumns, tags: state.tags })
   },
 
   getColumnByBehavior: (behavior) => {
@@ -205,5 +224,37 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       state.columns.find((c) => c.behavior === 'default-inbox') ??
       state.columns.sort((a, b) => a.order - b.order)[0]
     )
+  },
+
+  addTag: (name, color) => {
+    const state = get()
+    const normalized = name.trim().toLowerCase().replace(/^#/, '')
+    if (!normalized) return
+    if (state.tags.some((t) => t.name === normalized)) return
+    const newTags = [...state.tags, { name: normalized, color: color ?? nextTagColor(state.tags) }]
+    set({ tags: newTags })
+    debouncedSave({ tasks: state.tasks, columns: state.columns, tags: newTags })
+  },
+
+  removeTag: (name) => {
+    const state = get()
+    const newTags = state.tags.filter((t) => t.name !== name)
+    const newTasks = state.tasks.map((t) =>
+      t.tags.includes(name) ? { ...t, tags: t.tags.filter((tag) => tag !== name), updatedAt: Date.now() } : t
+    )
+    set({ tags: newTags, tasks: newTasks })
+    if (state.activeTagFilter === name) set({ activeTagFilter: null })
+    debouncedSave({ tasks: newTasks, columns: state.columns, tags: newTags })
+  },
+
+  updateTagColor: (name, color) => {
+    const state = get()
+    const newTags = state.tags.map((t) => (t.name === name ? { ...t, color } : t))
+    set({ tags: newTags })
+    debouncedSave({ tasks: state.tasks, columns: state.columns, tags: newTags })
+  },
+
+  setActiveTagFilter: (tagName) => {
+    set({ activeTagFilter: tagName })
   }
 }))
