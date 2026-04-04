@@ -50,21 +50,24 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: { co
             </h4>
           ),
           p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              className="text-accent hover:underline cursor-pointer"
-              onClick={(e) => {
-                if (href && handleClaveLink(href)) {
-                  e.preventDefault()
-                }
-              }}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            const isClaveLink = href?.startsWith('clave://')
+            return (
+              <a
+                href={isClaveLink ? undefined : href}
+                className="text-accent hover:underline cursor-pointer"
+                onClick={(e) => {
+                  if (href && handleClaveLink(href)) {
+                    e.preventDefault()
+                  }
+                }}
+                target={isClaveLink ? undefined : '_blank'}
+                rel={isClaveLink ? undefined : 'noopener noreferrer'}
+              >
+                {children}
+              </a>
+            )
+          },
           ul: ({ children }) => <ul className="mb-3 pl-5 list-disc space-y-1">{children}</ul>,
           ol: ({ children }) => <ol className="mb-3 pl-5 list-decimal space-y-1">{children}</ol>,
           li: ({ children }) => <li className="text-text-primary">{children}</li>,
