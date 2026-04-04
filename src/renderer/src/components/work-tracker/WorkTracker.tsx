@@ -4,11 +4,11 @@ import { WorkTrackerCollapsed } from './WorkTrackerCollapsed'
 import { WorkTrackerExpanded } from './WorkTrackerExpanded'
 
 export function WorkTracker() {
+  const enabled = useWorkTrackerStore((s) => s.enabled)
   const isExpanded = useWorkTrackerStore((s) => s.isExpanded)
   const todaySessionCount = useWorkTrackerStore((s) => s.todaySessionCount)
 
-  // Don't render if no sessions have been tracked yet
-  if (todaySessionCount === 0) return null
+  if (!enabled || todaySessionCount === 0) return null
 
   return (
     <div className="flex-shrink-0 px-2 pb-1">
