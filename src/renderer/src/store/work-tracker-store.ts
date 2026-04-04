@@ -206,7 +206,87 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     })
   },
 
-  updateHistoricalData: (_usage: unknown) => {
-    // Will be implemented in Task 2
+  updateHistoricalData: (usage: unknown) => {
+    const data = usage as {
+      dailyActivity?: {
+        date: string
+        messageCount: number
+        sessionCount: number
+        toolCallCount: number
+      }[]
+      dailyModelTokens?: { date: string; tokensByModel: Record<string, number> }[]
+      estimatedCost?: number
+      totalTokens?: number
+    }
+    if (!data.dailyActivity) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+
+    // Build week dates starting from Monday
+    const now = new Date()
+    const mondayOffset = (now.getDay() + 6) % 7
+    const mondayDate = new Date(now)
+    mondayDate.setDate(mondayDate.getDate() - mondayOffset)
+    mondayDate.setHours(0, 0, 0, 0)
+
+    const weekDates: string[] = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(mondayDate)
+      d.setDate(d.getDate() + i)
+      weekDates.push(d.toISOString().slice(0, 10))
+    }
+
+    const activityByDate = new Map(data.dailyActivity.map((d) => [d.date, d]))
+
+    // Yesterday summary
+    const yesterdayActivity = activityByDate.get(yesterday)
+    const yesterdaySummary: YesterdaySummary | null = yesterdayActivity
+      ? {
+          totalMinutes: yesterdayActivity.messageCount * 2,
+          sessionCount: yesterdayActivity.sessionCount,
+          topProjects: []
+        }
+      : null
+
+    // Weekly summary
+    const dailyMinutes = weekDates.map((date) => {
+      const activity = activityByDate.get(date)
+      return activity ? activity.messageCount * 2 : 0
+    })
+    const activeDays = dailyMinutes.filter((m) => m > 0).length
+    const totalWeekMinutes = dailyMinutes.reduce((a, b) => a + b, 0)
+    const weeklySummary: WeeklySummary = {
+      dailyMinutes,
+      totalSessions: weekDates.reduce((sum, date) => {
+        const a = activityByDate.get(date)
+        return sum + (a ? a.sessionCount : 0)
+      }, 0),
+      avgDailyMinutes: activeDays > 0 ? Math.round(totalWeekMinutes / activeDays) : 0
+    }
+
+    // Token usage
+    const tokensByDate = new Map(
+      (data.dailyModelTokens || []).map((d) => [
+        d.date,
+        Object.values(d.tokensByModel).reduce((a, b) => a + b, 0)
+      ])
+    )
+
+    const todayTokens = tokensByDate.get(today) || 0
+    const weekTokens = weekDates.reduce((sum, date) => sum + (tokensByDate.get(date) || 0), 0)
+
+    const totalTokens = data.totalTokens || 1
+    const totalCost = data.estimatedCost || 0
+    const costPerToken = totalTokens > 0 ? totalCost / totalTokens : 0
+
+    const tokenUsage: TokenUsage = {
+      todayTokens,
+      todayCost: Math.round(todayTokens * costPerToken * 100) / 100,
+      weekTokens,
+      weekCost: Math.round(weekTokens * costPerToken * 100) / 100
+    }
+
+    set({ yesterdaySummary, weeklySummary, tokenUsage })
   }
 }))
