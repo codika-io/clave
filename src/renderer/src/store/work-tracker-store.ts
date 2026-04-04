@@ -1,5 +1,6 @@
 // src/renderer/src/store/work-tracker-store.ts
 import { create } from 'zustand'
+import { useEffect, useRef } from 'react'
 import { useSessionStore } from './session-store'
 
 interface TrackedSession {
@@ -290,3 +291,71 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     set({ yesterdaySummary, weeklySummary, tokenUsage })
   }
 }))
+
+/**
+ * Mount once in AppShell. Syncs session-store sessions into work tracker,
+ * runs a 30s tick for duration/streak updates, and refreshes historical
+ * data every 10 minutes.
+ */
+export function useWorkTracker(): void {
+  const prevSessionIds = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    // Sync existing alive sessions on mount
+    const sessions = useSessionStore.getState().sessions
+    for (const s of sessions) {
+      if (s.alive) {
+        useWorkTrackerStore.getState().trackSession(s.id, s.cwd)
+      }
+    }
+
+    // Subscribe to session-store for new/ended sessions
+    const unsubscribe = useSessionStore.subscribe((state) => {
+      const currentIds = new Set<string>(state.sessions.filter((s) => s.alive).map((s) => s.id))
+      const tracker = useWorkTrackerStore.getState()
+
+      // New sessions
+      for (const s of state.sessions) {
+        if (s.alive && !prevSessionIds.current.has(s.id)) {
+          tracker.trackSession(s.id, s.cwd)
+        }
+      }
+
+      // Ended sessions
+      for (const id of prevSessionIds.current) {
+        if (!currentIds.has(id)) {
+          tracker.endSession(id)
+        }
+      }
+
+      prevSessionIds.current = currentIds
+    })
+
+    // 30-second tick for duration & streak
+    const tickInterval = setInterval(() => {
+      useWorkTrackerStore.getState().tick()
+    }, 30000)
+
+    // Run first tick immediately
+    useWorkTrackerStore.getState().tick()
+
+    // Fetch historical data
+    const fetchHistorical = async () => {
+      try {
+        const stats = await window.electronAPI.getUsageStats()
+        useWorkTrackerStore.getState().updateHistoricalData(stats)
+      } catch {
+        // Usage stats may not be available — ignore
+      }
+    }
+
+    fetchHistorical()
+    const historicalInterval = setInterval(fetchHistorical, 10 * 60 * 1000)
+
+    return () => {
+      unsubscribe()
+      clearInterval(tickInterval)
+      clearInterval(historicalInterval)
+    }
+  }, [])
+}
