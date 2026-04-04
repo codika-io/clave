@@ -4,7 +4,6 @@ import { useSessionStore } from '../../store/session-store'
 import { useBoardStore } from '../../store/board-store'
 import { useHistoryStore, type HistorySession } from '../../store/history-store'
 import { cn } from '../../lib/utils'
-import { Collapsible, CollapsibleContent } from '../ui/collapsible'
 
 export function SectionHeading({
   title,
@@ -40,8 +39,11 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <Collapsible open={!collapsed} className="flex-shrink-0">
-      <CollapsibleContent className="overflow-hidden data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0">
+    <div
+      className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out flex-shrink-0"
+      style={{ gridTemplateRows: collapsed ? '0fr' : '1fr', opacity: collapsed ? 0 : 1, transform: collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
+    >
+      <div className="overflow-hidden">
         <div className="px-2 pt-0.5 pb-2">
           {/* Queue row — clickable to navigate, chevron to expand sub-items */}
           <button
@@ -103,8 +105,8 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
             </div>
           )}
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
+    </div>
   )
 }
 
@@ -157,8 +159,11 @@ export function HistorySection({ collapsed }: { collapsed: boolean }) {
   }
 
   return (
-    <Collapsible open={!collapsed} className="flex-shrink-0">
-      <CollapsibleContent className="overflow-hidden data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0">
+    <div
+      className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out flex-shrink-0"
+      style={{ gridTemplateRows: collapsed ? '0fr' : '1fr', opacity: collapsed ? 0 : 1, transform: collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
+    >
+      <div className="overflow-hidden">
         <div className="px-2 pt-0.5 pb-2">
           {/* History row — mirrors Queue design */}
           <button
@@ -233,7 +238,7 @@ export function HistorySection({ collapsed }: { collapsed: boolean }) {
             </div>
           )}
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
+    </div>
   )
 }
