@@ -85,7 +85,7 @@ export function KanbanColumn({
     <div
       data-column-id={column.id}
       className={cn(
-        'flex flex-col w-72 flex-shrink-0 rounded-xl bg-surface-50 border border-border-subtle',
+        'flex flex-col w-72 flex-shrink-0 max-h-full rounded-xl bg-surface-50 border border-border-subtle',
         dropTarget?.columnId === column.id && draggingTaskId && 'ring-2 ring-accent/40'
       )}
     >
