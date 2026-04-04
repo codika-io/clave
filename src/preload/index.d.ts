@@ -105,18 +105,35 @@ export interface FileReadResult {
   binary: boolean
 }
 
+export type ColumnBehavior = 'default-inbox' | 'active' | 'terminal' | 'none'
+
+export interface BoardColumn {
+  id: string
+  title: string
+  order: number
+  builtIn: boolean
+  behavior: ColumnBehavior
+  locked?: boolean
+  color?: string
+}
+
 export interface BoardTask {
   id: string
   title: string
   prompt: string
+  notes: string
   cwd: string
   dangerousMode: boolean
   createdAt: number
   updatedAt: number
+  columnId: string
+  order: number
+  sessionId?: string
 }
 
 export interface BoardData {
   tasks: BoardTask[]
+  columns: BoardColumn[]
 }
 
 export interface ModelTokenUsage {
