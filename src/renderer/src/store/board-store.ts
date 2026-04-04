@@ -66,7 +66,27 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   loadBoard: async () => {
     if (!window.electronAPI?.boardLoad) return
     const data = await window.electronAPI.boardLoad()
-    set({ tasks: data.tasks, columns: data.columns, tags: data.tags ?? [], loaded: true })
+    const columns = data.columns ?? []
+    const tags = data.tags ?? []
+    const columnIds = new Set(columns.map((c) => c.id))
+
+    // Fix orphaned tasks whose columnId doesn't match any existing column
+    const inboxCol =
+      columns.find((c) => c.behavior === 'default-inbox') ??
+      [...columns].sort((a, b) => a.order - b.order)[0]
+    let needsSave = false
+    const tasks = (data.tasks ?? []).map((t) => {
+      if (!columnIds.has(t.columnId) && inboxCol) {
+        needsSave = true
+        return { ...t, columnId: inboxCol.id, updatedAt: Date.now() }
+      }
+      return t
+    })
+
+    set({ tasks, columns, tags, loaded: true })
+    if (needsSave) {
+      debouncedSave({ tasks, columns, tags })
+    }
   },
 
   addTask: (partial) => {
