@@ -8,6 +8,7 @@ import { KanbanColumn } from './KanbanColumn'
 import { useBoardDnd } from '../../hooks/use-board-dnd'
 import { TaskForm } from './TaskForm'
 import { TaskDetailPanel } from './TaskDetailPanel'
+import { TagPill } from './TagPill'
 import { ContextMenu } from '../ui/ContextMenu'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import type { BoardTask } from '../../../../preload/index.d'
@@ -22,6 +23,9 @@ export function TaskQueue() {
   const updateColumn = useBoardStore((s) => s.updateColumn)
   const deleteColumn = useBoardStore((s) => s.deleteColumn)
   const getColumnByBehavior = useBoardStore((s) => s.getColumnByBehavior)
+  const boardTags = useBoardStore((s) => s.tags)
+  const activeTagFilter = useBoardStore((s) => s.activeTagFilter)
+  const setActiveTagFilter = useBoardStore((s) => s.setActiveTagFilter)
 
   const addSession = useSessionStore((s) => s.addSession)
 
@@ -51,16 +55,22 @@ export function TaskQueue() {
   )
 
   const filteredTasks = useMemo(() => {
-    if (!search.trim()) return tasks
-    const q = search.toLowerCase()
-    return tasks.filter(
-      (t) =>
-        t.title.toLowerCase().includes(q) ||
-        t.prompt.toLowerCase().includes(q) ||
-        t.notes.toLowerCase().includes(q) ||
-        t.cwd.toLowerCase().includes(q)
-    )
-  }, [tasks, search])
+    let result = tasks
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      result = result.filter(
+        (t) =>
+          t.title.toLowerCase().includes(q) ||
+          t.prompt.toLowerCase().includes(q) ||
+          t.notes.toLowerCase().includes(q) ||
+          t.cwd.toLowerCase().includes(q)
+      )
+    }
+    if (activeTagFilter) {
+      result = result.filter((t) => t.tags?.includes(activeTagFilter))
+    }
+    return result
+  }, [tasks, search, activeTagFilter])
 
   const tasksByColumn = useMemo(() => {
     const map = new Map<string, BoardTask[]>()
@@ -244,18 +254,45 @@ export function TaskQueue() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-surface-0">
-      {/* Top bar: search */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle flex-shrink-0">
-        <div className="flex-1 relative">
-          <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tasks..."
-            className="w-full h-7 pl-8 pr-3 rounded bg-surface-100 border border-border-subtle text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-accent/40 focus:border-accent/40 transition-all"
-          />
+      {/* Top bar: search + tag filter */}
+      <div className="flex flex-col border-b border-border-subtle flex-shrink-0">
+        <div className="flex items-center gap-2 px-4 py-3">
+          <div className="flex-1 relative">
+            <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tasks..."
+              className="w-full h-7 pl-8 pr-3 rounded bg-surface-100 border border-border-subtle text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-accent/40 focus:border-accent/40 transition-all"
+            />
+          </div>
         </div>
+        {boardTags.length > 0 && (
+          <div className="flex items-center gap-1.5 px-4 pb-3 flex-wrap">
+            <span className="text-[11px] text-text-tertiary mr-0.5">Filter:</span>
+            {boardTags.map((tag) => (
+              <TagPill
+                key={tag.name}
+                name={tag.name}
+                color={tag.color}
+                size="md"
+                active={activeTagFilter === tag.name}
+                onClick={() =>
+                  setActiveTagFilter(activeTagFilter === tag.name ? null : tag.name)
+                }
+              />
+            ))}
+            {activeTagFilter && (
+              <button
+                onClick={() => setActiveTagFilter(null)}
+                className="text-[11px] text-text-tertiary hover:text-text-secondary ml-1"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Board: horizontal scrolling columns */}

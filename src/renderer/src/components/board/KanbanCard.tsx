@@ -102,7 +102,7 @@ export function KanbanCard({
       )}
 
       {/* Tags */}
-      {task.tags.length > 0 && (
+      {task.tags?.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
           {task.tags.map((tagName) => {
             const def = boardTags.find((t) => t.name === tagName)
