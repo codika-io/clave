@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { useBoardStore } from '../../store/board-store'
+import { TagInput } from './TagInput'
 import { useSessionStore } from '../../store/session-store'
 import type { BoardTask } from '../../../../preload/index.d'
 
@@ -37,6 +38,7 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
   const [prompt, setPrompt] = useState('')
   const [cwd, setCwd] = useState('')
   const [dangerousMode, setDangerousMode] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
   const notesRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -46,6 +48,7 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
       setPrompt(task.prompt)
       setCwd(task.cwd)
       setDangerousMode(task.dangerousMode)
+      setTags(task.tags ?? [])
     }
   }, [task])
 
@@ -56,9 +59,10 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
       notes: notes.trim(),
       prompt: prompt.trim(),
       cwd: cwd.trim(),
-      dangerousMode
+      dangerousMode,
+      tags
     })
-  }, [task, title, notes, prompt, cwd, dangerousMode, updateTask])
+  }, [task, title, notes, prompt, cwd, dangerousMode, tags, updateTask])
 
   const handleBlur = useCallback(() => {
     save()
@@ -198,6 +202,20 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
                     Skip permissions
                   </span>
                 </label>
+
+                {/* Tags */}
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                    Tags
+                  </label>
+                  <TagInput
+                    tags={tags}
+                    onChange={(newTags) => {
+                      setTags(newTags)
+                      if (task) updateTask(task.id, { tags: newTags })
+                    }}
+                  />
+                </div>
 
                 {/* Session status & actions */}
                 {task.sessionId && (

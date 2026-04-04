@@ -2,6 +2,8 @@ import { FolderIcon, CommandLineIcon, ArrowTopRightOnSquareIcon } from '@heroico
 import { useSessionStore } from '../../store/session-store'
 import { cn } from '../../lib/utils'
 import type { BoardTask, BoardColumn } from '../../../../preload/index.d'
+import { TagPill } from './TagPill'
+import { useBoardStore } from '../../store/board-store'
 
 function shortenCwd(cwd: string): string {
   const parts = cwd.split('/')
@@ -44,6 +46,7 @@ export function KanbanCard({
   isDragging,
   onPointerDown
 }: KanbanCardProps) {
+  const boardTags = useBoardStore((s) => s.tags)
   const linkedSession = useSessionStore((s) =>
     task.sessionId ? s.sessions.find((sess) => sess.id === task.sessionId) : undefined
   )
@@ -96,6 +99,22 @@ export function KanbanCard({
       {/* Notes preview */}
       {notesPreview && (
         <p className="mt-1 text-xs text-text-tertiary line-clamp-2">{notesPreview}</p>
+      )}
+
+      {/* Tags */}
+      {task.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {task.tags.map((tagName) => {
+            const def = boardTags.find((t) => t.name === tagName)
+            return (
+              <TagPill
+                key={tagName}
+                name={tagName}
+                color={def?.color ?? 'blue'}
+              />
+            )
+          })}
+        </div>
       )}
 
       {/* Metadata row */}
