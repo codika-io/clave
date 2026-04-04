@@ -3,11 +3,13 @@ import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { useBoardStore } from '../../store/board-store'
 import { useSessionStore } from '../../store/session-store'
 import { useBoardPersistence } from '../../hooks/use-board-persistence'
+import { useBoardSessionSync } from '../../hooks/use-board-session-sync'
 import { KanbanColumn } from './KanbanColumn'
 import { useBoardDnd } from '../../hooks/use-board-dnd'
 import { TaskForm } from './TaskForm'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { ContextMenu } from '../ui/ContextMenu'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import type { BoardTask } from '../../../../preload/index.d'
 
 export function TaskQueue() {
@@ -24,6 +26,7 @@ export function TaskQueue() {
   const addSession = useSessionStore((s) => s.addSession)
 
   useBoardPersistence()
+  useBoardSessionSync()
 
   const { draggingTaskId, dropTarget, onPointerDown } = useBoardDnd()
 
@@ -38,6 +41,7 @@ export function TaskQueue() {
     y: number
     items: { label: string; onClick: () => void; danger?: boolean }[]
   } | null>(null)
+  const [deleteTaskTarget, setDeleteTaskTarget] = useState<BoardTask | null>(null)
 
   const sortedColumns = useMemo(() => [...columns].sort((a, b) => a.order - b.order), [columns])
 
@@ -109,22 +113,60 @@ export function TaskQueue() {
         y: e.clientY,
         items: [
           { label: 'Edit', onClick: () => handleEditTask(task) },
-          { label: 'Delete', onClick: () => deleteTask(task.id), danger: true }
+          { label: 'Delete', onClick: () => setDeleteTaskTarget(task), danger: true }
         ]
       })
     },
-    [handleEditTask, deleteTask]
+    [handleEditTask]
   )
 
   const runTask = useCallback(
     async (task: BoardTask) => {
+      if (!window.electronAPI?.spawnSession) return
+
+      // Check if this task has an ended session we can resume
+      const existingSession = task.sessionId
+        ? useSessionStore.getState().sessions.find((s) => s.id === task.sessionId)
+        : undefined
+      const canResume = existingSession && !existingSession.alive && existingSession.claudeSessionId
+
+      if (canResume) {
+        // Resume the previous Claude session
+        const sessionInfo = await window.electronAPI.spawnSession(task.cwd, {
+          claudeMode: true,
+          resumeSessionId: existingSession.claudeSessionId!
+        })
+
+        addSession({
+          id: sessionInfo.id,
+          cwd: sessionInfo.cwd,
+          folderName: sessionInfo.folderName,
+          name: task.title || task.prompt.slice(0, 40),
+          alive: sessionInfo.alive,
+          activityStatus: 'idle',
+          promptWaiting: null,
+          claudeMode: true,
+          dangerousMode: task.dangerousMode ?? false,
+          claudeSessionId: sessionInfo.claudeSessionId,
+          sessionType: 'local'
+        })
+
+        const activeCol = getColumnByBehavior('active')
+        if (activeCol) {
+          moveTask(task.id, activeCol.id, 0)
+        }
+        updateTask(task.id, { sessionId: sessionInfo.id })
+
+        useSessionStore.getState().selectSession(sessionInfo.id, false)
+        return
+      }
+
+      // Fresh run — requires a prompt
       if (!task.prompt.trim()) {
         const current = useBoardStore.getState().tasks.find((t) => t.id === task.id)
         setDetailTask(current ?? task)
         return
       }
-
-      if (!window.electronAPI?.spawnSession) return
 
       const dangerousMode = task.dangerousMode ?? false
       const sessionInfo = await window.electronAPI.spawnSession(task.cwd, {
@@ -181,12 +223,27 @@ export function TaskQueue() {
     [addSession, moveTask, updateTask, getColumnByBehavior]
   )
 
+  const reorderColumns = useBoardStore((s) => s.reorderColumns)
+
+  const handleMoveColumn = useCallback(
+    (columnId: string, direction: 'left' | 'right') => {
+      const ids = sortedColumns.map((c) => c.id)
+      const idx = ids.indexOf(columnId)
+      if (idx < 0) return
+      const swapIdx = direction === 'left' ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= ids.length) return
+      ;[ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]]
+      reorderColumns(ids)
+    },
+    [sortedColumns, reorderColumns]
+  )
+
   const handleAddNewColumn = useCallback(() => {
     addColumn('New Column')
   }, [addColumn])
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-surface-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-surface-0">
       {/* Top bar: search */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle flex-shrink-0">
         <div className="flex-1 relative">
@@ -203,8 +260,8 @@ export function TaskQueue() {
 
       {/* Board: horizontal scrolling columns */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
-        <div className="flex gap-4 h-full items-start">
-          {sortedColumns.map((column) => (
+        <div className="flex gap-4 h-full items-start min-w-min">
+          {sortedColumns.map((column, idx) => (
             <KanbanColumn
               key={column.id}
               column={column}
@@ -217,6 +274,9 @@ export function TaskQueue() {
               onRenameColumn={(id, title) => updateColumn(id, { title })}
               onDeleteColumn={deleteColumn}
               onAddColumnAfter={(id) => addColumn('New Column', id)}
+              onMoveColumn={handleMoveColumn}
+              isFirst={idx === 0}
+              isLast={idx === sortedColumns.length - 1}
               isOnlyInbox={inboxColumnCount <= 1}
               draggingTaskId={draggingTaskId}
               dropTarget={dropTarget}
@@ -252,6 +312,18 @@ export function TaskQueue() {
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={deleteTaskTarget !== null}
+        title="Delete task?"
+        message={`"${deleteTaskTarget?.title || deleteTaskTarget?.prompt?.slice(0, 40) || 'Untitled'}" will be permanently deleted.`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (deleteTaskTarget) deleteTask(deleteTaskTarget.id)
+          setDeleteTaskTarget(null)
+        }}
+        onCancel={() => setDeleteTaskTarget(null)}
+      />
     </div>
   )
 }
