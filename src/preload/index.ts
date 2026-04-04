@@ -89,6 +89,7 @@ const electronAPI = {
   setAppIcon: (icon: string) => ipcRenderer.invoke('app:set-icon', icon),
   getUsername: () => ipcRenderer.invoke('app:get-username') as Promise<string | null>,
   saveAvatar: (sourcePath: string) => ipcRenderer.invoke('app:save-avatar', sourcePath) as Promise<string | null>,
+  getAppVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
 
   installUpdate: () => ipcRenderer.invoke('updater:install'),
   startDownload: () => ipcRenderer.invoke('updater:start-download'),

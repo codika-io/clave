@@ -21,6 +21,7 @@ import { cn } from '../../lib/utils'
 import { usePinnedStore } from '../../store/pinned-store'
 import { resolveColorHex } from '../../store/session-types'
 import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
+import { WhatsNewBanner } from '../help/WhatsNewBanner'
 
 const sidebarTransition = {
   duration: 0.2,
@@ -180,6 +181,19 @@ export function AppShell() {
           if (!state.fileTreeOpen) toggleFileTree()
           useSessionStore.getState().setSidePanelTab('git')
         }
+      }
+      // Cmd+? (Cmd+Shift+/) — open help panel
+      if (e.metaKey && e.shiftKey && e.key === '/') {
+        e.preventDefault()
+        const { fileTreeOpen: helpFileTreeOpen, toggleFileTree: helpToggleFileTree, sidePanelTab, setSidePanelTab } =
+          useSessionStore.getState()
+        if (helpFileTreeOpen && sidePanelTab === 'help') {
+          helpToggleFileTree()
+        } else {
+          if (!helpFileTreeOpen) helpToggleFileTree()
+          setSidePanelTab('help')
+        }
+        return
       }
       // Cmd+T: New terminal session
       if (e.metaKey && e.key === 't') {
@@ -433,6 +447,7 @@ export function AppShell() {
         sidebarOpen ? 'ml-1' : 'ml-2',
         fileTreeOpen ? 'mr-1' : 'mr-2'
       )}>
+        <WhatsNewBanner />
         {/* Toolbar — its own floating card */}
         <div className="floating-card flex-shrink-0 !bg-surface-0/70">
           <div

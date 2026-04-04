@@ -319,6 +319,7 @@ export interface ElectronAPI {
   onDownloadError: (callback: (message: string) => void) => () => void
   setAppIcon: (icon: string) => Promise<void>
   getUsername: () => Promise<string | null>
+  getAppVersion: () => Promise<string>
   installUpdate: () => Promise<void>
   startDownload: () => Promise<void>
   cancelDownload: () => Promise<void>

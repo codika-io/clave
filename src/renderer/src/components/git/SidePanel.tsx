@@ -9,6 +9,8 @@ import { MagicPullButton, MagicSyncButton, ViewModeToggle, PanelModeToggle, Coll
 import { useMultiRepoStatus } from '../../hooks/use-multi-repo-status'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { shortenPath } from '../../lib/utils'
+import { HelpPanel } from '../help/HelpPanel'
+import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
 
 function getParentPaths(fullPath: string): { path: string; name: string }[] {
   const homedir = fullPath.match(/^\/Users\/[^/]+/)?.[0] ?? ''
@@ -281,13 +283,24 @@ export function SidePanel() {
                 Git
               </button>
             )}
+            <button
+              onClick={() => setSidePanelTab('help')}
+              className={`flex items-center justify-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                effectiveTab === 'help'
+                  ? 'bg-surface-200 text-text-primary'
+                  : 'text-text-tertiary hover:text-text-secondary'
+              }`}
+            >
+              <QuestionMarkCircleIcon className="w-3.5 h-3.5" />
+              Help
+            </button>
           </div>
           </div>
           <div className="w-6 flex-shrink-0" />
         </div>
 
         {/* Row 2: Left-aligned path display + optional branch badge */}
-        <div className="relative flex items-center gap-1.5 px-3 pb-2">
+        {effectiveTab !== 'help' && <div className="relative flex items-center gap-1.5 px-3 pb-2">
           <div className="flex-1 min-w-0">
             {isRemoteSession && locationName ? (
               <div
@@ -390,7 +403,7 @@ export function SidePanel() {
             )}
           </div>
 
-        </div>
+        </div>}
       </div>
 
       {/* Shared git toolbar — branch on left, controls on right */}
@@ -426,7 +439,9 @@ export function SidePanel() {
       )}
 
       {/* Active tab content */}
-      {isRemoteSession && remoteLocationId && effectiveCwd && effectiveCwd !== '' && effectiveCwd !== '~' && effectiveCwd.startsWith('/') ? (
+      {effectiveTab === 'help' ? (
+        <HelpPanel />
+      ) : isRemoteSession && remoteLocationId && effectiveCwd && effectiveCwd !== '' && effectiveCwd !== '~' && effectiveCwd.startsWith('/') ? (
         <RemoteFileTree locationId={remoteLocationId} cwd={effectiveCwd} />
       ) : isRemoteSession ? (
         <div className="flex-1 flex items-center justify-center px-3">
