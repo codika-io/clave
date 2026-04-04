@@ -83,6 +83,7 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
           prompt: prompt.trim(),
           cwd: cwd.trim(),
           dangerousMode,
+          tags: [],
           columnId
         })
       }
