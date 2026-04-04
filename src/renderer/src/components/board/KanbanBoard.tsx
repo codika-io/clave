@@ -4,6 +4,7 @@ import { useBoardStore } from '../../store/board-store'
 import { useSessionStore } from '../../store/session-store'
 import { useBoardPersistence } from '../../hooks/use-board-persistence'
 import { KanbanColumn } from './KanbanColumn'
+import { useBoardDnd } from '../../hooks/use-board-dnd'
 import { TaskForm } from './TaskForm'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { ContextMenu } from '../ui/ContextMenu'
@@ -23,6 +24,8 @@ export function TaskQueue() {
   const addSession = useSessionStore((s) => s.addSession)
 
   useBoardPersistence()
+
+  const { draggingTaskId, dropTarget, onPointerDown } = useBoardDnd()
 
   const [formOpen, setFormOpen] = useState(false)
   const [formColumnId, setFormColumnId] = useState<string | undefined>(undefined)
@@ -212,6 +215,9 @@ export function TaskQueue() {
               onDeleteColumn={deleteColumn}
               onAddColumnAfter={(id) => addColumn('New Column', id)}
               isOnlyInbox={inboxColumnCount <= 1}
+              draggingTaskId={draggingTaskId}
+              dropTarget={dropTarget}
+              onPointerDown={onPointerDown}
             />
           ))}
 
