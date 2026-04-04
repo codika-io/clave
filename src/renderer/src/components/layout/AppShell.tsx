@@ -497,7 +497,7 @@ export function AppShell() {
           'flex-1 min-h-0 floating-card',
           activeView === 'terminals' ? 'hidden' : 'flex'
         )}>
-          <div className={activeView === 'board' ? 'flex-1 flex min-h-0' : 'hidden'}>
+          <div className={activeView === 'board' ? 'flex-1 flex min-h-0 min-w-0' : 'hidden'}>
             <TaskQueue />
           </div>
           <div className={activeView === 'usage' ? 'flex-1 flex min-h-0' : 'hidden'}>
