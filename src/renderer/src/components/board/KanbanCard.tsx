@@ -67,7 +67,7 @@ export function KanbanCard({
   const canResume = linkedSession != null && !sessionAlive
   const canRun =
     column.behavior !== 'terminal' &&
-    (column.behavior !== 'active' || canResume)
+    (column.behavior !== 'active' || !sessionAlive)
   const hasPrompt = task.prompt.trim().length > 0
   const notesPreview = task.notes.trim() ? task.notes.split('\n').slice(0, 2).join(' ') : null
 
