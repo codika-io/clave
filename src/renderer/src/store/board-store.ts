@@ -87,7 +87,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       updatedAt: now,
       columnId,
       order: tasksInColumn.length,
-      sessionId: undefined
+      sessionId: partial.sessionId ?? undefined,
+      claudeSessionId: partial.claudeSessionId ?? undefined
     }
     const newTasks = [...state.tasks, task]
     set({ tasks: newTasks })
