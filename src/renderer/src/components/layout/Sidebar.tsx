@@ -26,6 +26,7 @@ import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resy
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
 import { SidebarFooter } from './SidebarFooter'
+import { WorkTracker } from '../work-tracker/WorkTracker'
 import { ScrollArea } from '../ui/scroll-area'
 import {
   MagnifyingGlassIcon,
@@ -1227,6 +1228,9 @@ export function Sidebar() {
         <TaskQueueSection collapsed={boardCollapsed} />
         <HistorySection collapsed={boardCollapsed} />
       </ScrollArea>
+
+      {/* Work tracker widget */}
+      <WorkTracker />
 
       {/* User footer */}
       <SidebarFooter />
