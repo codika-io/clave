@@ -7,8 +7,17 @@ interface BoardState {
   loaded: boolean
 
   loadBoard: () => Promise<void>
-  addTask: (task: Omit<BoardTask, 'id' | 'createdAt' | 'updatedAt' | 'columnId' | 'order'> & { columnId?: string }) => void
-  updateTask: (id: string, updates: Partial<Pick<BoardTask, 'title' | 'prompt' | 'notes' | 'cwd' | 'dangerousMode' | 'sessionId'>>) => void
+  addTask: (
+    task: Omit<BoardTask, 'id' | 'createdAt' | 'updatedAt' | 'columnId' | 'order'> & {
+      columnId?: string
+    }
+  ) => void
+  updateTask: (
+    id: string,
+    updates: Partial<
+      Pick<BoardTask, 'title' | 'prompt' | 'notes' | 'cwd' | 'dangerousMode' | 'sessionId'>
+    >
+  ) => void
   deleteTask: (id: string) => void
   moveTask: (taskId: string, toColumnId: string, toOrder: number) => void
 
@@ -93,17 +102,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     let newTasks = state.tasks.filter((t) => t.id !== taskId)
     if (fromColumnId !== toColumnId) {
       newTasks = newTasks.map((t) =>
-        t.columnId === fromColumnId && t.order > task.order
-          ? { ...t, order: t.order - 1 }
-          : t
+        t.columnId === fromColumnId && t.order > task.order ? { ...t, order: t.order - 1 } : t
       )
     }
 
     // Make space at target position
     newTasks = newTasks.map((t) =>
-      t.columnId === toColumnId && t.order >= toOrder
-        ? { ...t, order: t.order + 1 }
-        : t
+      t.columnId === toColumnId && t.order >= toOrder ? { ...t, order: t.order + 1 } : t
     )
 
     // Insert at new position
@@ -146,9 +151,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateColumn: (id, updates) => {
     const state = get()
-    const newColumns = state.columns.map((c) =>
-      c.id === id ? { ...c, ...updates } : c
-    )
+    const newColumns = state.columns.map((c) => (c.id === id ? { ...c, ...updates } : c))
     set({ columns: newColumns })
     debouncedSave({ tasks: state.tasks, columns: newColumns })
   },
@@ -164,9 +167,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const remainingColumns = state.columns.filter((c) => c.id !== id)
     if (remainingColumns.length === 0) return
 
-    const targetColumnId = column.id === inbox.id
-      ? remainingColumns.sort((a, b) => a.order - b.order)[0].id
-      : inbox.id
+    const targetColumnId =
+      column.id === inbox.id ? remainingColumns.sort((a, b) => a.order - b.order)[0].id : inbox.id
 
     const targetTaskCount = state.tasks.filter((t) => t.columnId === targetColumnId).length
     const newTasks = state.tasks.map((t, idx) =>
@@ -199,6 +201,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   getInboxColumn: () => {
     const state = get()
-    return state.columns.find((c) => c.behavior === 'default-inbox') ?? state.columns.sort((a, b) => a.order - b.order)[0]
+    return (
+      state.columns.find((c) => c.behavior === 'default-inbox') ??
+      state.columns.sort((a, b) => a.order - b.order)[0]
+    )
   }
 }))

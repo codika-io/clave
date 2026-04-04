@@ -32,7 +32,15 @@ interface KanbanCardProps {
   onPointerDown?: (e: React.PointerEvent) => void
 }
 
-export function KanbanCard({ task, column, onRun, onClick, onContextMenu, isDragging, onPointerDown }: KanbanCardProps) {
+export function KanbanCard({
+  task,
+  column,
+  onRun,
+  onClick,
+  onContextMenu,
+  isDragging,
+  onPointerDown
+}: KanbanCardProps) {
   const label = task.title || task.notes.split('\n')[0] || task.prompt.split('\n')[0] || 'Untitled'
   const canRun = column.behavior !== 'terminal' && column.behavior !== 'active'
   const hasPrompt = task.prompt.trim().length > 0
@@ -73,7 +81,9 @@ export function KanbanCard({ task, column, onRun, onClick, onContextMenu, isDrag
         )}
         <span className="flex items-center gap-1 text-[11px] text-text-tertiary">
           <FolderIcon className="w-3 h-3" />
-          <span className="truncate max-w-[120px]" title={task.cwd}>{shortenCwd(task.cwd)}</span>
+          <span className="truncate max-w-[120px]" title={task.cwd}>
+            {shortenCwd(task.cwd)}
+          </span>
         </span>
         <span className="text-text-tertiary/30">·</span>
         <span className="text-[11px] text-text-tertiary">{formatDate(task.createdAt)}</span>
