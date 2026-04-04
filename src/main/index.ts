@@ -53,7 +53,23 @@ function createWindow(): void {
     openclawClient.disconnectAll()
   })
 
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('clave://')) {
+      event.preventDefault()
+      return
+    }
+    // In dev, allow navigating to the dev server URL
+    if (is.dev && url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '')) {
+      return
+    }
+    // Block all other navigation — links should be handled by the renderer
+    event.preventDefault()
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
+    if (details.url.startsWith('clave://')) {
+      return { action: 'deny' }
+    }
     shell.openExternal(details.url).catch(() => {})
     return { action: 'deny' }
   })

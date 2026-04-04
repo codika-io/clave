@@ -1,0 +1,62 @@
+[
+  {
+    "id": "getting-started",
+    "title": "Getting Started",
+    "subtitle": "What is Clave and how to use it",
+    "keywords": ["intro", "overview", "first", "new", "welcome"]
+  },
+  {
+    "id": "sessions",
+    "title": "Sessions",
+    "subtitle": "Claude mode, terminal mode, and dangerous mode",
+    "keywords": ["claude", "terminal", "dangerous", "create", "close", "kill"]
+  },
+  {
+    "id": "board",
+    "title": "Kanban Board",
+    "subtitle": "Queue tasks and let Claude work through them",
+    "keywords": ["kanban", "task", "queue", "drag", "drop", "tag", "run"]
+  },
+  {
+    "id": "git",
+    "title": "Git Panel",
+    "subtitle": "Staging, committing, push, pull, and Git Journey",
+    "keywords": ["git", "commit", "push", "pull", "diff", "stage", "journey"]
+  },
+  {
+    "id": "groups",
+    "title": "Session Groups",
+    "subtitle": "Groups, pinned configs, .clave files, and templates",
+    "keywords": ["group", "pin", "pinned", "clave", "template", "workspace", "toolbar"]
+  },
+  {
+    "id": "files",
+    "title": "File Browser",
+    "subtitle": "Browse files, preview markdown, and search with Cmd+P",
+    "keywords": ["file", "browse", "tree", "preview", "palette", "markdown"]
+  },
+  {
+    "id": "history",
+    "title": "History",
+    "subtitle": "Browse past Claude Code sessions and conversations",
+    "keywords": ["history", "past", "session", "conversation", "search"]
+  },
+  {
+    "id": "usage",
+    "title": "Usage Analytics",
+    "subtitle": "Token usage, cost estimates, and activity patterns",
+    "keywords": ["usage", "token", "cost", "analytics", "model"]
+  },
+  {
+    "id": "shortcuts",
+    "title": "Keyboard Shortcuts",
+    "subtitle": "Full shortcut reference",
+    "keywords": ["keyboard", "shortcut", "hotkey", "key", "cmd"]
+  },
+  {
+    "id": "remote",
+    "title": "Remote Sessions",
+    "subtitle": "SSH locations and remote terminal sessions",
+    "keywords": ["remote", "ssh", "location", "server"]
+  }
+]
