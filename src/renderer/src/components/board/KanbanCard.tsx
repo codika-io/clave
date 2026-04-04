@@ -48,9 +48,21 @@ export function KanbanCard({
     task.sessionId ? s.sessions.find((sess) => sess.id === task.sessionId) : undefined
   )
 
-  const sessionAlive = linkedSession?.alive === true
-  const activityStatus = linkedSession?.activityStatus ?? null
-  const promptWaiting = linkedSession?.promptWaiting ?? null
+  const sessionAlive = useSessionStore((s) => {
+    if (!task.sessionId) return false
+    const sess = s.sessions.find((ss) => ss.id === task.sessionId)
+    return sess?.alive === true
+  })
+  const activityStatus = useSessionStore((s) => {
+    if (!task.sessionId) return null
+    const sess = s.sessions.find((ss) => ss.id === task.sessionId)
+    return sess?.activityStatus ?? null
+  })
+  const promptWaiting = useSessionStore((s) => {
+    if (!task.sessionId) return null
+    const sess = s.sessions.find((ss) => ss.id === task.sessionId)
+    return sess?.promptWaiting ?? null
+  })
   const label = task.title || task.notes.split('\n')[0] || task.prompt.split('\n')[0] || 'Untitled'
   const canResume = linkedSession != null && !sessionAlive
   const canRun =
