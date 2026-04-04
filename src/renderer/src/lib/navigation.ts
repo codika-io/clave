@@ -7,13 +7,13 @@ const VIEW_TARGETS: Set<string> = new Set([
   'history',
   'settings',
   'usage',
-  'agents',
+  'agents'
 ])
 
 const SIDE_PANEL_TABS: Record<string, 'files' | 'git' | 'help'> = {
   'side:files': 'files',
   'side:git': 'git',
-  'side:help': 'help',
+  'side:help': 'help'
 }
 
 export function navigateTo(target: string): boolean {
@@ -26,7 +26,7 @@ export function navigateTo(target: string): boolean {
 
   const sideTab = SIDE_PANEL_TABS[target]
   if (sideTab) {
-    if (!store.showFileTree) {
+    if (!store.fileTreeOpen) {
       store.toggleFileTree()
     }
     store.setSidePanelTab(sideTab)

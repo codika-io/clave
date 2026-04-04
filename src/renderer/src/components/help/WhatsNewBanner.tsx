@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { navigateTo } from '../../lib/navigation'
 import whatsNewData from '../../help/whats-new.json'
@@ -12,7 +12,7 @@ interface WhatsNewEntry {
 
 const LAST_SEEN_KEY = 'clave-whats-new-last-seen-version'
 
-export function WhatsNewBanner() {
+export function WhatsNewBanner(): React.ReactNode {
   const [visible, setVisible] = useState(false)
   const [entry, setEntry] = useState<WhatsNewEntry | null>(null)
 
@@ -32,9 +32,7 @@ export function WhatsNewBanner() {
         if (lastSeen === currentVersion) return
 
         // Find entry for current version
-        const match = (whatsNewData as WhatsNewEntry[]).find(
-          (e) => e.version === currentVersion,
-        )
+        const match = (whatsNewData as WhatsNewEntry[]).find((e) => e.version === currentVersion)
         if (match) {
           setEntry(match)
           setVisible(true)
@@ -68,8 +66,8 @@ export function WhatsNewBanner() {
   return (
     <div className="mx-2 mb-1 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 flex items-center gap-2 text-xs">
       <span className="text-text-secondary flex-1">
-        <span className="font-medium text-text-primary">New in {entry.version}:</span>{' '}
-        {entry.title} — {entry.description}
+        <span className="font-medium text-text-primary">New in {entry.version}:</span> {entry.title}{' '}
+        — {entry.description}
       </span>
       <button
         onClick={handleTryIt}
