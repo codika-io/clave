@@ -24,6 +24,7 @@ interface KanbanColumnProps {
   onRunTask: (task: BoardTask) => void
   onClickTask: (task: BoardTask) => void
   onContextMenuTask: (e: React.MouseEvent, task: BoardTask) => void
+  onViewSession?: (sessionId: string) => void
   onRenameColumn: (columnId: string, title: string) => void
   onDeleteColumn: (columnId: string) => void
   onAddColumnAfter: (columnId: string) => void
@@ -40,6 +41,7 @@ export function KanbanColumn({
   onRunTask,
   onClickTask,
   onContextMenuTask,
+  onViewSession,
   onRenameColumn,
   onDeleteColumn,
   onAddColumnAfter,
@@ -130,6 +132,7 @@ export function KanbanColumn({
             onRun={onRunTask}
             onClick={onClickTask}
             onContextMenu={onContextMenuTask}
+            onViewSession={onViewSession}
             isDragging={draggingTaskId === task.id}
             onPointerDown={onPointerDown ? (e) => onPointerDown(e, task.id, column.id) : undefined}
           />

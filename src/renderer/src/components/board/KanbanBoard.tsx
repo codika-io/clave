@@ -97,6 +97,10 @@ export function TaskQueue() {
     setDetailTask(null)
   }, [])
 
+  const handleViewSession = useCallback((sessionId: string) => {
+    useSessionStore.getState().selectSession(sessionId, false)
+  }, [])
+
   const handleContextMenuTask = useCallback(
     (e: React.MouseEvent, task: BoardTask) => {
       e.preventDefault()
@@ -209,6 +213,7 @@ export function TaskQueue() {
               onRunTask={runTask}
               onClickTask={handleClickTask}
               onContextMenuTask={handleContextMenuTask}
+              onViewSession={handleViewSession}
               onRenameColumn={(id, title) => updateColumn(id, { title })}
               onDeleteColumn={deleteColumn}
               onAddColumnAfter={(id) => addColumn('New Column', id)}
