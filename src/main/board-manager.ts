@@ -31,6 +31,7 @@ export interface BoardTask {
   columnId: string
   order: number
   sessionId?: string
+  claudeSessionId?: string
   tags: string[]
 }
 
@@ -93,6 +94,7 @@ class BoardManager {
           columnId: (t.columnId as string) ?? inboxColumn.id,
           order: typeof t.order === 'number' ? (t.order as number) : index,
           sessionId: (t.sessionId as string) ?? undefined,
+          claudeSessionId: (t.claudeSessionId as string) ?? undefined,
           tags: Array.isArray(t.tags) ? (t.tags as string[]) : []
         }))
 
