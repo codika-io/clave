@@ -4,6 +4,15 @@ All notable changes to Clave are documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — feature/in-app-docs
+
+### Added
+- Help tab in right side panel with searchable documentation (10 help topics)
+- What's New banner for post-update feature announcements
+- `clave://navigate` deep links in help docs to jump to features
+- Cmd+? keyboard shortcut to open Help tab
+- App version exposed to renderer via IPC
+
 ## [Unreleased] — feature/kanban-board
 
 ### Added

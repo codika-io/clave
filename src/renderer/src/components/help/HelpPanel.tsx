@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { MarkdownRenderer } from '../files/MarkdownRenderer'
 import helpIndex from '../../help/index.json'
@@ -24,7 +24,7 @@ const helpDocsMap: Record<string, string> = {
   history,
   usage,
   shortcuts,
-  remote,
+  remote
 }
 
 function getDocContent(id: string): string | null {
@@ -38,7 +38,7 @@ interface HelpEntry {
   keywords: string[]
 }
 
-export function HelpPanel() {
+export function HelpPanel(): React.ReactNode {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [filterText, setFilterText] = useState('')
 
@@ -49,7 +49,7 @@ export function HelpPanel() {
       (doc) =>
         doc.title.toLowerCase().includes(lower) ||
         doc.subtitle.toLowerCase().includes(lower) ||
-        doc.keywords.some((k) => k.includes(lower)),
+        doc.keywords.some((k) => k.includes(lower))
     )
   }, [filterText])
 
@@ -68,9 +68,7 @@ export function HelpPanel() {
           >
             <ArrowLeftIcon className="w-4 h-4" />
           </button>
-          <span className="text-xs font-medium text-text-primary truncate">
-            {selectedTitle}
-          </span>
+          <span className="text-xs font-medium text-text-primary truncate">{selectedTitle}</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           <MarkdownRenderer content={selectedDoc} />
