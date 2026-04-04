@@ -53,6 +53,12 @@ function createWindow(): void {
     openclawClient.disconnectAll()
   })
 
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('clave://')) {
+      event.preventDefault()
+    }
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     if (details.url.startsWith('clave://')) {
       return { action: 'deny' }
