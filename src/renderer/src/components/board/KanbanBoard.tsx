@@ -138,13 +138,19 @@ export function TaskQueue() {
       const existingSession = task.sessionId
         ? useSessionStore.getState().sessions.find((s) => s.id === task.sessionId)
         : undefined
-      const canResume = existingSession && !existingSession.alive && existingSession.claudeSessionId
+      const canResumeFromSession = existingSession && !existingSession.alive && existingSession.claudeSessionId
 
-      if (canResume) {
-        // Resume the previous Claude session
+      // Cold-start fallback: use persisted claudeSessionId when runtime session is gone
+      const resumeId = canResumeFromSession
+        ? existingSession.claudeSessionId!
+        : (!existingSession && task.claudeSessionId)
+          ? task.claudeSessionId
+          : null
+
+      if (resumeId) {
         const sessionInfo = await window.electronAPI.spawnSession(task.cwd, {
           claudeMode: true,
-          resumeSessionId: existingSession.claudeSessionId!
+          resumeSessionId: resumeId
         })
 
         addSession({
@@ -165,7 +171,7 @@ export function TaskQueue() {
         if (activeCol) {
           moveTask(task.id, activeCol.id, 0)
         }
-        updateTask(task.id, { sessionId: sessionInfo.id })
+        updateTask(task.id, { sessionId: sessionInfo.id, claudeSessionId: sessionInfo.claudeSessionId ?? undefined })
 
         useSessionStore.getState().selectSession(sessionInfo.id, false)
         return
@@ -202,7 +208,7 @@ export function TaskQueue() {
       if (activeCol) {
         moveTask(task.id, activeCol.id, 0)
       }
-      updateTask(task.id, { sessionId: sessionInfo.id })
+      updateTask(task.id, { sessionId: sessionInfo.id, claudeSessionId: sessionInfo.claudeSessionId ?? undefined })
 
       useSessionStore.getState().selectSession(sessionInfo.id, false)
 

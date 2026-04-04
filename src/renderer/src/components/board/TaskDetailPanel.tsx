@@ -31,7 +31,7 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
   const sessionAlive = linkedSession?.alive === true
   const activityStatus = linkedSession?.activityStatus ?? null
   const promptWaiting = linkedSession?.promptWaiting ?? null
-  const canResume = linkedSession != null && !sessionAlive
+  const canResume = (linkedSession != null && !sessionAlive) || (!linkedSession && !!task?.claudeSessionId)
 
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')

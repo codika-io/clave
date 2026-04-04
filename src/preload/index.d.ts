@@ -134,6 +134,7 @@ export interface BoardTask {
   columnId: string
   order: number
   sessionId?: string
+  claudeSessionId?: string
   tags: string[]
 }
 

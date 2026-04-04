@@ -17,7 +17,7 @@ interface BoardState {
   updateTask: (
     id: string,
     updates: Partial<
-      Pick<BoardTask, 'title' | 'prompt' | 'notes' | 'cwd' | 'dangerousMode' | 'sessionId' | 'tags'>
+      Pick<BoardTask, 'title' | 'prompt' | 'notes' | 'cwd' | 'dangerousMode' | 'sessionId' | 'tags' | 'claudeSessionId'>
     >
   ) => void
   deleteTask: (id: string) => void

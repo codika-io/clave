@@ -67,7 +67,7 @@ export function KanbanCard({
     return sess?.promptWaiting ?? null
   })
   const label = task.title || task.notes.split('\n')[0] || task.prompt.split('\n')[0] || 'Untitled'
-  const canResume = linkedSession != null && !sessionAlive
+  const canResume = (linkedSession != null && !sessionAlive) || (!linkedSession && !!task.claudeSessionId)
   const canRun =
     column.behavior !== 'terminal' &&
     (column.behavior !== 'active' || !sessionAlive)
