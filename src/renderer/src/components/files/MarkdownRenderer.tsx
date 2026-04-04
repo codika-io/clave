@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSyntaxHighlight } from '../../hooks/use-syntax-highlight'
+import { handleClaveLink } from '../../lib/navigation'
 
 const CodeBlock = memo(function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const filename = lang ? `file.${lang}` : 'file.txt'
@@ -52,7 +53,12 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: { co
           a: ({ href, children }) => (
             <a
               href={href}
-              className="text-accent hover:underline"
+              className="text-accent hover:underline cursor-pointer"
+              onClick={(e) => {
+                if (href && handleClaveLink(href)) {
+                  e.preventDefault()
+                }
+              }}
               target="_blank"
               rel="noopener noreferrer"
             >
