@@ -3,20 +3,32 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { MarkdownRenderer } from '../files/MarkdownRenderer'
 import helpIndex from '../../help/index.json'
 
-// Import all help markdown files as raw strings
-const helpDocs: Record<string, string> = import.meta.glob('../../help/*.md', {
-  eager: true,
-  query: '?raw',
-  import: 'default',
-}) as Record<string, string>
+import gettingStarted from '../../help/getting-started.md?raw'
+import sessions from '../../help/sessions.md?raw'
+import board from '../../help/board.md?raw'
+import git from '../../help/git.md?raw'
+import groups from '../../help/groups.md?raw'
+import files from '../../help/files.md?raw'
+import history from '../../help/history.md?raw'
+import usage from '../../help/usage.md?raw'
+import shortcuts from '../../help/shortcuts.md?raw'
+import remote from '../../help/remote.md?raw'
 
-// Normalize keys from glob paths to doc IDs
-// e.g., '../../help/getting-started.md' -> 'getting-started'
+const helpDocsMap: Record<string, string> = {
+  'getting-started': gettingStarted,
+  sessions,
+  board,
+  git,
+  groups,
+  files,
+  history,
+  usage,
+  shortcuts,
+  remote,
+}
+
 function getDocContent(id: string): string | null {
-  for (const [path, content] of Object.entries(helpDocs)) {
-    if (path.endsWith(`/${id}.md`)) return content
-  }
-  return null
+  return helpDocsMap[id] ?? null
 }
 
 interface HelpEntry {
