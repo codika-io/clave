@@ -67,7 +67,8 @@ export function KanbanCard({
       onPointerDown={onPointerDown}
       className={cn(
         'group rounded-lg border border-border-subtle bg-surface-100 p-3 cursor-default transition-all hover:border-border hover:shadow-sm',
-        isDragging && 'opacity-40'
+        isDragging && 'opacity-40',
+        sessionAlive && promptWaiting && 'border-amber-400/50 shadow-[0_0_8px_rgba(251,191,36,0.15)]'
       )}
     >
       {/* Title */}
