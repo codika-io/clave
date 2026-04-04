@@ -22,6 +22,7 @@ export function useBoardDnd() {
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const ghostRef = useRef<HTMLElement | null>(null)
+  const dropTargetRef = useRef<DropTarget | null>(null)
 
   const createGhost = useCallback((sourceEl: HTMLElement, x: number, y: number) => {
     const ghost = sourceEl.cloneNode(true) as HTMLElement
@@ -102,17 +103,19 @@ export function useBoardDnd() {
         }
 
         const target = findDropTarget(ev.clientX, ev.clientY)
+        dropTargetRef.current = target
         setDropTarget(target)
       }
 
       const onUp = () => {
         const drag = dragRef.current
-        const currentTarget = dropTarget
+        const currentTarget = dropTargetRef.current
         if (drag?.started && currentTarget) {
           moveTask(drag.taskId, currentTarget.columnId, currentTarget.order)
         }
 
         dragRef.current = null
+        dropTargetRef.current = null
         setDraggingTaskId(null)
         setDropTarget(null)
         removeGhost()
@@ -123,7 +126,7 @@ export function useBoardDnd() {
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
     },
-    [createGhost, removeGhost, findDropTarget, moveTask, dropTarget]
+    [createGhost, removeGhost, findDropTarget, moveTask]
   )
 
   return {
