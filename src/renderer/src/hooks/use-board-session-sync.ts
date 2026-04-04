@@ -34,19 +34,26 @@ export function useBoardSessionSync(): void {
       const prevIds = prevSessionIdsRef.current
       const prevAlive = prevAliveRef.current
 
-      // Build a set of session IDs already linked to board tasks
+      // Build sets of IDs already linked to board tasks for deduplication.
+      // Check both sessionId (runtime) AND claudeSessionId (persistent) —
+      // resumed sessions get a new runtime ID but keep the same claudeSessionId.
       const linkedSessionIds = new Set<string>()
+      const linkedClaudeSessionIds = new Set<string>()
       for (const task of boardState.tasks) {
         if (task.sessionId) linkedSessionIds.add(task.sessionId)
+        if (task.claudeSessionId) linkedClaudeSessionIds.add(task.claudeSessionId)
       }
 
       for (const session of state.sessions) {
         // --- New session detection ---
         if (!prevIds.has(session.id)) {
+          const alreadyLinked =
+            linkedSessionIds.has(session.id) ||
+            (session.claudeSessionId && linkedClaudeSessionIds.has(session.claudeSessionId))
           if (
             session.claudeMode &&
             session.sessionType === 'local' &&
-            !linkedSessionIds.has(session.id)
+            !alreadyLinked
           ) {
             const activeCol = boardState.getColumnByBehavior('active')
             if (activeCol) {
@@ -70,6 +77,23 @@ export function useBoardSessionSync(): void {
         if (wasAlive === true && session.alive === false) {
           const currentBoardState = useBoardStore.getState()
           const task = currentBoardState.tasks.find((t) => t.sessionId === session.id)
+          if (task) {
+            const terminalCol = currentBoardState.getColumnByBehavior('terminal')
+            if (terminalCol && task.columnId !== terminalCol.id) {
+              useBoardStore.getState().moveTask(task.id, terminalCol.id, 0)
+            }
+          }
+        }
+      }
+
+      // --- Session removal detection ---
+      // When a session is closed via X, removeSession() removes it from the store
+      // entirely — it never transitions alive: true → false. Detect disappearance.
+      const currentIds = new Set(state.sessions.map((s) => s.id))
+      for (const oldId of prevIds) {
+        if (!currentIds.has(oldId)) {
+          const currentBoardState = useBoardStore.getState()
+          const task = currentBoardState.tasks.find((t) => t.sessionId === oldId)
           if (task) {
             const terminalCol = currentBoardState.getColumnByBehavior('terminal')
             if (terminalCol && task.columnId !== terminalCol.id) {

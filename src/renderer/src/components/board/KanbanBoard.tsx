@@ -153,6 +153,14 @@ export function TaskQueue() {
           resumeSessionId: resumeId
         })
 
+        // Link the card to the new session BEFORE adding it to the session store,
+        // so the sync hook sees it as already tracked and won't create a duplicate card.
+        updateTask(task.id, { sessionId: sessionInfo.id, claudeSessionId: sessionInfo.claudeSessionId ?? undefined })
+        const activeCol = getColumnByBehavior('active')
+        if (activeCol) {
+          moveTask(task.id, activeCol.id, 0)
+        }
+
         addSession({
           id: sessionInfo.id,
           cwd: sessionInfo.cwd,
@@ -166,12 +174,6 @@ export function TaskQueue() {
           claudeSessionId: sessionInfo.claudeSessionId,
           sessionType: 'local'
         })
-
-        const activeCol = getColumnByBehavior('active')
-        if (activeCol) {
-          moveTask(task.id, activeCol.id, 0)
-        }
-        updateTask(task.id, { sessionId: sessionInfo.id, claudeSessionId: sessionInfo.claudeSessionId ?? undefined })
 
         useSessionStore.getState().selectSession(sessionInfo.id, false)
         return
@@ -190,6 +192,14 @@ export function TaskQueue() {
         claudeMode: true
       })
 
+      // Link the card to the new session BEFORE adding it to the session store,
+      // so the sync hook sees it as already tracked and won't create a duplicate card.
+      updateTask(task.id, { sessionId: sessionInfo.id, claudeSessionId: sessionInfo.claudeSessionId ?? undefined })
+      const activeCol = getColumnByBehavior('active')
+      if (activeCol) {
+        moveTask(task.id, activeCol.id, 0)
+      }
+
       addSession({
         id: sessionInfo.id,
         cwd: sessionInfo.cwd,
@@ -203,12 +213,6 @@ export function TaskQueue() {
         claudeSessionId: sessionInfo.claudeSessionId,
         sessionType: 'local'
       })
-
-      const activeCol = getColumnByBehavior('active')
-      if (activeCol) {
-        moveTask(task.id, activeCol.id, 0)
-      }
-      updateTask(task.id, { sessionId: sessionInfo.id, claudeSessionId: sessionInfo.claudeSessionId ?? undefined })
 
       useSessionStore.getState().selectSession(sessionInfo.id, false)
 
