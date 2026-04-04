@@ -197,4 +197,8 @@ export function registerAppHandlers(): void {
       }
     }
   })
+
+  ipcMain.handle('app:get-version', () => {
+    return app.getVersion()
+  })
 }
