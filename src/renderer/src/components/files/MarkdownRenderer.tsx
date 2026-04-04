@@ -1,8 +1,13 @@
 import { memo, useMemo } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSyntaxHighlight } from '../../hooks/use-syntax-highlight'
 import { handleClaveLink } from '../../lib/navigation'
+
+function urlTransform(url: string): string {
+  if (url.startsWith('clave://')) return url
+  return defaultUrlTransform(url)
+}
 
 const CodeBlock = memo(function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const filename = lang ? `file.${lang}` : 'file.txt'
@@ -129,6 +134,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: { co
     <div className="p-5 prose-preview text-sm leading-relaxed text-text-primary">
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
+        urlTransform={urlTransform}
         children={content}
         components={components}
       />
