@@ -102,8 +102,7 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
               <div className="absolute left-0 top-0 bottom-0 w-px bg-border-subtle" />
 
               {activeTasks.map((task) => {
-                const label =
-                  task.title || task.notes.split('\n')[0] || task.prompt.slice(0, 40) || 'Untitled'
+                const label = task.title || task.notes.split('\n')[0] || task.prompt.slice(0, 40) || 'Untitled'
                 return (
                   <button
                     key={task.id}
