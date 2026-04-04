@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronRightIcon, ClockIcon, QueueListIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import {
+  ChevronRightIcon,
+  ClockIcon,
+  QueueListIcon,
+  SparklesIcon
+} from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
 import { useBoardStore } from '../../store/board-store'
 import { useHistoryStore, type HistorySession } from '../../store/history-store'
@@ -37,7 +42,18 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
   const activeView = useSessionStore((s) => s.activeView)
   const setActiveView = useSessionStore((s) => s.setActiveView)
   const tasks = useBoardStore((s) => s.tasks)
+  const columns = useBoardStore((s) => s.columns)
   const [expanded, setExpanded] = useState(false)
+
+  // Hide tasks in terminal columns (e.g., "Done") from sidebar count
+  const terminalColumnIds = useMemo(
+    () => new Set(columns.filter((c) => c.behavior === 'terminal').map((c) => c.id)),
+    [columns]
+  )
+  const activeTasks = useMemo(
+    () => tasks.filter((t) => !terminalColumnIds.has(t.columnId)),
+    [tasks, terminalColumnIds]
+  )
 
   return (
     <Collapsible open={!collapsed} className="flex-shrink-0">
@@ -54,10 +70,10 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
             )}
           >
             <QueueListIcon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />
-            <span className="truncate">Queue</span>
-            {tasks.length > 0 && (
+            <span className="truncate">Board</span>
+            {activeTasks.length > 0 && (
               <span className="ml-auto flex items-center gap-1.5">
-                <span className="text-[12px] text-text-tertiary">{tasks.length}</span>
+                <span className="text-[12px] text-text-tertiary">{activeTasks.length}</span>
                 <span
                   role="button"
                   onClick={(e) => {
@@ -77,14 +93,15 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
             )}
           </button>
 
-          {/* Expanded sub-items: task list with vertical connecting line */}
-          {expanded && tasks.length > 0 && (
+          {/* Expanded sub-items: non-terminal tasks with vertical connecting line */}
+          {expanded && activeTasks.length > 0 && (
             <div className="relative ml-[18px] mt-0.5">
               {/* Vertical connecting line */}
               <div className="absolute left-0 top-0 bottom-0 w-px bg-border-subtle" />
 
-              {tasks.map((task) => {
-                const label = task.title || task.prompt
+              {activeTasks.map((task) => {
+                const label =
+                  task.title || task.notes.split('\n')[0] || task.prompt.slice(0, 40) || 'Untitled'
                 return (
                   <button
                     key={task.id}
@@ -95,7 +112,9 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
                     <div className="absolute left-0 top-1/2 w-2.5 h-px bg-border-subtle" />
                     <span className="text-[12px] text-text-secondary truncate">{label}</span>
                     {task.dangerousMode && (
-                      <span className="flex-shrink-0 text-[9px] text-red-400 font-medium">skip</span>
+                      <span className="flex-shrink-0 text-[9px] text-red-400 font-medium">
+                        skip
+                      </span>
                     )}
                   </button>
                 )
