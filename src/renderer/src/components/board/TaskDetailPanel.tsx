@@ -5,6 +5,8 @@ import { useBoardStore } from '../../store/board-store'
 import { TagInput } from './TagInput'
 import { useSessionStore } from '../../store/session-store'
 import type { BoardTask } from '../../../../preload/index.d'
+import { TaskHistorySection } from './TaskHistorySection'
+import { useHistoryStore } from '../../store/history-store'
 
 function formatFullDate(ts: number): string {
   return new Date(ts).toLocaleString(undefined, {
@@ -63,6 +65,17 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
       tags
     })
   }, [task, title, notes, prompt, cwd, dangerousMode, tags, updateTask])
+
+  const selectHistorySession = useHistoryStore((s) => s.selectSession)
+
+  const handleBrowseHistory = useCallback(
+    (historySession: import('../../store/history-store').HistorySession) => {
+      save()
+      onClose()
+      selectHistorySession(historySession)
+    },
+    [save, onClose, selectHistorySession]
+  )
 
   const handleBlur = useCallback(() => {
     save()
@@ -300,6 +313,19 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
                       </svg>
                       Run
                     </button>
+                  </div>
+                )}
+
+                {/* History */}
+                {task.claudeSessionId && (
+                  <div className="pt-3 border-t border-border-subtle">
+                    <label className="block text-xs font-medium text-text-secondary mb-1.5">
+                      History
+                    </label>
+                    <TaskHistorySection
+                      claudeSessionId={task.claudeSessionId}
+                      onBrowseHistory={handleBrowseHistory}
+                    />
                   </div>
                 )}
 
