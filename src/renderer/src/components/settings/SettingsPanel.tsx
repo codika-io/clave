@@ -8,6 +8,7 @@ import { CheckIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarOutline, TrashIcon, PlusIcon, PencilIcon, FolderIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LocationsTab } from './LocationsTab'
+import { useAssistantStore } from '../../store/assistant-store'
 
 const cLogoPath = 'M742,232 L322,232 A100,100 0 0 0 222,332 L222,732 A100,100 0 0 0 322,832 L742,832 L742,680 L424,680 A50,50 0 0 1 374,630 L374,434 A50,50 0 0 1 424,384 L742,384 Z'
 const cDepthBack = 'M802,172 L382,172 A100,100 0 0 0 282,272 L282,672 A100,100 0 0 0 382,772 L802,772 L802,620 L484,620 A50,50 0 0 1 434,570 L434,374 A50,50 0 0 1 484,324 L802,324 Z'
@@ -420,8 +421,65 @@ export function SettingsPanel() {
         <section className="mt-8">
           <LocationsTab />
         </section>
+
+        <AIAssistantSection />
       </div>
     </div>
+  )
+}
+
+function AIAssistantSection() {
+  const enabled = useAssistantStore((s) => s.enabled)
+  const setEnabled = useAssistantStore((s) => s.setEnabled)
+  const aiSummaries = useAssistantStore((s) => s.aiSummaries)
+  const setAiSummaries = useAssistantStore((s) => s.setAiSummaries)
+
+  return (
+    <section className="mt-8">
+      <h3 className="text-[13px] font-semibold text-text-primary mb-3">AI Assistant</h3>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[13px] text-text-secondary">Show AI tab in side panel</p>
+          <p className="text-[11px] text-text-tertiary mt-0.5">
+            Work journal showing today&apos;s accomplishments grouped by project
+          </p>
+        </div>
+        <button
+          onClick={() => setEnabled(!enabled)}
+          className={`relative w-9 h-5 rounded-full transition-colors ${
+            enabled ? 'bg-accent' : 'bg-surface-300'
+          }`}
+        >
+          <div
+            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+              enabled ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+      {enabled && (
+        <div className="flex items-center justify-between mt-3 pl-3 border-l-2 border-surface-200">
+          <div>
+            <p className="text-[13px] text-text-secondary">AI session summaries</p>
+            <p className="text-[11px] text-text-tertiary mt-0.5">
+              Generate smart summaries when sessions end (uses Claude Haiku)
+            </p>
+          </div>
+          <button
+            onClick={() => setAiSummaries(!aiSummaries)}
+            className={`relative w-9 h-5 rounded-full transition-colors ${
+              aiSummaries ? 'bg-accent' : 'bg-surface-300'
+            }`}
+          >
+            <div
+              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                aiSummaries ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+      )}
+    </section>
   )
 }
 

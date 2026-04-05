@@ -11,6 +11,8 @@ import { UpdateOverlay } from '../ui/UpdateOverlay'
 import { AgentChatPanel } from '../agents/AgentChatPanel'
 import { HistoryPanel } from '../history/HistoryPanel'
 import { useLaunchTemplate } from '../../hooks/use-launch-template'
+import { useJournalPersistence } from '../../hooks/use-journal-persistence'
+import { useJournalSessionSync } from '../../hooks/use-journal-session-sync'
 import { FilePalette } from '../files/FilePalette'
 import { SidePanel } from '../git/SidePanel'
 import { FilePreview } from '../files/FilePreview'
@@ -48,6 +50,8 @@ export function AppShell() {
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
 
   useLaunchTemplate()
+  useJournalPersistence()
+  useJournalSessionSync()
 
   const spawnSessionWithOptions = useCallback(
     async (claudeMode: boolean, dangerousMode: boolean) => {
