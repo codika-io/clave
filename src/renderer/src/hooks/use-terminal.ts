@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { useSessionStore } from '../store/session-store'
 import { shellEscape } from '../lib/shell'
 import { getXtermTheme } from '../lib/terminal-theme'
+import { safePort } from '../lib/utils'
 import '@xterm/xterm/css/xterm.css'
 
 // eslint-disable-next-line no-control-regex
@@ -18,7 +19,13 @@ const LOCALHOST_URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d{1,5})(?:\/
 
 function detectLocalhostUrl(buffer: string): string | null {
   const match = buffer.match(LOCALHOST_URL_RE)
-  return match ? match[0] : null
+  if (!match) return null
+  try {
+    new URL(match[0])
+    return match[0]
+  } catch {
+    return null
+  }
 }
 
 function detectPrompt(buffer: string): string | null {
@@ -196,7 +203,7 @@ export function useTerminal(sessionId: string) {
       // If a URL is set and we see signals the server was killed, verify immediately
       const currentUrl = useSessionStore.getState().sessions.find((s) => s.id === sessionId)?.detectedUrl
       if (currentUrl && /(\^C|SIGINT|SIGTERM|EADDRINUSE)/.test(stripped)) {
-        const port = Number(new URL(currentUrl).port)
+        const port = safePort(currentUrl)
         if (port) {
           // Small delay — let the process actually die
           setTimeout(() => {
@@ -379,22 +386,20 @@ export function useTerminal(sessionId: string) {
       if (!document.hasFocus() || !isVisibleRef.current) return
       const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
       if (!session?.detectedUrl || session.serverStatus !== 'running') { portCheckFailures = 0; return }
-      try {
-        const port = Number(new URL(session.detectedUrl).port)
-        if (port) {
-          window.electronAPI.checkPort(port).then((alive) => {
-            if (alive) {
+      const port = safePort(session.detectedUrl)
+      if (port) {
+        window.electronAPI.checkPort(port).then((alive) => {
+          if (alive) {
+            portCheckFailures = 0
+          } else {
+            portCheckFailures++
+            if (portCheckFailures >= 2) {
+              setSessionServerStatus(sessionId, 'stopped')
               portCheckFailures = 0
-            } else {
-              portCheckFailures++
-              if (portCheckFailures >= 2) {
-                setSessionServerStatus(sessionId, 'stopped')
-                portCheckFailures = 0
-              }
             }
-          })
-        }
-      } catch { /* invalid URL */ }
+          }
+        })
+      }
     }, 3000)
 
     return () => {

@@ -17,7 +17,7 @@ import { FilePreview } from '../files/FilePreview'
 import { GitDiffPreview } from '../git/GitDiffPreview'
 import { GitJourneyPanel } from '../git/GitJourneyPanel'
 import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-import { cn } from '../../lib/utils'
+import { cn, safePort } from '../../lib/utils'
 import { usePinnedStore } from '../../store/pinned-store'
 import { resolveColorHex } from '../../store/session-types'
 import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
@@ -623,24 +623,21 @@ function ToolbarActiveUrls() {
 
   for (const session of sessions) {
     if (!session.detectedUrl || !session.serverStatus) continue
-    try {
-      const port = new URL(session.detectedUrl).port
-      const group = groups.find((g) =>
-        g.sessionIds.includes(session.id) ||
-        g.terminals.some((t) => t.sessionId === session.id)
-      )
-      urlEntries.push({
-        sessionId: session.id,
-        url: session.detectedUrl,
-        port,
-        groupName: session.cwd.split('/').pop() || session.name,
-        groupColor: resolveColorHex(group?.color),
-        serverStatus: session.serverStatus,
-        serverCommand: session.serverCommand
-      })
-    } catch {
-      // invalid URL
-    }
+    const port = safePort(session.detectedUrl)
+    if (!port) continue
+    const group = groups.find((g) =>
+      g.sessionIds.includes(session.id) ||
+      g.terminals.some((t) => t.sessionId === session.id)
+    )
+    urlEntries.push({
+      sessionId: session.id,
+      url: session.detectedUrl,
+      port: String(port),
+      groupName: session.cwd.split('/').pop() || session.name,
+      groupColor: resolveColorHex(group?.color),
+      serverStatus: session.serverStatus,
+      serverCommand: session.serverCommand
+    })
   }
 
   if (urlEntries.length === 0) return null

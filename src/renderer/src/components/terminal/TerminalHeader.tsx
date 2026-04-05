@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, PlayIcon, ArrowDownTrayIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
-import { cn } from '../../lib/utils'
+import { cn, safePort } from '../../lib/utils'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 
 interface TerminalHeaderProps {
@@ -94,7 +94,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
                   }
                 />
                 {/* Port label */}
-                <span>{`:${new URL(session.detectedUrl!).port}`}</span>
+                <span>{`:${safePort(session.detectedUrl!) ?? '?'}`}</span>
                 {/* Action icon */}
                 {serverStatus === 'running' && <ArrowTopRightOnSquareIcon className="w-3 h-3" />}
                 {serverStatus === 'stopped' && <PlayIcon className="w-3 h-3" />}
