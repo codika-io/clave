@@ -9,6 +9,8 @@ import { MagicPullButton, MagicSyncButton, ViewModeToggle, PanelModeToggle, Coll
 import { useMultiRepoStatus } from '../../hooks/use-multi-repo-status'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { shortenPath } from '../../lib/utils'
+import { AssistantPanel } from '../assistant/AssistantPanel'
+import { useAssistantStore } from '../../store/assistant-store'
 
 function getParentPaths(fullPath: string): { path: string; name: string }[] {
   const homedir = fullPath.match(/^\/Users\/[^/]+/)?.[0] ?? ''
@@ -28,6 +30,7 @@ export function SidePanel() {
   const sessions = useSessionStore((s) => s.sessions)
   const sidePanelTab = useSessionStore((s) => s.sidePanelTab)
   const setSidePanelTab = useSessionStore((s) => s.setSidePanelTab)
+  const aiEnabled = useAssistantStore((s) => s.enabled)
 
   const focusedSession = sessions.find((s) => s.id === focusedSessionId)
   const sessionCwd = focusedSession?.cwd ?? null
@@ -281,6 +284,21 @@ export function SidePanel() {
                 Git
               </button>
             )}
+            {aiEnabled && (
+              <button
+                onClick={() => setSidePanelTab('ai')}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                  sidePanelTab === 'ai'
+                    ? 'bg-surface-200 text-text-primary'
+                    : 'text-text-tertiary hover:text-text-secondary'
+                }`}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M6 1L7.5 4.5L11 6L7.5 7.5L6 11L4.5 7.5L1 6L4.5 4.5L6 1Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+                </svg>
+                AI
+              </button>
+            )}
           </div>
           </div>
           <div className="w-6 flex-shrink-0" />
@@ -432,6 +450,8 @@ export function SidePanel() {
         <div className="flex-1 flex items-center justify-center px-3">
           <span className="text-xs text-text-tertiary text-center">No working directory</span>
         </div>
+      ) : sidePanelTab === 'ai' ? (
+        <AssistantPanel />
       ) : (sidePanelTab === 'files' || isRemoteSession) ? (
         <FileTree
           cwd={cwd}

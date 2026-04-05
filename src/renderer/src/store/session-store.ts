@@ -44,7 +44,7 @@ interface SessionState {
   gitRefreshTrigger: number
   collapseAllTrigger: number
   activeView: ActiveView
-  sidePanelTab: 'files' | 'git'
+  sidePanelTab: 'files' | 'git' | 'ai'
   gitViewMode: 'list' | 'tree'
   gitPanelMode: 'changes' | 'log'
   journeyPanel: { cwd: string; repoName: string } | null
