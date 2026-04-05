@@ -104,7 +104,7 @@ interface SessionState {
   setCommitMessage: (cwd: string, message: string) => void
   setGeneratingCommit: (cwd: string, generating: boolean) => void
   setPreviewFile: (path: string | null, source?: 'palette' | 'tree', cwd?: string | null, locationId?: string | null) => void
-  setDiffPreview: (preview: SessionState['diffPreview']) => void
+  setDiffPreview: (preview: SessionState['diffPreview'], opts?: { fromJourney?: boolean }) => void
   triggerGitRefresh: () => void
   triggerCollapseAll: () => void
   addFileTab: (tab: FileTab) => void
@@ -638,9 +638,9 @@ export const useSessionStore = create<SessionState>((set) => ({
   setGitPanelMode: (mode) => set({ gitPanelMode: mode }),
 
   openJourneyPanel: (cwd, repoName) =>
-    set({ journeyPanel: { cwd, repoName }, previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null }),
+    set({ journeyPanel: { cwd, repoName }, diffPreview: null, previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null }),
 
-  closeJourneyPanel: () => set({ journeyPanel: null }),
+  closeJourneyPanel: () => set({ journeyPanel: null, diffPreview: null }),
 
   setCommitMessage: (cwd, message) =>
     set((state) => ({
@@ -658,8 +658,12 @@ export const useSessionStore = create<SessionState>((set) => ({
   setPreviewFile: (path, source, cwd, locationId) =>
     set((state) => ({ previewFile: path, previewCwd: cwd ?? null, previewSource: source ?? null, previewLocationId: locationId ?? null, diffPreview: path ? null : state.diffPreview })),
 
-  setDiffPreview: (preview) =>
-    set({ diffPreview: preview, ...(preview ? { previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null } : {}) }),
+  setDiffPreview: (preview, opts) =>
+    set({
+      diffPreview: preview,
+      ...(preview ? { previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null } : {}),
+      ...(preview && !opts?.fromJourney ? { journeyPanel: null } : {})
+    }),
 
   triggerGitRefresh: () => set((state) => ({ gitRefreshTrigger: state.gitRefreshTrigger + 1 })),
 

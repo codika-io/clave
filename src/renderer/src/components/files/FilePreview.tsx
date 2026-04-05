@@ -42,6 +42,7 @@ export function FilePreview() {
   const [editContent, setEditContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const filename = previewFile?.split('/').pop() ?? ''
@@ -202,6 +203,18 @@ export function FilePreview() {
     }
   }, [])
 
+  // Click-outside: close when clicking anywhere outside the panel
+  useEffect(() => {
+    if (!previewFile) return
+    const handleMouseDown = (e: MouseEvent): void => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        handleClose()
+      }
+    }
+    window.addEventListener('mousedown', handleMouseDown)
+    return () => window.removeEventListener('mousedown', handleMouseDown)
+  }, [previewFile, handleClose])
+
   if (!previewFile) return null
 
   // Position: floating overlay to the left of the tree panel
@@ -210,10 +223,8 @@ export function FilePreview() {
 
   return (
     <>
-      {/* Click-outside backdrop (transparent) */}
-      <div className="fixed inset-0 z-40" onClick={handleClose} />
-
       <motion.div
+        ref={panelRef}
         initial={{ opacity: 0, x: 8 }}
         animate={{ opacity: 1, x: 0, width: panelWidth }}
         exit={{ opacity: 0, x: 8 }}
@@ -223,8 +234,9 @@ export function FilePreview() {
           right: rightOffset,
           top: '10%',
           maxHeight: '75vh',
-          width: panelWidth
-        }}
+          width: panelWidth,
+          WebkitAppRegion: 'no-drag'
+        } as React.CSSProperties}
       >
         {/* Edit mode accent bar */}
         {isEditing && (

@@ -187,6 +187,7 @@ export function GitJourneyPanel() {
   // Focused item for keyboard nav — use ref to avoid stale closures in keydown handler
   const [focusedKey, setFocusedKey] = useState<string | null>(null)
   const focusedKeyRef = useRef<string | null>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
   // Keep ref in sync
@@ -291,7 +292,7 @@ export function GitJourneyPanel() {
         fileStatus: file.status,
         hash,
         siblings: files.map((f) => ({ file: f.path, staged: false, fileStatus: f.status }))
-      })
+      }, { fromJourney: true })
     },
     [journeyPanel, setDiffPreview, commitFilesCache]
   )
@@ -376,6 +377,22 @@ export function GitJourneyPanel() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [journeyPanel, closeJourneyPanel, setDiffPreview, togglePush, toggleCommit, onSelectFile])
 
+  // Click-outside: close when clicking anywhere outside the panel
+  // (ignore clicks on sibling panels like GitDiffPreview)
+  useEffect(() => {
+    if (!journeyPanel) return
+    const handleMouseDown = (e: MouseEvent): void => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        // Don't close if clicking on a sibling floating panel (e.g. diff preview)
+        const target = e.target as HTMLElement
+        if (target.closest('[data-floating-panel]')) return
+        closeJourneyPanel()
+      }
+    }
+    window.addEventListener('mousedown', handleMouseDown)
+    return () => window.removeEventListener('mousedown', handleMouseDown)
+  }, [journeyPanel, closeJourneyPanel])
+
   if (!journeyPanel) return null
 
   const rightOffset = fileTreeOpen ? fileTreeWidth + 8 : 16
@@ -394,9 +411,9 @@ export function GitJourneyPanel() {
 
   return (
     <>
-      <div className="fixed inset-0 z-40" onClick={closeJourneyPanel} />
-
       <motion.div
+        ref={panelRef}
+        data-floating-panel
         initial={{ opacity: 0, x: 8 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 8 }}
@@ -406,8 +423,9 @@ export function GitJourneyPanel() {
           right: rightOffset,
           top: '4%',
           maxHeight: '92vh',
-          width: panelWidth
-        }}
+          width: panelWidth,
+          WebkitAppRegion: 'no-drag'
+        } as React.CSSProperties}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle flex-shrink-0">

@@ -60,6 +60,21 @@ export function GitDiffPreview() {
 
   const close = useCallback(() => setDiffPreview(null), [setDiffPreview])
 
+  // Click-outside: close when clicking anywhere outside the panel
+  // (ignore clicks on sibling floating panels like GitJourneyPanel)
+  useEffect(() => {
+    if (!diffPreview) return
+    const handleMouseDown = (e: MouseEvent): void => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        const target = e.target as HTMLElement
+        if (target.closest('[data-floating-panel]')) return
+        close()
+      }
+    }
+    window.addEventListener('mousedown', handleMouseDown)
+    return () => window.removeEventListener('mousedown', handleMouseDown)
+  }, [diffPreview, close])
+
   // Fetch diff
   useEffect(() => {
     if (!diffPreview) {
@@ -204,11 +219,9 @@ export function GitDiffPreview() {
 
   return (
     <>
-      {/* Click-outside backdrop */}
-      <div className="fixed inset-0 z-40" onClick={close} />
-
       <motion.div
         ref={panelRef}
+        data-floating-panel
         initial={{ opacity: 0, x: 8 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 8 }}
@@ -218,8 +231,9 @@ export function GitDiffPreview() {
           right: rightOffset,
           top: panelTop != null ? panelTop : '4%',
           maxHeight: '92vh',
-          width: panelWidth
-        }}
+          width: panelWidth,
+          WebkitAppRegion: 'no-drag'
+        } as React.CSSProperties}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle flex-shrink-0">
