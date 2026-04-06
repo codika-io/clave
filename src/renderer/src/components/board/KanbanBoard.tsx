@@ -131,8 +131,11 @@ export function TaskQueue() {
   )
 
   const runTask = useCallback(
-    async (task: BoardTask) => {
+    async (staleTask: BoardTask) => {
       if (!window.electronAPI?.spawnSession) return
+
+      // Read fresh task from store to get latest attachments/prompt
+      const task = useBoardStore.getState().tasks.find((t) => t.id === staleTask.id) ?? staleTask
 
       // Check if this task has an ended session we can resume
       const existingSession = task.sessionId
@@ -220,10 +223,12 @@ export function TaskQueue() {
         let sent = false
         let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-        // Prepend file paths for attachments
-        const filePaths = (task.attachments ?? []).map((a) => a.path)
+        // Prepend file paths for attachments (quote paths with spaces)
+        const filePaths = (task.attachments ?? []).map((a) =>
+          a.path.includes(' ') ? `'${a.path}'` : a.path
+        )
         const fullPrompt = filePaths.length > 0
-          ? filePaths.join('\n') + '\n\n' + task.prompt
+          ? filePaths.join(' ') + ' ' + task.prompt
           : task.prompt
 
         const sendPrompt = (): void => {

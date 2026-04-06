@@ -51,7 +51,9 @@ export function AttachmentList({ attachments, onChange }: AttachmentListProps) {
     }
   }, [attachments, thumbnails])
 
-  const handleAddFiles = useCallback(async () => {
+  const handleAddFiles = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
     const paths = await window.electronAPI?.openFileDialog()
     if (!paths) return
 
@@ -116,7 +118,11 @@ export function AttachmentList({ attachments, onChange }: AttachmentListProps) {
   }, [])
 
   return (
-    <div>
+    <div
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+    >
       <label className="block text-xs font-medium text-text-secondary mb-1">
         Attachments
       </label>
@@ -147,7 +153,10 @@ export function AttachmentList({ attachments, onChange }: AttachmentListProps) {
               </span>
               <button
                 type="button"
-                onClick={() => handleRemove(a.id)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleRemove(a.id)
+                }}
                 className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover/attachment:opacity-100 hover:bg-surface-300 text-text-tertiary hover:text-text-primary transition-all flex-shrink-0"
               >
                 <XMarkIcon className="w-3 h-3" />
@@ -159,9 +168,6 @@ export function AttachmentList({ attachments, onChange }: AttachmentListProps) {
 
       {/* Drop zone / add button */}
       <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
         className={`flex items-center justify-center gap-1.5 h-8 rounded-lg border border-dashed text-xs transition-colors cursor-pointer ${
           isDragOver
             ? 'border-accent bg-accent/5 text-accent'

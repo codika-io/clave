@@ -133,8 +133,8 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -8 }}
             transition={{ duration: 0.15, ease: [0.2, 0, 0, 1] }}
-            className="fixed z-50 left-1/2 -translate-x-1/2 w-[480px]"
-            style={{ top: '15%' }}
+            className="fixed z-50 left-1/2 -translate-x-1/2 w-[480px] max-h-[80vh] overflow-y-auto"
+            style={{ top: '10%' }}
           >
             <form
               onSubmit={handleSubmit}

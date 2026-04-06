@@ -46,12 +46,7 @@ export function registerShellHandlers(): void {
   ipcMain.handle('dialog:openFiles', async (_event) => {
     const win = BrowserWindow.fromWebContents(_event.sender)
     const result = await dialog.showOpenDialog(win!, {
-      properties: ['openFile', 'multiSelections'],
-      filters: [
-        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] },
-        { name: 'Text Files', extensions: ['csv', 'json', 'txt', 'md', 'ts', 'js', 'py', 'yaml', 'yml'] },
-        { name: 'All Files', extensions: ['*'] }
-      ]
+      properties: ['openFile', 'multiSelections']
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null
