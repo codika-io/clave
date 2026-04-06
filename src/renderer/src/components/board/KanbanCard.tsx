@@ -1,4 +1,4 @@
-import { FolderIcon, CommandLineIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
+import { FolderIcon, CommandLineIcon, ArrowTopRightOnSquareIcon, PaperClipIcon } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
 import { cn } from '../../lib/utils'
 import type { BoardTask, BoardColumn } from '../../../../preload/index.d'
@@ -132,6 +132,12 @@ export function KanbanCard({
         {hasPrompt && (
           <span className="flex items-center gap-1 text-[10px] text-accent/70" title="Has prompt">
             <CommandLineIcon className="w-3 h-3" />
+          </span>
+        )}
+        {task.attachments?.length > 0 && (
+          <span className="flex items-center gap-0.5 text-[10px] text-text-tertiary" title={`${task.attachments.length} attachment${task.attachments.length > 1 ? 's' : ''}`}>
+            <PaperClipIcon className="w-3 h-3" />
+            <span>{task.attachments.length}</span>
           </span>
         )}
         <span className="flex items-center gap-1 text-[11px] text-text-tertiary">

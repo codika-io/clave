@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { useBoardStore } from '../../store/board-store'
 import { TagInput } from './TagInput'
+import { AttachmentList } from './AttachmentList'
 import { useSessionStore } from '../../store/session-store'
-import type { BoardTask } from '../../../../preload/index.d'
+import type { BoardTask, TaskAttachment } from '../../../../preload/index.d'
 import { TaskHistorySection } from './TaskHistorySection'
 import { useHistoryStore } from '../../store/history-store'
 
@@ -41,6 +42,7 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
   const [cwd, setCwd] = useState('')
   const [dangerousMode, setDangerousMode] = useState(false)
   const [tags, setTags] = useState<string[]>([])
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([])
   const notesRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -51,6 +53,7 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
       setCwd(task.cwd)
       setDangerousMode(task.dangerousMode)
       setTags(task.tags ?? [])
+      setAttachments(task.attachments ?? [])
     }
   }, [task])
 
@@ -62,9 +65,10 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
       prompt: prompt.trim(),
       cwd: cwd.trim(),
       dangerousMode,
-      tags
+      tags,
+      attachments
     })
-  }, [task, title, notes, prompt, cwd, dangerousMode, tags, updateTask])
+  }, [task, title, notes, prompt, cwd, dangerousMode, tags, attachments, updateTask])
 
   const selectHistorySession = useHistoryStore((s) => s.selectSession)
 
@@ -169,6 +173,15 @@ export function TaskDetailPanel({ task, onClose, onRunTask, onViewSession }: Tas
                     className="w-full px-3 py-2 rounded-lg bg-surface-200 border-none text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors resize-y font-mono"
                   />
                 </div>
+
+                {/* Attachments */}
+                <AttachmentList
+                  attachments={attachments}
+                  onChange={(newAttachments) => {
+                    setAttachments(newAttachments)
+                    if (task) updateTask(task.id, { attachments: newAttachments })
+                  }}
+                />
 
                 {/* Folder */}
                 <div>

@@ -64,6 +64,7 @@ export function useBoardSessionSync(): void {
                 cwd: session.cwd,
                 dangerousMode: session.dangerousMode,
                 tags: [],
+                attachments: [],
                 sessionId: session.id,
                 claudeSessionId: session.claudeSessionId ?? undefined,
                 columnId: activeCol.id

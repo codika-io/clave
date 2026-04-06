@@ -220,11 +220,17 @@ export function TaskQueue() {
         let sent = false
         let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+        // Prepend file paths for attachments
+        const filePaths = (task.attachments ?? []).map((a) => a.path)
+        const fullPrompt = filePaths.length > 0
+          ? filePaths.join('\n') + '\n\n' + task.prompt
+          : task.prompt
+
         const sendPrompt = (): void => {
           if (sent) return
           sent = true
           if (debounceTimer) clearTimeout(debounceTimer)
-          window.electronAPI?.writeSession(sessionInfo.id, task.prompt)
+          window.electronAPI?.writeSession(sessionInfo.id, fullPrompt)
           setTimeout(() => {
             window.electronAPI?.writeSession(sessionInfo.id, '\r')
           }, 150)

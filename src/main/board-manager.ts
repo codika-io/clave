@@ -19,6 +19,12 @@ export interface TagDefinition {
   color: string
 }
 
+export interface TaskAttachment {
+  id: string
+  path: string
+  name: string
+}
+
 export interface BoardTask {
   id: string
   title: string
@@ -33,6 +39,7 @@ export interface BoardTask {
   sessionId?: string
   claudeSessionId?: string
   tags: string[]
+  attachments: TaskAttachment[]
 }
 
 export interface BoardData {
@@ -100,7 +107,8 @@ class BoardManager {
           order: typeof t.order === 'number' ? (t.order as number) : index,
           sessionId: (t.sessionId as string) ?? undefined,
           claudeSessionId: (t.claudeSessionId as string) ?? undefined,
-          tags: Array.isArray(t.tags) ? (t.tags as string[]) : []
+          tags: Array.isArray(t.tags) ? (t.tags as string[]) : [],
+          attachments: Array.isArray(t.attachments) ? (t.attachments as TaskAttachment[]) : []
         }))
 
       const tags: TagDefinition[] = Array.isArray(data.tags) ? (data.tags as TagDefinition[]) : []

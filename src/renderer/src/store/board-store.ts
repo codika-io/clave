@@ -17,7 +17,7 @@ interface BoardState {
   updateTask: (
     id: string,
     updates: Partial<
-      Pick<BoardTask, 'title' | 'prompt' | 'notes' | 'cwd' | 'dangerousMode' | 'sessionId' | 'tags' | 'claudeSessionId'>
+      Pick<BoardTask, 'title' | 'prompt' | 'notes' | 'cwd' | 'dangerousMode' | 'sessionId' | 'tags' | 'claudeSessionId' | 'attachments'>
     >
   ) => void
   deleteTask: (id: string) => void
@@ -103,6 +103,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       cwd: partial.cwd,
       dangerousMode: partial.dangerousMode,
       tags: partial.tags ?? [],
+      attachments: partial.attachments ?? [],
       createdAt: now,
       updatedAt: now,
       columnId,

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBoardStore } from '../../store/board-store'
 import { TagInput } from './TagInput'
+import { AttachmentList } from './AttachmentList'
+import type { TaskAttachment } from '../../../../preload/index.d'
 
 interface TaskFormProps {
   isOpen: boolean
@@ -15,6 +17,7 @@ interface TaskFormProps {
     cwd: string
     dangerousMode: boolean
     tags?: string[]
+    attachments?: TaskAttachment[]
   } | null
 }
 
@@ -28,6 +31,7 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
   const [cwd, setCwd] = useState('')
   const [dangerousMode, setDangerousMode] = useState(false)
   const [tags, setTags] = useState<string[]>([])
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([])
   const titleRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -39,6 +43,7 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
         setCwd(editTask.cwd)
         setDangerousMode(editTask.dangerousMode)
         setTags(editTask.tags ?? [])
+        setAttachments(editTask.attachments ?? [])
       } else {
         setTitle('')
         setNotes('')
@@ -46,6 +51,7 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
         setCwd('')
         setDangerousMode(false)
         setTags([])
+        setAttachments([])
       }
       setTimeout(() => titleRef.current?.focus(), 50)
     }
@@ -80,7 +86,8 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
           prompt: prompt.trim(),
           cwd: cwd.trim(),
           dangerousMode,
-          tags
+          tags,
+          attachments
         })
       } else {
         addTask({
@@ -90,12 +97,13 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
           cwd: cwd.trim(),
           dangerousMode,
           tags,
+          attachments,
           columnId
         })
       }
       onClose()
     },
-    [title, notes, prompt, cwd, dangerousMode, tags, columnId, editTask, addTask, updateTask, onClose]
+    [title, notes, prompt, cwd, dangerousMode, tags, attachments, columnId, editTask, addTask, updateTask, onClose]
   )
 
   const handleKeyDown = useCallback(
@@ -178,6 +186,9 @@ export function TaskForm({ isOpen, onClose, columnId, editTask }: TaskFormProps)
                     className="w-full px-3 py-2 rounded-lg bg-surface-200 border-none text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors resize-none font-mono"
                   />
                 </div>
+
+                {/* Attachments */}
+                <AttachmentList attachments={attachments} onChange={setAttachments} />
 
                 {/* Folder */}
                 <div>

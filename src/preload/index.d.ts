@@ -122,6 +122,12 @@ export interface TagDefinition {
   color: string   // Color ID from palette (e.g., 'blue', 'green', 'amber')
 }
 
+export interface TaskAttachment {
+  id: string
+  path: string
+  name: string
+}
+
 export interface BoardTask {
   id: string
   title: string
@@ -136,6 +142,7 @@ export interface BoardTask {
   sessionId?: string
   claudeSessionId?: string
   tags: string[]
+  attachments: TaskAttachment[]
 }
 
 export interface BoardData {
@@ -313,6 +320,7 @@ export interface ElectronAPI {
   checkPort: (port: number) => Promise<boolean>
   openPath: (filePath: string) => Promise<string>
   openFolderDialog: () => Promise<string | null>
+  openFileDialog: () => Promise<string[] | null>
   onUpdateAvailable: (callback: (version: string) => void) => () => void
   onUpdateDownloaded: (callback: (version: string) => void) => () => void
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
