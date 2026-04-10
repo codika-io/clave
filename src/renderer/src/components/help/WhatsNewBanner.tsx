@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { navigateTo } from '../../lib/navigation'
 import whatsNewData from '../../help/whats-new.json'
@@ -12,14 +12,16 @@ interface WhatsNewEntry {
 
 const LAST_SEEN_KEY = 'clave-whats-new-last-seen-version'
 
-export function WhatsNewBanner(): React.ReactNode {
+export function WhatsNewBanner(): ReactNode {
   const [visible, setVisible] = useState(false)
   const [entry, setEntry] = useState<WhatsNewEntry | null>(null)
+  const currentVersionRef = useRef<string | null>(null)
 
   useEffect(() => {
     async function check(): Promise<void> {
       try {
         const currentVersion = await window.electronAPI.getAppVersion()
+        currentVersionRef.current = currentVersion
         const lastSeen = localStorage.getItem(LAST_SEEN_KEY)
 
         // Don't show on fresh install (no last seen version)
@@ -49,8 +51,8 @@ export function WhatsNewBanner(): React.ReactNode {
 
   function dismiss(): void {
     setVisible(false)
-    if (entry) {
-      localStorage.setItem(LAST_SEEN_KEY, entry.version)
+    if (currentVersionRef.current) {
+      localStorage.setItem(LAST_SEEN_KEY, currentVersionRef.current)
     }
   }
 
@@ -66,11 +68,11 @@ export function WhatsNewBanner(): React.ReactNode {
   return (
     <div
       className="mx-2 mb-1 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 flex items-center gap-2 text-xs"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
     >
       <span className="text-text-secondary flex-1">
-        <span className="font-medium text-text-primary">New in {entry.version}:</span> {entry.title}{' '}
-        — {entry.description}
+        <span className="font-medium text-text-primary">New in {entry.version}:</span> {entry.title}.{' '}
+        {entry.description}
       </span>
       <button
         onClick={handleTryIt}

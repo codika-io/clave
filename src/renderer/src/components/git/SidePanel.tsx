@@ -252,7 +252,7 @@ export function SidePanel() {
             <button
               onClick={() => setSidePanelTab('files')}
               className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                sidePanelTab === 'files'
+                effectiveTab === 'files'
                   ? 'bg-surface-200 text-text-primary'
                   : 'text-text-tertiary hover:text-text-secondary'
               }`}
@@ -267,7 +267,7 @@ export function SidePanel() {
               <button
                 onClick={() => setSidePanelTab('git')}
                 className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                  sidePanelTab === 'git'
+                  effectiveTab === 'git'
                     ? 'bg-surface-200 text-text-primary'
                     : 'text-text-tertiary hover:text-text-secondary'
                 }`}
@@ -285,13 +285,13 @@ export function SidePanel() {
             )}
             <button
               onClick={() => setSidePanelTab('help')}
-              className={`flex items-center justify-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
                 effectiveTab === 'help'
                   ? 'bg-surface-200 text-text-primary'
                   : 'text-text-tertiary hover:text-text-secondary'
               }`}
             >
-              <QuestionMarkCircleIcon className="w-3.5 h-3.5" />
+              <QuestionMarkCircleIcon className="w-3 h-3" />
               Help
             </button>
           </div>

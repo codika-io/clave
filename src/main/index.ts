@@ -59,7 +59,8 @@ function createWindow(): void {
       return
     }
     // In dev, allow navigating to the dev server URL
-    if (is.dev && url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '')) {
+    const devUrl = process.env['ELECTRON_RENDERER_URL']
+    if (is.dev && devUrl && url.startsWith(devUrl)) {
       return
     }
     // Block all other navigation — links should be handled by the renderer
@@ -70,7 +71,10 @@ function createWindow(): void {
     if (details.url.startsWith('clave://')) {
       return { action: 'deny' }
     }
-    shell.openExternal(details.url).catch(() => {})
+    const allowed = ['https:', 'http:']
+    if (allowed.some((s) => details.url.startsWith(s))) {
+      shell.openExternal(details.url).catch(() => {})
+    }
     return { action: 'deny' }
   })
 

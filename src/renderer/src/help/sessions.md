@@ -29,7 +29,7 @@ Drag sessions together in the sidebar to create groups. Groups let you:
 - Collapse/expand to reduce clutter
 - Color-code for visual distinction
 
-See [Session Groups](clave://navigate/side:help) for more on pinned groups and .clave files.
+See the **Session Groups** doc for more on pinned groups and .clave files.
 
 ## Closing Sessions
 

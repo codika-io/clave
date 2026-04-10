@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { MarkdownRenderer } from '../files/MarkdownRenderer'
 import helpIndex from '../../help/index.json'
@@ -38,7 +38,7 @@ interface HelpEntry {
   keywords: string[]
 }
 
-export function HelpPanel(): React.ReactNode {
+export function HelpPanel(): ReactNode {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [filterText, setFilterText] = useState('')
 
