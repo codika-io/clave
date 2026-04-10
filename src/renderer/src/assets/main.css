@@ -46,6 +46,20 @@
   --color-status-waiting: #f59e0b;
   --color-status-inactive: #6b7280;
 
+  /* Journal project colors (dark theme) */
+  --journal-active-bg: rgba(34, 197, 94, 0.1);
+  --journal-active-border: rgba(34, 197, 94, 0.2);
+  --journal-active-dot: #22c55e;
+  --journal-active-text: #4ade80;
+  --journal-project-1: #c084fc;
+  --journal-project-2: #22d3ee;
+  --journal-project-3: #fbbf24;
+  --journal-project-4: #4ade80;
+  --journal-project-5: #f472b6;
+  --journal-project-6: #60a5fa;
+  --journal-project-7: #fb923c;
+  --journal-project-8: #f87171;
+
   --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 
@@ -106,6 +120,18 @@
   --color-wellbeing-strong: oklch(0.5 0.15 50);
   --color-wellbeing-strong-bg: oklch(0.95 0.03 50);
   --color-wellbeing-strong-border: oklch(0.8 0.08 50);
+  --journal-active-bg: rgba(22, 163, 74, 0.08);
+  --journal-active-border: rgba(22, 163, 74, 0.15);
+  --journal-active-dot: #16a34a;
+  --journal-active-text: #15803d;
+  --journal-project-1: #9333ea;
+  --journal-project-2: #0891b2;
+  --journal-project-3: #d97706;
+  --journal-project-4: #16a34a;
+  --journal-project-5: #db2777;
+  --journal-project-6: #2563eb;
+  --journal-project-7: #ea580c;
+  --journal-project-8: #dc2626;
 }
 
 /* Coffee theme — warm light, matching Claude's cream/beige aesthetic */
@@ -136,6 +162,18 @@
   --color-wellbeing-strong: oklch(0.45 0.15 50);
   --color-wellbeing-strong-bg: oklch(0.85 0.04 50);
   --color-wellbeing-strong-border: oklch(0.7 0.08 50);
+  --journal-active-bg: rgba(22, 163, 74, 0.08);
+  --journal-active-border: rgba(22, 163, 74, 0.15);
+  --journal-active-dot: #16a34a;
+  --journal-active-text: #15803d;
+  --journal-project-1: #7e22ce;
+  --journal-project-2: #0e7490;
+  --journal-project-3: #b45309;
+  --journal-project-4: #15803d;
+  --journal-project-5: #be185d;
+  --journal-project-6: #1d4ed8;
+  --journal-project-7: #c2410c;
+  --journal-project-8: #b91c1c;
 }
 
 @keyframes pulse-dot {

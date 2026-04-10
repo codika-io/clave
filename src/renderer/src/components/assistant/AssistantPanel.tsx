@@ -1,7 +1,8 @@
 // src/renderer/src/components/assistant/AssistantPanel.tsx
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useAssistantStore } from '../../store/assistant-store'
 import { useSessionStore } from '../../store/session-store'
+import { cleanSummary } from '../../lib/journal-utils'
 
 function ActiveBanner(): React.ReactNode {
   const journal = useAssistantStore((s) => s.journal)
@@ -12,7 +13,11 @@ function ActiveBanner(): React.ReactNode {
   for (const project of journal.projects) {
     for (const entry of project.entries) {
       if (entry.status === 'active') {
-        activeEntries.push({ sessionId: entry.sessionId, name: entry.sessionName, cwd: project.name })
+        activeEntries.push({
+          sessionId: entry.sessionId,
+          name: entry.sessionName,
+          cwd: project.name
+        })
       }
     }
   }
@@ -28,10 +33,21 @@ function ActiveBanner(): React.ReactNode {
   }
 
   return (
-    <div className="mx-3 mb-3 px-3 py-2 rounded-md bg-green-500/10 border border-green-500/20">
+    <div
+      className="mx-3 mb-3 px-3 py-2 rounded-md border"
+      style={{
+        backgroundColor: 'var(--journal-active-bg)',
+        borderColor: 'var(--journal-active-border)'
+      }}
+    >
       <div className="flex items-center gap-2 mb-1">
-        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-        <div className="text-[10px] font-medium text-green-400">Working on</div>
+        <div
+          className="w-1.5 h-1.5 rounded-full animate-pulse flex-shrink-0"
+          style={{ backgroundColor: 'var(--journal-active-dot)' }}
+        />
+        <div className="text-[10px] font-medium" style={{ color: 'var(--journal-active-text)' }}>
+          Working on
+        </div>
       </div>
       <div className="space-y-1 pl-3.5">
         {activeEntries.map((entry) => (
@@ -59,15 +75,9 @@ interface EntryItemProps {
     endTime?: number
     status: 'active' | 'completed'
   }
-  projectCwd: string
 }
 
-/** Strip XML-like tags and clean up display text */
-function cleanSummary(text: string): string {
-  return text.replace(/<\/?[a-zA-Z][a-zA-Z0-9_-]*>/g, '').trim()
-}
-
-function EntryItem({ entry, projectCwd }: EntryItemProps): React.ReactNode {
+function EntryItem({ entry }: EntryItemProps): React.ReactNode {
   const [expanded, setExpanded] = useState(false)
   const setActiveView = useSessionStore((s) => s.setActiveView)
   const sessions = useSessionStore((s) => s.sessions)
@@ -98,9 +108,6 @@ function EntryItem({ entry, projectCwd }: EntryItemProps): React.ReactNode {
       : durationMin > 0
         ? `${durationMin}m`
         : ''
-
-  // Suppress unused variable warning
-  void projectCwd
 
   if (!expanded) {
     return (
@@ -167,16 +174,16 @@ function EntryItem({ entry, projectCwd }: EntryItemProps): React.ReactNode {
   )
 }
 
-// Color palette for project headings — cycles through
-const PROJECT_COLORS = [
-  'text-purple-400',
-  'text-cyan-400',
-  'text-amber-400',
-  'text-green-400',
-  'text-pink-400',
-  'text-blue-400',
-  'text-orange-400',
-  'text-red-400'
+// CSS variable references for project heading colors — theme-adaptive
+const PROJECT_COLOR_VARS = [
+  'var(--journal-project-1)',
+  'var(--journal-project-2)',
+  'var(--journal-project-3)',
+  'var(--journal-project-4)',
+  'var(--journal-project-5)',
+  'var(--journal-project-6)',
+  'var(--journal-project-7)',
+  'var(--journal-project-8)'
 ]
 
 export function AssistantPanel(): React.ReactNode {
@@ -219,7 +226,7 @@ export function AssistantPanel(): React.ReactNode {
     <div className="flex-1 flex flex-col overflow-y-auto">
       {/* Date header */}
       <div className="px-3 pt-3 pb-2">
-        <div className="text-[13px] font-semibold text-text-primary">Today — {dateLabel}</div>
+        <div className="text-[13px] font-semibold text-text-primary">Today, {dateLabel}</div>
         {hasContent && (
           <div className="text-[10px] text-text-tertiary mt-0.5">
             {totalSessions} session{totalSessions !== 1 ? 's' : ''} · {journal.projects.length}{' '}
@@ -240,7 +247,8 @@ export function AssistantPanel(): React.ReactNode {
               <div key={project.cwd} className="mb-4 last:mb-0">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <span
-                    className={`text-[11px] font-semibold ${PROJECT_COLORS[idx % PROJECT_COLORS.length]}`}
+                    className="text-[11px] font-semibold"
+                    style={{ color: PROJECT_COLOR_VARS[idx % PROJECT_COLOR_VARS.length] }}
                   >
                     {project.name}
                   </span>
@@ -252,7 +260,7 @@ export function AssistantPanel(): React.ReactNode {
                   {project.entries
                     .filter((e) => e.status === 'completed')
                     .map((entry) => (
-                      <EntryItem key={entry.sessionId} entry={entry} projectCwd={project.cwd} />
+                      <EntryItem key={entry.sessionId} entry={entry} />
                     ))}
                 </div>
               </div>

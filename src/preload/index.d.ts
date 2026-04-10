@@ -138,7 +138,6 @@ export interface JournalProjectData {
 export interface JournalData {
   date: string
   projects: JournalProjectData[]
-  aiEnabled?: boolean
 }
 
 export interface ModelTokenUsage {
@@ -338,6 +337,7 @@ export interface ElectronAPI {
   boardSave: (data: BoardData) => Promise<void>
   journalLoad: () => Promise<JournalData>
   journalSave: (data: JournalData) => Promise<void>
+  journalArchive: (data: JournalData) => Promise<void>
   journalSummarize: (claudeSessionId: string, cwd: string) => Promise<string | null>
   templatesLoad: () => Promise<LaunchTemplatesData>
   templatesSave: (data: LaunchTemplatesData) => Promise<void>

@@ -1,26 +1,6 @@
 // src/renderer/src/store/assistant-store.ts
 import { create } from 'zustand'
-
-interface JournalEntry {
-  sessionId: string
-  claudeSessionId?: string
-  sessionName: string
-  summary?: string
-  startTime: number
-  endTime?: number
-  status: 'active' | 'completed'
-}
-
-interface JournalProject {
-  cwd: string
-  name: string
-  entries: JournalEntry[]
-}
-
-interface JournalDay {
-  date: string
-  projects: JournalProject[]
-}
+import type { JournalEntry, JournalData as JournalDay } from '../../../shared/journal-types'
 
 interface AssistantState {
   journal: JournalDay
@@ -34,6 +14,7 @@ interface AssistantState {
   setAiSummaries: (enabled: boolean) => void
   addEntry: (entry: JournalEntry, cwd: string) => void
   completeEntry: (sessionId: string, summary?: string) => void
+  updateEntrySummary: (sessionId: string, summary: string) => void
   updateEntryName: (sessionId: string, name: string) => void
   removeActiveEntry: (sessionId: string) => void
 }
@@ -79,7 +60,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     if (data.date === today) {
       set({ journal: data, loaded: true })
     } else {
-      // Stale data — start fresh for today
+      // Archive the previous day's journal before starting fresh
+      if (data.date && data.projects.length > 0) {
+        window.electronAPI.journalArchive?.(data)
+      }
       const fresh: JournalDay = { date: today, projects: [] }
       set({ journal: fresh, loaded: true })
       debouncedSave(fresh)
@@ -159,13 +143,22 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     debouncedSave(updated)
   },
 
+  updateEntrySummary: (sessionId, summary) => {
+    const state = get()
+    const projects = state.journal.projects.map((p) => ({
+      ...p,
+      entries: p.entries.map((e) => (e.sessionId === sessionId ? { ...e, summary } : e))
+    }))
+    const updated = { ...state.journal, projects }
+    set({ journal: updated })
+    debouncedSave(updated)
+  },
+
   updateEntryName: (sessionId, name) => {
     const state = get()
     const projects = state.journal.projects.map((p) => ({
       ...p,
-      entries: p.entries.map((e) =>
-        e.sessionId === sessionId ? { ...e, sessionName: name } : e
-      )
+      entries: p.entries.map((e) => (e.sessionId === sessionId ? { ...e, sessionName: name } : e))
     }))
     const updated = { ...state.journal, projects }
     set({ journal: updated })
