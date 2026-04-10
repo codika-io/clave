@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "version": "1.29.0",
+    "title": "Work Tracker",
+    "description": "Track your daily coding sessions, build streaks, and visualize weekly trends right from the sidebar",
+    "action": { "type": "navigate", "target": "side:help" }
+  }
+]
