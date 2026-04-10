@@ -13,20 +13,13 @@ import { cn } from '../../lib/utils'
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover'
 import { UserIconDisplay } from '../ui/UserIconDisplay'
 
-export function SidebarFooter() {
-  const name = useUserStore((s) => s.name)
-  const avatarIcon = useUserStore((s) => s.avatarIcon)
-  const avatarColor = useUserStore((s) => s.avatarColor)
-  const setActiveView = useSessionStore((s) => s.setActiveView)
-  const activeView = useSessionStore((s) => s.activeView)
-
+export function UpdateBanner() {
   const phase = useUpdaterStore((s) => s.phase)
   const version = useUpdaterStore((s) => s.version)
   const dismissed = useUpdaterStore((s) => s.dismissed)
   const setAvailable = useUpdaterStore((s) => s.setAvailable)
   const setDownloading = useUpdaterStore((s) => s.setDownloading)
   const dismiss = useUpdaterStore((s) => s.dismiss)
-  const undismiss = useUpdaterStore((s) => s.undismiss)
 
   useEffect(() => {
     if (!window.electronAPI?.onUpdateAvailable) return
@@ -40,9 +33,60 @@ export function SidebarFooter() {
     window.electronAPI?.startDownload()
   }
 
+  const showUpdateBanner = phase === 'available' && !dismissed
+
+  return (
+    <AnimatePresence>
+      {showUpdateBanner && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+          className="overflow-hidden"
+        >
+          <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-accent/8 border border-accent/15">
+            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-accent/12 flex-shrink-0">
+              <ArrowDownTrayIcon className="w-3.5 h-3.5 text-accent" />
+            </div>
+            <p className="text-[12px] font-medium text-text-primary leading-tight">
+              {version ? `v${version}` : 'Update'}
+            </p>
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                onClick={dismiss}
+                className="px-1.5 py-0.5 text-[11px] font-medium text-text-tertiary hover:text-text-secondary rounded-md hover:bg-surface-200 transition-colors"
+              >
+                Later
+              </button>
+              <button
+                onClick={handleUpdate}
+                className="px-2 py-0.5 text-[11px] font-medium text-white bg-accent hover:bg-accent-hover rounded-md transition-colors"
+              >
+                Update
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
+export function SidebarFooter() {
+  const name = useUserStore((s) => s.name)
+  const avatarIcon = useUserStore((s) => s.avatarIcon)
+  const avatarColor = useUserStore((s) => s.avatarColor)
+  const setActiveView = useSessionStore((s) => s.setActiveView)
+  const activeView = useSessionStore((s) => s.activeView)
+
+  const phase = useUpdaterStore((s) => s.phase)
+  const version = useUpdaterStore((s) => s.version)
+  const dismissed = useUpdaterStore((s) => s.dismissed)
+  const undismiss = useUpdaterStore((s) => s.undismiss)
+
   const [popoverOpen, setPopoverOpen] = useState(false)
 
-  const showUpdateBanner = phase === 'available' && !dismissed
   const showUpdateDot = dismissed && version !== null && phase === 'available'
 
   const items: { view: ActiveView; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string }[] = [
@@ -52,42 +96,6 @@ export function SidebarFooter() {
 
   return (
     <div className="relative">
-      {/* Update banner */}
-      <AnimatePresence>
-        {showUpdateBanner && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-            className="overflow-hidden"
-          >
-            <div className="flex items-center gap-2 px-2.5 py-2 mb-1.5 rounded-xl bg-accent/8 border border-accent/15">
-              <div className="flex items-center justify-center w-6 h-6 rounded-md bg-accent/12 flex-shrink-0">
-                <ArrowDownTrayIcon className="w-3.5 h-3.5 text-accent" />
-              </div>
-              <p className="text-[12px] font-medium text-text-primary leading-tight">
-                {version ? `v${version}` : 'Update'}
-              </p>
-              <div className="flex items-center gap-1 ml-auto">
-                <button
-                  onClick={dismiss}
-                  className="px-1.5 py-0.5 text-[11px] font-medium text-text-tertiary hover:text-text-secondary rounded-md hover:bg-surface-200 transition-colors"
-                >
-                  Later
-                </button>
-                <button
-                  onClick={handleUpdate}
-                  className="px-2 py-0.5 text-[11px] font-medium text-white bg-accent hover:bg-accent-hover rounded-md transition-colors"
-                >
-                  Update
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>
           <button

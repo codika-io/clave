@@ -26,7 +26,7 @@ import { useLocationStore } from '../../store/location-store'
 import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName, initClaveFileWatchers } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
-import { SidebarFooter } from './SidebarFooter'
+import { SidebarFooter, UpdateBanner } from './SidebarFooter'
 import { WorkTracker } from '../work-tracker/WorkTracker'
 import { ScrollArea } from '../ui/scroll-area'
 import {
@@ -1231,11 +1231,16 @@ export function Sidebar() {
         <JournalSection collapsed={boardCollapsed} />
       </ScrollArea>
 
-      {/* Bottom section: divider + work tracker + announcements + user */}
+      {/* Announcements — above the bottom bar */}
+      <div className="flex-shrink-0 px-2 space-y-1">
+        <WhatsNewBanner />
+        <UpdateBanner />
+      </div>
+
+      {/* Bottom section: divider + work tracker + user */}
       <div className="flex-shrink-0 border-t border-border-subtle">
         <div className="px-2 pt-1.5 pb-2 space-y-0.5">
           <WorkTracker />
-          <WhatsNewBanner />
           <SidebarFooter />
         </div>
       </div>

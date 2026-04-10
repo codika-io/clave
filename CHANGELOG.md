@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.32.3] — 2026-04-10
+
+### Changed
+- Moved What's New and Update banners above the sidebar footer, appearing on top of sessions and the divider bar
+
 ## [1.32.2] — 2026-04-10
 
 ### Changed
