@@ -34,30 +34,30 @@ function ActiveBanner(): React.ReactNode {
 
   return (
     <div
-      className="mx-3 mb-3 px-3 py-2 rounded-md border"
+      className="mx-5 mb-4 px-4 py-3 rounded-lg border"
       style={{
         backgroundColor: 'var(--journal-active-bg)',
         borderColor: 'var(--journal-active-border)'
       }}
     >
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-1.5">
         <div
-          className="w-1.5 h-1.5 rounded-full animate-pulse flex-shrink-0"
+          className="w-2 h-2 rounded-full animate-pulse flex-shrink-0"
           style={{ backgroundColor: 'var(--journal-active-dot)' }}
         />
-        <div className="text-[10px] font-medium" style={{ color: 'var(--journal-active-text)' }}>
+        <div className="text-xs font-medium" style={{ color: 'var(--journal-active-text)' }}>
           Working on
         </div>
       </div>
-      <div className="space-y-1 pl-3.5">
+      <div className="space-y-1.5 pl-4">
         {activeEntries.map((entry) => (
           <button
             key={entry.sessionId}
             onClick={() => handleClick(entry.sessionId)}
-            className="block w-full text-left text-[11px] text-text-primary truncate hover:text-accent transition-colors"
+            className="block w-full text-left text-sm text-text-primary truncate hover:text-accent transition-colors"
           >
             {entry.name}
-            <span className="text-[9px] text-text-tertiary ml-1.5">{entry.cwd}</span>
+            <span className="text-xs text-text-tertiary ml-2">{entry.cwd}</span>
           </button>
         ))}
       </div>
@@ -113,33 +113,33 @@ function EntryItem({ entry }: EntryItemProps): React.ReactNode {
     return (
       <button
         onClick={() => setExpanded(true)}
-        className="flex items-start gap-1.5 w-full text-left mb-1.5 hover:bg-surface-100 rounded px-1 py-0.5 -mx-1 transition-colors"
+        className="flex items-start gap-2 w-full text-left mb-2 hover:bg-surface-100 rounded-md px-2 py-1 -mx-2 transition-colors"
       >
-        <span className="text-text-tertiary text-[11px] mt-px flex-shrink-0">•</span>
+        <span className="text-text-tertiary text-sm mt-px flex-shrink-0">•</span>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] text-text-secondary leading-relaxed line-clamp-2">
+          <div className="text-sm text-text-secondary leading-relaxed line-clamp-2">
             {summaryText || displayText}
           </div>
-          {timeStr && <div className="text-[9px] text-text-tertiary mt-0.5">{timeStr}</div>}
+          {timeStr && <div className="text-xs text-text-tertiary mt-0.5">{timeStr}</div>}
         </div>
       </button>
     )
   }
 
   return (
-    <div className="bg-surface-100 rounded-md p-2.5 mb-1.5 -mx-1">
+    <div className="bg-surface-100 rounded-lg p-3 mb-2 -mx-2">
       <button
         onClick={() => setExpanded(false)}
-        className="text-[11px] text-text-primary font-medium mb-1.5 text-left w-full"
+        className="text-sm text-text-primary font-medium mb-2 text-left w-full"
       >
         {summaryText || displayText}
       </button>
 
       {summaryText && (
-        <div className="text-[10px] text-text-tertiary mb-1.5">Session: {displayText}</div>
+        <div className="text-xs text-text-tertiary mb-2">Session: {displayText}</div>
       )}
 
-      <div className="flex gap-3 text-[9px] text-text-tertiary mb-2">
+      <div className="flex gap-3 text-xs text-text-tertiary mb-2.5">
         {entry.startTime && (
           <span>
             {new Date(entry.startTime).toLocaleTimeString([], {
@@ -164,7 +164,7 @@ function EntryItem({ entry }: EntryItemProps): React.ReactNode {
         <div className="flex gap-1.5">
           <button
             onClick={handleViewSession}
-            className="text-[9px] px-2 py-1 rounded bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
+            className="text-xs px-2.5 py-1 rounded bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
           >
             View Session
           </button>
@@ -195,8 +195,8 @@ export function AssistantPanel(): React.ReactNode {
     return (
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="text-center">
-          <div className="text-[11px] text-text-tertiary">AI Journal is disabled</div>
-          <div className="text-[10px] text-text-tertiary mt-1 opacity-60">
+          <div className="text-sm text-text-tertiary">AI Journal is disabled</div>
+          <div className="text-xs text-text-tertiary mt-1 opacity-60">
             Enable it in Settings to track your work
           </div>
         </div>
@@ -207,7 +207,7 @@ export function AssistantPanel(): React.ReactNode {
   if (!loaded) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <span className="text-xs text-text-tertiary">Loading journal...</span>
+        <span className="text-sm text-text-tertiary">Loading journal...</span>
       </div>
     )
   }
@@ -225,11 +225,12 @@ export function AssistantPanel(): React.ReactNode {
   return (
     <div className="flex-1 flex flex-col overflow-y-auto">
       {/* Date header */}
-      <div className="px-3 pt-3 pb-2">
-        <div className="text-[13px] font-semibold text-text-primary">Today, {dateLabel}</div>
+      <div className="px-5 pt-5 pb-3">
+        <div className="text-xs uppercase tracking-[0.18em] text-text-tertiary mb-1">AI Journal</div>
+        <h2 className="text-lg font-semibold text-text-primary">Today, {dateLabel}</h2>
         {hasContent && (
-          <div className="text-[10px] text-text-tertiary mt-0.5">
-            {totalSessions} session{totalSessions !== 1 ? 's' : ''} · {journal.projects.length}{' '}
+          <div className="text-sm text-text-secondary mt-1">
+            {totalSessions} session{totalSessions !== 1 ? 's' : ''} across {journal.projects.length}{' '}
             project{journal.projects.length !== 1 ? 's' : ''}
           </div>
         )}
@@ -240,23 +241,23 @@ export function AssistantPanel(): React.ReactNode {
 
       {/* Project groups */}
       {hasContent ? (
-        <div className="px-3 pb-3">
+        <div className="px-5 pb-5">
           {journal.projects.map((project, idx) => {
             const completedCount = project.entries.filter((e) => e.status === 'completed').length
             return (
-              <div key={project.cwd} className="mb-4 last:mb-0">
-                <div className="flex items-center gap-1.5 mb-1.5">
+              <div key={project.cwd} className="mb-6 last:mb-0">
+                <div className="flex items-center gap-2 mb-2">
                   <span
-                    className="text-[11px] font-semibold"
+                    className="text-sm font-semibold"
                     style={{ color: PROJECT_COLOR_VARS[idx % PROJECT_COLOR_VARS.length] }}
                   >
                     {project.name}
                   </span>
-                  <span className="text-[9px] text-text-tertiary">
+                  <span className="text-xs text-text-tertiary">
                     ({completedCount} completed)
                   </span>
                 </div>
-                <div className="pl-0.5">
+                <div className="pl-1">
                   {project.entries
                     .filter((e) => e.status === 'completed')
                     .map((entry) => (
@@ -270,8 +271,8 @@ export function AssistantPanel(): React.ReactNode {
       ) : (
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="text-center">
-            <div className="text-[11px] text-text-tertiary">No sessions yet today</div>
-            <div className="text-[10px] text-text-tertiary mt-1 opacity-60">
+            <div className="text-sm text-text-tertiary">No sessions yet today</div>
+            <div className="text-xs text-text-tertiary mt-1 opacity-60">
               Accomplishments will appear here as you work
             </div>
           </div>
