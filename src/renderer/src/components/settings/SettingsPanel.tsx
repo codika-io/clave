@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { type Theme, type AppIcon, useSessionStore } from '../../store/session-store'
+import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { useTemplateStore } from '../../store/template-store'
 import { useUserStore, USER_ICONS, USER_ICON_COLORS } from '../../store/user-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
@@ -420,8 +421,43 @@ export function SettingsPanel() {
         <section className="mt-8">
           <LocationsTab />
         </section>
+
+        <WorkTrackerSection />
       </div>
     </div>
+  )
+}
+
+function WorkTrackerSection() {
+  const enabled = useWorkTrackerStore((s) => s.enabled)
+  const setEnabled = useWorkTrackerStore((s) => s.setEnabled)
+
+  return (
+    <section className="mt-8">
+      <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-widest mb-3">Work Tracker</h3>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[13px] text-text-secondary">Show work tracker widget</p>
+          <p className="text-[11px] text-text-tertiary mt-0.5">
+            Track daily work time, break reminders, and weekly trends in the sidebar
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={enabled}
+          onClick={() => setEnabled(!enabled)}
+          className={`relative w-9 h-5 rounded-full transition-colors ${
+            enabled ? 'bg-accent' : 'bg-surface-300'
+          }`}
+        >
+          <div
+            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+              enabled ? 'translate-x-[18px]' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+    </section>
   )
 }
 

@@ -21,6 +21,13 @@
   --color-accent: oklch(0.65 0.2 265);
   --color-accent-hover: oklch(0.7 0.22 265);
 
+  --color-wellbeing-gentle: oklch(0.75 0.15 85);
+  --color-wellbeing-gentle-bg: oklch(0.25 0.03 85);
+  --color-wellbeing-gentle-border: oklch(0.4 0.06 85);
+  --color-wellbeing-strong: oklch(0.7 0.15 50);
+  --color-wellbeing-strong-bg: oklch(0.25 0.03 50);
+  --color-wellbeing-strong-border: oklch(0.4 0.06 50);
+
   /* shadcn semantic aliases */
   --color-background: var(--surface-0);
   --color-foreground: var(--text-primary);
@@ -93,6 +100,12 @@
   --claude-toggle-bg: rgba(0, 0, 0, 0.06);
   --claude-toggle-active: rgba(217, 119, 87, 0.15);
   --claude-toggle-glow: rgba(217, 119, 87, 0.18);
+  --color-wellbeing-gentle: oklch(0.55 0.15 85);
+  --color-wellbeing-gentle-bg: oklch(0.95 0.03 85);
+  --color-wellbeing-gentle-border: oklch(0.8 0.08 85);
+  --color-wellbeing-strong: oklch(0.5 0.15 50);
+  --color-wellbeing-strong-bg: oklch(0.95 0.03 50);
+  --color-wellbeing-strong-border: oklch(0.8 0.08 50);
 }
 
 /* Coffee theme — warm light, matching Claude's cream/beige aesthetic */
@@ -117,6 +130,12 @@
   --claude-toggle-bg: rgba(120, 100, 80, 0.08);
   --claude-toggle-active: rgba(217, 119, 87, 0.18);
   --claude-toggle-glow: rgba(217, 119, 87, 0.22);
+  --color-wellbeing-gentle: oklch(0.5 0.12 85);
+  --color-wellbeing-gentle-bg: oklch(0.85 0.04 85);
+  --color-wellbeing-gentle-border: oklch(0.7 0.08 85);
+  --color-wellbeing-strong: oklch(0.45 0.15 50);
+  --color-wellbeing-strong-bg: oklch(0.85 0.04 50);
+  --color-wellbeing-strong-border: oklch(0.7 0.08 50);
 }
 
 @keyframes pulse-dot {
