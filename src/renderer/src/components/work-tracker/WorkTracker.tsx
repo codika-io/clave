@@ -7,10 +7,9 @@ import { cn } from '../../lib/utils'
 export function WorkTracker() {
   const enabled = useWorkTrackerStore((s) => s.enabled)
   const isExpanded = useWorkTrackerStore((s) => s.isExpanded)
-  const todaySessionCount = useWorkTrackerStore((s) => s.todaySessionCount)
   const breakSuggestion = useWorkTrackerStore((s) => s.breakSuggestion)
 
-  if (!enabled || todaySessionCount === 0) return null
+  if (!enabled) return null
 
   return (
     <div className="flex-shrink-0 px-2 pb-1">

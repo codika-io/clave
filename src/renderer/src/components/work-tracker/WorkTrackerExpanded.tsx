@@ -34,7 +34,7 @@ export function WorkTrackerExpanded() {
   const streakPercent = Math.min((streakMinutes / 240) * 100, 100)
 
   return (
-    <div className="max-h-[320px] overflow-y-auto">
+    <div>
       {/* Today's Breakdown */}
       {todayProjects.length > 0 && (
         <div className="px-3 py-2.5 border-b border-border-subtle">
