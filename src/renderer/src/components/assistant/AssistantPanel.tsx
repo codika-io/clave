@@ -253,7 +253,7 @@ export function AssistantPanel(): React.ReactNode {
                     {project.name}
                   </span>
                   <span className="text-[9px] text-text-tertiary">
-                    — {completedCount} completed
+                    ({completedCount} completed)
                   </span>
                 </div>
                 <div className="pl-0.5">

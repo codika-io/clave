@@ -7,7 +7,7 @@ import {
   loadClaudeHistoryMessages
 } from './claude-history'
 
-const SUMMARY_MODEL = 'claude-haiku-4-5-20251001'
+const SUMMARY_MODEL = 'claude-haiku-4-5-latest'
 const MAX_MESSAGES = 40
 const MAX_CONTENT_LENGTH = 500
 const MAX_CONCURRENT = 3
