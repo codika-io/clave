@@ -39,11 +39,9 @@ interface WorkTrackerState {
 
   // UI
   enabled: boolean
-  isExpanded: boolean
 
   // Actions
   setEnabled: (enabled: boolean) => void
-  toggleExpanded: () => void
   trackSession: (sessionId: string, cwd: string) => void
   endSession: (sessionId: string) => void
   tick: () => void
@@ -104,13 +102,11 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
   todayTotalMinutes: 0,
   todaySessionCount: 0,
   enabled: localStorage.getItem('clave-work-tracker-enabled') !== 'false',
-  isExpanded: false,
 
   setEnabled: (enabled) => {
     localStorage.setItem('clave-work-tracker-enabled', String(enabled))
     set({ enabled })
   },
-  toggleExpanded: () => set((s) => ({ isExpanded: !s.isExpanded })),
 
   trackSession: (sessionId, cwd) =>
     set((state) => {

@@ -66,8 +66,8 @@ export function WhatsNewBanner(): ReactNode {
   if (!visible || !entry) return null
 
   return (
-    <div className="px-2 pb-1 flex-shrink-0">
-      <div className="px-2.5 py-2 rounded-lg bg-accent/8 border border-accent/15">
+    <div>
+      <div className="px-2.5 py-2 rounded-xl bg-accent/8 border border-accent/15">
         <div className="flex items-start gap-2">
           <SparklesIcon className="w-3.5 h-3.5 text-accent flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">

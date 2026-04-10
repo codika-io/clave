@@ -1231,14 +1231,14 @@ export function Sidebar() {
         <JournalSection collapsed={boardCollapsed} />
       </ScrollArea>
 
-      {/* Work tracker widget */}
-      <WorkTracker />
-
-      {/* What's new banner */}
-      <WhatsNewBanner />
-
-      {/* User footer */}
-      <SidebarFooter />
+      {/* Bottom section: divider + work tracker + announcements + user */}
+      <div className="flex-shrink-0 border-t border-border-subtle">
+        <div className="px-2 pt-1.5 pb-2 space-y-0.5">
+          <WorkTracker />
+          <WhatsNewBanner />
+          <SidebarFooter />
+        </div>
+      </div>
 
       {/* Context menu */}
       {contextMenu && (

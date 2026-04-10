@@ -1,43 +1,71 @@
-import { motion, AnimatePresence } from 'framer-motion'
+import { ClockIcon } from '@heroicons/react/24/outline'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
-import { WorkTrackerCollapsed } from './WorkTrackerCollapsed'
-import { WorkTrackerExpanded } from './WorkTrackerExpanded'
+import { useSessionStore } from '../../store/session-store'
 import { cn } from '../../lib/utils'
+import { formatDuration } from './utils'
 
 export function WorkTracker() {
   const enabled = useWorkTrackerStore((s) => s.enabled)
-  const isExpanded = useWorkTrackerStore((s) => s.isExpanded)
+  const todayTotalMinutes = useWorkTrackerStore((s) => s.todayTotalMinutes)
+  const todaySessionCount = useWorkTrackerStore((s) => s.todaySessionCount)
   const breakSuggestion = useWorkTrackerStore((s) => s.breakSuggestion)
+  const setActiveView = useSessionStore((s) => s.setActiveView)
 
   if (!enabled) return null
 
+  const isGentle = breakSuggestion === 'gentle'
+  const isStrong = breakSuggestion === 'strong'
+  const hasBreak = isGentle || isStrong
+  const hasActivity = todayTotalMinutes > 0
+
+  const sessionText = hasBreak
+    ? isStrong
+      ? 'take a break'
+      : 'break?'
+    : `${todaySessionCount} session${todaySessionCount !== 1 ? 's' : ''}`
+
   return (
-    <div className="flex-shrink-0 px-2 pb-1">
-      <div
+    <button
+      onClick={() => setActiveView('usage')}
+      className={cn(
+        'w-full flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors text-left',
+        hasBreak
+          ? isStrong
+            ? 'bg-wellbeing-strong-bg'
+            : 'bg-wellbeing-gentle-bg'
+          : 'hover:bg-surface-100'
+      )}
+    >
+      <ClockIcon
         className={cn(
-          'rounded-xl border bg-surface-50 overflow-hidden',
-          breakSuggestion === 'strong'
-            ? 'border-wellbeing-strong-border'
-            : breakSuggestion === 'gentle'
-              ? 'border-wellbeing-gentle-border'
-              : 'border-border-subtle'
+          'w-3.5 h-3.5 flex-shrink-0',
+          hasBreak
+            ? isStrong
+              ? 'text-wellbeing-strong'
+              : 'text-wellbeing-gentle'
+            : hasActivity
+              ? 'text-accent'
+              : 'text-text-tertiary'
+        )}
+      />
+      <span
+        className={cn(
+          'text-[13px] font-semibold',
+          hasBreak
+            ? isStrong
+              ? 'text-wellbeing-strong'
+              : 'text-wellbeing-gentle'
+            : hasActivity
+              ? 'text-accent'
+              : 'text-text-tertiary'
         )}
       >
-        <AnimatePresence initial={false}>
-          {isExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-              className="overflow-hidden"
-            >
-              <WorkTrackerExpanded />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <WorkTrackerCollapsed />
-      </div>
-    </div>
+        {formatDuration(todayTotalMinutes)}
+      </span>
+      <span className="text-[11px] text-text-tertiary">·</span>
+      <span className="text-[11px] text-text-tertiary flex-1 truncate">
+        {sessionText}
+      </span>
+    </button>
   )
 }

@@ -51,7 +51,7 @@ export function SidebarFooter() {
   ]
 
   return (
-    <div className="relative flex-shrink-0 px-2 pb-2 pt-1.5">
+    <div className="relative">
       {/* Update banner */}
       <AnimatePresence>
         {showUpdateBanner && (
