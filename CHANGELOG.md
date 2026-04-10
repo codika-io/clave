@@ -6,7 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.29.0] — 2026-04-10
+
 ### Added
+- Work Tracker widget with daily session stats, streaks, and weekly trends
 - In-app help panel with searchable documentation (10 help topics)
 - What's New banner for post-update feature announcements
 - `clave://navigate` deep links in help docs to jump to features
