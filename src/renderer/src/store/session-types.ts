@@ -140,7 +140,7 @@ export interface FileTab {
   name: string
 }
 
-export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings' | 'agents' | 'history'
+export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings' | 'agents' | 'history' | 'journal'
 
 export interface PinnedGroupSession {
   cwd: string

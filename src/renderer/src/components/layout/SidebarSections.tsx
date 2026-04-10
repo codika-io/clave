@@ -3,6 +3,7 @@ import { ChevronRightIcon, ClockIcon, QueueListIcon, SparklesIcon } from '@heroi
 import { useSessionStore } from '../../store/session-store'
 import { useBoardStore } from '../../store/board-store'
 import { useHistoryStore, type HistorySession } from '../../store/history-store'
+import { useAssistantStore } from '../../store/assistant-store'
 import { cn } from '../../lib/utils'
 
 export function SectionHeading({
@@ -237,6 +238,44 @@ export function HistorySection({ collapsed }: { collapsed: boolean }) {
               )}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function JournalSection({ collapsed }: { collapsed: boolean }) {
+  const activeView = useSessionStore((s) => s.activeView)
+  const setActiveView = useSessionStore((s) => s.setActiveView)
+  const enabled = useAssistantStore((s) => s.enabled)
+  const journal = useAssistantStore((s) => s.journal)
+
+  if (!enabled) return null
+
+  const totalSessions = journal.projects.reduce((sum, p) => sum + p.entries.length, 0)
+
+  return (
+    <div
+      className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out flex-shrink-0"
+      style={{ gridTemplateRows: collapsed ? '0fr' : '1fr', opacity: collapsed ? 0 : 1, transform: collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
+    >
+      <div className="overflow-hidden">
+        <div className="px-2 pt-0.5 pb-2">
+          <button
+            onClick={() => setActiveView('journal')}
+            className={cn(
+              'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
+              activeView === 'journal'
+                ? 'bg-surface-200 text-text-primary shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-100'
+            )}
+          >
+            <SparklesIcon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />
+            <span className="truncate">Journal</span>
+            {totalSessions > 0 && (
+              <span className="ml-auto text-[12px] text-text-tertiary">{totalSessions}</span>
+            )}
+          </button>
         </div>
       </div>
     </div>
