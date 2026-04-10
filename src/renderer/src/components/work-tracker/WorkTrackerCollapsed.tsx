@@ -10,7 +10,6 @@ export function WorkTrackerCollapsed() {
   const breakSuggestion = useWorkTrackerStore((s) => s.breakSuggestion)
   const isExpanded = useWorkTrackerStore((s) => s.isExpanded)
   const toggleExpanded = useWorkTrackerStore((s) => s.toggleExpanded)
-  const tokenUsage = useWorkTrackerStore((s) => s.tokenUsage)
 
   const isGentle = breakSuggestion === 'gentle'
   const isStrong = breakSuggestion === 'strong'
@@ -22,10 +21,6 @@ export function WorkTrackerCollapsed() {
       ? 'take a break'
       : 'break?'
     : `${todaySessionCount} session${todaySessionCount !== 1 ? 's' : ''}`
-
-  const costSuffix = tokenUsage && tokenUsage.todayCost > 0
-    ? ` · ~$${Math.round(tokenUsage.todayCost)}`
-    : ''
 
   return (
     <button
@@ -67,7 +62,7 @@ export function WorkTrackerCollapsed() {
       </span>
       <span className="text-[11px] text-text-tertiary">·</span>
       <span className="text-[11px] text-text-tertiary flex-1 truncate">
-        {sessionText}{costSuffix}
+        {sessionText}
       </span>
       {isExpanded ? (
         <ChevronUpIcon className="w-3 h-3 text-text-tertiary flex-shrink-0" />

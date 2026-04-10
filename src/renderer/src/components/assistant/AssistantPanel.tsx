@@ -186,7 +186,6 @@ export function AssistantPanel(): React.ReactNode {
   const goToToday = useAssistantStore((s) => s.goToToday)
   const loadArchiveDates = useAssistantStore((s) => s.loadArchiveDates)
   const todayTotalMinutes = useWorkTrackerStore((s) => s.todayTotalMinutes)
-  const yesterdaySummary = useWorkTrackerStore((s) => s.yesterdaySummary)
 
   useEffect(() => {
     loadArchiveDates()
@@ -327,14 +326,12 @@ export function AssistantPanel(): React.ReactNode {
                 ? 'Nothing was logged on this day'
                 : 'Sessions will appear here as you work'}
             </div>
-            {!isViewingArchive && yesterdaySummary && yesterdaySummary.totalMinutes > 0 && (
+            {!isViewingArchive && (
               <button
                 onClick={() => navigateDay('prev')}
                 className="mt-3 text-xs text-text-tertiary hover:text-text-secondary transition-colors"
               >
-                Yesterday: {formatDuration(yesterdaySummary.totalMinutes)} across{' '}
-                {yesterdaySummary.sessionCount} session
-                {yesterdaySummary.sessionCount !== 1 ? 's' : ''}
+                View yesterday
               </button>
             )}
           </div>

@@ -1,14 +1,9 @@
 // src/renderer/src/components/work-tracker/WorkTrackerExpanded.tsx
+import { ChartBarIcon } from '@heroicons/react/24/outline'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
-import { WeeklyChart } from './WeeklyChart'
+import { useSessionStore } from '../../store/session-store'
 import { cn } from '../../lib/utils'
 import { formatDuration } from './utils'
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`
-  if (tokens >= 1000) return `${Math.round(tokens / 1000)}K`
-  return String(tokens)
-}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -22,20 +17,18 @@ export function WorkTrackerExpanded() {
   const todayProjects = useWorkTrackerStore((s) => s.todayProjects)
   const currentStreakStartedAt = useWorkTrackerStore((s) => s.currentStreakStartedAt)
   const breakSuggestion = useWorkTrackerStore((s) => s.breakSuggestion)
-  const yesterdaySummary = useWorkTrackerStore((s) => s.yesterdaySummary)
-  const weeklySummary = useWorkTrackerStore((s) => s.weeklySummary)
-  const tokenUsage = useWorkTrackerStore((s) => s.tokenUsage)
+  const setActiveView = useSessionStore((s) => s.setActiveView)
+  const toggleExpanded = useWorkTrackerStore((s) => s.toggleExpanded)
 
   const streakMinutes = currentStreakStartedAt
     ? Math.round((Date.now() - currentStreakStartedAt) / 60000)
     : 0
 
-  // Progress bar: fills toward 4h (240 min)
   const streakPercent = Math.min((streakMinutes / 240) * 100, 100)
 
   return (
     <div>
-      {/* Today's Breakdown — always visible */}
+      {/* Today's Breakdown */}
       <div className="px-3 py-2.5 border-b border-border-subtle">
         <SectionLabel>Today</SectionLabel>
         {todayProjects.length > 0 ? (
@@ -97,49 +90,17 @@ export function WorkTrackerExpanded() {
         </div>
       )}
 
-      {/* Yesterday */}
-      {yesterdaySummary && (
-        <div className="px-3 py-2.5 border-b border-border-subtle">
-          <SectionLabel>Yesterday</SectionLabel>
-          <div className="text-[12px] text-text-tertiary">
-            {formatDuration(yesterdaySummary.totalMinutes)} · {yesterdaySummary.sessionCount} session{yesterdaySummary.sessionCount !== 1 ? 's' : ''}
-          </div>
-        </div>
-      )}
-
-      {/* Weekly Trends */}
-      {weeklySummary && (
-        <div className="px-3 py-2.5 border-b border-border-subtle">
-          <SectionLabel>This week</SectionLabel>
-          <WeeklyChart
-            dailyMinutes={weeklySummary.dailyMinutes}
-            avgDailyMinutes={weeklySummary.avgDailyMinutes}
-          />
-        </div>
-      )}
-
-      {/* Token Usage */}
-      {tokenUsage && (tokenUsage.todayTokens > 0 || tokenUsage.weekTokens > 0) && (
-        <div className="px-3 py-2.5">
-          <SectionLabel>Tokens</SectionLabel>
-          {tokenUsage.todayTokens > 0 && (
-            <div className="flex justify-between text-[12px]">
-              <span className="text-text-secondary">Today</span>
-              <span className="text-text-tertiary">
-                {formatTokens(tokenUsage.todayTokens)} · ~${tokenUsage.todayCost.toFixed(2)}
-              </span>
-            </div>
-          )}
-          {tokenUsage.weekTokens > 0 && (
-            <div className="flex justify-between text-[12px] mt-0.5">
-              <span className="text-text-secondary">Week</span>
-              <span className="text-text-tertiary">
-                {formatTokens(tokenUsage.weekTokens)} · ~${tokenUsage.weekCost.toFixed(2)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Link to full usage page */}
+      <button
+        onClick={() => {
+          setActiveView('usage')
+          toggleExpanded()
+        }}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] text-text-tertiary hover:text-accent transition-colors"
+      >
+        <ChartBarIcon className="w-3.5 h-3.5" />
+        <span>See full usage</span>
+      </button>
     </div>
   )
 }

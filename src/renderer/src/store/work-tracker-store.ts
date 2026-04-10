@@ -21,24 +21,6 @@ interface ProjectSummary {
   sessionCount: number
 }
 
-interface YesterdaySummary {
-  totalMinutes: number
-  sessionCount: number
-}
-
-interface WeeklySummary {
-  dailyMinutes: number[] // 7 entries, Mon–Sun
-  totalSessions: number
-  avgDailyMinutes: number
-}
-
-interface TokenUsage {
-  todayTokens: number
-  todayCost: number
-  weekTokens: number
-  weekCost: number
-}
-
 type BreakSuggestion = 'none' | 'gentle' | 'strong'
 
 interface WorkTrackerState {
@@ -55,11 +37,6 @@ interface WorkTrackerState {
   todayTotalMinutes: number
   todaySessionCount: number
 
-  // Historical
-  yesterdaySummary: YesterdaySummary | null
-  weeklySummary: WeeklySummary | null
-  tokenUsage: TokenUsage | null
-
   // UI
   enabled: boolean
   isExpanded: boolean
@@ -70,7 +47,6 @@ interface WorkTrackerState {
   trackSession: (sessionId: string, cwd: string) => void
   endSession: (sessionId: string) => void
   tick: () => void
-  updateHistoricalData: (usage: unknown) => void
 }
 
 const GENTLE_THRESHOLD_MS = 2 * 60 * 60 * 1000 // 2 hours
@@ -127,9 +103,6 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
   todayProjects: [],
   todayTotalMinutes: 0,
   todaySessionCount: 0,
-  yesterdaySummary: null,
-  weeklySummary: null,
-  tokenUsage: null,
   enabled: localStorage.getItem('clave-work-tracker-enabled') !== 'false',
   isExpanded: false,
 
@@ -165,12 +138,21 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
   endSession: (sessionId) =>
     set((state) => {
       const now = Date.now()
+      // Count active tracked sessions to split wall-clock time fairly
+      const storeSessions = useSessionStore.getState().sessions
+      let activeCount = 0
+      for (const s of state.trackedSessions) {
+        if (s.endedAt) continue
+        const ss = storeSessions.find((x) => x.id === s.sessionId)
+        if (ss?.alive && ss.activityStatus === 'active') activeCount++
+      }
+      if (activeCount < 1) activeCount = 1
+
       return {
         trackedSessions: state.trackedSessions.map((s) => {
           if (s.sessionId !== sessionId || s.endedAt) return s
-          // Final accumulation: add time since last tick
           const delta = now - s.lastTickAt
-          return { ...s, endedAt: now, lastTickAt: now, accumulatedMs: s.accumulatedMs + delta }
+          return { ...s, endedAt: now, lastTickAt: now, accumulatedMs: s.accumulatedMs + (delta / activeCount) }
         })
       }
     }),
@@ -181,27 +163,30 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     const todayKey = getLocalDateString()
     const storeSessions = useSessionStore.getState().sessions
 
-    // Update accumulated time for live sessions (only active time counts)
+    // First pass: count concurrently active sessions for fair wall-clock split
+    let activeCount = 0
+    for (const ts of state.trackedSessions) {
+      if (ts.endedAt) continue
+      const ss = storeSessions.find((s) => s.id === ts.sessionId)
+      if (ss?.alive && ss.activityStatus === 'active') activeCount++
+    }
+
+    // Second pass: update accumulated time, dividing by concurrent count
     const updatedTracked = state.trackedSessions.map((ts) => {
       if (ts.endedAt) return ts
       const storeSession = storeSessions.find((s) => s.id === ts.sessionId)
       if (!storeSession || !storeSession.alive) {
-        // Session ended between ticks — finalize
         return { ...ts, endedAt: now, lastTickAt: now }
       }
-      // Only accumulate time when session is actively working
-      if (storeSession.activityStatus === 'active') {
+      if (storeSession.activityStatus === 'active' && activeCount > 0) {
         const delta = now - ts.lastTickAt
-        return { ...ts, lastTickAt: now, accumulatedMs: ts.accumulatedMs + delta }
+        // Split wall-clock time among concurrent sessions so totals reflect real time
+        return { ...ts, lastTickAt: now, accumulatedMs: ts.accumulatedMs + delta / activeCount }
       }
-      // Session alive but idle — advance lastTickAt without accumulating
       return { ...ts, lastTickAt: now }
     })
 
-    // Check if any session is active
-    const hasActiveSession = storeSessions.some(
-      (s) => s.alive && s.activityStatus === 'active'
-    )
+    const hasActiveSession = activeCount > 0
 
     // Streak logic
     let { currentStreakStartedAt, lastActivityAt } = state
@@ -233,101 +218,11 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     })
   },
 
-  updateHistoricalData: (usage: unknown) => {
-    const data = usage as {
-      dailyActivity?: {
-        date: string
-        messageCount: number
-        sessionCount: number
-        toolCallCount: number
-      }[]
-      dailyModelTokens?: { date: string; tokensByModel: Record<string, number> }[]
-      estimatedCost?: number
-      totalTokens?: number
-    }
-    if (!data.dailyActivity) return
-
-    const nowDate = new Date()
-    const today = getLocalDateString(nowDate)
-    const yesterdayDate = new Date(nowDate)
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-    const yesterday = getLocalDateString(yesterdayDate)
-
-    // Build week dates starting from Monday (all in local time)
-    const mondayOffset = (nowDate.getDay() + 6) % 7
-    const mondayDate = new Date(nowDate)
-    mondayDate.setDate(mondayDate.getDate() - mondayOffset)
-    mondayDate.setHours(0, 0, 0, 0)
-
-    const weekDates: string[] = []
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(mondayDate)
-      d.setDate(d.getDate() + i)
-      weekDates.push(getLocalDateString(d))
-    }
-
-    const activityByDate = new Map(data.dailyActivity.map((d) => [d.date, d]))
-
-    // Yesterday summary
-    const yesterdayActivity = activityByDate.get(yesterday)
-    const yesterdaySummary: YesterdaySummary | null = yesterdayActivity
-      ? {
-          // Rough estimate: ~2 min per message exchange. Not actual tracked time.
-          totalMinutes: yesterdayActivity.messageCount * 2,
-          sessionCount: yesterdayActivity.sessionCount
-        }
-      : null
-
-    // Weekly summary — use live tracked minutes for today, heuristic for past days
-    const { todayTotalMinutes } = get()
-    const todayIndex = weekDates.indexOf(today)
-    const dailyMinutes = weekDates.map((date, i) => {
-      if (i === todayIndex) return todayTotalMinutes
-      const activity = activityByDate.get(date)
-      // Rough estimate: ~2 min per message exchange
-      return activity ? activity.messageCount * 2 : 0
-    })
-    const activeDays = dailyMinutes.filter((m) => m > 0).length
-    const totalWeekMinutes = dailyMinutes.reduce((a, b) => a + b, 0)
-    const weeklySummary: WeeklySummary = {
-      dailyMinutes,
-      totalSessions: weekDates.reduce((sum, date) => {
-        const a = activityByDate.get(date)
-        return sum + (a ? a.sessionCount : 0)
-      }, 0),
-      avgDailyMinutes: activeDays > 0 ? Math.round(totalWeekMinutes / activeDays) : 0
-    }
-
-    // Token usage
-    const tokensByDate = new Map(
-      (data.dailyModelTokens || []).map((d) => [
-        d.date,
-        Object.values(d.tokensByModel).reduce((a, b) => a + b, 0)
-      ])
-    )
-
-    const todayTokens = tokensByDate.get(today) || 0
-    const weekTokens = weekDates.reduce((sum, date) => sum + (tokensByDate.get(date) || 0), 0)
-
-    const totalTokens = data.totalTokens || 1
-    const totalCost = data.estimatedCost || 0
-    const costPerToken = totalTokens > 0 ? totalCost / totalTokens : 0
-
-    const tokenUsage: TokenUsage = {
-      todayTokens,
-      todayCost: Math.round(todayTokens * costPerToken * 100) / 100,
-      weekTokens,
-      weekCost: Math.round(weekTokens * costPerToken * 100) / 100
-    }
-
-    set({ yesterdaySummary, weeklySummary, tokenUsage })
-  }
 }))
 
 /**
- * Mount once in AppShell. Syncs session-store sessions into work tracker,
- * runs a 30s tick for duration/streak updates, and refreshes historical
- * data every 10 minutes.
+ * Mount once in AppShell. Syncs session-store sessions into work tracker
+ * and runs a 30s tick for duration/streak updates.
  */
 export function useWorkTracker(): void {
   const prevSessionIds = useRef<Set<string>>(new Set())
@@ -344,21 +239,18 @@ export function useWorkTracker(): void {
     // Subscribe to session-store for new/ended sessions
     let prevSessionRef = useSessionStore.getState().sessions
     const unsubscribe = useSessionStore.subscribe((state) => {
-      // Skip if sessions array hasn't changed (avoids reacting to theme/layout changes)
       if (state.sessions === prevSessionRef) return
       prevSessionRef = state.sessions
 
       const currentIds = new Set<string>(state.sessions.filter((s) => s.alive).map((s) => s.id))
       const tracker = useWorkTrackerStore.getState()
 
-      // New sessions
       for (const s of state.sessions) {
         if (s.alive && !prevSessionIds.current.has(s.id)) {
           tracker.trackSession(s.id, s.cwd)
         }
       }
 
-      // Ended sessions
       for (const id of prevSessionIds.current) {
         if (!currentIds.has(id)) {
           tracker.endSession(id)
@@ -368,32 +260,15 @@ export function useWorkTracker(): void {
       prevSessionIds.current = currentIds
     })
 
-    // 30-second tick for duration & streak
     const tickInterval = setInterval(() => {
       useWorkTrackerStore.getState().tick()
     }, 30000)
 
-    // Run first tick immediately
     useWorkTrackerStore.getState().tick()
-
-    // Fetch historical data
-    const fetchHistorical = async () => {
-      try {
-        if (!window.electronAPI?.getUsageStats) return
-        const stats = await window.electronAPI.getUsageStats()
-        useWorkTrackerStore.getState().updateHistoricalData(stats)
-      } catch {
-        // Usage stats may not be available — ignore
-      }
-    }
-
-    fetchHistorical()
-    const historicalInterval = setInterval(fetchHistorical, 10 * 60 * 1000)
 
     return () => {
       unsubscribe()
       clearInterval(tickInterval)
-      clearInterval(historicalInterval)
     }
   }, [])
 }
