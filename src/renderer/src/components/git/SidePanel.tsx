@@ -55,6 +55,7 @@ export function SidePanel() {
     return useLocationStore.getState().locations.find((l) => l.id === remoteLocationId)?.name ?? null
   }, [remoteLocationId])
 
+  const prevTabRef = useRef<'files' | 'git'>('files')
   const [customCwd, _setCustomCwd] = useState<string | null>(null)
   const navMapRef = useRef(new Map<string, string>())        // sessionId -> current customCwd
   const navStackRef = useRef(new Map<string, string[]>())    // sessionId -> back stack
@@ -283,20 +284,28 @@ export function SidePanel() {
                 Git
               </button>
             )}
+          </div>
+          </div>
+          <div className="w-6 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <button
-              onClick={() => setSidePanelTab('help')}
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              onClick={() => {
+                if (effectiveTab === 'help') {
+                  setSidePanelTab(prevTabRef.current)
+                } else {
+                  prevTabRef.current = sidePanelTab === 'help' ? 'files' : sidePanelTab as 'files' | 'git'
+                  setSidePanelTab('help')
+                }
+              }}
+              className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                 effectiveTab === 'help'
-                  ? 'bg-surface-200 text-text-primary'
-                  : 'text-text-tertiary hover:text-text-secondary'
+                  ? 'text-accent bg-accent/10'
+                  : 'text-text-tertiary hover:text-text-secondary hover:bg-surface-200'
               }`}
+              title={effectiveTab === 'help' ? 'Close help' : 'Help'}
             >
-              <QuestionMarkCircleIcon className="w-3 h-3" />
-              Help
+              <QuestionMarkCircleIcon className="w-3.5 h-3.5" />
             </button>
           </div>
-          </div>
-          <div className="w-6 flex-shrink-0" />
         </div>
 
         {/* Row 2: Left-aligned path display + optional branch badge */}
