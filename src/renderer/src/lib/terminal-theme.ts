@@ -26,28 +26,28 @@ export const DARK_THEME = {
 }
 
 export const LIGHT_THEME = {
-  background: '#ffffff',
-  foreground: 'rgba(0, 0, 0, 0.85)',
-  cursor: 'rgba(0, 0, 0, 0.7)',
-  cursorAccent: '#ffffff',
-  selectionBackground: 'rgba(0, 0, 0, 0.12)',
+  background: '#fbfbf9',
+  foreground: '#1b1b18',
+  cursor: 'rgba(27, 27, 24, 0.7)',
+  cursorAccent: '#fbfbf9',
+  selectionBackground: 'rgba(0, 0, 0, 0.1)',
   selectionForeground: undefined,
-  black: '#000000',
+  black: '#1b1b18',
   red: '#dc2626',
   green: '#16a34a',
   yellow: '#ca8a04',
   blue: '#2563eb',
   magenta: '#9333ea',
   cyan: '#0891b2',
-  white: '#d4d4d4',
-  brightBlack: '#737373',
+  white: '#d7d6d3',
+  brightBlack: '#6c6c65',
   brightRed: '#ef4444',
   brightGreen: '#22c55e',
   brightYellow: '#eab308',
   brightBlue: '#3b82f6',
   brightMagenta: '#a855f7',
   brightCyan: '#06b6d4',
-  brightWhite: '#525252'
+  brightWhite: '#9b9b94'
 }
 
 export const COFFEE_THEME = {
