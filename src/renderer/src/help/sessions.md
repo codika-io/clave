@@ -16,25 +16,31 @@ You can also create sessions from the **+** button in the sidebar.
 
 Each session shows a colored dot in the sidebar:
 
-- **Green (active)** — Claude is generating a response
-- **Blue (idle)** — Waiting for your input
-- **Amber (permission)** — Claude is asking for permission to run a tool
-- **Gray (ended)** — Session has finished
+- **Pulsing** (active): Claude is generating a response or running tools
+- **Solid green** (idle): Waiting for your input
+- **Gray** (ended): Session has finished or was closed
+
+Sessions with unseen activity highlight their icon in the accent color so you know which tabs need attention.
+
+## Session Modes
+
+Session icons in the sidebar reflect their type:
+
+- **Sparkles**: Claude Code session
+- **Fire**: Dangerous mode session
+- **Bolt**: Agent session
+- **Globe**: Remote session
 
 ## Session Groups
 
-Drag sessions together in the sidebar to create groups. Groups let you:
-
-- Organize related sessions (e.g., "Frontend + API + Tests")
-- Collapse/expand to reduce clutter
-- Color-code for visual distinction
+Drag sessions together in the sidebar to create groups. Groups let you organize related sessions (e.g., "Frontend + API + Tests"), collapse them to reduce clutter, and color-code for visual distinction.
 
 See the **Session Groups** doc for more on pinned groups and .clave files.
 
 ## Closing Sessions
 
-- **Cmd+Backspace** — Kill the focused session
-- Right-click a session in the sidebar → Close
+- **Cmd+Backspace**: Kill the focused session
+- Right-click a session in the sidebar and close it
 
 ## Auto-Naming
 

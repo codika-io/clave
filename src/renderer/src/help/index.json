@@ -8,38 +8,44 @@
   {
     "id": "sessions",
     "title": "Sessions",
-    "subtitle": "Claude mode, terminal mode, and dangerous mode",
-    "keywords": ["claude", "terminal", "dangerous", "create", "close", "kill"]
+    "subtitle": "Claude, terminal, dangerous, and remote session types",
+    "keywords": ["claude", "terminal", "dangerous", "create", "close", "kill", "remote", "agent"]
   },
   {
     "id": "board",
-    "title": "Kanban Board",
-    "subtitle": "Queue tasks and let Claude work through them",
-    "keywords": ["kanban", "task", "queue", "drag", "drop", "tag", "run"]
+    "title": "Task Queue",
+    "subtitle": "Queue prompts and run them as Claude sessions",
+    "keywords": ["task", "queue", "prompt", "run", "batch"]
   },
   {
     "id": "git",
     "title": "Git Panel",
-    "subtitle": "Staging, committing, push, pull, and Git Journey",
-    "keywords": ["git", "commit", "push", "pull", "diff", "stage", "journey"]
+    "subtitle": "Staging, committing, MagicSync, diffs, and Git Journey",
+    "keywords": ["git", "commit", "push", "pull", "diff", "stage", "journey", "magic", "sync"]
   },
   {
     "id": "groups",
     "title": "Session Groups",
-    "subtitle": "Groups, pinned configs, .clave files, and templates",
-    "keywords": ["group", "pin", "pinned", "clave", "template", "workspace", "toolbar"]
+    "subtitle": "Groups, pinned configs, .clave files, and toolbar shortcuts",
+    "keywords": ["group", "pin", "pinned", "clave", "toolbar", "export", "color", "icon"]
   },
   {
     "id": "files",
     "title": "File Browser",
-    "subtitle": "Browse files, preview markdown, and search with Cmd+P",
-    "keywords": ["file", "browse", "tree", "preview", "palette", "markdown"]
+    "subtitle": "Browse, preview, edit files, and quick search with Cmd+P",
+    "keywords": ["file", "browse", "tree", "preview", "palette", "markdown", "edit", "image"]
   },
   {
     "id": "history",
     "title": "History",
-    "subtitle": "Browse past Claude Code sessions and conversations",
-    "keywords": ["history", "past", "session", "conversation", "search"]
+    "subtitle": "Browse and search past Claude Code conversations",
+    "keywords": ["history", "past", "session", "conversation", "search", "chat"]
+  },
+  {
+    "id": "journal",
+    "title": "Daily Log",
+    "subtitle": "AI-generated daily summaries of your work by project",
+    "keywords": ["journal", "daily", "log", "summary", "ai", "project", "recap"]
   },
   {
     "id": "work-tracker",
@@ -62,7 +68,13 @@
   {
     "id": "remote",
     "title": "Remote Sessions",
-    "subtitle": "SSH locations and remote terminal sessions",
-    "keywords": ["remote", "ssh", "location", "server"]
+    "subtitle": "SSH locations, remote terminals, and agents",
+    "keywords": ["remote", "ssh", "location", "server", "agent", "sftp"]
+  },
+  {
+    "id": "settings",
+    "title": "Settings",
+    "subtitle": "Theme, profile, workspaces, locations, and templates",
+    "keywords": ["settings", "theme", "profile", "workspace", "template", "appearance", "icon"]
   }
 ]

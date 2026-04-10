@@ -6,18 +6,16 @@ Browse and search past Claude Code sessions across all your projects.
 
 ## Viewing History
 
-The history view shows all past Claude Code sessions, grouped by project. Each entry shows:
+The history view shows all past Claude Code sessions, grouped by project. Each entry shows the session title, date, and project path. Click a session to view the full conversation.
 
-- Session title
-- Date and time
-- Project path
+## Conversation View
 
-Click a session to view the full conversation with rendered markdown.
+Conversations display as chat bubbles with user messages, assistant responses, and collapsible tool results. Markdown is fully rendered.
 
 ## Searching
 
-Use the search bar to find sessions by content. Search supports CJK characters and highlights matches in the conversation.
+Use the search bar to filter sessions by content. Matches are highlighted in the conversation.
 
 ## Sidebar History
 
-The left sidebar shows your 10 most recent sessions under the **History** section. Click any to view the full conversation.
+The left sidebar shows your most recent sessions under the **History** section. Click any entry to jump straight to the conversation.
