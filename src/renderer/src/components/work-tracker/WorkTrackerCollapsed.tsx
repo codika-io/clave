@@ -2,13 +2,7 @@
 import { ClockIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { cn } from '../../lib/utils'
-
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m > 0 ? `${h}h ${m}m` : `${h}h`
-}
+import { formatDuration } from './utils'
 
 export function WorkTrackerCollapsed() {
   const todayTotalMinutes = useWorkTrackerStore((s) => s.todayTotalMinutes)
@@ -28,9 +22,9 @@ export function WorkTrackerCollapsed() {
         'w-full flex items-center gap-2 px-3 py-2 rounded-xl transition-colors text-left',
         hasBreak
           ? isStrong
-            ? 'bg-wellbeing-strong-bg border border-wellbeing-strong-border'
-            : 'bg-wellbeing-gentle-bg border border-wellbeing-gentle-border'
-          : 'bg-surface-100 border border-border-subtle hover:bg-surface-200'
+            ? 'bg-wellbeing-strong-bg'
+            : 'bg-wellbeing-gentle-bg'
+          : 'hover:bg-surface-200'
       )}
     >
       <ClockIcon
@@ -60,9 +54,9 @@ export function WorkTrackerCollapsed() {
         {hasBreak ? (isStrong ? 'take a break' : 'break?') : `${todaySessionCount} session${todaySessionCount !== 1 ? 's' : ''}`}
       </span>
       {isExpanded ? (
-        <ChevronDownIcon className="w-3 h-3 text-text-tertiary flex-shrink-0" />
-      ) : (
         <ChevronUpIcon className="w-3 h-3 text-text-tertiary flex-shrink-0" />
+      ) : (
+        <ChevronDownIcon className="w-3 h-3 text-text-tertiary flex-shrink-0" />
       )}
     </button>
   )

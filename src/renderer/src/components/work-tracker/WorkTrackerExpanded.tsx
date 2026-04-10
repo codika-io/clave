@@ -2,13 +2,7 @@
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { WeeklyChart } from './WeeklyChart'
 import { cn } from '../../lib/utils'
-
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m > 0 ? `${h}h ${m}m` : `${h}h`
-}
+import { formatDuration } from './utils'
 
 function formatTokens(tokens: number): string {
   if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`
@@ -107,7 +101,6 @@ export function WorkTrackerExpanded() {
           <SectionLabel>Yesterday</SectionLabel>
           <div className="text-[12px] text-text-tertiary">
             {formatDuration(yesterdaySummary.totalMinutes)} · {yesterdaySummary.sessionCount} session{yesterdaySummary.sessionCount !== 1 ? 's' : ''}
-            {yesterdaySummary.topProjects.length > 0 && ` · ${yesterdaySummary.topProjects.join(', ')}`}
           </div>
         </div>
       )}

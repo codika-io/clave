@@ -7,8 +7,10 @@ interface TrackedSession {
   sessionId: string
   cwd: string
   projectName: string
+  dateKey: string // local YYYY-MM-DD when session started
   startedAt: number
   endedAt: number | null
+  lastTickAt: number // last time tick() updated this session
   accumulatedMs: number
 }
 
@@ -22,7 +24,6 @@ interface ProjectSummary {
 interface YesterdaySummary {
   totalMinutes: number
   sessionCount: number
-  topProjects: string[]
 }
 
 interface WeeklySummary {
@@ -80,6 +81,14 @@ function getProjectName(cwd: string): string {
   return cwd.split('/').filter(Boolean).pop() || cwd
 }
 
+/** Returns YYYY-MM-DD in local timezone */
+function getLocalDateString(date: Date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function computeBreakSuggestion(streakMs: number): BreakSuggestion {
   if (streakMs >= STRONG_THRESHOLD_MS) return 'strong'
   if (streakMs >= GENTLE_THRESHOLD_MS) return 'gentle'
@@ -87,13 +96,10 @@ function computeBreakSuggestion(streakMs: number): BreakSuggestion {
 }
 
 function aggregateProjects(sessions: TrackedSession[]): ProjectSummary[] {
-  const now = Date.now()
   const map = new Map<string, { totalMs: number; count: number }>()
 
   for (const s of sessions) {
-    // accumulatedMs is kept up-to-date by tick() for live sessions,
-    // but between ticks we compute the live delta for accuracy
-    const totalMs = s.endedAt ? s.accumulatedMs : now - s.startedAt
+    const totalMs = s.accumulatedMs
     const existing = map.get(s.cwd)
     if (existing) {
       existing.totalMs += totalMs
@@ -144,8 +150,10 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
             sessionId,
             cwd,
             projectName: getProjectName(cwd),
+            dateKey: getLocalDateString(),
             startedAt: now,
             endedAt: null,
+            lastTickAt: now,
             accumulatedMs: 0
           }
         ],
@@ -158,27 +166,36 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     set((state) => {
       const now = Date.now()
       return {
-        trackedSessions: state.trackedSessions.map((s) =>
-          s.sessionId === sessionId && !s.endedAt
-            ? { ...s, endedAt: now, accumulatedMs: now - s.startedAt }
-            : s
-        )
+        trackedSessions: state.trackedSessions.map((s) => {
+          if (s.sessionId !== sessionId || s.endedAt) return s
+          // Final accumulation: add time since last tick
+          const delta = now - s.lastTickAt
+          return { ...s, endedAt: now, lastTickAt: now, accumulatedMs: s.accumulatedMs + delta }
+        })
       }
     }),
 
   tick: () => {
     const state = get()
     const now = Date.now()
+    const todayKey = getLocalDateString()
     const storeSessions = useSessionStore.getState().sessions
 
-    // Update accumulated time for live sessions
+    // Update accumulated time for live sessions (only active time counts)
     const updatedTracked = state.trackedSessions.map((ts) => {
       if (ts.endedAt) return ts
       const storeSession = storeSessions.find((s) => s.id === ts.sessionId)
       if (!storeSession || !storeSession.alive) {
-        return { ...ts, endedAt: now, accumulatedMs: now - ts.startedAt }
+        // Session ended between ticks — finalize
+        return { ...ts, endedAt: now, lastTickAt: now }
       }
-      return { ...ts, accumulatedMs: now - ts.startedAt }
+      // Only accumulate time when session is actively working
+      if (storeSession.activityStatus === 'active') {
+        const delta = now - ts.lastTickAt
+        return { ...ts, lastTickAt: now, accumulatedMs: ts.accumulatedMs + delta }
+      }
+      // Session alive but idle — advance lastTickAt without accumulating
+      return { ...ts, lastTickAt: now }
     })
 
     // Check if any session is active
@@ -199,10 +216,11 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     const streakMs = currentStreakStartedAt ? now - currentStreakStartedAt : 0
     const breakSuggestion = computeBreakSuggestion(streakMs)
 
-    // Aggregate
-    const todayProjects = aggregateProjects(updatedTracked)
+    // Aggregate only today's sessions
+    const todaySessions = updatedTracked.filter((s) => s.dateKey === todayKey)
+    const todayProjects = aggregateProjects(todaySessions)
     const todayTotalMinutes = todayProjects.reduce((sum, p) => sum + p.totalMinutes, 0)
-    const todaySessionCount = updatedTracked.length
+    const todaySessionCount = todaySessions.length
 
     set({
       trackedSessions: updatedTracked,
@@ -229,13 +247,15 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     }
     if (!data.dailyActivity) return
 
-    const today = new Date().toISOString().slice(0, 10)
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const nowDate = new Date()
+    const today = getLocalDateString(nowDate)
+    const yesterdayDate = new Date(nowDate)
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+    const yesterday = getLocalDateString(yesterdayDate)
 
-    // Build week dates starting from Monday
-    const now = new Date()
-    const mondayOffset = (now.getDay() + 6) % 7
-    const mondayDate = new Date(now)
+    // Build week dates starting from Monday (all in local time)
+    const mondayOffset = (nowDate.getDay() + 6) % 7
+    const mondayDate = new Date(nowDate)
     mondayDate.setDate(mondayDate.getDate() - mondayOffset)
     mondayDate.setHours(0, 0, 0, 0)
 
@@ -243,7 +263,7 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
     for (let i = 0; i < 7; i++) {
       const d = new Date(mondayDate)
       d.setDate(d.getDate() + i)
-      weekDates.push(d.toISOString().slice(0, 10))
+      weekDates.push(getLocalDateString(d))
     }
 
     const activityByDate = new Map(data.dailyActivity.map((d) => [d.date, d]))
@@ -254,13 +274,15 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
       ? {
           // Rough estimate: ~2 min per message exchange. Not actual tracked time.
           totalMinutes: yesterdayActivity.messageCount * 2,
-          sessionCount: yesterdayActivity.sessionCount,
-          topProjects: []
+          sessionCount: yesterdayActivity.sessionCount
         }
       : null
 
-    // Weekly summary
-    const dailyMinutes = weekDates.map((date) => {
+    // Weekly summary — use live tracked minutes for today, heuristic for past days
+    const { todayTotalMinutes } = get()
+    const todayIndex = weekDates.indexOf(today)
+    const dailyMinutes = weekDates.map((date, i) => {
+      if (i === todayIndex) return todayTotalMinutes
       const activity = activityByDate.get(date)
       // Rough estimate: ~2 min per message exchange
       return activity ? activity.messageCount * 2 : 0
@@ -320,7 +342,12 @@ export function useWorkTracker(): void {
     }
 
     // Subscribe to session-store for new/ended sessions
+    let prevSessionRef = useSessionStore.getState().sessions
     const unsubscribe = useSessionStore.subscribe((state) => {
+      // Skip if sessions array hasn't changed (avoids reacting to theme/layout changes)
+      if (state.sessions === prevSessionRef) return
+      prevSessionRef = state.sessions
+
       const currentIds = new Set<string>(state.sessions.filter((s) => s.alive).map((s) => s.id))
       const tracker = useWorkTrackerStore.getState()
 

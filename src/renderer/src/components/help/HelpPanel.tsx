@@ -10,6 +10,7 @@ import git from '../../help/git.md?raw'
 import groups from '../../help/groups.md?raw'
 import files from '../../help/files.md?raw'
 import history from '../../help/history.md?raw'
+import workTracker from '../../help/work-tracker.md?raw'
 import usage from '../../help/usage.md?raw'
 import shortcuts from '../../help/shortcuts.md?raw'
 import remote from '../../help/remote.md?raw'
@@ -22,6 +23,7 @@ const helpDocsMap: Record<string, string> = {
   groups,
   files,
   history,
+  'work-tracker': workTracker,
   usage,
   shortcuts,
   remote

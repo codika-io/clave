@@ -1,7 +1,8 @@
 // src/renderer/src/components/work-tracker/WeeklyChart.tsx
 import { cn } from '../../lib/utils'
+import { formatDuration } from './utils'
 
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
 interface WeeklyChartProps {
   dailyMinutes: number[]
@@ -40,15 +41,8 @@ export function WeeklyChart({ dailyMinutes, avgDailyMinutes }: WeeklyChartProps)
         ))}
       </div>
       <div className="mt-1 text-[11px] text-text-tertiary">
-        Avg {formatMinutes(avgDailyMinutes)}/day
+        Avg {formatDuration(avgDailyMinutes)}/day
       </div>
     </div>
   )
-}
-
-function formatMinutes(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m > 0 ? `${h}h ${m}m` : `${h}h`
 }

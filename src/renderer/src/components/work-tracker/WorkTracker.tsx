@@ -2,17 +2,28 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { WorkTrackerCollapsed } from './WorkTrackerCollapsed'
 import { WorkTrackerExpanded } from './WorkTrackerExpanded'
+import { cn } from '../../lib/utils'
 
 export function WorkTracker() {
   const enabled = useWorkTrackerStore((s) => s.enabled)
   const isExpanded = useWorkTrackerStore((s) => s.isExpanded)
   const todaySessionCount = useWorkTrackerStore((s) => s.todaySessionCount)
+  const breakSuggestion = useWorkTrackerStore((s) => s.breakSuggestion)
 
   if (!enabled || todaySessionCount === 0) return null
 
   return (
     <div className="flex-shrink-0 px-2 pb-1">
-      <div className="rounded-xl border border-border-subtle bg-surface-50 overflow-hidden">
+      <div
+        className={cn(
+          'rounded-xl border bg-surface-50 overflow-hidden',
+          breakSuggestion === 'strong'
+            ? 'border-wellbeing-strong-border'
+            : breakSuggestion === 'gentle'
+              ? 'border-wellbeing-gentle-border'
+              : 'border-border-subtle'
+        )}
+      >
         <AnimatePresence initial={false}>
           {isExpanded && (
             <motion.div

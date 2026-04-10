@@ -434,7 +434,7 @@ function WorkTrackerSection() {
 
   return (
     <section className="mt-8">
-      <h3 className="text-[13px] font-semibold text-text-primary mb-3">Work Tracker</h3>
+      <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-widest mb-3">Work Tracker</h3>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[13px] text-text-secondary">Show work tracker widget</p>
@@ -443,6 +443,8 @@ function WorkTrackerSection() {
           </p>
         </div>
         <button
+          role="switch"
+          aria-checked={enabled}
           onClick={() => setEnabled(!enabled)}
           className={`relative w-9 h-5 rounded-full transition-colors ${
             enabled ? 'bg-accent' : 'bg-surface-300'

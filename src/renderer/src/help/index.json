@@ -42,6 +42,12 @@
     "keywords": ["history", "past", "session", "conversation", "search"]
   },
   {
+    "id": "work-tracker",
+    "title": "Work Tracker",
+    "subtitle": "Daily time tracking, streaks, and break reminders",
+    "keywords": ["work", "tracker", "time", "break", "streak", "weekly", "widget"]
+  },
+  {
     "id": "usage",
     "title": "Usage Analytics",
     "subtitle": "Token usage, cost estimates, and activity patterns",
