@@ -6,6 +6,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.31.0] — 2026-04-10
+
+### Added
+- Design system: semantic CSS tokens for sidebar items, buttons, inputs, badges, and icon buttons in main.css
+- History conversation view: chat bubble layout with user messages right-aligned and assistant messages left-aligned
+- Conversation turn grouping: assistant messages and tool results merged into single visual blocks
+
+### Changed
+- Queue panel redesigned to match History list layout (centered content, hover rows, no dividers)
+- Sidebar spacing tightened (4px gaps) and count badges removed from History and Daily Log tabs
+- All buttons, inputs, badges, and icon buttons across 35 components now use shared design tokens
+- Border radius standardized (icon buttons use rounded-md, dialogs use rounded-xl)
+- Dialog footer buttons unified with btn-dialog class
+- What's New banner relocated to sidebar
+
+### Fixed
+- Inconsistent spacing between sidebar items (session tabs vs activity tabs)
+- Arbitrary shadow values replaced with design system tokens
+- AddLocationDialog used rounded-2xl instead of rounded-xl like other dialogs
+
 ## [1.30.0] — 2026-04-10
 
 ### Added

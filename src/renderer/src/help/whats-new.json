@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.31.0",
+    "title": "Design System & Chat History",
+    "description": "Unified design tokens across the app, and a new chat bubble layout for browsing conversation history",
+    "action": { "type": "navigate", "target": "history" }
+  },
+  {
     "version": "1.30.0",
     "title": "AI Journal",
     "description": "Your daily work automatically summarized by project, with smart session summaries",
