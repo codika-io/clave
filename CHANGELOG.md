@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.32.4] — 2026-04-11
+
+### Added
+- Daily cost bar chart on the Usage page with Day, Week, and Month views
+- Day view shows hourly cost breakdown (24 bars), replacing the old Activity by Hour grid
+- Week and Month views show daily cost with navigation between periods
+- Hover reveals exact cost per bar with smooth fade animation
+
+### Changed
+- Usage data now computes accurate daily cost from per-category token breakdowns (input, output, cache read, cache creation) instead of a single total
+- Model breakdown component is now full-width
+
 ## [1.32.3] — 2026-04-10
 
 ### Changed

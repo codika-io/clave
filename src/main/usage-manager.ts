@@ -12,7 +12,12 @@ export interface DailyActivity {
 
 export interface DailyModelTokens {
   date: string
-  tokensByModel: Record<string, number>
+  tokensByModel: Record<string, ModelTokenUsage>
+}
+
+export interface DailyCost {
+  date: string
+  cost: number
 }
 
 export interface ModelTokenUsage {
@@ -22,14 +27,20 @@ export interface ModelTokenUsage {
   cacheCreationInputTokens: number
 }
 
+export interface HourlyCost {
+  date: string
+  hours: number[] // 24 entries, index 0 = midnight
+}
+
 export interface UsageData {
   dailyActivity: DailyActivity[]
   dailyModelTokens: DailyModelTokens[]
+  dailyCost: DailyCost[]
+  hourlyCost: HourlyCost[]
   modelUsage: Record<string, ModelTokenUsage>
   totalSessions: number
   totalMessages: number
   firstSessionDate: string | null
-  hourCounts: Record<string, number>
   estimatedCost: number
   totalTokens: number
 }
@@ -71,14 +82,15 @@ interface PerFileSummary {
   dailyMessages: Record<string, number>
   dailyToolCalls: Record<string, number>
   dailySessions: Record<string, boolean>
-  hourCounts: Record<string, number>
   modelUsage: Record<string, ModelTokenUsage>
-  dailyModelTokens: Record<string, Record<string, number>>
+  dailyModelTokens: Record<string, Record<string, ModelTokenUsage>>
+  // date -> hour (0-23) -> model -> token usage
+  dailyHourlyTokens: Record<string, Record<string, Record<string, ModelTokenUsage>>>
   firstTimestamp: string | null
 }
 
 interface UsageCache {
-  version: 3
+  version: 5
   files: Record<string, PerFileSummary>
 }
 
@@ -205,9 +217,9 @@ function buildFileSummary(parsed: Awaited<ReturnType<typeof parseJsonlFile>>, mt
   const dailyMessages: Record<string, number> = {}
   const dailyToolCalls: Record<string, number> = {}
   const dailySessions: Record<string, boolean> = {}
-  const hourCounts: Record<string, number> = {}
   const modelUsage: Record<string, ModelTokenUsage> = {}
-  const dailyModelTokens: Record<string, Record<string, number>> = {}
+  const dailyModelTokens: Record<string, Record<string, ModelTokenUsage>> = {}
+  const dailyHourlyTokens: Record<string, Record<string, Record<string, ModelTokenUsage>>> = {}
 
   let firstTimestamp: string | null = null
   if (parsed.timestamps.length > 0) {
@@ -221,8 +233,6 @@ function buildFileSummary(parsed: Awaited<ReturnType<typeof parseJsonlFile>>, mt
     if (!dailySessions[date]) {
       dailySessions[date] = true
     }
-    const hour = new Date(ts).getHours()
-    hourCounts[String(hour)] = (hourCounts[String(hour)] || 0) + 1
   }
 
   // Count messages per day from assistant entries (each deduped assistant entry = 1 API call)
@@ -295,12 +305,32 @@ function buildFileSummary(parsed: Awaited<ReturnType<typeof parseJsonlFile>>, mt
     const date = entry.timestamp ? entry.timestamp.slice(0, 10) : activeDays[0] || ''
     if (date) {
       if (!dailyModelTokens[date]) dailyModelTokens[date] = {}
-      const totalTokens =
-        entry.usage.input_tokens +
-        entry.usage.output_tokens +
-        entry.usage.cache_read_input_tokens +
-        entry.usage.cache_creation_input_tokens
-      dailyModelTokens[date][model] = (dailyModelTokens[date][model] || 0) + totalTokens
+      if (!dailyModelTokens[date][model]) {
+        dailyModelTokens[date][model] = {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0
+        }
+      }
+      dailyModelTokens[date][model].inputTokens += entry.usage.input_tokens
+      dailyModelTokens[date][model].outputTokens += entry.usage.output_tokens
+      dailyModelTokens[date][model].cacheReadInputTokens += entry.usage.cache_read_input_tokens
+      dailyModelTokens[date][model].cacheCreationInputTokens += entry.usage.cache_creation_input_tokens
+
+      // Hourly breakdown
+      const hour = entry.timestamp ? String(new Date(entry.timestamp).getHours()) : '0'
+      if (!dailyHourlyTokens[date]) dailyHourlyTokens[date] = {}
+      if (!dailyHourlyTokens[date][hour]) dailyHourlyTokens[date][hour] = {}
+      if (!dailyHourlyTokens[date][hour][model]) {
+        dailyHourlyTokens[date][hour][model] = {
+          inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0
+        }
+      }
+      dailyHourlyTokens[date][hour][model].inputTokens += entry.usage.input_tokens
+      dailyHourlyTokens[date][hour][model].outputTokens += entry.usage.output_tokens
+      dailyHourlyTokens[date][hour][model].cacheReadInputTokens += entry.usage.cache_read_input_tokens
+      dailyHourlyTokens[date][hour][model].cacheCreationInputTokens += entry.usage.cache_creation_input_tokens
     }
   }
 
@@ -312,9 +342,9 @@ function buildFileSummary(parsed: Awaited<ReturnType<typeof parseJsonlFile>>, mt
     dailyMessages,
     dailyToolCalls,
     dailySessions,
-    hourCounts,
     modelUsage,
     dailyModelTokens,
+    dailyHourlyTokens,
     firstTimestamp
   }
 }
@@ -323,9 +353,10 @@ function mergeAllSummaries(files: Record<string, PerFileSummary>): UsageData {
   const dailyMessagesMap: Record<string, number> = {}
   const dailySessionsMap: Record<string, Set<string>> = {}
   const dailyToolCallsMap: Record<string, number> = {}
-  const hourCountsMap: Record<string, number> = {}
   const modelUsageMap: Record<string, ModelTokenUsage> = {}
-  const dailyModelTokensMap: Record<string, Record<string, number>> = {}
+  const dailyModelTokensMap: Record<string, Record<string, ModelTokenUsage>> = {}
+  // date -> hour -> model -> usage
+  const dailyHourlyTokensMap: Record<string, Record<string, Record<string, ModelTokenUsage>>> = {}
 
   let totalMessages = 0
   let totalSessions = 0
@@ -360,8 +391,22 @@ function mergeAllSummaries(files: Record<string, PerFileSummary>): UsageData {
       if (summary.sessionId) dailySessionsMap[date].add(summary.sessionId)
     }
 
-    for (const [hour, count] of Object.entries(summary.hourCounts)) {
-      hourCountsMap[hour] = (hourCountsMap[hour] || 0) + count
+    for (const [date, hours] of Object.entries(summary.dailyHourlyTokens || {})) {
+      if (!dailyHourlyTokensMap[date]) dailyHourlyTokensMap[date] = {}
+      for (const [hour, models] of Object.entries(hours)) {
+        if (!dailyHourlyTokensMap[date][hour]) dailyHourlyTokensMap[date][hour] = {}
+        for (const [model, usage] of Object.entries(models)) {
+          if (!dailyHourlyTokensMap[date][hour][model]) {
+            dailyHourlyTokensMap[date][hour][model] = {
+              inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0
+            }
+          }
+          dailyHourlyTokensMap[date][hour][model].inputTokens += usage.inputTokens
+          dailyHourlyTokensMap[date][hour][model].outputTokens += usage.outputTokens
+          dailyHourlyTokensMap[date][hour][model].cacheReadInputTokens += usage.cacheReadInputTokens
+          dailyHourlyTokensMap[date][hour][model].cacheCreationInputTokens += usage.cacheCreationInputTokens
+        }
+      }
     }
 
     for (const [model, usage] of Object.entries(summary.modelUsage)) {
@@ -381,8 +426,19 @@ function mergeAllSummaries(files: Record<string, PerFileSummary>): UsageData {
 
     for (const [date, models] of Object.entries(summary.dailyModelTokens)) {
       if (!dailyModelTokensMap[date]) dailyModelTokensMap[date] = {}
-      for (const [model, tokens] of Object.entries(models)) {
-        dailyModelTokensMap[date][model] = (dailyModelTokensMap[date][model] || 0) + tokens
+      for (const [model, usage] of Object.entries(models)) {
+        if (!dailyModelTokensMap[date][model]) {
+          dailyModelTokensMap[date][model] = {
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0
+          }
+        }
+        dailyModelTokensMap[date][model].inputTokens += usage.inputTokens
+        dailyModelTokensMap[date][model].outputTokens += usage.outputTokens
+        dailyModelTokensMap[date][model].cacheReadInputTokens += usage.cacheReadInputTokens
+        dailyModelTokensMap[date][model].cacheCreationInputTokens += usage.cacheCreationInputTokens
       }
     }
   }
@@ -406,6 +462,30 @@ function mergeAllSummaries(files: Record<string, PerFileSummary>): UsageData {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, tokensByModel]) => ({ date, tokensByModel }))
 
+  // Compute daily cost from per-day per-model breakdowns
+  const dailyCost: DailyCost[] = Object.entries(dailyModelTokensMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, models]) => {
+      let cost = 0
+      for (const [model, usage] of Object.entries(models)) {
+        cost += computeCost(model, usage)
+      }
+      return { date, cost }
+    })
+
+  // Compute hourly cost per day
+  const hourlyCost: HourlyCost[] = Object.entries(dailyHourlyTokensMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, hours]) => {
+      const costArr = new Array(24).fill(0)
+      for (const [hour, models] of Object.entries(hours)) {
+        for (const [model, usage] of Object.entries(models)) {
+          costArr[Number(hour)] += computeCost(model, usage)
+        }
+      }
+      return { date, hours: costArr }
+    })
+
   let estimatedCost = 0
   let totalTokens = 0
   for (const [model, usage] of Object.entries(modelUsageMap)) {
@@ -420,11 +500,12 @@ function mergeAllSummaries(files: Record<string, PerFileSummary>): UsageData {
   return {
     dailyActivity,
     dailyModelTokens,
+    dailyCost,
+    hourlyCost,
     modelUsage: modelUsageMap,
     totalSessions,
     totalMessages,
     firstSessionDate,
-    hourCounts: hourCountsMap,
     estimatedCost,
     totalTokens
   }
@@ -455,7 +536,7 @@ async function parallelLimit<T>(
 
 class UsageManager {
   private cachePath: string
-  private cache: UsageCache = { version: 3, files: {} }
+  private cache: UsageCache = { version: 5, files: {} }
   private cacheLoaded = false
   private cachedResult: UsageData | null = null
 
@@ -468,7 +549,7 @@ class UsageManager {
     try {
       const raw = fs.readFileSync(this.cachePath, 'utf-8')
       const parsed = JSON.parse(raw)
-      if (parsed && parsed.version === 3 && parsed.files) {
+      if (parsed && parsed.version === 4 && parsed.files) {
         this.cache = parsed as UsageCache
       }
     } catch (err) {

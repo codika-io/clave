@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react'
-import type { UsageData } from '../../../../preload/index.d'
+import type { UsageData, DailyCost, HourlyCost } from '../../../../preload/index.d'
 
 function formatNumber(n: number): string {
   if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
@@ -291,32 +291,200 @@ function ModelBreakdown({ data }: { data: UsageData }) {
   )
 }
 
-function HourGrid({ hourCounts }: { hourCounts: Record<string, number> }) {
-  const maxCount = useMemo(() => {
-    const values = Object.values(hourCounts)
-    return values.length > 0 ? Math.max(...values, 1) : 1
-  }, [hourCounts])
+type CostViewMode = 'day' | 'week' | 'month'
+
+function getDateRange(mode: CostViewMode, offset: number): { start: Date; end: Date; label: string } {
+  const today = new Date()
+  if (mode === 'day') {
+    const target = new Date(today)
+    target.setDate(target.getDate() - offset)
+    const label = target.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    return { start: target, end: target, label }
+  }
+  if (mode === 'week') {
+    const end = new Date(today)
+    end.setDate(end.getDate() - offset * 7)
+    const start = new Date(end)
+    start.setDate(start.getDate() - 6)
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return { start, end, label: `${fmt(start)} – ${fmt(end)}` }
+  }
+  // month mode
+  const target = new Date(today.getFullYear(), today.getMonth() - offset, 1)
+  const start = new Date(target.getFullYear(), target.getMonth(), 1)
+  const end = new Date(target.getFullYear(), target.getMonth() + 1, 0)
+  const label = target.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  return { start, end, label }
+}
+
+function toDateStr(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function DailyCostChart({ dailyCost, hourlyCost }: { dailyCost: DailyCost[]; hourlyCost: HourlyCost[] }) {
+  const [mode, setMode] = useState<CostViewMode>('week')
+  const [offset, setOffset] = useState(0)
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+
+  // Reset offset when switching modes
+  const handleModeChange = (newMode: CostViewMode) => {
+    setMode(newMode)
+    setOffset(0)
+  }
+
+  const costLookup = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const entry of dailyCost) {
+      map.set(entry.date, entry.cost)
+    }
+    return map
+  }, [dailyCost])
+
+  const hourlyLookup = useMemo(() => {
+    const map = new Map<string, number[]>()
+    for (const entry of hourlyCost) {
+      map.set(entry.date, entry.hours)
+    }
+    return map
+  }, [hourlyCost])
+
+  const { bars, label, totalCost } = useMemo(() => {
+    const { start, end, label } = getDateRange(mode, offset)
+
+    if (mode === 'day') {
+      const dateStr = toDateStr(start)
+      const hours = hourlyLookup.get(dateStr) ?? new Array(24).fill(0)
+      const bars = hours.map((cost, h) => ({
+        date: `${dateStr}-${h}`,
+        cost,
+        dayLabel: String(h)
+      }))
+      const totalCost = hours.reduce((sum, c) => sum + c, 0)
+      return { bars, label, totalCost }
+    }
+
+    const days: { date: string; cost: number; dayLabel: string }[] = []
+    const cursor = new Date(start)
+    while (cursor <= end) {
+      const dateStr = toDateStr(cursor)
+      days.push({
+        date: dateStr,
+        cost: costLookup.get(dateStr) ?? 0,
+        dayLabel: mode === 'week'
+          ? cursor.toLocaleDateString('en-US', { weekday: 'short' })
+          : String(cursor.getDate())
+      })
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    const totalCost = days.reduce((sum, d) => sum + d.cost, 0)
+    return { bars: days, label, totalCost }
+  }, [mode, offset, costLookup, hourlyLookup])
+
+  const maxCost = useMemo(() => Math.max(...bars.map((b) => b.cost), 0.01), [bars])
+
+  // Check if we can go forward (not beyond today)
+  const canGoForward = offset > 0
 
   return (
     <div className="bg-surface-100 border border-border-subtle rounded-xl p-4">
-      <span className="text-xs font-medium text-text-secondary">Activity by hour</span>
-      <div className="mt-3 grid grid-cols-12 gap-1">
-        {Array.from({ length: 24 }, (_, h) => {
-          const count = hourCounts[String(h)] ?? 0
-          const intensity = count / maxCount
+      {/* Header */}
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-medium text-text-secondary">Daily cost</span>
+        <div className="flex items-center gap-1">
+          {(['day', 'week', 'month'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => handleModeChange(m)}
+              className={`px-2 py-0.5 text-[11px] rounded-md transition-colors capitalize ${
+                mode === m
+                  ? 'bg-surface-300 text-text-primary'
+                  : 'text-text-tertiary hover:text-text-secondary'
+              }`}
+            >
+              {m.charAt(0).toUpperCase() + m.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={() => setOffset((o) => o + 1)}
+          className="btn-icon btn-icon-sm"
+          title={`Previous ${mode}`}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <div className="flex flex-col items-center">
+          <span className="text-[11px] text-text-secondary font-medium">{label}</span>
+          <span className="text-[10px] text-text-tertiary">{formatCost(totalCost)} total</span>
+        </div>
+        <button
+          onClick={() => setOffset((o) => Math.max(0, o - 1))}
+          disabled={!canGoForward}
+          className="btn-icon btn-icon-sm disabled:opacity-30"
+          title={`Next ${mode}`}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Bar chart */}
+      <div className="flex items-end gap-[3px]" style={{ height: 120 }}>
+        {bars.map((bar, i) => {
+          const heightPct = maxCost > 0 ? (bar.cost / maxCost) * 100 : 0
+          const isHovered = hoveredIdx === i
           return (
-            <div key={h} className="flex flex-col items-center gap-1">
+            <div
+              key={bar.date}
+              className="flex-1 flex flex-col items-center justify-end h-full"
+              onMouseEnter={() => setHoveredIdx(i)}
+              onMouseLeave={() => setHoveredIdx(null)}
+              style={{ cursor: 'default' }}
+            >
+              {bar.cost > 0 && (
+                <span
+                  className="text-[9px] text-text-secondary font-medium whitespace-nowrap pointer-events-none mb-1"
+                  style={{
+                    opacity: isHovered ? 1 : 0,
+                    transition: 'opacity 200ms ease'
+                  }}
+                >
+                  {formatCost(bar.cost)}
+                </span>
+              )}
               <div
-                className="w-full aspect-square rounded-sm"
+                className="w-full rounded-sm"
                 style={{
+                  height: `${Math.max(heightPct, bar.cost > 0 ? 3 : 0)}%`,
                   backgroundColor: 'var(--color-accent)',
-                  opacity: Math.max(0.08, intensity * 0.9),
-                  transition: 'opacity 0.2s'
+                  opacity: bar.cost > 0 ? (isHovered ? 1 : 0.7) : 0.15,
+                  minHeight: bar.cost > 0 ? 2 : 0,
+                  transform: isHovered ? 'scaleY(1.04)' : 'scaleY(1)',
+                  transformOrigin: 'bottom',
+                  transition: 'opacity 300ms ease, transform 300ms ease'
                 }}
-                title={`${h}:00 — ${count.toLocaleString()} messages`}
               />
-              {h % 3 === 0 && (
-                <span className="text-[8px] text-text-tertiary">{h}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* X-axis labels */}
+      <div className="flex gap-[3px] mt-1.5">
+        {bars.map((bar, i) => {
+          const showLabel = mode === 'week'
+            || (mode === 'day' && i % 3 === 0)
+            || (mode === 'month' && (i === 0 || i === bars.length - 1 || (i + 1) % 5 === 0))
+          return (
+            <div key={bar.date} className="flex-1 text-center">
+              {showLabel && (
+                <span className="text-[8px] text-text-tertiary">{bar.dayLabel}</span>
               )}
             </div>
           )
@@ -409,6 +577,9 @@ export function UsagePanel() {
         {/* Contribution heatmap — centerpiece */}
         <ContributionHeatmap data={data} />
 
+        {/* Daily cost bar chart */}
+        <DailyCostChart dailyCost={data.dailyCost} hourlyCost={data.hourlyCost} />
+
         {/* Stat cards */}
         <div className="grid grid-cols-4 gap-3">
           <StatCard
@@ -433,11 +604,8 @@ export function UsagePanel() {
           />
         </div>
 
-        {/* Bottom row: model breakdown + hour grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <ModelBreakdown data={data} />
-          <HourGrid hourCounts={data.hourCounts} />
-        </div>
+        {/* Model breakdown */}
+        <ModelBreakdown data={data} />
       </div>
     </div>
   )

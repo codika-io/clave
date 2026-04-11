@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.32.4",
+    "title": "Daily Cost Tracking",
+    "description": "See exactly how much you spend per day, week, or month with the new cost bar chart on the Usage page",
+    "action": { "type": "navigate", "target": "usage" }
+  },
+  {
     "version": "1.32.2",
     "title": "Activity Heatmap",
     "description": "Your Usage page now shows a full year of activity as a GitHub-style contribution heatmap",

@@ -147,14 +147,25 @@ export interface ModelTokenUsage {
   cacheCreationInputTokens: number
 }
 
+export interface DailyCost {
+  date: string
+  cost: number
+}
+
+export interface HourlyCost {
+  date: string
+  hours: number[] // 24 entries, index 0 = midnight
+}
+
 export interface UsageData {
   dailyActivity: { date: string; messageCount: number; sessionCount: number; toolCallCount: number }[]
-  dailyModelTokens: { date: string; tokensByModel: Record<string, number> }[]
+  dailyModelTokens: { date: string; tokensByModel: Record<string, ModelTokenUsage> }[]
+  dailyCost: DailyCost[]
+  hourlyCost: HourlyCost[]
   modelUsage: Record<string, ModelTokenUsage>
   totalSessions: number
   totalMessages: number
   firstSessionDate: string | null
-  hourCounts: Record<string, number>
   estimatedCost: number
   totalTokens: number
 }
