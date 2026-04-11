@@ -1232,7 +1232,7 @@ export function Sidebar() {
       </ScrollArea>
 
       {/* Announcements — above the bottom bar */}
-      <div className="flex-shrink-0 px-2 space-y-1">
+      <div className="flex-shrink-0 px-2 has-[>div]:pb-2 space-y-1">
         <WhatsNewBanner />
         <UpdateBanner />
       </div>

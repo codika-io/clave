@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.32.5] — 2026-04-11
+
+### Fixed
+- Announcements container (What's New / Update banners) no longer adds bottom padding when empty
+
 ## [1.32.4] — 2026-04-11
 
 ### Added
