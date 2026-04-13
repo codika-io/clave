@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.32.6",
+    "title": "Open Git Diffs as Tabs",
+    "description": "Double-click any changed file to preview, then open the diff as a persistent document tab — with live stage/unstage and right-click access from the git tree",
+    "action": { "type": "navigate", "target": "side:git" }
+  },
+  {
     "version": "1.32.4",
     "title": "Daily Cost Tracking",
     "description": "See exactly how much you spend per day, week, or month with the new cost bar chart on the Usage page",

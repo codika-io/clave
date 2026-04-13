@@ -15,6 +15,7 @@ export function FileRow({
   onSelect,
   onStageToggle,
   onDiscard,
+  onContextMenu,
   disabled,
   selectedPaths
 }: {
@@ -26,6 +27,7 @@ export function FileRow({
   onSelect?: (path: string, metaKey: boolean) => void
   onStageToggle?: () => void
   onDiscard?: () => void
+  onContextMenu?: (file: GitFileStatus, clientX: number, clientY: number) => void
   disabled?: boolean
   selectedPaths?: Set<string>
 }) {
@@ -42,6 +44,15 @@ export function FileRow({
       onClickName?.(e.clientY)
     },
     [file.path, onClickName, onSelect]
+  )
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onContextMenu) return
+      e.preventDefault()
+      onContextMenu(file, e.clientX, e.clientY)
+    },
+    [file, onContextMenu]
   )
 
   const handleDragStart = useCallback(
@@ -65,6 +76,7 @@ export function FileRow({
         disabled ? 'opacity-50 pointer-events-none' : isActiveDiff ? 'bg-accent/15 border-l-2 border-l-accent' : isSelected ? 'bg-surface-200 border-l-2 border-l-transparent' : 'hover:bg-surface-100 border-l-2 border-l-transparent'
       }`}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       draggable
       onDragStart={handleDragStart}
     >
@@ -170,6 +182,7 @@ export function GitTreeFileRow({
   onSelect,
   onStageToggle,
   onDiscard,
+  onContextMenu,
   disabled,
   selectedPaths
 }: {
@@ -181,6 +194,7 @@ export function GitTreeFileRow({
   onSelect?: (path: string, metaKey: boolean) => void
   onStageToggle?: () => void
   onDiscard?: () => void
+  onContextMenu?: (file: GitFileStatus, clientX: number, clientY: number) => void
   disabled?: boolean
   selectedPaths?: Set<string>
 }) {
@@ -197,6 +211,15 @@ export function GitTreeFileRow({
       onClickName?.(e.clientY)
     },
     [file.path, onClickName, onSelect]
+  )
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onContextMenu) return
+      e.preventDefault()
+      onContextMenu(file, e.clientX, e.clientY)
+    },
+    [file, onContextMenu]
   )
 
   const handleDragStart = useCallback(
@@ -221,6 +244,7 @@ export function GitTreeFileRow({
       }`}
       style={{ paddingLeft: `${8 + node.depth * 12}px` }}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       draggable
       onDragStart={handleDragStart}
     >
@@ -268,6 +292,7 @@ export function GitTreeSection({
   onSelect,
   onStageToggle,
   onDiscard,
+  onContextMenu,
   disabled
 }: {
   files: GitFileStatus[]
@@ -280,6 +305,7 @@ export function GitTreeSection({
   onSelect: (path: string, metaKey: boolean) => void
   onStageToggle: (file: GitFileStatus) => void
   onDiscard: (file: GitFileStatus) => void
+  onContextMenu?: (file: GitFileStatus, clientX: number, clientY: number) => void
   disabled?: boolean
 }) {
   const flatNodes = useMemo(() => {
@@ -311,6 +337,7 @@ export function GitTreeSection({
             onSelect={onSelect}
             onStageToggle={() => node.file && onStageToggle(node.file)}
             onDiscard={() => node.file && onDiscard(node.file)}
+            onContextMenu={onContextMenu}
             disabled={disabled}
             selectedPaths={selectedPaths}
           />

@@ -1,5 +1,6 @@
 import { useSessionStore, type FileTab } from '../../store/session-store'
 import { DocumentTextIcon } from '@heroicons/react/24/outline'
+import { CodeBracketSquareIcon } from '@heroicons/react/24/outline'
 import { SidebarTabItem } from './SidebarTabItem'
 
 interface FileTabItemProps {
@@ -30,11 +31,20 @@ export function FileTabItem({
   const renameFileTab = useSessionStore((s) => s.renameFileTab)
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
 
+  const isDiff = fileTab.kind === 'diff'
+  const titleSuffix = isDiff
+    ? fileTab.diff?.type === 'commit'
+      ? ` (diff @ ${fileTab.diff.hash?.slice(0, 7) ?? 'commit'})`
+      : fileTab.diff?.staged
+        ? ' (staged diff)'
+        : ' (diff)'
+    : ''
+
   return (
     <SidebarTabItem
       id={fileTab.id}
       name={fileTab.name}
-      title={fileTab.filePath.replace(/^\/Users\/[^/]+/, '~')}
+      title={`${fileTab.filePath.replace(/^\/Users\/[^/]+/, '~')}${titleSuffix}`}
       isSelected={isSelected}
       onClick={onClick}
       onContextMenu={onContextMenu}
@@ -42,7 +52,11 @@ export function FileTabItem({
       onDelete={() => removeFileTab(fileTab.id)}
       icon={
         <span className="flex-shrink-0 w-4 h-4">
-          <DocumentTextIcon className="w-4 h-4 text-text-tertiary" />
+          {isDiff ? (
+            <CodeBracketSquareIcon className="w-4 h-4 text-text-tertiary" />
+          ) : (
+            <DocumentTextIcon className="w-4 h-4 text-text-tertiary" />
+          )}
         </span>
       }
       grouped={grouped}

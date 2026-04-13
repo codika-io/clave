@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState, useCallback, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react'
 import { motion } from 'framer-motion'
+import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
-import { parseDiffLines } from '../../lib/diff-utils'
+import { useDiff } from '../../hooks/use-diff'
+import { DiffLinesView } from './DiffLinesView'
 import { CloseIcon, fileActionButtonClass } from '../files/FileActionIcons'
 
 function commitFileStatusColor(status: string): string {
@@ -49,13 +51,11 @@ export function GitDiffPreview() {
   const diffPreview = useSessionStore((s) => s.diffPreview)
   const setDiffPreview = useSessionStore((s) => s.setDiffPreview)
   const triggerGitRefresh = useSessionStore((s) => s.triggerGitRefresh)
+  const addFileTab = useSessionStore((s) => s.addFileTab)
   const fileTreeOpen = useSessionStore((s) => s.fileTreeOpen)
   const fileTreeWidth = useSessionStore((s) => s.fileTreeWidth)
   const journeyPanel = useSessionStore((s) => s.journeyPanel)
 
-  const [diff, setDiff] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [operating, setOperating] = useState(false)
 
   const close = useCallback(() => setDiffPreview(null), [setDiffPreview])
@@ -75,49 +75,14 @@ export function GitDiffPreview() {
     return () => window.removeEventListener('mousedown', handleMouseDown)
   }, [diffPreview, close])
 
-  // Fetch diff
-  useEffect(() => {
-    if (!diffPreview) {
-      setDiff(null)
-      setLoading(false)
-      return
-    }
-
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-
-    const fetch = async (): Promise<void> => {
-      try {
-        let result: string
-        if (diffPreview.type === 'commit' && diffPreview.hash) {
-          result = await window.electronAPI.gitCommitDiff(
-            diffPreview.cwd,
-            diffPreview.hash,
-            diffPreview.file
-          )
-        } else {
-          const isUntracked = diffPreview.fileStatus === 'untracked'
-          result = await window.electronAPI.gitDiff(
-            diffPreview.cwd,
-            diffPreview.file,
-            diffPreview.staged,
-            isUntracked
-          )
-        }
-        if (!cancelled) setDiff(result)
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    fetch()
-
-    return () => {
-      cancelled = true
-    }
-  }, [diffPreview?.file, diffPreview?.cwd, diffPreview?.type, diffPreview?.hash, diffPreview?.staged, diffPreview?.fileStatus])
+  const { diffLines, loading, error, stats } = useDiff({
+    cwd: diffPreview?.cwd ?? '',
+    file: diffPreview?.file ?? '',
+    type: diffPreview?.type ?? 'working',
+    staged: diffPreview?.staged ?? false,
+    fileStatus: diffPreview?.fileStatus ?? '',
+    hash: diffPreview?.hash ?? null
+  })
 
   // Keyboard
   useEffect(() => {
@@ -149,26 +114,6 @@ export function GitDiffPreview() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [diffPreview, close, setDiffPreview])
-
-  const diffLines = useMemo(() => {
-    if (diff === null) return []
-    const isUntracked = diffPreview?.fileStatus === 'untracked'
-    const isNewFile = diffPreview?.fileStatus === 'A' || diffPreview?.fileStatus === 'added'
-    if (isUntracked || (isNewFile && !diff.includes('@@'))) {
-      return diff.split('\n').map((line) => ({ type: 'add' as const, content: line }))
-    }
-    return parseDiffLines(diff)
-  }, [diff, diffPreview?.fileStatus])
-
-  const stats = useMemo(() => {
-    let additions = 0
-    let deletions = 0
-    for (const line of diffLines) {
-      if (line.type === 'add') additions++
-      else if (line.type === 'del') deletions++
-    }
-    return { additions, deletions }
-  }, [diffLines])
 
   const handleStageToggle = useCallback(async () => {
     if (!diffPreview || diffPreview.type !== 'working' || operating) return
@@ -209,6 +154,26 @@ export function GitDiffPreview() {
     top = Math.max(padding, Math.min(top, vh - panelHeight - padding))
     setPanelTop(top)
   })
+
+  const openAsTab = useCallback(() => {
+    if (!diffPreview) return
+    const filename = diffPreview.file.split('/').pop() ?? diffPreview.file
+    addFileTab({
+      id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      filePath: `${diffPreview.cwd}/${diffPreview.file}`,
+      name: filename,
+      kind: 'diff',
+      diff: {
+        type: diffPreview.type,
+        cwd: diffPreview.cwd,
+        file: diffPreview.file,
+        staged: diffPreview.staged,
+        fileStatus: diffPreview.fileStatus,
+        hash: diffPreview.hash
+      }
+    })
+    close()
+  }, [diffPreview, addFileTab, close])
 
   if (!diffPreview) return null
 
@@ -265,6 +230,9 @@ export function GitDiffPreview() {
                 {diffPreview.hash.slice(0, 7)}
               </span>
             )}
+            <button onClick={openAsTab} className={fileActionButtonClass} title="Open as tab">
+              <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+            </button>
             <button onClick={close} className={fileActionButtonClass}>
               <CloseIcon />
             </button>
@@ -272,47 +240,12 @@ export function GitDiffPreview() {
         </div>
 
         {/* Diff content */}
-        <div className="flex-1 overflow-auto font-mono text-[11px] leading-[18px] min-h-0">
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <span className="text-xs text-text-tertiary">Loading diff...</span>
-            </div>
-          )}
-          {error && (
-            <div className="px-3 py-2 text-xs text-red-400">{error}</div>
-          )}
-          {!loading && !error && diffLines.length === 0 && (
-            <div className="flex items-center justify-center py-8">
-              <span className="text-xs text-text-tertiary">No changes</span>
-            </div>
-          )}
-          {!loading &&
-            !error &&
-            diffLines.map((line, i) => {
-              let bg = ''
-              let textColor = 'text-text-secondary'
-              if (line.type === 'add') {
-                bg = 'bg-green-500/10'
-                textColor = 'text-green-400'
-              } else if (line.type === 'del') {
-                bg = 'bg-red-500/10'
-                textColor = 'text-red-400'
-              } else if (line.type === 'hunk') {
-                bg = 'bg-blue-500/10'
-                textColor = 'text-blue-400'
-              } else if (line.type === 'binary') {
-                textColor = 'text-text-tertiary'
-              }
-              return (
-                <div key={i} className={`px-3 whitespace-pre ${bg} ${textColor}`}>
-                  {line.type === 'add' && <span className="select-none mr-1">+</span>}
-                  {line.type === 'del' && <span className="select-none mr-1">-</span>}
-                  {line.type === 'context' && <span className="select-none mr-1">{' '}</span>}
-                  {line.content}
-                </div>
-              )
-            })}
-        </div>
+        <DiffLinesView
+          lines={diffLines}
+          loading={loading}
+          error={error}
+          className="flex-1 min-h-0"
+        />
 
         {/* Footer */}
         {!loading && !error && diffLines.length > 0 && (

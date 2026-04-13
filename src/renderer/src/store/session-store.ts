@@ -110,6 +110,7 @@ interface SessionState {
   addFileTab: (tab: FileTab) => void
   removeFileTab: (id: string) => void
   renameFileTab: (id: string, name: string) => void
+  setFileTabDiffStaged: (id: string, staged: boolean) => void
   setClaudeSessionId: (id: string, claudeSessionId: string) => void
   addAgentSession: (agent: Agent, locationId: string) => void
   removeAgentSessions: (locationId: string) => void
@@ -144,6 +145,17 @@ export function getDisplayOrder(state: {
 
 export function isFileTabId(id: string): boolean {
   return id.startsWith('file-')
+}
+
+export function fileTabDedupKey(tab: FileTab): string {
+  if (tab.kind === 'diff' && tab.diff) {
+    const suffix =
+      tab.diff.type === 'working'
+        ? `working-${tab.diff.staged ? 's' : 'u'}`
+        : `commit-${tab.diff.hash ?? ''}`
+    return `diff:${tab.diff.cwd}:${tab.diff.file}:${suffix}`
+  }
+  return `file:${tab.filePath}`
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -671,8 +683,8 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   addFileTab: (tab) =>
     set((state) => {
-      // Dedup by filePath
-      const existing = state.fileTabs.find((f) => f.filePath === tab.filePath)
+      const key = fileTabDedupKey(tab)
+      const existing = state.fileTabs.find((f) => fileTabDedupKey(f) === key)
       if (existing) {
         return {
           selectedSessionIds: [existing.id],
@@ -721,6 +733,13 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => ({
       fileTabs: state.fileTabs.map((f) =>
         f.id === id ? { ...f, name: name.trim() || f.filePath.split(/[\\/]/).pop() || 'file' } : f
+      )
+    })),
+
+  setFileTabDiffStaged: (id, staged) =>
+    set((state) => ({
+      fileTabs: state.fileTabs.map((f) =>
+        f.id === id && f.diff ? { ...f, diff: { ...f.diff, staged } } : f
       )
     })),
 

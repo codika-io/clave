@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.32.6] — 2026-04-13
+
+### Added
+- Open git diffs as document tabs from the git panel — "Open as tab" button in the diff preview header, and a right-click "Open as tab" option on any changed file in the git tree
+- Diff tabs live-update on stage/unstage and git refresh, and keep Stage/Unstage actions inline
+- Same file can coexist as multiple tabs: file content, unstaged diff, staged diff, and per-commit diff
+
 ## [1.32.5] — 2026-04-11
 
 ### Fixed

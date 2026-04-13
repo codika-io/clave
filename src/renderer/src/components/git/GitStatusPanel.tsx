@@ -2,6 +2,8 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { ContextMenu } from '../ui/ContextMenu'
+import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon } from '@heroicons/react/24/outline'
 import { buildGitTree, compactTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import { GitLogView } from './GitLogView'
 import { FileRow, GitTreeSection } from './GitFileRows'
@@ -50,10 +52,16 @@ function RepoSection({
   const gitViewMode = useSessionStore((s) => s.gitViewMode)
   const setDiffPreview = useSessionStore((s) => s.setDiffPreview)
   const diffPreview = useSessionStore((s) => s.diffPreview)
+  const addFileTab = useSessionStore((s) => s.addFileTab)
   const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [operating, setOperating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<{
+    file: GitFileStatus
+    x: number
+    y: number
+  } | null>(null)
 
   // Restore expanded state from per-cwd cache
   const cache = getExpandedCache(cwd)
@@ -289,6 +297,65 @@ function RepoSection({
     runOperation(() => window.electronAPI.gitDiscard(cwd, filesToDiscard))
   }, [cwd, confirmDiscard, runOperation])
 
+  const openAsTab = useCallback(
+    (file: GitFileStatus) => {
+      const filename = file.path.includes('/') ? file.path.split('/').pop()! : file.path
+      addFileTab({
+        id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        filePath: `${repoRoot}/${file.path}`,
+        name: filename,
+        kind: 'diff',
+        diff: {
+          type: 'working',
+          cwd,
+          file: file.path,
+          staged: file.staged,
+          fileStatus: file.status,
+          hash: null
+        }
+      })
+    },
+    [addFileTab, cwd, repoRoot]
+  )
+
+  const handleRowContextMenu = useCallback(
+    (file: GitFileStatus, clientX: number, clientY: number) => {
+      setContextMenu({ file, x: clientX, y: clientY })
+    },
+    []
+  )
+
+  const contextMenuItems = useMemo(() => {
+    if (!contextMenu) return []
+    const file = contextMenu.file
+    const items: Array<{
+      label: string
+      onClick: () => void
+      icon?: React.ReactNode
+      danger?: boolean
+    }> = [
+      {
+        label: 'Open as tab',
+        icon: <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />,
+        onClick: () => openAsTab(file)
+      },
+      {
+        label: file.staged ? 'Unstage' : 'Stage',
+        icon: file.staged
+          ? <MinusIcon className="w-3.5 h-3.5" />
+          : <PlusIcon className="w-3.5 h-3.5" />,
+        onClick: () => (file.staged ? unstageFile(file.path) : stageFile(file.path))
+      },
+      {
+        label: 'Discard changes',
+        icon: <ArrowUturnLeftIcon className="w-3.5 h-3.5" />,
+        danger: true,
+        onClick: () => promptDiscardFile(file)
+      }
+    ]
+    return items
+  }, [contextMenu, openAsTab, stageFile, unstageFile, promptDiscardFile])
+
   const totalFiltered = staged.length + unstaged.length + untracked.length
 
   // Clean state
@@ -350,6 +417,7 @@ function RepoSection({
                 onSelect={handleSelect}
                 onStageToggle={(f) => unstageFile(f.path)}
                 onDiscard={promptDiscardFile}
+                onContextMenu={handleRowContextMenu}
                 disabled={operating}
               />
             ) : (
@@ -364,6 +432,7 @@ function RepoSection({
                   onSelect={handleSelect}
                   onStageToggle={() => unstageFile(f.path)}
                   onDiscard={() => promptDiscardFile(f)}
+                  onContextMenu={handleRowContextMenu}
                   disabled={operating}
                   selectedPaths={selectedPaths}
                 />
@@ -394,6 +463,7 @@ function RepoSection({
                 onSelect={handleSelect}
                 onStageToggle={(f) => stageFile(f.path)}
                 onDiscard={promptDiscardFile}
+                onContextMenu={handleRowContextMenu}
                 disabled={operating}
               />
             ) : (
@@ -408,6 +478,7 @@ function RepoSection({
                   onSelect={handleSelect}
                   onStageToggle={() => stageFile(f.path)}
                   onDiscard={() => promptDiscardFile(f)}
+                  onContextMenu={handleRowContextMenu}
                   disabled={operating}
                   selectedPaths={selectedPaths}
                 />
@@ -438,6 +509,7 @@ function RepoSection({
                 onSelect={handleSelect}
                 onStageToggle={(f) => stageFile(f.path)}
                 onDiscard={promptDiscardFile}
+                onContextMenu={handleRowContextMenu}
                 disabled={operating}
               />
             ) : (
@@ -452,6 +524,7 @@ function RepoSection({
                   onSelect={handleSelect}
                   onStageToggle={() => stageFile(f.path)}
                   onDiscard={() => promptDiscardFile(f)}
+                  onContextMenu={handleRowContextMenu}
                   disabled={operating}
                   selectedPaths={selectedPaths}
                 />
@@ -477,6 +550,14 @@ function RepoSection({
         onConfirm={executeDiscard}
         onCancel={() => setConfirmDiscard(null)}
       />
+      {contextMenu && (
+        <ContextMenu
+          items={contextMenuItems}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </>
   )
 }

@@ -4,6 +4,7 @@ import { TerminalPanel } from '../terminal/TerminalPanel'
 import { RemoteTerminalPanel } from '../terminal/RemoteTerminalPanel'
 import { TerminalErrorBoundary } from '../terminal/TerminalErrorBoundary'
 import { FileViewer } from '../files/FileViewer'
+import { DiffViewer } from '../files/DiffViewer'
 import { EmptyState } from '../ui/EmptyState'
 
 function computeGridLayout(count: number): { cols: number; rows: number } {
@@ -112,7 +113,11 @@ export function TerminalGrid() {
           if (!fileTab) return null
           return (
             <div key={fileTab.id} className="min-h-0 min-w-0 h-full floating-card">
-              <FileViewer fileTab={fileTab} />
+              {fileTab.kind === 'diff' ? (
+                <DiffViewer fileTab={fileTab} />
+              ) : (
+                <FileViewer fileTab={fileTab} />
+              )}
             </div>
           )
         })}

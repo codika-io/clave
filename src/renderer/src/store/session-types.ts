@@ -134,10 +134,21 @@ export interface SessionGroup {
   color?: GroupTerminalColor | null
 }
 
+export interface FileTabDiffInfo {
+  type: 'working' | 'commit'
+  cwd: string
+  file: string
+  staged: boolean
+  fileStatus: string
+  hash: string | null
+}
+
 export interface FileTab {
   id: string
   filePath: string
   name: string
+  kind?: 'file' | 'diff'
+  diff?: FileTabDiffInfo
 }
 
 export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings' | 'agents' | 'history' | 'journal'
