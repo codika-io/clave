@@ -6,6 +6,7 @@ import * as fsSync from 'fs'
 import { contentCache } from '../src/main/inventory/content-cache'
 import { scanClaudeMd } from '../src/main/inventory/scanners/claude-md'
 import { scanSkills } from '../src/main/inventory/scanners/skills'
+import { scanPlugins } from '../src/main/inventory/scanners/plugins'
 
 type Case = { name: string; run: () => void | Promise<void> }
 const cases: Case[] = []
@@ -74,6 +75,18 @@ cases.push({
       assert(e.estimatedTokens >= 0, 'non-negative tokens')
     }
     console.log(`  (found ${entries.length} skills)`)
+  }
+})
+
+cases.push({
+  name: 'pluginsScanner',
+  run: async () => {
+    const entries = await scanPlugins()
+    for (const e of entries) {
+      assert(e.category === 'plugins', 'category is plugins')
+      assert(e.source === 'plugin', 'source is plugin')
+    }
+    console.log(`  (found ${entries.length} plugins)`)
   }
 })
 
