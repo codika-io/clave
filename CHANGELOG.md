@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.34.1] — 2026-04-14
+
+### Fixed
+- Context Inventory popover no longer drifts to the top-left of the screen when switching sessions or opening a new Clave window — it now closes automatically when its session is hidden or the window loses focus
+- Close (×) button on the Context Inventory popover now reliably dismisses it
+
 ## [1.34.0] — 2026-04-14
 
 ### Added

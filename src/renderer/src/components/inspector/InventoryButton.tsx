@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { CircleStackIcon } from '@heroicons/react/24/outline'
 import { contextPercent, inventoryKey, useInventoryStore } from '../../store/inventory-store'
+import { useSessionStore } from '../../store/session-store'
 import { InspectorPopover } from './InspectorPopover'
 import { cn } from '../../lib/utils'
 
 interface InventoryButtonProps {
+  sessionId: string
   cwd: string
   model?: string
 }
@@ -15,14 +17,28 @@ function badgeStylesFor(percent: number): string {
   return 'bg-surface-300 text-text-secondary'
 }
 
-export function InventoryButton({ cwd, model }: InventoryButtonProps) {
+export function InventoryButton({ sessionId, cwd, model }: InventoryButtonProps) {
   const [open, setOpen] = useState(false)
   const fetch = useInventoryStore((s) => s.fetch)
   const report = useInventoryStore((s) => s.reports[inventoryKey(cwd, model)])
+  const isVisible = useSessionStore((s) => s.selectedSessionIds.includes(sessionId))
 
   useEffect(() => {
     fetch(cwd, model)
   }, [cwd, model, fetch])
+
+  // Auto-close when the owning session is hidden (display:none keeps this mounted
+  // but detaches the trigger, which would otherwise leave the popover floating at 0,0).
+  useEffect(() => {
+    if (!isVisible && open) setOpen(false)
+  }, [isVisible, open])
+
+  useEffect(() => {
+    if (!open) return
+    const handleBlur = () => setOpen(false)
+    window.addEventListener('blur', handleBlur)
+    return () => window.removeEventListener('blur', handleBlur)
+  }, [open])
 
   const percent = contextPercent(report)
 

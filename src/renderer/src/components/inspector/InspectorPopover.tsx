@@ -88,7 +88,6 @@ export function InspectorPopover({ open, onOpenChange, cwd, model, children }: I
         sideOffset={8}
         className="w-[420px] max-h-[500px] flex flex-col"
         onOpenAutoFocus={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
       >
         <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
           <div className="flex flex-col">

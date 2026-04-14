@@ -117,7 +117,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <InventoryButton cwd={session.cwd} />
+          <InventoryButton sessionId={session.id} cwd={session.cwd} />
           {session.claudeMode && session.claudeSessionId && (
             <>
               <button
