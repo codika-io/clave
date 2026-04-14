@@ -16,6 +16,7 @@ import usage from '../../help/usage.md?raw'
 import shortcuts from '../../help/shortcuts.md?raw'
 import remote from '../../help/remote.md?raw'
 import settings from '../../help/settings.md?raw'
+import inspector from '../../help/inspector.md?raw'
 
 const helpDocsMap: Record<string, string> = {
   'getting-started': gettingStarted,
@@ -28,6 +29,7 @@ const helpDocsMap: Record<string, string> = {
   journal,
   'work-tracker': workTracker,
   usage,
+  inspector,
   shortcuts,
   remote,
   settings
