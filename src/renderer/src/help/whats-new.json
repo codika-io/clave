@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.34.0",
+    "title": "Context Inventory",
+    "description": "See what Claude Code loads into context per session — CLAUDE.md, skills, plugins, MCP, hooks — with a live percentage badge, category breakdown, and estimated token cost",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.33.0",
     "title": "Daily Log Redesigned",
     "description": "See your day at a glance with a 7-day heatmap week strip, stat cards, a project-coloured timeline, and a Timeline / By project toggle",
