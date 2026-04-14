@@ -1,9 +1,8 @@
 // src/main/inventory/scanners/hooks.ts
 import * as path from 'path'
 import * as os from 'os'
-import * as fs from 'fs/promises'
-import { contentCache } from '../content-cache'
 import { estimateTokens } from '../token-estimator'
+import { forEachPluginRoot, readJson, walkUpFromCwd } from '../scan-utils'
 import type { InventoryEntry, InventorySource } from '../../../shared/inventory-types'
 
 interface HookSpec {
@@ -40,61 +39,25 @@ function extractHookEntries(
   }
 }
 
-async function listDirs(root: string): Promise<string[]> {
-  try {
-    const entries = await fs.readdir(root, { withFileTypes: true })
-    return entries.filter((e) => e.isDirectory()).map((e) => path.join(root, e.name))
-  } catch {
-    return []
-  }
-}
-
-async function readJson(filePath: string): Promise<unknown | null> {
-  const content = await contentCache.readIfChanged(filePath)
-  if (!content) return null
-  try {
-    return JSON.parse(content)
-  } catch {
-    return null
-  }
-}
-
 export async function scanHooks(cwd: string): Promise<InventoryEntry[]> {
   const home = os.homedir()
   const out: InventoryEntry[] = []
 
-  const userSettings = await readJson(path.join(home, '.claude', 'settings.json'))
-  if (userSettings)
-    extractHookEntries(userSettings, path.join(home, '.claude', 'settings.json'), 'user', undefined, out)
+  const userSettingsPath = path.join(home, '.claude', 'settings.json')
+  const userSettings = await readJson(userSettingsPath)
+  if (userSettings) extractHookEntries(userSettings, userSettingsPath, 'user', undefined, out)
 
-  // Project settings walking up
-  let current = path.resolve(cwd)
-  const visited = new Set<string>()
-  while (!visited.has(current)) {
-    visited.add(current)
-    const projectSettings = path.join(current, '.claude', 'settings.json')
+  await walkUpFromCwd(cwd, async (dir) => {
+    const projectSettings = path.join(dir, '.claude', 'settings.json')
     const parsed = await readJson(projectSettings)
     if (parsed) extractHookEntries(parsed, projectSettings, 'project', undefined, out)
-    const parent = path.dirname(current)
-    if (parent === current) break
-    current = parent
-  }
+  })
 
-  // Plugin hooks
-  const pluginCache = path.join(home, '.claude', 'plugins', 'cache')
-  const marketplaces = await listDirs(pluginCache)
-  for (const marketplace of marketplaces) {
-    const plugins = await listDirs(marketplace)
-    for (const plugin of plugins) {
-      const versions = await listDirs(plugin)
-      const pluginRoots = versions.length > 0 ? versions : [plugin]
-      for (const pluginRoot of pluginRoots) {
-        const hooksFile = path.join(pluginRoot, 'hooks', 'hooks.json')
-        const parsed = await readJson(hooksFile)
-        if (parsed) extractHookEntries(parsed, hooksFile, 'plugin', path.basename(plugin), out)
-      }
-    }
-  }
+  await forEachPluginRoot(async (pluginRoot, pluginName) => {
+    const hooksFile = path.join(pluginRoot, 'hooks', 'hooks.json')
+    const parsed = await readJson(hooksFile)
+    if (parsed) extractHookEntries(parsed, hooksFile, 'plugin', pluginName, out)
+  })
 
   return out
 }
