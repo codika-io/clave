@@ -27,19 +27,24 @@ Auto-updates are built in — once installed, new versions download silently in 
 ## Features
 
 - **Multi-session management** — Open unlimited Claude Code sessions, each in its own PTY
-- **Session groups** — Organize sessions into color-coded groups
+- **Session types** — Claude Code (Cmd+N), plain terminal (Cmd+T), or Dangerous Mode (Cmd+D, runs with `--dangerously-skip-permissions`)
+- **Session groups** — Organize sessions into color-coded groups with pinned configs and `.clave` files
 - **Flexible layouts** — Single, split (2-panel), or grid (4-panel) view modes
 - **Searchable sidebar** — Filter sessions by name, folder, or path
-- **Git integration** — Full Git panel with status, diff viewer, commit history, stage/unstage, commit, push, and pull
-- **File browser** — Local and remote file trees with syntax-highlighted preview, markdown rendering, and search palette
+- **Task Queue** — Queue up prompts and launch them as new Claude sessions with one click
+- **Git panel** — Status, diff viewer, commit history, stage/unstage, commit, push, pull, plus **MagicSync** (pull → stage → AI commit message → commit → push in one click) and **Git Journey** (visual commit history grouped by push batch)
+- **File browser** — Local and remote file trees with syntax-highlighted preview, markdown rendering, and Cmd+P search palette
+- **History** — Browse and search past Claude Code conversations, restart any session from history
+- **Daily Log** — AI-generated daily summaries of your work, grouped by project, with a week heatmap strip and timeline view
+- **Work Tracker** — Daily time tracking with streaks, weekly charts, and break reminders
+- **Usage analytics** — Token usage, per-day cost tracking (day/week/month), GitHub-style year-long activity heatmap
 - **SSH / Remote sessions** — Connect to remote hosts via SSH for terminal sessions and SFTP file browsing
-- **Agent support** — Integrated agent chat panel via WebSocket connection to OpenClaw
-- **Kanban board** — Task management with draggable columns and cards
+- **Agent chat panel** — Integrated agent chat via WebSocket connection to OpenClaw
 - **Session templates** — Launch pre-configured sessions with saved directories and modes
+- **Internationalization** — English and Simplified Chinese UI
 - **Keyboard shortcuts** — Cmd+P (file palette), Cmd+E (file tree), Cmd+T (new terminal), Cmd+N (new Claude session), Cmd+D (dangerous mode), Cmd+W (close tab)
 - **Dark / Light / Coffee themes** — Full theming for both terminal and UI
 - **URL detection** — Detects localhost URLs in terminal output and makes them clickable
-- **Usage tracking** — Monitor API and token usage statistics
 - **Native macOS feel** — Hidden inset titlebar with traffic light controls, native notifications
 - **Auto-updates** — New versions install automatically on quit via `electron-updater`
 - **Signed & notarized** — Passes macOS Gatekeeper without warnings
