@@ -103,7 +103,7 @@ export function InspectorPopover({ open, onOpenChange, cwd, model, children }: I
             />
           ))}
           {report?.warnings.length ? (
-            <div className="px-3 py-2 text-[10px] text-status-waiting bg-surface-100">
+            <div className="px-3 py-2 text-[10px] text-status-waiting border-t border-border-subtle border-l-2 border-l-status-waiting">
               {report.warnings.join(' · ')}
             </div>
           ) : null}
