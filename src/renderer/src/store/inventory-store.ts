@@ -9,7 +9,7 @@ interface InventoryState {
   clear: (cwd?: string) => void
 }
 
-function keyFor(cwd: string, model?: string): string {
+export function inventoryKey(cwd: string, model?: string): string {
   return `${cwd}::${model ?? ''}`
 }
 
@@ -17,7 +17,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
   reports: {},
   loading: {},
   fetch: async (cwd, model, force) => {
-    const key = keyFor(cwd, model)
+    const key = inventoryKey(cwd, model)
     if (!force && get().reports[key]) return get().reports[key]
     set((s) => ({ loading: { ...s.loading, [key]: true } }))
     try {
@@ -39,12 +39,18 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       set({ reports: {}, loading: {} })
       return
     }
+    const prefix = cwd + '::'
     set((s) => {
       const reports = { ...s.reports }
       const loading = { ...s.loading }
-      for (const key of Object.keys(reports)) if (key.startsWith(cwd + '::')) delete reports[key]
-      for (const key of Object.keys(loading)) if (key.startsWith(cwd + '::')) delete loading[key]
+      for (const key of Object.keys(reports)) if (key.startsWith(prefix)) delete reports[key]
+      for (const key of Object.keys(loading)) if (key.startsWith(prefix)) delete loading[key]
       return { reports, loading }
     })
   }
 }))
+
+export function contextPercent(report: InventoryReport | undefined): number | null {
+  if (!report) return null
+  return Math.min(100, Math.round((report.totalTokens / report.contextWindow) * 100))
+}

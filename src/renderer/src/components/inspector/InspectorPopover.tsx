@@ -3,7 +3,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../ui/tooltip'
 import { ArrowPathIcon, XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { CategorySection } from './CategorySection'
-import { useInventoryStore } from '../../store/inventory-store'
+import { contextPercent, inventoryKey, useInventoryStore } from '../../store/inventory-store'
 import type { InventoryCategory, InventoryEntry } from '../../../../shared/inventory-types'
 
 const ORDER: InventoryCategory[] = [
@@ -28,9 +28,10 @@ interface InspectorPopoverProps {
 }
 
 export function InspectorPopover({ open, onOpenChange, cwd, model, children }: InspectorPopoverProps) {
+  const key = inventoryKey(cwd, model)
   const fetch = useInventoryStore((s) => s.fetch)
-  const report = useInventoryStore((s) => s.reports[`${cwd}::${model ?? ''}`])
-  const storeLoading = useInventoryStore((s) => s.loading[`${cwd}::${model ?? ''}`] ?? false)
+  const report = useInventoryStore((s) => s.reports[key])
+  const storeLoading = useInventoryStore((s) => s.loading[key] ?? false)
   const [refreshing, setRefreshing] = useState(false)
   const loading = storeLoading || refreshing
 
@@ -65,9 +66,7 @@ export function InspectorPopover({ open, onOpenChange, cwd, model, children }: I
     return map
   }, [report])
 
-  const percent = report
-    ? Math.min(100, Math.round((report.totalTokens / report.contextWindow) * 100))
-    : 0
+  const percent = contextPercent(report) ?? 0
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
