@@ -3,6 +3,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../ui/tooltip'
 import { ArrowPathIcon, XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { CategorySection } from './CategorySection'
+import { CATEGORY_COLORS } from './category-colors'
 import { contextPercent, inventoryKey, useInventoryStore } from '../../store/inventory-store'
 import type { InventoryCategory, InventoryEntry } from '../../../../shared/inventory-types'
 
@@ -66,7 +67,15 @@ export function InspectorPopover({ open, onOpenChange, cwd, model, children }: I
     return map
   }, [report])
 
+  const categoryTotals = useMemo(() => {
+    return ORDER.map((category) => ({
+      category,
+      total: byCategory[category].reduce((sum, e) => sum + e.estimatedTokens, 0)
+    })).filter((c) => c.total > 0)
+  }, [byCategory])
+
   const percent = contextPercent(report) ?? 0
+  const grandTotal = report?.totalTokens ?? 0
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -142,6 +151,33 @@ export function InspectorPopover({ open, onOpenChange, cwd, model, children }: I
             </button>
           </div>
         </div>
+        {grandTotal > 0 && (
+          <div className="px-3 pt-2 pb-2.5 border-b border-border-subtle">
+            <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-surface-200">
+              {categoryTotals.map(({ category, total }) => (
+                <div
+                  key={category}
+                  style={{
+                    width: `${(total / grandTotal) * 100}%`,
+                    backgroundColor: CATEGORY_COLORS[category]
+                  }}
+                  title={`${category}: ${total.toLocaleString()} tok`}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-x-2.5 gap-y-1 mt-1.5 text-[10px] text-text-secondary">
+              {categoryTotals.map(({ category, total }) => (
+                <span key={category} className="flex items-center gap-1 tabular-nums">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: CATEGORY_COLORS[category] }}
+                  />
+                  {Math.round((total / grandTotal) * 100)}%
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">
           {ORDER.map((category) => (
             <CategorySection
