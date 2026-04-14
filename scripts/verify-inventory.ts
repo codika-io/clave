@@ -5,6 +5,7 @@ import * as path from 'path'
 import * as fsSync from 'fs'
 import { contentCache } from '../src/main/inventory/content-cache'
 import { scanClaudeMd } from '../src/main/inventory/scanners/claude-md'
+import { scanSkills } from '../src/main/inventory/scanners/skills'
 
 type Case = { name: string; run: () => void | Promise<void> }
 const cases: Case[] = []
@@ -60,6 +61,19 @@ cases.push({
     const deep = entries.find((e) => e.filePath?.endsWith(path.join('deep', 'CLAUDE.md')))!
     assert(deep.estimatedTokens === 10, '40 chars -> 10 tokens')
     fsSync.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+cases.push({
+  name: 'skillsScanner',
+  run: async () => {
+    const entries = await scanSkills()
+    for (const e of entries) {
+      assert(e.category === 'skills', 'category is skills')
+      assert(typeof e.name === 'string' && e.name.length > 0, 'has name')
+      assert(e.estimatedTokens >= 0, 'non-negative tokens')
+    }
+    console.log(`  (found ${entries.length} skills)`)
   }
 })
 
