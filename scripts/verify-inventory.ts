@@ -4,6 +4,7 @@ import * as os from 'os'
 import * as path from 'path'
 import * as fsSync from 'fs'
 import { contentCache } from '../src/main/inventory/content-cache'
+import { scanClaudeMd } from '../src/main/inventory/scanners/claude-md'
 
 type Case = { name: string; run: () => void | Promise<void> }
 const cases: Case[] = []
@@ -40,6 +41,25 @@ cases.push({
     const third = await contentCache.readIfChanged(file)
     assert(third === 'world', 'post-change read returns new content')
     fsSync.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+cases.push({
+  name: 'claudeMdScanner',
+  run: async () => {
+    const root = fsSync.mkdtempSync(path.join(os.tmpdir(), 'clave-claudemd-'))
+    const nested = path.join(root, 'sub', 'deep')
+    fsSync.mkdirSync(nested, { recursive: true })
+    fsSync.writeFileSync(path.join(root, 'CLAUDE.md'), 'a'.repeat(100), 'utf-8')
+    fsSync.writeFileSync(path.join(nested, 'CLAUDE.md'), 'b'.repeat(40), 'utf-8')
+
+    const entries = await scanClaudeMd(nested)
+    const paths = entries.map((e) => e.filePath)
+    assert(paths.some((p) => p?.endsWith(path.join('deep', 'CLAUDE.md'))), 'found deep CLAUDE.md')
+    assert(paths.some((p) => p?.endsWith(path.join('CLAUDE.md')) && !p?.includes('deep')), 'found root CLAUDE.md')
+    const deep = entries.find((e) => e.filePath?.endsWith(path.join('deep', 'CLAUDE.md')))!
+    assert(deep.estimatedTokens === 10, '40 chars -> 10 tokens')
+    fsSync.rmSync(root, { recursive: true, force: true })
   }
 })
 
