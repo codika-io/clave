@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.35.0] — 2026-04-14
+
+### Fixed
+- Context Inventory popover no longer flashes to the top-left corner when you open a new session (Cmd+T / Cmd+D) with the popover open — it now vanishes cleanly as the session hides
+
 ## [1.34.3] — 2026-04-14
 
 ### Fixed
