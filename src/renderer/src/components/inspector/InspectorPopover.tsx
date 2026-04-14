@@ -77,7 +77,9 @@ export function InspectorPopover({ open, onOpenChange, cwd, model, children }: I
           </div>
           <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={() => fetch(cwd, model, true)}
+              onPointerDown={(e) => e.stopPropagation()}
               disabled={loading}
               className="btn-icon btn-icon-xs"
               title="Refresh"

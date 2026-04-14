@@ -29,8 +29,10 @@ export function CategorySection({ category, entries, defaultOpen }: CategorySect
   return (
     <div className="border-b border-border-subtle">
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-surface-100 transition-colors"
+        onPointerDown={(e) => e.stopPropagation()}
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-surface-200 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-1.5">
           <ChevronRightIcon
