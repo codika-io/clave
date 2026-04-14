@@ -266,7 +266,13 @@ const electronAPI = {
   preferencesGet: (key: string) =>
     ipcRenderer.invoke('preferences:get', key),
   preferencesSet: (key: string, value: unknown) =>
-    ipcRenderer.invoke('preferences:set', key, value)
+    ipcRenderer.invoke('preferences:set', key, value),
+
+  // Inventory
+  getInventory: (cwd: string, model?: string) =>
+    ipcRenderer.invoke('inventory:get', cwd, model),
+  invalidateInventory: () =>
+    ipcRenderer.invoke('inventory:invalidate')
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

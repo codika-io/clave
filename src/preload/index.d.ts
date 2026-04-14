@@ -431,6 +431,8 @@ export interface ElectronAPI {
   readImageAsDataUrl: (absolutePath: string) => Promise<string | null>
   preferencesGet: (key: string) => Promise<unknown>
   preferencesSet: (key: string, value: unknown) => Promise<void>
+  getInventory: (cwd: string, model?: string) => Promise<import('../shared/inventory-types').InventoryReport>
+  invalidateInventory: () => Promise<void>
 }
 
 declare global {
