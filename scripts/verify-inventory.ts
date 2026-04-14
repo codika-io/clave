@@ -7,6 +7,7 @@ import { contentCache } from '../src/main/inventory/content-cache'
 import { scanClaudeMd } from '../src/main/inventory/scanners/claude-md'
 import { scanSkills } from '../src/main/inventory/scanners/skills'
 import { scanPlugins } from '../src/main/inventory/scanners/plugins'
+import { scanMcp } from '../src/main/inventory/scanners/mcp'
 
 type Case = { name: string; run: () => void | Promise<void> }
 const cases: Case[] = []
@@ -87,6 +88,23 @@ cases.push({
       assert(e.source === 'plugin', 'source is plugin')
     }
     console.log(`  (found ${entries.length} plugins)`)
+  }
+})
+
+cases.push({
+  name: 'mcpScanner',
+  run: async () => {
+    const root = fsSync.mkdtempSync(path.join(os.tmpdir(), 'clave-mcp-'))
+    fsSync.writeFileSync(
+      path.join(root, '.mcp.json'),
+      JSON.stringify({ mcpServers: { demo: { command: 'node', args: ['demo.js'] } } }),
+      'utf-8'
+    )
+    const entries = await scanMcp(root)
+    const demo = entries.find((e) => e.name === 'demo')
+    assert(!!demo, 'found demo MCP')
+    assert(demo!.source === 'project', 'project source')
+    fsSync.rmSync(root, { recursive: true, force: true })
   }
 })
 
