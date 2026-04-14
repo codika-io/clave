@@ -12,6 +12,7 @@ import { scanHooks } from '../src/main/inventory/scanners/hooks'
 import { scanMemory } from '../src/main/inventory/scanners/memory'
 import { scanCommands } from '../src/main/inventory/scanners/commands'
 import { scanAgents } from '../src/main/inventory/scanners/agents'
+import { inventoryManager } from '../src/main/inventory/inventory-manager'
 
 type Case = { name: string; run: () => void | Promise<void> }
 const cases: Case[] = []
@@ -158,6 +159,19 @@ cases.push({
     const entries = await scanAgents()
     for (const e of entries) assert(e.category === 'agents', 'category is agents')
     console.log(`  (found ${entries.length} agents)`)
+  }
+})
+
+cases.push({
+  name: 'inventoryManager',
+  run: async () => {
+    const report = await inventoryManager.getReport(process.cwd())
+    assert(typeof report.totalTokens === 'number', 'has totalTokens')
+    assert(report.contextWindow === 200000, 'default 200k context window')
+    assert(Array.isArray(report.entries), 'has entries array')
+    console.log(
+      `  (total ${report.totalTokens} tokens across ${report.entries.length} entries)`
+    )
   }
 })
 
