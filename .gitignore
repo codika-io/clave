@@ -28,6 +28,9 @@ Thumbs.db
 next-features.md
 prd-*.md
 
+# Local scratch / pre-deletion holding area
+temp_trash/
+
 # Environment variables
 .env
 .certificates*

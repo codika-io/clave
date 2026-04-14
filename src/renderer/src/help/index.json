@@ -60,6 +60,12 @@
     "keywords": ["usage", "token", "cost", "analytics", "model"]
   },
   {
+    "id": "inspector",
+    "title": "Context Inventory",
+    "subtitle": "See what Claude Code loads at session start and estimated token cost",
+    "keywords": ["inspector", "inventory", "context", "tokens", "skills", "plugins", "mcp", "claude.md", "memory", "hooks"]
+  },
+  {
     "id": "shortcuts",
     "title": "Keyboard Shortcuts",
     "subtitle": "Full shortcut reference",
