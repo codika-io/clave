@@ -8,6 +8,10 @@ import { scanClaudeMd } from '../src/main/inventory/scanners/claude-md'
 import { scanSkills } from '../src/main/inventory/scanners/skills'
 import { scanPlugins } from '../src/main/inventory/scanners/plugins'
 import { scanMcp } from '../src/main/inventory/scanners/mcp'
+import { scanHooks } from '../src/main/inventory/scanners/hooks'
+import { scanMemory } from '../src/main/inventory/scanners/memory'
+import { scanCommands } from '../src/main/inventory/scanners/commands'
+import { scanAgents } from '../src/main/inventory/scanners/agents'
 
 type Case = { name: string; run: () => void | Promise<void> }
 const cases: Case[] = []
@@ -105,6 +109,55 @@ cases.push({
     assert(!!demo, 'found demo MCP')
     assert(demo!.source === 'project', 'project source')
     fsSync.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+cases.push({
+  name: 'hooksScanner',
+  run: async () => {
+    const root = fsSync.mkdtempSync(path.join(os.tmpdir(), 'clave-hooks-'))
+    const claudeDir = path.join(root, '.claude')
+    fsSync.mkdirSync(claudeDir, { recursive: true })
+    fsSync.writeFileSync(
+      path.join(claudeDir, 'settings.json'),
+      JSON.stringify({
+        hooks: {
+          PostToolUse: [{ matcher: 'Write', hooks: [{ type: 'command', command: 'echo hi' }] }]
+        }
+      }),
+      'utf-8'
+    )
+    const entries = await scanHooks(root)
+    const found = entries.find((e) => e.filePath?.endsWith(path.join('.claude', 'settings.json')) && e.source === 'project')
+    assert(!!found, 'found project hook')
+    fsSync.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+cases.push({
+  name: 'memoryScanner',
+  run: async () => {
+    const entries = await scanMemory(process.cwd())
+    for (const e of entries) assert(e.category === 'memory', 'category is memory')
+    console.log(`  (found ${entries.length} memory files for cwd)`)
+  }
+})
+
+cases.push({
+  name: 'commandsScanner',
+  run: async () => {
+    const entries = await scanCommands()
+    for (const e of entries) assert(e.category === 'commands', 'category is commands')
+    console.log(`  (found ${entries.length} commands)`)
+  }
+})
+
+cases.push({
+  name: 'agentsScanner',
+  run: async () => {
+    const entries = await scanAgents()
+    for (const e of entries) assert(e.category === 'agents', 'category is agents')
+    console.log(`  (found ${entries.length} agents)`)
   }
 })
 
