@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.34.3] — 2026-04-14
+
+### Fixed
+- Context Inventory popover no longer closes when you click inside it (e.g. expanding Skills or Agents) — removed an over-eager window-blur handler that was firing on focus transitions between the terminal and the popover
+
 ## [1.34.2] — 2026-04-14
 
 ### Fixed

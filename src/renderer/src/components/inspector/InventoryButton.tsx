@@ -33,13 +33,6 @@ export function InventoryButton({ sessionId, cwd, model }: InventoryButtonProps)
     if (!isVisible && open) setOpen(false)
   }, [isVisible, open])
 
-  useEffect(() => {
-    if (!open) return
-    const handleBlur = () => setOpen(false)
-    window.addEventListener('blur', handleBlur)
-    return () => window.removeEventListener('blur', handleBlur)
-  }, [open])
-
   const percent = contextPercent(report)
 
   return (
