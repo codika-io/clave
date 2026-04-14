@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover'
-import { ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../ui/tooltip'
+import { ArrowPathIcon, XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { CategorySection } from './CategorySection'
 import { useInventoryStore } from '../../store/inventory-store'
 import type { InventoryCategory, InventoryEntry } from '../../../../shared/inventory-types'
@@ -16,6 +17,8 @@ const ORDER: InventoryCategory[] = [
   'agents'
 ]
 
+const MIN_SPINNER_MS = 450
+
 interface InspectorPopoverProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -27,11 +30,25 @@ interface InspectorPopoverProps {
 export function InspectorPopover({ open, onOpenChange, cwd, model, children }: InspectorPopoverProps) {
   const fetch = useInventoryStore((s) => s.fetch)
   const report = useInventoryStore((s) => s.reports[`${cwd}::${model ?? ''}`])
-  const loading = useInventoryStore((s) => s.loading[`${cwd}::${model ?? ''}`] ?? false)
+  const storeLoading = useInventoryStore((s) => s.loading[`${cwd}::${model ?? ''}`] ?? false)
+  const [refreshing, setRefreshing] = useState(false)
+  const loading = storeLoading || refreshing
 
   useEffect(() => {
     if (open) fetch(cwd, model)
   }, [open, cwd, model, fetch])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    const start = performance.now()
+    try {
+      await fetch(cwd, model, true)
+    } finally {
+      const elapsed = performance.now() - start
+      const remaining = Math.max(0, MIN_SPINNER_MS - elapsed)
+      setTimeout(() => setRefreshing(false), remaining)
+    }
+  }
 
   const byCategory = useMemo(() => {
     const map: Record<InventoryCategory, InventoryEntry[]> = {
@@ -77,9 +94,38 @@ export function InspectorPopover({ open, onOpenChange, cwd, model, children }: I
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="btn-icon btn-icon-xs"
+                    aria-label="What is this?"
+                  >
+                    <InformationCircleIcon className="w-3.5 h-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" align="end" className="max-w-[280px] whitespace-normal leading-snug">
+                  <div className="space-y-1">
+                    <div className="font-semibold">What you're seeing</div>
+                    <div className="text-text-secondary">
+                      Everything Claude Code loads into context at session start. Token counts are estimates
+                      (≈ chars ÷ 4). MCP runtime tool schemas aren't counted.
+                    </div>
+                    <div className="font-semibold pt-1">Reduce context</div>
+                    <ul className="list-disc pl-3.5 space-y-0.5 text-text-secondary">
+                      <li><code>/plugin</code> — disable or uninstall plugins</li>
+                      <li><code>/clear</code> — wipe the current conversation</li>
+                      <li><code>/compact</code> — summarize to shrink context</li>
+                      <li>Edit <code>~/.claude/settings.json</code> to turn off skills or MCP servers</li>
+                    </ul>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <button
               type="button"
-              onClick={() => fetch(cwd, model, true)}
+              onClick={handleRefresh}
               onPointerDown={(e) => e.stopPropagation()}
               disabled={loading}
               className="btn-icon btn-icon-xs"
@@ -88,6 +134,7 @@ export function InspectorPopover({ open, onOpenChange, cwd, model, children }: I
               <ArrowPathIcon className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button
+              type="button"
               onClick={() => onOpenChange(false)}
               className="btn-icon btn-icon-xs"
               title="Close"
