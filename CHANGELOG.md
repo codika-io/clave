@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Added
+- **Context Inventory popover** per session — click the database icon in the terminal header to see what Claude Code loads at session start (CLAUDE.md chain, skills, plugins, commands, agents, MCP servers, hooks, project memory) with estimated token cost and percentage of the context window
+- Token-percentage badge on the inventory icon when context usage crosses 40% (green) and 70% (amber)
+- Info tooltip in the popover with quick tips for reducing context (`/plugin`, `/clear`, `/compact`, `~/.claude/settings.json`)
+- In-app help page (Help → "Context Inventory") explaining what's measured, what isn't (e.g. MCP runtime tool schemas), and the read-only design philosophy
+- Addresses [issue #9](https://github.com/codika-io/clave/issues/9)
+
 ## [1.33.0] — 2026-04-14
 
 ### Changed
