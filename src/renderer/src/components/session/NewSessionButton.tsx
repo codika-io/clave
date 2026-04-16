@@ -13,7 +13,8 @@ export function NewSessionButton() {
 
       const state = useSessionStore.getState()
       const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
-        claudeMode: state.claudeMode,
+        claudeMode: state.geminiMode ? false : state.claudeMode,
+        geminiMode: state.geminiMode,
         dangerousMode: state.dangerousMode
       })
       addSession({
@@ -24,7 +25,8 @@ export function NewSessionButton() {
         alive: sessionInfo.alive,
         activityStatus: 'idle',
         promptWaiting: null,
-        claudeMode: state.claudeMode,
+        claudeMode: state.geminiMode ? false : state.claudeMode,
+        geminiMode: state.geminiMode,
         dangerousMode: state.dangerousMode,
         claudeSessionId: sessionInfo.claudeSessionId,
         sessionType: 'local'

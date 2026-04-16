@@ -77,6 +77,7 @@ export function getLoginShellEnv(): Record<string, string> {
 export interface PtySpawnOptions {
   dangerousMode?: boolean
   claudeMode?: boolean
+  geminiMode?: boolean
   resumeSessionId?: string
   claudeSessionId?: string
   initialCommand?: string
@@ -97,14 +98,17 @@ class PtyManager {
   spawn(cwd: string, options?: PtySpawnOptions): PtySession & { claudeSessionId?: string } {
     const id = randomUUID()
     const folderName = (isWindows ? cwd.split('\\') : cwd.split('/')).pop() || cwd
-    const useClaudeMode = options?.claudeMode !== false
+    const useClaudeMode = options?.claudeMode !== false && !options?.geminiMode
+    const useGeminiMode = options?.geminiMode === true
 
     // For Claude mode: generate a session ID upfront (or reuse one for resume)
     let claudeSessionId: string | undefined
     let shellArgs: string[]
     if (isWindows) {
-      // On Windows, use cmd.exe with /k to launch claude (keeps shell alive on exit/error)
-      if (!useClaudeMode) {
+      // On Windows, use cmd.exe with /k to launch cli (keeps shell alive on exit/error)
+      if (useGeminiMode) {
+        shellArgs = ['/k', 'gemini']
+      } else if (!useClaudeMode) {
         shellArgs = []
       } else {
         const parts = ['claude']
@@ -121,7 +125,9 @@ class PtyManager {
         shellArgs = ['/k', ...parts]
       }
     } else {
-      if (!useClaudeMode) {
+      if (useGeminiMode) {
+        shellArgs = ['-l', '-c', 'gemini']
+      } else if (!useClaudeMode) {
         shellArgs = ['-l']
       } else {
         const parts = ['claude']

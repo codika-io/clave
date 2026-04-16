@@ -33,7 +33,7 @@ interface ClaveGroupData {
   toolbar?: boolean
   category?: string
   logo?: string
-  sessions: { cwd: string; name: string; claudeMode: boolean; dangerousMode: boolean }[]
+  sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; dangerousMode: boolean }[]
   terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean }[]
 }
 
@@ -96,6 +96,7 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
       cwd: path.resolve(dir, s.cwd || '.'),
       name: s.name,
       claudeMode: s.claudeMode ?? false,
+      geminiMode: s.geminiMode ?? false,
       dangerousMode: s.dangerousMode ?? false
     })),
     terminals: (raw.terminals || []).map((t) => ({
@@ -166,6 +167,7 @@ export function registerClaveFileHandlers(): void {
             cwd: toRelative(s.cwd),
             name: s.name,
             claudeMode: s.claudeMode,
+            geminiMode: s.geminiMode,
             dangerousMode: s.dangerousMode
           })),
           terminals: g.terminals.map((t) => ({

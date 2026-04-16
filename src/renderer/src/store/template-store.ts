@@ -89,7 +89,7 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
     const templateSessions: LaunchTemplateSession[] = sessions.map((s) => {
       const newId = crypto.randomUUID()
       sessionIdMap.set(s.id, newId)
-      return { id: newId, cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, dangerousMode: s.dangerousMode }
+      return { id: newId, cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, geminiMode: s.geminiMode ?? false, dangerousMode: s.dangerousMode }
     })
 
     const templateGroups: LaunchTemplateGroup[] = groups.map((g) => {

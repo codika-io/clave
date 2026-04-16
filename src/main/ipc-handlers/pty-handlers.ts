@@ -6,7 +6,7 @@ export function registerPtyHandlers(): void {
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: PtySpawnOptions) => {
     const session = ptyManager.spawn(cwd, options)
     const win = BrowserWindow.fromWebContents(_event.sender)
-    const isClaudeMode = options?.claudeMode !== false
+    const isClaudeMode = options?.claudeMode !== false && !options?.geminiMode
     const isResumed = !!options?.resumeSessionId
 
     // Schedule title generation for new Claude-mode sessions

@@ -30,8 +30,19 @@ function ClaudeLogo({ className }: { className?: string }) {
   )
 }
 
+function GeminiLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 65 65" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M57.865 29.011C52.865 26.859 48.49 23.906 44.74 20.157C40.99 16.407 38.037 12.031 35.885 7.031C35.059 5.115 34.395 3.146 33.886 1.126C33.72.466 33.128.001 32.448.001C31.767.001 31.175.466 31.009 1.126C30.5 3.146 29.836 5.113 29.01 7.031C26.858 12.031 23.905 16.407 20.156 20.157C16.406 23.906 12.03 26.859 7.03 29.011C5.114 29.837 3.144 30.501 1.125 31.01C.465 31.176 0 31.768 0 32.449C0 33.129.465 33.721 1.125 33.887C3.144 34.396 5.112 35.06 7.03 35.886C12.03 38.038 16.405 40.991 20.156 44.74C23.907 48.49 26.858 52.866 29.01 57.866C29.836 59.782 30.5 61.752 31.009 63.771C31.175 64.431 31.767 64.896 32.448 64.896C33.128 64.896 33.72 64.431 33.886 63.771C34.395 61.752 35.059 59.784 35.885 57.866C38.037 52.866 40.99 48.492 44.74 44.74C48.489 40.991 52.865 38.038 57.865 35.886C59.781 35.06 61.751 34.396 63.77 33.887C64.43 33.721 64.895 33.129 64.895 32.449C64.895 31.768 64.43 31.176 63.77 31.01C61.751 30.501 59.783 29.837 57.865 29.011Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
 interface NewSessionDropdownProps {
-  onNewSession: (options: { claudeMode: boolean; dangerousMode: boolean; locationId?: string }) => void
+  onNewSession: (options: { claudeMode: boolean; geminiMode: boolean; dangerousMode: boolean; locationId?: string }) => void
   loading: boolean
 }
 
@@ -49,9 +60,9 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
   const hasAgentLocations = agents.length > 0
 
   const handleOption = useCallback(
-    (claudeMode: boolean, dangerousMode: boolean, locationId?: string) => {
+    (claudeMode: boolean, dangerousMode: boolean, locationId?: string, geminiMode?: boolean) => {
       setOpen(false)
-      onNewSession({ claudeMode, dangerousMode, locationId })
+      onNewSession({ claudeMode, geminiMode: geminiMode ?? false, dangerousMode, locationId })
     },
     [onNewSession]
   )
@@ -90,6 +101,11 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
             <span className="flex-1">Claude Code (skip permissions)</span>
             <DropdownMenuShortcut>{'\u2318D'}</DropdownMenuShortcut>
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleOption(false, false, undefined, true)}>
+            <GeminiLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+            <span className="flex-1">Gemini CLI</span>
+            <DropdownMenuShortcut>{'\u2318I'}</DropdownMenuShortcut>
+          </DropdownMenuItem>
 
           {connectedRemoteLocations.map((loc) => (
             <div key={loc.id}>
@@ -110,6 +126,10 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
               <DropdownMenuItem onSelect={() => handleOption(true, false, loc.id)}>
                 <ClaudeLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
                 <span className="flex-1">Claude Code</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleOption(false, false, loc.id, true)}>
+                <GeminiLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                <span className="flex-1">Gemini CLI</span>
               </DropdownMenuItem>
             </div>
           ))}

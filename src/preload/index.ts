@@ -14,7 +14,7 @@ function createIpcListener<T extends unknown[]>(
 }
 
 const electronAPI = {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) =>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; resumeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) =>
     ipcRenderer.invoke('pty:spawn', cwd, options),
 
   writeSession: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),

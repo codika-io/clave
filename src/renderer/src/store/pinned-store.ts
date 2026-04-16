@@ -151,7 +151,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
         color: p.color,
         ...(p.toolbar ? { toolbar: true } : {}),
         ...(p.logo ? { logo: p.logo } : {}),
-        sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, dangerousMode: s.dangerousMode })),
+        sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, geminiMode: s.geminiMode, dangerousMode: s.dangerousMode })),
         terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost })),
         ...(p.category ? { category: p.category } : {})
       })
@@ -173,7 +173,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
 // ── Import / Export ──
 
 function createPinnedFromGroup(
-  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; dangerousMode: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[] },
+  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; dangerousMode: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[] },
   filePath: string,
   groupIndex?: number,
   rootDir?: string | null,
@@ -299,6 +299,7 @@ export async function exportClaveFile(pinnedId: string, folder: string, fileName
       cwd: s.cwd,
       name: s.name,
       claudeMode: s.claudeMode,
+      geminiMode: s.geminiMode,
       dangerousMode: s.dangerousMode
     })),
     terminals: pg.terminals.map((t) => ({
@@ -414,6 +415,7 @@ export function pinGroupFromCurrent(groupId: string): void {
       cwd: s.cwd,
       name: s.name,
       claudeMode: s.claudeMode,
+      geminiMode: s.geminiMode,
       dangerousMode: s.dangerousMode
     }))
 
@@ -482,7 +484,8 @@ async function spawnPinnedGroup(pinnedId: string, pg: PinnedGroup): Promise<void
   for (const session of pg.sessions) {
     try {
       const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
-        claudeMode: session.claudeMode,
+        claudeMode: session.geminiMode ? false : session.claudeMode,
+        geminiMode: session.geminiMode,
         dangerousMode: session.dangerousMode
       })
 
@@ -494,7 +497,8 @@ async function spawnPinnedGroup(pinnedId: string, pg: PinnedGroup): Promise<void
         alive: sessionInfo.alive,
         activityStatus: 'idle',
         promptWaiting: null,
-        claudeMode: session.claudeMode,
+        claudeMode: session.geminiMode ? false : session.claudeMode,
+        geminiMode: session.geminiMode,
         dangerousMode: session.dangerousMode,
         claudeSessionId: sessionInfo.claudeSessionId,
         sessionType: 'local',
@@ -612,6 +616,7 @@ export function resyncPinnedGroup(groupId: string): void {
       cwd: s.cwd,
       name: s.name,
       claudeMode: s.claudeMode,
+      geminiMode: s.geminiMode,
       dangerousMode: s.dangerousMode
     }))
 
@@ -669,7 +674,7 @@ export function isPinnedOutOfSync(groupId: string): boolean {
     const s = sessions.find((sess) => sess.id === liveSessions[i])
     const ps = pg.sessions[i]
     if (!s || !ps) return true
-    if (s.cwd !== ps.cwd || s.claudeMode !== ps.claudeMode || s.dangerousMode !== ps.dangerousMode) return true
+    if (s.cwd !== ps.cwd || s.claudeMode !== ps.claudeMode || s.geminiMode !== ps.geminiMode || s.dangerousMode !== ps.dangerousMode) return true
   }
 
   // Compare terminal count and configs

@@ -58,13 +58,14 @@ export function AppShell() {
   useJournalSessionSync()
 
   const spawnSessionWithOptions = useCallback(
-    async (claudeMode: boolean, dangerousMode: boolean) => {
+    async (claudeMode: boolean, dangerousMode: boolean, geminiMode?: boolean) => {
       try {
         const folderPath = await window.electronAPI.openFolderDialog()
         if (!folderPath) return
 
         const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
-          claudeMode,
+          claudeMode: geminiMode ? false : claudeMode,
+          geminiMode,
           dangerousMode
         })
         addSession({
@@ -75,7 +76,8 @@ export function AppShell() {
           alive: sessionInfo.alive,
           activityStatus: 'idle',
           promptWaiting: null,
-          claudeMode,
+          claudeMode: geminiMode ? false : claudeMode,
+          geminiMode: geminiMode ?? false,
           dangerousMode,
           claudeSessionId: sessionInfo.claudeSessionId,
           sessionType: 'local'
@@ -216,6 +218,11 @@ export function AppShell() {
       if (e.metaKey && e.key === 'd') {
         e.preventDefault()
         spawnSessionWithOptions(true, true)
+      }
+      // Cmd+I: New Gemini CLI session
+      if (e.metaKey && !e.shiftKey && !e.altKey && e.key === 'i') {
+        e.preventDefault()
+        spawnSessionWithOptions(false, false, true)
       }
       // Cmd+W: Close focused file tab
       if (e.metaKey && e.key === 'w') {
