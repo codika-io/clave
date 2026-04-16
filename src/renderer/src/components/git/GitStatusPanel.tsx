@@ -373,7 +373,7 @@ function RepoSection({
             cwd={cwd}
             stagedCount={0}
             totalFileCount={0}
-            allFilePaths={[]}
+            unstagedFilePaths={[]}
             ahead={status.ahead}
             behind={status.behind}
             operating={operating}
@@ -537,7 +537,7 @@ function RepoSection({
         cwd={cwd}
         stagedCount={staged.length}
         totalFileCount={staged.length + unstaged.length + untracked.length}
-        allFilePaths={[...staged, ...unstaged, ...untracked].map((f) => f.path)}
+        unstagedFilePaths={[...unstaged, ...untracked].map((f) => f.path)}
         ahead={status.ahead}
         behind={status.behind}
         operating={operating}

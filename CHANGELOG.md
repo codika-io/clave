@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.35.1] — 2026-04-16
+
+### Fixed
+- Generate commit message no longer fails when changes are already staged — previously it tried to re-stage all files including already-staged ones, causing pathspec errors on renamed or moved files
+
 ## [1.35.0] — 2026-04-14
 
 ### Fixed

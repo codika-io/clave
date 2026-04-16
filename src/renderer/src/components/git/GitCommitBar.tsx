@@ -86,7 +86,7 @@ export function CommitBar({
   cwd,
   stagedCount,
   totalFileCount,
-  allFilePaths,
+  unstagedFilePaths,
   ahead,
   behind,
   operating,
@@ -95,7 +95,7 @@ export function CommitBar({
   cwd: string
   stagedCount: number
   totalFileCount: number
-  allFilePaths: string[]
+  unstagedFilePaths: string[]
   ahead: number
   behind: number
   operating: boolean
@@ -115,9 +115,9 @@ export function CommitBar({
     const store = useSessionStore.getState()
     store.setGeneratingCommit(cwd, true)
     try {
-      // Stage all files first
-      if (allFilePaths.length > 0) {
-        await window.electronAPI.gitStage(cwd, allFilePaths)
+      // Only stage files that aren't already staged
+      if (unstagedFilePaths.length > 0) {
+        await window.electronAPI.gitStage(cwd, unstagedFilePaths)
       }
       const message = await window.electronAPI.gitGenerateCommitMessage(cwd)
       // Write to store directly so it persists even if component unmounted
@@ -129,7 +129,7 @@ export function CommitBar({
     } finally {
       useSessionStore.getState().setGeneratingCommit(cwd, false)
     }
-  }, [cwd, totalFileCount, allFilePaths, generating])
+  }, [cwd, totalFileCount, unstagedFilePaths, generating])
 
   const handleCommit = useCallback(() => {
     if (!commitMessage.trim() || stagedCount === 0) return
