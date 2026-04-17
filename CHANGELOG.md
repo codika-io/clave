@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.35.4] — 2026-04-17
+
+### Fixed
+- Generate commit message now retries once on transient failures and falls back to Sonnet when Haiku is overloaded, so the "Command failed" error that appeared ~50% of the time should be much rarer
+- Commit message generator now surfaces the real underlying error (including stderr) when the Claude CLI fails, instead of a truncated generic message
+- Bumped the commit message generation timeout from 30s to 60s to cover slower Haiku responses
+
 ## [1.35.1] — 2026-04-16
 
 ### Fixed
