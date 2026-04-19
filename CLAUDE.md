@@ -2,6 +2,8 @@
 
 Mac desktop app for managing multiple Claude Code terminal sessions. Electron + React + TypeScript.
 
+This repo also ships a Claude Code plugin marketplace at its root — `.claude-plugin/marketplace.json` + `plugins/` — so users can do `/plugin marketplace add codika-io/clave` to install clave-companion plugins (e.g. `workspace-builder`). See `plugins/CLAUDE.md` for the marketplace conventions.
+
 ## Commands
 
 - `npm run dev` — start dev (Electron window + hot reload)

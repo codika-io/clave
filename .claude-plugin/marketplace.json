@@ -1,0 +1,17 @@
+{
+  "name": "clave-marketplace",
+  "version": "1.0.0",
+  "description": "Plugin marketplace for the Clave desktop app",
+  "owner": {
+    "name": "Codika",
+    "email": "team@codika.io"
+  },
+  "plugins": [
+    {
+      "name": "workspace-builder",
+      "description": "Create and configure .clave workspace files with groups, sessions, terminals, icons, and toolbar actions",
+      "source": "./plugins/workspace-builder",
+      "category": "developer-tools"
+    }
+  ]
+}
