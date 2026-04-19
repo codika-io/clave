@@ -1,0 +1,22 @@
+{
+  "name": "workspace-builder",
+  "version": "1.0.0",
+  "description": "Create and configure `.clave` workspace files for the Clave desktop app — groups, sessions, terminals, icons, and toolbar actions.",
+  "author": {
+    "name": "Codika",
+    "email": "team@codika.io",
+    "url": "https://codika.io"
+  },
+  "homepage": "https://github.com/codika-io/clave",
+  "repository": "https://github.com/codika-io/clave-plugin",
+  "license": "MIT",
+  "keywords": [
+    "clave",
+    "workspace",
+    "groups",
+    "terminals",
+    "sessions",
+    "toolbar",
+    "desktop"
+  ]
+}
