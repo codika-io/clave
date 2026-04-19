@@ -1,4 +1,4 @@
-# Clave Plugin (`workspace-builder`)
+# Clave Plugin (`clave`)
 
 Companion agent plugin for [Clave](https://github.com/codika-io/clave) — a multi-session Claude Code desktop app. Installs one skill, `create-workspace`, that lets your coding agent generate and configure `.clave` workspace files (groups, sessions, terminals, icons, toolbar actions) from a natural-language description.
 
@@ -18,14 +18,14 @@ The `plugins` CLI auto-detects which agent tools are installed and installs into
 
 ```
 /plugin marketplace add codika-io/clave-plugin
-/plugin install workspace-builder@clave-plugin
+/plugin install clave@clave-plugin
 ```
 
 ## What's Inside
 
 | Skill | What it does |
 |---|---|
-| `workspace-builder:create-workspace` | Scaffold a `.clave` workspace file from a description. Handles groups, session configs, terminal commands, icons, and toolbar actions. |
+| `clave:create-workspace` | Scaffold a `.clave` workspace file from a description. Handles groups, session configs, terminal commands, icons, and toolbar actions. |
 
 ## Usage
 
@@ -35,7 +35,7 @@ Once installed, ask your agent things like:
 - *"Scaffold a workspace for the slideless repo with separate terminal tabs for the app, CLI, and docs."*
 - *"Add a toolbar action to my existing workspace that runs `npm test`."*
 
-The agent invokes `workspace-builder:create-workspace`, writes a valid `.clave` file to your chosen path, and you open it in Clave.
+The agent invokes `clave:create-workspace`, writes a valid `.clave` file to your chosen path, and you open it in Clave.
 
 ## About Clave
 

@@ -1,6 +1,6 @@
 # Clave Plugin
 
-Single-plugin [Open Plugin v1](https://github.com/vercel-labs/open-plugin-spec) repo. Companion to the [Clave desktop app](https://github.com/codika-io/clave) — ships `workspace-builder`, a skill for creating `.clave` workspace files via an AI agent.
+Single-plugin [Open Plugin v1](https://github.com/vercel-labs/open-plugin-spec) repo. Companion to the [Clave desktop app](https://github.com/codika-io/clave). Plugin name is `clave`; all skills surface as `/clave:<skill>` in any installed host. Ships `clave:create-workspace` — generates `.clave` workspace files via an AI agent.
 
 ## Repository Structure
 
@@ -61,7 +61,7 @@ From the repo root:
 npx plugins add .
 ```
 
-Skills surface as `/workspace-builder:<skill>` in any installed host.
+Skills surface as `/clave:<skill>` in any installed host.
 
 ## Conventions
 
