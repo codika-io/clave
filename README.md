@@ -24,6 +24,16 @@ Download the `.dmg`, drag to Applications, done.
 
 Auto-updates are built in — once installed, new versions download silently in the background.
 
+## Agent plugin
+
+Clave ships a companion agent plugin ([`codika-io/clave-plugin`](https://github.com/codika-io/clave-plugin)) that lets any Claude Code / Cursor / Open-Plugin-compatible agent generate `.clave` workspace files for you.
+
+```bash
+npx plugins add codika-io/clave-plugin
+```
+
+Then ask your agent something like *"create a clave workspace for this repo with 3 sessions"* and it writes the `.clave` file for you to open in Clave.
+
 ## Features
 
 - **Multi-session management** — Open unlimited Claude Code sessions, each in its own PTY
