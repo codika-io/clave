@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.35.5] — 2026-04-20
+
+### Added
+- Multi-repo git panel: hovering a repo name for ~2 seconds reveals a tooltip with the shortened full path, making it easy to tell apart repos with the same name
+
 ## [1.35.4] — 2026-04-17
 
 ### Fixed

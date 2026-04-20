@@ -3,6 +3,8 @@ import { useSessionStore } from '../../store/session-store'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ContextMenu } from '../ui/ContextMenu'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
+import { shortenPath } from '../../lib/utils'
 import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon } from '@heroicons/react/24/outline'
 import { buildGitTree, compactTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import { GitLogView } from './GitLogView'
@@ -730,8 +732,15 @@ function MultiRepoSection({
           <path d="M3 1.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
 
-        {/* Repo name */}
-        <span className="text-text-primary font-medium truncate">{name}</span>
+        {/* Repo name — long hover reveals the full path */}
+        <Tooltip delayDuration={2000}>
+          <TooltipTrigger asChild>
+            <span className="text-text-primary font-medium truncate">{name}</span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="font-mono">
+            {shortenPath(repoPath)}
+          </TooltipContent>
+        </Tooltip>
 
         {/* Branch badge */}
         <span className="text-text-tertiary truncate">{status.branch}</span>
