@@ -41,11 +41,19 @@ const electronAPI = {
   onClearDetected: (sessionId: string, callback: () => void) =>
     createIpcListener<[]>(`session:clear-detected:${sessionId}`, callback),
 
-  saveDiscussion: (cwd: string, claudeSessionId: string, sessionName: string) =>
-    ipcRenderer.invoke('session:save-discussion', cwd, claudeSessionId, sessionName),
+  saveDiscussion: (
+    cwd: string,
+    claudeSessionId: string,
+    sessionName: string,
+    extras?: { sessionType?: string | null; locationId?: string | null }
+  ) => ipcRenderer.invoke('session:save-discussion', cwd, claudeSessionId, sessionName, extras),
 
-  savePlan: (cwd: string, claudeSessionId: string, sessionName: string) =>
-    ipcRenderer.invoke('session:save-plan', cwd, claudeSessionId, sessionName),
+  savePlan: (
+    cwd: string,
+    claudeSessionId: string,
+    sessionName: string,
+    extras?: { sessionType?: string | null; locationId?: string | null }
+  ) => ipcRenderer.invoke('session:save-plan', cwd, claudeSessionId, sessionName, extras),
 
   // Claude history
   historyListProjects: () =>

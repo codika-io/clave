@@ -311,8 +311,18 @@ export interface ElectronAPI {
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) => () => void
   onClearDetected: (sessionId: string, callback: () => void) => () => void
-  saveDiscussion: (cwd: string, claudeSessionId: string, sessionName: string) => Promise<{ success: boolean; error?: string }>
-  savePlan: (cwd: string, claudeSessionId: string, sessionName: string) => Promise<{ success: boolean; error?: string }>
+  saveDiscussion: (
+    cwd: string,
+    claudeSessionId: string,
+    sessionName: string,
+    extras?: { sessionType?: string | null; locationId?: string | null }
+  ) => Promise<{ success: boolean; error?: string }>
+  savePlan: (
+    cwd: string,
+    claudeSessionId: string,
+    sessionName: string,
+    extras?: { sessionType?: string | null; locationId?: string | null }
+  ) => Promise<{ success: boolean; error?: string }>
   historyListProjects: () => Promise<ClaudeHistoryProject[]>
   historyLoadSessions: (projectId: string) => Promise<ClaudeHistorySession[]>
   historyLoadMessages: (sourcePath: string) => Promise<ClaudeHistoryMessage[]>

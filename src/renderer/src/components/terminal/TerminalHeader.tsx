@@ -121,7 +121,12 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
           {session.claudeMode && session.claudeSessionId && (
             <>
               <button
-                onClick={() => window.electronAPI.saveDiscussion(session.cwd, session.claudeSessionId!, session.name)}
+                onClick={() =>
+                  window.electronAPI.saveDiscussion(session.cwd, session.claudeSessionId!, session.name, {
+                    sessionType: session.sessionType,
+                    locationId: session.locationId ?? null
+                  })
+                }
                 className="btn-icon btn-icon-sm hover:bg-surface-300"
                 title="Save discussion"
               >
@@ -129,7 +134,12 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
               </button>
               {session.planFilePath && (
                 <button
-                  onClick={() => window.electronAPI.savePlan(session.cwd, session.claudeSessionId!, session.name)}
+                  onClick={() =>
+                    window.electronAPI.savePlan(session.cwd, session.claudeSessionId!, session.name, {
+                      sessionType: session.sessionType,
+                      locationId: session.locationId ?? null
+                    })
+                  }
                   className="btn-icon btn-icon-sm hover:bg-surface-300"
                   title="Save plan"
                 >

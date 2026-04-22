@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.35.6] — 2026-04-22
+
+### Fixed
+- Save discussion now finds the right transcript even after `/clear`, `/compact`, or `/resume` rotates Claude's session UUID — it falls back to matching by the session id recorded inside the JSONL, then to the most recently modified JSONL in the project folder
+- Save discussion and Save plan now show a clear error dialog when the transcript can't be found, instead of silently doing nothing
+- Save discussion and Save plan now work for remote Claude sessions — the transcript is fetched from the remote host over SFTP instead of being looked up only on the local disk
+
 ## [1.35.5] — 2026-04-20
 
 ### Added
