@@ -457,32 +457,40 @@ export function SidePanel() {
         <div className="flex-1 flex items-center justify-center px-3">
           <span className="text-xs text-text-tertiary text-center">No working directory</span>
         </div>
-      ) : (sidePanelTab === 'files' || isRemoteSession) ? (
-        <FileTree
-          cwd={cwd}
-          isCustom={isCustom}
-          onChangeFolder={handleChangeFolder}
-          onResetFolder={handleResetFolder}
-          onNavigateToFolder={handleNavigateToFolder}
-        />
-      ) : multiRepo.result.mode === 'multi' ? (
-        <MultiRepoGitPanel
-          repos={multiRepo.result.repos}
-          rootPath={multiRepo.hasNestedRepos ? cwd : null}
-          refresh={multiRepo.refresh}
-        />
-      ) : multiRepo.result.mode === 'none' ? (
-        <div className="flex-1 flex items-center justify-center px-3">
-          <span className="text-xs text-text-tertiary text-center">Not a git repository</span>
-        </div>
       ) : (
-        <GitStatusPanel
-          cwd={cwd}
-          isActive={isGitTabActive}
-          filterPrefix={isNavigatedSubfolder ? cwd : null}
-          externalStatus={singleRepoGit.status}
-          externalRefresh={singleRepoGit.refresh}
-        />
+        <>
+          {/* Keep FileTree mounted across tab switches so folder expansion state is preserved */}
+          <div className={sidePanelTab === 'files' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
+            <FileTree
+              cwd={cwd}
+              isCustom={isCustom}
+              onChangeFolder={handleChangeFolder}
+              onResetFolder={handleResetFolder}
+              onNavigateToFolder={handleNavigateToFolder}
+            />
+          </div>
+          {sidePanelTab === 'git' && (
+            multiRepo.result.mode === 'multi' ? (
+              <MultiRepoGitPanel
+                repos={multiRepo.result.repos}
+                rootPath={multiRepo.hasNestedRepos ? cwd : null}
+                refresh={multiRepo.refresh}
+              />
+            ) : multiRepo.result.mode === 'none' ? (
+              <div className="flex-1 flex items-center justify-center px-3">
+                <span className="text-xs text-text-tertiary text-center">Not a git repository</span>
+              </div>
+            ) : (
+              <GitStatusPanel
+                cwd={cwd}
+                isActive={isGitTabActive}
+                filterPrefix={isNavigatedSubfolder ? cwd : null}
+                externalStatus={singleRepoGit.status}
+                externalRefresh={singleRepoGit.refresh}
+              />
+            )
+          )}
+        </>
       )}
     </div>
   )
