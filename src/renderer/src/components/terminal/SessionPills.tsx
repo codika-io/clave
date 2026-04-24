@@ -128,6 +128,7 @@ interface ModelDetailsProps {
 function ModelDetails({ status }: ModelDetailsProps): React.ReactElement {
   const effort = status.effort?.level
   const cost = status.cost?.total_cost_usd
+  const maxWindow = effectiveMaxWindow(status)
   return (
     <div className="w-[260px] py-1">
       <div className="px-3 py-2 border-b border-border-subtle">
@@ -157,6 +158,9 @@ function ModelDetails({ status }: ModelDetailsProps): React.ReactElement {
             {status.fast_mode ? 'On' : 'Off'}
           </span>
         </Row>
+        {maxWindow != null && (
+          <Row label="Context window">{formatContextSize(maxWindow)} tokens</Row>
+        )}
         {status.output_style?.name && (
           <Row label="Output style">{status.output_style.name}</Row>
         )}
