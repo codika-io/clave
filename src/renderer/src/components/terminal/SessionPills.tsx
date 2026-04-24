@@ -11,8 +11,6 @@ interface SessionPillsProps {
 
 type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
-const EFFORT_LEVELS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
-
 const EFFORT_LABELS: Record<EffortLevel, string> = {
   low: 'Low',
   medium: 'Medium',
@@ -56,45 +54,6 @@ function effectiveMaxWindow(status: ClaudeSessionStatus): number | null {
   const id = status.model?.id ?? ''
   if (/\[1m\]$/i.test(id)) return 1_000_000
   return status.context_window?.context_window_size ?? null
-}
-
-/**
- * Wifi-style reasoning-effort indicator: five vertical bars, filled from left
- * up to the active level (1 = low, 5 = max).
- */
-function EffortBars({ level }: { level: EffortLevel }): React.ReactElement {
-  const active = EFFORT_LEVELS.indexOf(level) + 1
-  const bars = [0.3, 0.45, 0.6, 0.8, 1]
-  return (
-    <svg width="11" height="10" viewBox="0 0 11 10" fill="none" aria-hidden="true">
-      {bars.map((h, i) => {
-        const x = i * 2
-        const barHeight = h * 10
-        const y = 10 - barHeight
-        const isActive = i < active
-        return (
-          <rect
-            key={i}
-            x={x}
-            y={y}
-            width="1.4"
-            height={barHeight}
-            rx="0.4"
-            fill={isActive ? 'currentColor' : 'transparent'}
-            stroke="currentColor"
-            strokeWidth={isActive ? 0 : 0.6}
-            opacity={isActive ? 1 : 0.35}
-          />
-        )
-      })}
-    </svg>
-  )
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`
-  return `${n}`
 }
 
 function formatContextSize(size: number): string {
@@ -142,12 +101,7 @@ function ModelDetails({ status }: ModelDetailsProps): React.ReactElement {
         )}
       </div>
       <div className="py-0.5">
-        {effort && (
-          <Row label="Reasoning">
-            <EffortBars level={effort} />
-            <span>{EFFORT_LABELS[effort]}</span>
-          </Row>
-        )}
+        {effort && <Row label="Reasoning">{EFFORT_LABELS[effort]}</Row>}
         <Row label="Thinking">
           <span className={status.thinking?.enabled ? 'text-text-primary' : 'pill-muted'}>
             {status.thinking?.enabled ? 'On' : 'Off'}
@@ -178,63 +132,38 @@ export function SessionPills({ sessionId }: SessionPillsProps): React.ReactEleme
   if (!status) return null
 
   const modelLabel = formatModelLabel(status.model)
-  const ctx = status.context_window
-  const maxWindow = effectiveMaxWindow(status)
-  const currentUsage = ctx?.current_usage ?? null
-  // Compute percentage against the *real* max, not CC's effective window —
-  // otherwise the percentage jumps when crossing 200k on 1M-capable models.
-  const usedPercent = currentUsage != null && maxWindow ? (currentUsage / maxWindow) * 100 : null
+  if (!modelLabel) return null
 
-  const modelTrigger = modelLabel ? (
+  // Match the InventoryButton shape/hover so the header reads as a consistent
+  // row of clickable chips rather than a mix of pill + icon button.
+  const modelTrigger = (
     <button
       type="button"
-      className="pill hover:bg-surface-200 focus:outline-none focus-visible:bg-surface-200"
+      className="btn-icon btn-icon-sm hover:bg-surface-300 relative gap-1 px-1.5"
       title="Session details"
     >
-      <CpuChipIcon className="w-3 h-3" />
-      <span>{modelLabel}</span>
+      <CpuChipIcon className="w-3.5 h-3.5" />
+      <span className="text-[11px] font-medium leading-none">{modelLabel}</span>
     </button>
-  ) : null
+  )
+
+  if (!isVisible) return modelTrigger
 
   return (
-    <>
-      {modelTrigger &&
-        (isVisible ? (
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>{modelTrigger}</PopoverTrigger>
-            <PopoverContent
-              animated
-              open={open}
-              side="bottom"
-              align="end"
-              sideOffset={8}
-              className="p-0"
-              onOpenAutoFocus={(e) => e.preventDefault()}
-              onFocusOutside={(e) => e.preventDefault()}
-            >
-              <ModelDetails status={status} />
-            </PopoverContent>
-          </Popover>
-        ) : (
-          modelTrigger
-        ))}
-      {maxWindow != null && (
-        <span
-          className="pill"
-          title={
-            currentUsage != null
-              ? `Context: ${currentUsage.toLocaleString()} / ${maxWindow.toLocaleString()} tokens` +
-                (usedPercent != null ? ` (${usedPercent.toFixed(1)}%)` : '')
-              : `Context window: ${maxWindow.toLocaleString()} tokens`
-          }
-        >
-          <span className="tabular-nums">
-            {currentUsage != null
-              ? `${formatTokens(currentUsage)} / ${formatContextSize(maxWindow)}`
-              : formatContextSize(maxWindow)}
-          </span>
-        </span>
-      )}
-    </>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{modelTrigger}</PopoverTrigger>
+      <PopoverContent
+        animated
+        open={open}
+        side="bottom"
+        align="end"
+        sideOffset={8}
+        className="p-0"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
+      >
+        <ModelDetails status={status} />
+      </PopoverContent>
+    </Popover>
   )
 }
