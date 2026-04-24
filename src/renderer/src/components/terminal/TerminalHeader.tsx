@@ -4,6 +4,7 @@ import { useSessionStore } from '../../store/session-store'
 import { cn, safePort } from '../../lib/utils'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { InventoryButton } from '../inspector/InventoryButton'
+import { SessionPills } from './SessionPills'
 
 interface TerminalHeaderProps {
   sessionId: string
@@ -117,6 +118,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          <SessionPills sessionId={session.id} />
           <InventoryButton sessionId={session.id} cwd={session.cwd} />
           {session.claudeMode && session.claudeSessionId && (
             <>

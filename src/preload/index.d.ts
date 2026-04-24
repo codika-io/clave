@@ -39,6 +39,35 @@ export interface SessionInfo {
   claudeSessionId: string | null
 }
 
+/**
+ * Claude Code session runtime status (reported via CC's statusLine hook).
+ * All fields optional — CC only emits what's relevant for the active model.
+ */
+export interface ClaudeSessionStatus {
+  model?: { id: string; display_name?: string }
+  effort?: { level: 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+  thinking?: { enabled: boolean }
+  context_window?: {
+    total_input_tokens?: number
+    total_output_tokens?: number
+    context_window_size: number
+    current_usage: number | null
+    used_percentage: number | null
+    remaining_percentage?: number | null
+  }
+  exceeds_200k_tokens?: boolean
+  fast_mode?: boolean
+  cost?: {
+    total_cost_usd?: number
+    total_duration_ms?: number
+    total_api_duration_ms?: number
+    total_lines_added?: number
+    total_lines_removed?: number
+  }
+  agent?: { name?: string }
+  output_style?: { name?: string }
+}
+
 export interface ClaudeHistoryProject {
   id: string
   name: string
@@ -310,6 +339,7 @@ export interface ElectronAPI {
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) => () => void
+  onSessionStatus: (sessionId: string, callback: (status: ClaudeSessionStatus) => void) => () => void
   onClearDetected: (sessionId: string, callback: () => void) => () => void
   saveDiscussion: (
     cwd: string,

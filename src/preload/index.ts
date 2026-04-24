@@ -38,6 +38,9 @@ const electronAPI = {
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) =>
     createIpcListener<[string]>(`session:plan-detected:${sessionId}`, callback),
 
+  onSessionStatus: (sessionId: string, callback: (status: unknown) => void) =>
+    createIpcListener<[unknown]>(`cc-status:update:${sessionId}`, callback),
+
   onClearDetected: (sessionId: string, callback: () => void) =>
     createIpcListener<[]>(`session:clear-detected:${sessionId}`, callback),
 

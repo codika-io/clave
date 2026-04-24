@@ -469,3 +469,29 @@ body,
   letter-spacing: 0.12em;
   font-weight: 600;
 }
+
+/* ── Pills ── */
+/* Small non-interactive chips used in session headers to surface live config
+   (model, reasoning effort, context window). Share shape with .badge but with
+   richer color tokens and an icon slot. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;              /* gap-1 */
+  height: 20px;
+  padding: 0 6px;        /* px-1.5 */
+  border-radius: 9999px; /* rounded-full */
+  background-color: var(--surface-100);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: color 150ms, background-color 150ms;
+}
+.pill svg {
+  flex-shrink: 0;
+}
+.pill-muted {
+  color: var(--text-tertiary);
+}

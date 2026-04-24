@@ -2,6 +2,7 @@ import * as pty from 'node-pty'
 import { execFile, execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
 import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS, INITIAL_COMMAND_DELAY_MS } from './constants'
+import { prepareSessionSettings, disposeSession } from './session-status-manager'
 
 const isWindows = process.platform === 'win32'
 
@@ -90,12 +91,13 @@ export interface PtySession {
   folderName: string
   ptyProcess: pty.IPty
   alive: boolean
+  claudeSessionId?: string
 }
 
 class PtyManager {
   private sessions = new Map<string, PtySession>()
 
-  spawn(cwd: string, options?: PtySpawnOptions): PtySession & { claudeSessionId?: string } {
+  spawn(cwd: string, options?: PtySpawnOptions): PtySession {
     const id = randomUUID()
     const folderName = (isWindows ? cwd.split('\\') : cwd.split('/')).pop() || cwd
     const useClaudeMode = options?.claudeMode !== false && !options?.geminiMode
@@ -122,6 +124,8 @@ class PtyManager {
         if (options?.dangerousMode) {
           parts.push('--dangerously-skip-permissions')
         }
+        const settingsPath = prepareSessionSettings(claudeSessionId, id)
+        if (settingsPath) parts.push('--settings', settingsPath)
         shellArgs = ['/k', ...parts]
       }
     } else {
@@ -141,6 +145,8 @@ class PtyManager {
         if (options?.dangerousMode) {
           parts.push('--dangerously-skip-permissions')
         }
+        const settingsPath = prepareSessionSettings(claudeSessionId, id)
+        if (settingsPath) parts.push('--settings', settingsPath)
         shellArgs = ['-l', '-c', parts.join(' ')]
       }
     }
@@ -164,11 +170,13 @@ class PtyManager {
       })()
     })
 
-    const session: PtySession & { claudeSessionId?: string } = { id, cwd, folderName, ptyProcess, alive: true, claudeSessionId }
+    const session: PtySession = { id, cwd, folderName, ptyProcess, alive: true }
+    if (claudeSessionId) session.claudeSessionId = claudeSessionId
     this.sessions.set(id, session)
 
     ptyProcess.onExit(() => {
       session.alive = false
+      disposeSession(claudeSessionId)
     })
 
     // Write initial command after shell init
@@ -197,11 +205,12 @@ class PtyManager {
   }
 
   kill(id: string): void {
-    const session = this.sessions.get(id)
+    const session = this.sessions.get(id) as (PtySession & { claudeSessionId?: string }) | undefined
     if (session) {
       if (session.alive) {
         session.ptyProcess.kill()
       }
+      disposeSession(session.claudeSessionId)
       this.sessions.delete(id)
     }
   }
