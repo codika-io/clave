@@ -34,3 +34,6 @@ temp_trash/
 # Environment variables
 .env
 .certificates*
+
+# ── Entire ───────────────────────────────────────────────────
+.entire/
