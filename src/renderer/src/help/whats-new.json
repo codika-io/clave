@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.37.0",
+    "title": "Windows Support",
+    "description": "Clave now ships a Windows installer alongside every macOS release — Windows users can download a `.exe` setup directly from GitHub Releases",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.36.0",
     "title": "Model Pill",
     "description": "See the active Claude model at a glance in the terminal header — click for a popover with reasoning effort, thinking, fast mode, context window, and live session cost. Everything stays up to date via Claude Code's statusLine hook",

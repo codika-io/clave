@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.37.0] — 2026-05-03
+
+### Added
+- Windows installer is now built and attached to every GitHub Release automatically — Windows users can download a `.exe` setup alongside the macOS `.dmg`/`.zip`
+
 ## [1.36.1] — 2026-04-24
 
 ### Fixed
