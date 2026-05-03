@@ -1,94 +1,108 @@
-# Clave — Unofficial Windows Builds
+<div align="center">
 
-> This is an **unofficial fork** of [`codika-io/clave`](https://github.com/codika-io/clave), maintained by [@Matt-Santalla](https://github.com/Matt-Santalla) for the sole purpose of producing **Windows installer builds**.
->
-> The upstream project ships macOS-only releases. **No application code is changed in this fork** — the only addition is a GitHub Actions workflow (`.github/workflows/build-win.yml`) that compiles the existing cross-platform Electron app into a Windows `.exe` installer.
->
-> All credit for Clave goes to [Codika](https://github.com/codika-io). For features, design, and product direction, please go to the [upstream repository](https://github.com/codika-io/clave).
+<img width="80" height="80" alt="Clave" src="resources/icon.png" />
+
+**Clave is a macOS desktop app for managing multiple Claude Code sessions.**
+
+Open as many sessions as you need, arrange them side-by-side, and switch between them instantly.
+
+[Features](#features) · [Download](#download) · [Build from Source](#build-from-source) · [Contributing](#contributing)
+
+</div>
+
+<p align="center">
+  <img src="assets/demo.avif" alt="Clave demo" width="800" />
+</p>
 
 ---
 
-## What is Clave?
+## Download
 
-Clave is a desktop app for managing multiple [Claude Code](https://www.anthropic.com/claude-code) sessions in one window — multi-pane layouts, color-coded session groups, queued prompts, integrated git/file/SSH browsing, token usage tracking. See the [upstream README](https://github.com/codika-io/clave#readme) for the complete feature list, screenshots, and demo.
+[**Download the latest version**](https://github.com/codika-io/clave/releases/latest) (macOS Universal — Apple Silicon & Intel) · [All releases](https://github.com/codika-io/clave/releases)
 
-## Download (Windows)
+Download the `.dmg`, drag to Applications, done.
 
-> **Latest installer:** [Releases →](https://github.com/Matt-Santalla/clave/releases/latest)
+Auto-updates are built in — once installed, new versions download silently in the background.
 
-1. Download `clave-<version>-setup.exe` from the latest release.
-2. Run the installer.
-3. On first launch, sign in to Claude Code (see prerequisites below).
+## Agent plugin
 
-### Prerequisites
+Clave ships a companion agent plugin ([`codika-io/clave-plugin`](https://github.com/codika-io/clave-plugin)) that lets any Claude Code, Cursor, or other [Open-Plugin-compatible](https://github.com/vercel-labs/open-plugin-spec) coding agent generate `.clave` workspace files for you.
 
-Clave manages Claude Code — it does **not** bundle Claude Code itself. Install the CLI first:
+**Install (any Open-Plugin-compatible host — auto-detects Claude Code, Cursor, …):**
 
 ```bash
-npm install -g @anthropic-ai/claude-code
-claude
+npx plugins add codika-io/clave-plugin
 ```
 
-(Node.js 20+ required for the CLI install.)
+**Claude Code native alternative:**
 
-### First-run heads-up: SmartScreen
+```
+/plugin marketplace add codika-io/clave-plugin
+/plugin install clave@clave-plugin
+```
 
-The installer is **unsigned** (no Windows code-signing certificate — those run ~$200/yr and aren't budgeted for an unofficial fork). When you run it, Windows will show *"Windows protected your PC"*.
+Both paths produce the same `/clave:create-workspace` skill.
 
-Click **More info → Run anyway**. This is standard for indie Electron apps and does not indicate a problem.
+**Usage:** ask your agent something like *"create a clave workspace for this repo with 3 sessions"*. It writes a valid `.clave` file to your chosen path; open it in Clave.
 
-If you have a corporate-policy reason to require a signed installer, file an issue and we can discuss options.
+**Updating:**
 
-### No auto-update on Windows
+```bash
+npx plugins add codika-io/clave-plugin   # re-run to pull latest
+```
 
-Upstream's auto-updater is wired to Codika's macOS-only release feed. Windows users should check this fork's [Releases page](https://github.com/Matt-Santalla/clave/releases) periodically. A scheduled rebuild keeps releases here in sync with upstream — see [Sync cadence](#sync-cadence) below.
+(Or `/plugin update clave@clave-plugin` in Claude Code native.)
 
-## For macOS or Linux users
+**Uninstalling:** `/plugin uninstall clave@clave-plugin` in Claude Code, or the equivalent in your host.
 
-This fork exists only because there is no upstream Windows release. If you're on Mac or Linux, please use upstream:
+## Features
 
-- **macOS:** [codika-io/clave/releases](https://github.com/codika-io/clave/releases) — official `.dmg` with auto-updates
-- **Linux:** clone upstream and run `npm run build:linux`
+- **Multi-session management** — Open unlimited Claude Code sessions, each in its own PTY
+- **Session types** — Claude Code (Cmd+N), plain terminal (Cmd+T), or Dangerous Mode (Cmd+D, runs with `--dangerously-skip-permissions`)
+- **Session groups** — Organize sessions into color-coded groups with pinned configs and `.clave` files
+- **Flexible layouts** — Single, split (2-panel), or grid (4-panel) view modes
+- **Searchable sidebar** — Filter sessions by name, folder, or path
+- **Task Queue** — Queue up prompts and launch them as new Claude sessions with one click
+- **Git panel** — Status, diff viewer, commit history, stage/unstage, commit, push, pull, plus **MagicSync** (pull → stage → AI commit message → commit → push in one click) and **Git Journey** (visual commit history grouped by push batch)
+- **File browser** — Local and remote file trees with syntax-highlighted preview, markdown rendering, and Cmd+P search palette
+- **History** — Browse and search past Claude Code conversations, restart any session from history
+- **Daily Log** — AI-generated daily summaries of your work, grouped by project, with a week heatmap strip and timeline view
+- **Work Tracker** — Daily time tracking with streaks, weekly charts, and break reminders
+- **Usage analytics** — Token usage, per-day cost tracking (day/week/month), GitHub-style year-long activity heatmap
+- **SSH / Remote sessions** — Connect to remote hosts via SSH for terminal sessions and SFTP file browsing
+- **Agent chat panel** — Integrated agent chat via WebSocket connection to OpenClaw
+- **Session templates** — Launch pre-configured sessions with saved directories and modes
+- **Internationalization** — English and Simplified Chinese UI
+- **Keyboard shortcuts** — Cmd+P (file palette), Cmd+E (file tree), Cmd+T (new terminal), Cmd+N (new Claude session), Cmd+D (dangerous mode), Cmd+W (close tab)
+- **Dark / Light / Coffee themes** — Full theming for both terminal and UI
+- **URL detection** — Detects localhost URLs in terminal output and makes them clickable
+- **Native macOS feel** — Hidden inset titlebar with traffic light controls, native notifications
+- **Auto-updates** — New versions install automatically on quit via `electron-updater`
+- **Signed & notarized** — Passes macOS Gatekeeper without warnings
 
-## How Windows builds are produced
+## Requirements
 
-A GitHub Actions workflow (`.github/workflows/build-win.yml`) runs on a `windows-latest` runner:
+- macOS (Apple Silicon or Intel)
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
 
-1. Checks out this fork (which tracks upstream `main`)
-2. Installs Node 20 and project dependencies
-3. Runs `electron-builder --win` to package an NSIS installer
-4. Uploads the `.exe` as a build artifact
+## Build from source
 
-The same `.exe` is then attached to a tagged release on this fork for direct public download.
+```bash
+git clone https://github.com/codika-io/clave.git
+cd clave
+npm install
+npm run dev          # development with hot reload
+npm run build:mac    # build macOS .dmg (requires signing credentials)
+```
 
-You can trigger a build manually from the [Actions tab](https://github.com/Matt-Santalla/clave/actions/workflows/build-win.yml) → **Run workflow**, or the scheduled job will handle it (see below).
+## Tech stack
 
-## Sync cadence
+[Electron](https://www.electronjs.org/) · [React 19](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [Zustand](https://zustand.docs.pmnd.rs/) · [Tailwind CSS v4](https://tailwindcss.com/) · [Framer Motion](https://motion.dev/) · [shiki](https://shiki.style/) · [simple-git](https://github.com/steveukx/git-js) · [ssh2](https://github.com/mscdex/ssh2)
 
-This fork aims to track upstream releases on a **monthly** rebuild cadence. The version available here will usually be the most recent upstream version at the time of the last build.
+## Contributing
 
-If you need a fresh build against a newer upstream version sooner, [open an issue](https://github.com/Matt-Santalla/clave/issues/new) and a manual build will be triggered.
-
-## Reporting bugs
-
-Please direct bug reports to the right place:
-
-| Issue type | Where to report |
-|---|---|
-| The app misbehaves (UI bug, feature request, crash inside Clave) | [codika-io/clave/issues](https://github.com/codika-io/clave/issues) — this fork does not modify app code |
-| Windows installer fails, build error, SmartScreen workaround question | [Matt-Santalla/clave/issues](https://github.com/Matt-Santalla/clave/issues) |
-| Request a fresh build against latest upstream | [Matt-Santalla/clave/issues](https://github.com/Matt-Santalla/clave/issues) |
-
-## Maintenance status
-
-This is a **best-effort, single-maintainer** fork. If upstream begins shipping official Windows builds, this fork will be archived in favor of upstream.
-
-There is no commercial support or SLA. Use at your own discretion.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on reporting bugs, suggesting features, and submitting pull requests.
 
 ## License
 
-[MIT](LICENSE) — identical to upstream.
-
----
-
-*Generated workflow + fork tooling assisted by Claude Code. App code is entirely Codika's work.*
+[MIT](LICENSE)
