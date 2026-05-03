@@ -2,10 +2,11 @@ name: Build Windows Installer
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-win.yml'
+  release:
+    types: [published]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -27,8 +28,6 @@ jobs:
 
       - name: Package Windows installer
         run: npx electron-builder --win --publish never
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
@@ -39,3 +38,9 @@ jobs:
             dist/*.exe.blockmap
           if-no-files-found: error
           retention-days: 30
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        run: gh release upload ${{ github.event.release.tag_name }} dist/*setup.exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
