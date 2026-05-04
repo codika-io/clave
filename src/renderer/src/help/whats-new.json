@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.37.1",
+    "title": "Undo in the sidebar",
+    "description": "Press Cmd+Z to undo the last sidebar action — disbanding a group, dragging a session, renaming, or recoloring. Up to 50 steps are remembered.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.37.0",
     "title": "Windows Support",
     "description": "Clave now ships a Windows installer alongside every macOS release — Windows users can download a `.exe` setup directly from GitHub Releases",

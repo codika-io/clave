@@ -54,6 +54,7 @@ interface SessionState {
   generatingCommitCwds: Set<string>
   hiddenAgentIds: Set<string>
   sessionStatuses: Record<string, ClaudeSessionStatus>
+  sidebarUndoStack: SidebarSnapshot[]
   setSessionStatus: (id: string, status: ClaudeSessionStatus) => void
   clearSessionStatus: (id: string) => void
   addSession: (session: Session) => void
@@ -77,6 +78,7 @@ interface SessionState {
     targetId: string,
     position: 'before' | 'after' | 'inside'
   ) => void
+  undoSidebar: () => void
   toggleSidebar: () => void
   setSidebarWidth: (width: number) => void
   setTheme: (theme: Theme) => void
@@ -126,6 +128,47 @@ interface SessionState {
 }
 
 let groupCounter = 0
+
+type SidebarSnapshot = {
+  groups: SessionGroup[]
+  displayOrder: string[]
+  selectedSessionIds: string[]
+  focusedSessionId: string | null
+}
+
+const MAX_SIDEBAR_UNDO = 50
+
+function cloneGroupsForSnapshot(groups: SessionGroup[]): SessionGroup[] {
+  return groups.map((g) => ({
+    ...g,
+    sessionIds: [...g.sessionIds],
+    terminals: g.terminals.map((t) => ({ ...t }))
+  }))
+}
+
+function snapshotSidebar(state: {
+  groups: SessionGroup[]
+  sessions: Session[]
+  displayOrder: string[]
+  selectedSessionIds: string[]
+  focusedSessionId: string | null
+}): SidebarSnapshot {
+  return {
+    groups: cloneGroupsForSnapshot(state.groups),
+    displayOrder: [...getDisplayOrder(state)],
+    selectedSessionIds: [...state.selectedSessionIds],
+    focusedSessionId: state.focusedSessionId
+  }
+}
+
+function pushSidebarSnapshot(
+  stack: SidebarSnapshot[],
+  snap: SidebarSnapshot
+): SidebarSnapshot[] {
+  const next = stack.length >= MAX_SIDEBAR_UNDO ? stack.slice(stack.length - MAX_SIDEBAR_UNDO + 1) : stack.slice()
+  next.push(snap)
+  return next
+}
 
 export function getDisplayOrder(state: {
   sessions: Session[]
@@ -201,6 +244,7 @@ export const useSessionStore = create<SessionState>((set) => ({
     JSON.parse(localStorage.getItem('clave-hidden-agent-ids') || '[]')
   ),
   sessionStatuses: {} as Record<string, ClaudeSessionStatus>,
+  sidebarUndoStack: [] as SidebarSnapshot[],
   setSessionStatus: (id, status) =>
     set((state) => ({
       sessionStatuses: { ...state.sessionStatuses, [id]: status }
@@ -320,6 +364,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   createGroup: (sessionIds, name?) =>
     set((state) => {
+      const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
       groupCounter++
       const groupName = name || `Group ${groupCounter}`
       const firstSession = state.sessions.find((s) => sessionIds.includes(s.id))
@@ -353,13 +398,14 @@ export const useSessionStore = create<SessionState>((set) => ({
       }, [])
       if (!inserted) displayOrder.push(newGroup.id)
 
-      return { groups: [...groups, newGroup], displayOrder }
+      return { groups: [...groups, newGroup], displayOrder, sidebarUndoStack }
     }),
 
   ungroupSessions: (groupId) =>
     set((state) => {
       const group = state.groups.find((g) => g.id === groupId)
       if (!group) return {}
+      const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
 
       // Replace group ID in displayOrder with its session IDs
       const displayOrder = getDisplayOrder(state)
@@ -370,7 +416,8 @@ export const useSessionStore = create<SessionState>((set) => ({
 
       return {
         groups: state.groups.filter((g) => g.id !== groupId),
-        displayOrder
+        displayOrder,
+        sidebarUndoStack
       }
     }),
 
@@ -411,11 +458,16 @@ export const useSessionStore = create<SessionState>((set) => ({
     }),
 
   renameGroup: (groupId, name) =>
-    set((state) => ({
-      groups: state.groups.map((g) =>
-        g.id === groupId ? { ...g, name: name.trim() || 'Group' } : g
-      )
-    })),
+    set((state) => {
+      const target = state.groups.find((g) => g.id === groupId)
+      const nextName = name.trim() || 'Group'
+      if (!target || target.name === nextName) return {}
+      const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
+      return {
+        groups: state.groups.map((g) => (g.id === groupId ? { ...g, name: nextName } : g)),
+        sidebarUndoStack
+      }
+    }),
 
   toggleGroupCollapsed: (groupId) =>
     set((state) => ({
@@ -476,14 +528,19 @@ export const useSessionStore = create<SessionState>((set) => ({
     })),
 
   setGroupColor: (groupId, color) =>
-    set((state) => ({
-      groups: state.groups.map((g) =>
-        g.id === groupId ? { ...g, color } : g
-      )
-    })),
+    set((state) => {
+      const target = state.groups.find((g) => g.id === groupId)
+      if (!target || target.color === color) return {}
+      const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
+      return {
+        groups: state.groups.map((g) => (g.id === groupId ? { ...g, color } : g)),
+        sidebarUndoStack
+      }
+    }),
 
   moveItems: (itemIds, targetId, position) =>
     set((state) => {
+      const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
       const displayOrder = getDisplayOrder(state)
       const newGroups = state.groups.map((g) => ({
         ...g,
@@ -530,7 +587,41 @@ export const useSessionStore = create<SessionState>((set) => ({
       const finalGroups = newGroups.filter((g) => g.sessionIds.length > 0)
       const finalDisplayOrder = displayOrder.filter((id) => !emptyGroupIds.includes(id))
 
-      return { displayOrder: finalDisplayOrder, groups: finalGroups }
+      return { displayOrder: finalDisplayOrder, groups: finalGroups, sidebarUndoStack }
+    }),
+
+  undoSidebar: () =>
+    set((state) => {
+      if (state.sidebarUndoStack.length === 0) return {}
+      const snap = state.sidebarUndoStack[state.sidebarUndoStack.length - 1]
+      const sidebarUndoStack = state.sidebarUndoStack.slice(0, -1)
+      const validSessionIds = new Set(state.sessions.map((s) => s.id))
+      const restoredGroups = snap.groups
+        .map((g) => ({
+          ...g,
+          sessionIds: g.sessionIds.filter((sid) => validSessionIds.has(sid)),
+          terminals: g.terminals.map((t) => ({
+            ...t,
+            sessionId: t.sessionId && validSessionIds.has(t.sessionId) ? t.sessionId : null
+          }))
+        }))
+        .filter((g) => g.sessionIds.length > 0)
+      const restoredGroupIds = new Set(restoredGroups.map((g) => g.id))
+      const displayOrder = snap.displayOrder.filter(
+        (id) => validSessionIds.has(id) || restoredGroupIds.has(id)
+      )
+      const focusedSessionId =
+        snap.focusedSessionId && validSessionIds.has(snap.focusedSessionId)
+          ? snap.focusedSessionId
+          : state.focusedSessionId
+      const selectedSessionIds = snap.selectedSessionIds.filter((sid) => validSessionIds.has(sid))
+      return {
+        groups: restoredGroups,
+        displayOrder,
+        focusedSessionId,
+        selectedSessionIds: selectedSessionIds.length > 0 ? selectedSessionIds : state.selectedSessionIds,
+        sidebarUndoStack
+      }
     }),
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),

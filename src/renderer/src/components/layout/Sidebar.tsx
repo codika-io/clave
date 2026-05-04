@@ -107,6 +107,7 @@ export function Sidebar() {
   const displayOrder = useSessionStore((s) => s.displayOrder)
   const createGroup = useSessionStore((s) => s.createGroup)
   const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
+  const undoSidebar = useSessionStore((s) => s.undoSidebar)
   const deleteGroup = useSessionStore((s) => s.deleteGroup)
   const setGroupColor = useSessionStore((s) => s.setGroupColor)
   const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
@@ -292,10 +293,23 @@ export function Sidebar() {
           setResetConfirmOpen(true)
         }
       }
+      // Cmd+Z: undo last sidebar group/move/rename action
+      if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
+        const target = e.target as HTMLElement | null
+        const tag = target?.tagName
+        const editable =
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          (target instanceof HTMLElement && target.isContentEditable)
+        if (editable) return
+        if (useSessionStore.getState().sidebarUndoStack.length === 0) return
+        e.preventDefault()
+        undoSidebar()
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [createGroup, ungroupSessions])
+  }, [createGroup, ungroupSessions, undoSidebar])
 
   // Initialize .clave file watchers + load workspace config
   useEffect(() => {

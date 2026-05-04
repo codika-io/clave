@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.37.1] — 2026-05-04
+
+### Added
+- Cmd+Z in the sidebar now undoes the last group/move/rename/recolor action — accidentally disbanding a group or dragging a session into the wrong place is no longer permanent
+
 ## [1.37.0] — 2026-05-03
 
 ### Added
