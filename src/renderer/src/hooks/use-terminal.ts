@@ -127,9 +127,35 @@ export function useTerminal(sessionId: string) {
       window.electronAPI.writeSession(sessionId, data)
     })
 
-    // Wire terminal resize -> PTY
-    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
+    // Wire terminal resize -> PTY.
+    // Debounce: during a Framer Motion layout animation, ResizeObserver fires
+    // many fits in quick succession. Each one would send SIGWINCH to the PTY,
+    // causing Claude Code (Ink TUI) to repaint the alt-screen at every
+    // intermediate width. Those overlapping repaints land in xterm cells that
+    // have just been reflowed again — producing duplicated fragments and rows
+    // with wrong character counts. We let xterm fit visually as often as
+    // needed, but only forward the *settled* size to the PTY so SIGWINCH fires
+    // exactly once and Claude Code redraws exactly once.
+    let pendingResize: { cols: number; rows: number } | null = null
+    let resizeIpcTimer: ReturnType<typeof setTimeout> | null = null
+    let lastSentCols = terminal.cols
+    let lastSentRows = terminal.rows
+    const flushResize = () => {
+      resizeIpcTimer = null
+      if (!pendingResize) return
+      const { cols, rows } = pendingResize
+      pendingResize = null
+      if (cols === lastSentCols && rows === lastSentRows) return
+      lastSentCols = cols
+      lastSentRows = rows
       window.electronAPI.resizeSession(sessionId, cols, rows)
+    }
+    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
+      pendingResize = { cols, rows }
+      if (resizeIpcTimer) clearTimeout(resizeIpcTimer)
+      // 220ms covers the 200ms Framer Motion panel animation; any fits triggered
+      // within that window collapse into a single SIGWINCH on the trailing edge.
+      resizeIpcTimer = setTimeout(flushResize, 220)
     })
 
     const { setSessionActivity, setSessionPromptWaiting, setSessionDetectedUrl, setSessionServerStatus, setSessionServerCommand, setSessionUnseenActivity, updateSessionAlive, autoRenameSession, resetSessionName, setSessionPlanFile, setSessionStatus } = useSessionStore.getState()
@@ -286,24 +312,19 @@ export function useTerminal(sessionId: string) {
     })
 
     // ResizeObserver for auto-fitting.
-    // Double-fit: the first fit runs immediately in rAF, the second runs after
-    // a delay long enough to outlive Framer Motion's 200ms panel animation so
-    // the final fit captures the settled width rather than an intermediate one.
-    // After the final fit, refresh the viewport to clear any residual glyphs
-    // left by the DOM renderer while the container width was interpolating.
+    // Trailing-only debounce: during a Framer Motion animation the observer
+    // fires dozens of times. Fitting on every entry would resize xterm's grid
+    // to many intermediate widths in succession; combined with the PTY
+    // resize debounce above, an immediate fit would also let xterm rewrap
+    // the buffer while Claude Code is still producing output for the old
+    // width. We wait until width has settled, then fit once and refresh to
+    // clear any glyphs left over from the interpolated widths.
     let resizeTimer: ReturnType<typeof setTimeout> | null = null
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (!entry) return
       const { width, height } = entry.contentRect
       if (width === 0 || height === 0) return
-      requestAnimationFrame(() => {
-        try {
-          fitAddon.fit()
-        } catch {
-          // ignore fit errors during layout transitions
-        }
-      })
       if (resizeTimer) clearTimeout(resizeTimer)
       resizeTimer = setTimeout(() => {
         try {
@@ -416,6 +437,7 @@ export function useTerminal(sessionId: string) {
       container.removeEventListener('drop', handleDrop, true)
       clearInterval(portCheckInterval)
       if (resizeTimer) clearTimeout(resizeTimer)
+      if (resizeIpcTimer) clearTimeout(resizeIpcTimer)
       if (activityTimer) clearTimeout(activityTimer)
       if (activeStartTimer) clearTimeout(activeStartTimer)
       if (notificationTimer) clearTimeout(notificationTimer)
@@ -455,14 +477,13 @@ export function useTerminal(sessionId: string) {
     }
     let pendingFitTimer: ReturnType<typeof setTimeout> | null = null
     const scheduleFit = () => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          try { fitAddonRef.current?.fit() } catch { /* ignore */ }
-        })
-      })
       if (pendingFitTimer) clearTimeout(pendingFitTimer)
       // 300ms outlasts Framer Motion's 200ms panel/sidebar animation so the
-      // final fit observes the settled width. Refresh clears stale glyphs.
+      // final fit observes the settled width. We deliberately do NOT fit
+      // immediately: each intermediate fit during the animation would tell
+      // the PTY (or at least xterm's grid) a new column count, and the TUI
+      // would race to redraw at widths it never settles at — producing the
+      // duplicated/short/long rows the user saw. Refresh clears stale glyphs.
       pendingFitTimer = setTimeout(() => {
         try {
           fitAddonRef.current?.fit()

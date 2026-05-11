@@ -199,9 +199,29 @@ export function useRemoteTerminal(shellId: string) {
       window.electronAPI.sshShellWrite(shellId, data)
     })
 
-    // Wire terminal resize -> SSH shell
-    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
+    // Wire terminal resize -> SSH shell.
+    // Debounced for the same reason as the local PTY path: collapse the
+    // SIGWINCH burst Framer Motion would otherwise produce during a panel
+    // animation into a single resize at the settled size. See use-terminal.ts
+    // for the full rationale.
+    let pendingResize: { cols: number; rows: number } | null = null
+    let resizeIpcTimer: ReturnType<typeof setTimeout> | null = null
+    let lastSentCols = terminal.cols
+    let lastSentRows = terminal.rows
+    const flushResize = () => {
+      resizeIpcTimer = null
+      if (!pendingResize) return
+      const { cols, rows } = pendingResize
+      pendingResize = null
+      if (cols === lastSentCols && rows === lastSentRows) return
+      lastSentCols = cols
+      lastSentRows = rows
       window.electronAPI.sshShellResize(shellId, cols, rows)
+    }
+    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
+      pendingResize = { cols, rows }
+      if (resizeIpcTimer) clearTimeout(resizeIpcTimer)
+      resizeIpcTimer = setTimeout(flushResize, 220)
     })
 
     const { setSessionActivity, setSessionPromptWaiting, setSessionDetectedUrl, setSessionServerStatus, setSessionUnseenActivity, updateSessionAlive } =
@@ -335,13 +355,6 @@ export function useRemoteTerminal(shellId: string) {
       if (!entry) return
       const { width, height } = entry.contentRect
       if (width === 0 || height === 0) return
-      requestAnimationFrame(() => {
-        try {
-          fitAddon.fit()
-        } catch {
-          // ignore fit errors during layout transitions
-        }
-      })
       if (resizeTimer) clearTimeout(resizeTimer)
       resizeTimer = setTimeout(() => {
         try {
@@ -381,6 +394,7 @@ export function useRemoteTerminal(shellId: string) {
     return () => {
       clearInterval(portCheckInterval)
       if (resizeTimer) clearTimeout(resizeTimer)
+      if (resizeIpcTimer) clearTimeout(resizeIpcTimer)
       if (activityTimer) clearTimeout(activityTimer)
       if (activeStartTimer) clearTimeout(activeStartTimer)
       if (notificationTimer) clearTimeout(notificationTimer)
@@ -414,11 +428,6 @@ export function useRemoteTerminal(shellId: string) {
     }
     let pendingFitTimer: ReturnType<typeof setTimeout> | null = null
     const scheduleFit = () => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          try { fitAddonRef.current?.fit() } catch { /* ignore */ }
-        })
-      })
       if (pendingFitTimer) clearTimeout(pendingFitTimer)
       pendingFitTimer = setTimeout(() => {
         try {

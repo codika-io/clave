@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.37.2] — 2026-05-11
+
+### Fixed
+- Terminal text no longer gets duplicated, truncated, or mojibaked when you toggle the sidebar / file tree or view sessions side-by-side — Framer Motion's panel animation used to fire dozens of SIGWINCH signals to the PTY during a single resize, causing Claude Code to repaint the conversation into the scrollback over and over. The PTY now receives exactly one resize at the settled size, so the conversation stays readable and scrollback isn't bloated with duplicates
+
 ## [1.37.1] — 2026-05-04
 
 ### Added
