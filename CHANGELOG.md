@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.37.3] — 2026-05-15
+
+### Fixed
+- Claude Code's welcome banner now renders at full width when you spawn a session, instead of appearing as a mangled sliver. The PTY used to be born at a fixed 80×24, so the welcome banner was laid out for 80 columns and then garbled when xterm reflowed to your actual terminal width. The PTY now waits until the terminal has measured itself before starting Claude, so the banner is laid out for the real width from the start
+- Your custom `statusLine` from `~/.claude/settings.json` is now preserved inside Clave sessions — Clave's own status hook used to override it entirely, hiding the context-fill bar and any other bottom-bar metadata you'd configured. Clave now chains the user's statusLine command through its hook so both Clave's pills and your own bottom-bar appear
+- The bash interactive prompt, macOS "default shell is now zsh" notice, and the echoed `claude …` command no longer flash on screen at session start — Claude is now exec'd directly by a non-interactive shell
+
 ## [1.37.2] — 2026-05-11
 
 ### Fixed

@@ -117,9 +117,35 @@ export function initSessionStatusManager(): void {
 }
 
 /**
+ * Read the user's global `~/.claude/settings.json` statusLine command (if any),
+ * so we can chain it inside our hook and keep the user's bottom-bar visible.
+ */
+function readUserStatusLineCommand(): string | null {
+  try {
+    const settingsPath = path.join(os.homedir(), '.claude', 'settings.json')
+    if (!fs.existsSync(settingsPath)) return null
+    const raw = fs.readFileSync(settingsPath, 'utf8')
+    const parsed = JSON.parse(raw) as { statusLine?: { type?: string; command?: string } }
+    const sl = parsed?.statusLine
+    if (!sl || sl.type !== 'command' || typeof sl.command !== 'string' || !sl.command.trim()) {
+      return null
+    }
+    return sl.command
+  } catch (err) {
+    console.warn('[session-status] could not read user statusLine:', err)
+    return null
+  }
+}
+
+/**
  * Prepare a per-session settings file that injects our statusLine hook.
  * Returns the settings file path to pass to `claude --settings <path>`,
  * or null if setup failed (caller should spawn without the flag).
+ *
+ * The hook script captures the status JSON for our session pills AND forwards
+ * stdin to the user's own statusLine command (if configured), printing its
+ * output so claude's visible bottom-bar still shows whatever the user set up
+ * in `~/.claude/settings.json`.
  */
 export function prepareSessionSettings(claudeSessionId: string, claveSessionId: string): string | null {
   try {
@@ -129,10 +155,13 @@ export function prepareSessionSettings(claudeSessionId: string, claveSessionId: 
       console.warn('[session-status] hook script missing:', hook)
       return null
     }
+    const userCmd = readUserStatusLineCommand()
+    const args = [shellQuote(hook), shellQuote(claudeSessionId), shellQuote(outDir)]
+    if (userCmd) args.push(shellQuote(userCmd))
     const settings = {
       statusLine: {
         type: 'command',
-        command: `${shellQuote(hook)} ${shellQuote(claudeSessionId)} ${shellQuote(outDir)}`
+        command: args.join(' ')
       }
     }
     const settingsPath = path.join(sdir, `${claudeSessionId}.json`)

@@ -19,6 +19,9 @@ const electronAPI = {
 
   writeSession: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),
 
+  startSession: (id: string, cols: number, rows: number) =>
+    ipcRenderer.send('pty:start', id, cols, rows),
+
   resizeSession: (id: string, cols: number, rows: number) =>
     ipcRenderer.send('pty:resize', id, cols, rows),
 

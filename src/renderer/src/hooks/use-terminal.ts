@@ -67,7 +67,6 @@ export function useTerminal(sessionId: string) {
       cursorStyle: 'bar',
       allowTransparency: false,
       scrollback: 10000,
-      convertEol: true,
       linkHandler: {
         activate: (_event, text) => {
           window.electronAPI.openExternal(text)
@@ -80,8 +79,10 @@ export function useTerminal(sessionId: string) {
 
     terminal.open(container)
 
+    let hasFit = false
     if (container.offsetWidth > 0 && container.offsetHeight > 0) {
       fitAddon.fit()
+      hasFit = true
     }
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
@@ -128,34 +129,20 @@ export function useTerminal(sessionId: string) {
     })
 
     // Wire terminal resize -> PTY.
-    // Debounce: during a Framer Motion layout animation, ResizeObserver fires
-    // many fits in quick succession. Each one would send SIGWINCH to the PTY,
-    // causing Claude Code (Ink TUI) to repaint the alt-screen at every
-    // intermediate width. Those overlapping repaints land in xterm cells that
-    // have just been reflowed again — producing duplicated fragments and rows
-    // with wrong character counts. We let xterm fit visually as often as
-    // needed, but only forward the *settled* size to the PTY so SIGWINCH fires
-    // exactly once and Claude Code redraws exactly once.
-    let pendingResize: { cols: number; rows: number } | null = null
-    let resizeIpcTimer: ReturnType<typeof setTimeout> | null = null
+    // We rely on the *fit* being debounced (ResizeObserver below + scheduleFit
+    // in the layout effect both wait for the animation to settle). xterm only
+    // fires onResize when fit actually changes the grid, so by the time we
+    // get here the size has already settled — forward to the PTY immediately
+    // so xterm grid and PTY winsize stay in lockstep. A stale debounce here
+    // is what produced the "PTY says N cols, xterm grid says M cols" drift
+    // that corrupts the screen during resize.
     let lastSentCols = terminal.cols
     let lastSentRows = terminal.rows
-    const flushResize = () => {
-      resizeIpcTimer = null
-      if (!pendingResize) return
-      const { cols, rows } = pendingResize
-      pendingResize = null
+    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
       if (cols === lastSentCols && rows === lastSentRows) return
       lastSentCols = cols
       lastSentRows = rows
       window.electronAPI.resizeSession(sessionId, cols, rows)
-    }
-    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
-      pendingResize = { cols, rows }
-      if (resizeIpcTimer) clearTimeout(resizeIpcTimer)
-      // 220ms covers the 200ms Framer Motion panel animation; any fits triggered
-      // within that window collapse into a single SIGWINCH on the trailing edge.
-      resizeIpcTimer = setTimeout(flushResize, 220)
     })
 
     const { setSessionActivity, setSessionPromptWaiting, setSessionDetectedUrl, setSessionServerStatus, setSessionServerCommand, setSessionUnseenActivity, updateSessionAlive, autoRenameSession, resetSessionName, setSessionPlanFile, setSessionStatus } = useSessionStore.getState()
@@ -337,8 +324,23 @@ export function useTerminal(sessionId: string) {
     })
     resizeObserver.observe(container)
 
-    // Initial resize sync
-    window.electronAPI.resizeSession(sessionId, terminal.cols, terminal.rows)
+    // Start the PTY at the real, post-fit cols/rows. We deliberately defer
+    // pty.spawn() in main until this point so claude/gemini are born at the
+    // correct size — otherwise their welcome banner is laid out for 80×24
+    // and then garbled when xterm reflows to the real width. If fit hasn't
+    // run yet (container size 0), the ResizeObserver path will trigger
+    // startSession via promote-on-first-resize in the main process once the
+    // container has settled. We only call startSession once.
+    let hasStarted = false
+    const startIfPossible = (): void => {
+      if (hasStarted) return
+      if (terminal.cols < 2 || terminal.rows < 2) return
+      hasStarted = true
+      lastSentCols = terminal.cols
+      lastSentRows = terminal.rows
+      window.electronAPI.startSession(sessionId, terminal.cols, terminal.rows)
+    }
+    if (hasFit) startIfPossible()
 
     // Drag-and-drop file path insertion
     // Use capture phase so we intercept before xterm's internal elements
@@ -437,7 +439,6 @@ export function useTerminal(sessionId: string) {
       container.removeEventListener('drop', handleDrop, true)
       clearInterval(portCheckInterval)
       if (resizeTimer) clearTimeout(resizeTimer)
-      if (resizeIpcTimer) clearTimeout(resizeIpcTimer)
       if (activityTimer) clearTimeout(activityTimer)
       if (activeStartTimer) clearTimeout(activeStartTimer)
       if (notificationTimer) clearTimeout(notificationTimer)

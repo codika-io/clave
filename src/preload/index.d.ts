@@ -332,6 +332,7 @@ export interface DownloadProgress {
 export interface ElectronAPI {
   spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
+  startSession: (id: string, cols: number, rows: number) => void
   resizeSession: (id: string, cols: number, rows: number) => void
   killSession: (id: string) => Promise<void>
   listSessions: () => Promise<SessionInfo[]>

@@ -3,6 +3,9 @@ import { ptyManager, type PtySpawnOptions } from '../pty-manager'
 import * as titleGenerator from '../title-generator'
 
 export function registerPtyHandlers(): void {
+  // Buffer PTY input per session to detect /clear command
+  const inputBuffers = new Map<string, string>()
+
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: PtySpawnOptions) => {
     const session = ptyManager.spawn(cwd, options)
     const win = BrowserWindow.fromWebContents(_event.sender)
@@ -14,19 +17,23 @@ export function registerPtyHandlers(): void {
       titleGenerator.scheduleTitleGeneration(session.id, session.cwd, session.claudeSessionId, win)
     }
 
-    session.ptyProcess.onData((data) => {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send(`pty:data:${session.id}`, data)
+    // Attach listeners now so the channels are ready before the renderer
+    // triggers the actual pty.spawn() via pty:start (or first pty:resize).
+    ptyManager.attachListeners(
+      session.id,
+      (data) => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(`pty:data:${session.id}`, data)
+        }
+      },
+      (exitCode) => {
+        titleGenerator.cleanup(session.id)
+        inputBuffers.delete(session.id)
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(`pty:exit:${session.id}`, exitCode)
+        }
       }
-    })
-
-    session.ptyProcess.onExit(({ exitCode }) => {
-      titleGenerator.cleanup(session.id)
-      inputBuffers.delete(session.id)
-      if (win && !win.isDestroyed()) {
-        win.webContents.send(`pty:exit:${session.id}`, exitCode)
-      }
-    })
+    )
 
     if (session.claudeSessionId) {
       console.log(
@@ -43,8 +50,11 @@ export function registerPtyHandlers(): void {
     }
   })
 
-  // Buffer PTY input per session to detect /clear command
-  const inputBuffers = new Map<string, string>()
+  // Renderer calls this once xterm has been fit, so claude/gemini are spawned
+  // at the real cols/rows instead of the default 80×24.
+  ipcMain.on('pty:start', (_event, id: string, cols: number, rows: number) => {
+    ptyManager.start(id, cols, rows)
+  })
 
   ipcMain.on('pty:write', (_event, id: string, data: string) => {
     // Track input to detect /clear command

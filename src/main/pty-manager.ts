@@ -85,31 +85,48 @@ export interface PtySpawnOptions {
   autoExecute?: boolean
 }
 
+interface PendingSpawn {
+  shellArgs: string[]
+  cwd: string
+  initialCommand?: string
+  autoExecute?: boolean
+}
+
 export interface PtySession {
   id: string
   cwd: string
   folderName: string
-  ptyProcess: pty.IPty
+  ptyProcess: pty.IPty | null
   alive: boolean
   claudeSessionId?: string
+  pending?: PendingSpawn
+  onData?: (data: string) => void
+  onExit?: (exitCode: number) => void
 }
 
 class PtyManager {
   private sessions = new Map<string, PtySession>()
 
+  /**
+   * Plan a PTY spawn but defer the actual `pty.spawn()` until the renderer
+   * has fit its xterm and reported real cols/rows. This avoids the TUI
+   * (claude/gemini) being born at the default 80×24 and then being mangled
+   * by xterm's reflow when the renderer resizes to the real width.
+   *
+   * `start(id, cols, rows)` finalises the spawn at the correct size.
+   */
   spawn(cwd: string, options?: PtySpawnOptions): PtySession {
     const id = randomUUID()
     const folderName = (isWindows ? cwd.split('\\') : cwd.split('/')).pop() || cwd
     const useClaudeMode = options?.claudeMode !== false && !options?.geminiMode
     const useGeminiMode = options?.geminiMode === true
 
-    // For Claude mode: generate a session ID upfront (or reuse one for resume)
     let claudeSessionId: string | undefined
     let shellArgs: string[]
     if (isWindows) {
-      // On Windows, use cmd.exe with /k to launch cli (keeps shell alive on exit/error)
+      // Windows: cmd.exe with /c to exec the command directly (no echoed prompt).
       if (useGeminiMode) {
-        shellArgs = ['/k', 'gemini']
+        shellArgs = ['/c', 'gemini']
       } else if (!useClaudeMode) {
         shellArgs = []
       } else {
@@ -121,14 +138,14 @@ class PtyManager {
           claudeSessionId = options?.claudeSessionId ?? randomUUID()
           parts.push('--session-id', claudeSessionId)
         }
-        if (options?.dangerousMode) {
-          parts.push('--dangerously-skip-permissions')
-        }
+        if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
         const settingsPath = prepareSessionSettings(claudeSessionId, id)
         if (settingsPath) parts.push('--settings', settingsPath)
-        shellArgs = ['/k', ...parts]
+        shellArgs = ['/c', ...parts]
       }
     } else {
+      // POSIX: -l -c '<cmd>' runs the command non-interactively (no echo, no
+      // prompt, no rc-file chatter like the macOS bash→zsh notice).
       if (useGeminiMode) {
         shellArgs = ['-l', '-c', 'gemini']
       } else if (!useClaudeMode) {
@@ -142,22 +159,69 @@ class PtyManager {
           claudeSessionId = options?.claudeSessionId ?? randomUUID()
           parts.push('--session-id', claudeSessionId)
         }
-        if (options?.dangerousMode) {
-          parts.push('--dangerously-skip-permissions')
-        }
+        if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
         const settingsPath = prepareSessionSettings(claudeSessionId, id)
         if (settingsPath) parts.push('--settings', settingsPath)
         shellArgs = ['-l', '-c', parts.join(' ')]
       }
     }
 
+    const session: PtySession = {
+      id,
+      cwd,
+      folderName,
+      ptyProcess: null,
+      alive: true,
+      pending: {
+        shellArgs,
+        cwd,
+        initialCommand: options?.initialCommand,
+        autoExecute: options?.autoExecute
+      }
+    }
+    if (claudeSessionId) session.claudeSessionId = claudeSessionId
+    this.sessions.set(id, session)
+    return session
+  }
+
+  /**
+   * Register the data/exit listeners that should be wired up as soon as the
+   * underlying pty.spawn() runs. Must be called BEFORE start().
+   */
+  attachListeners(
+    id: string,
+    onData: (data: string) => void,
+    onExit: (exitCode: number) => void
+  ): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    session.onData = onData
+    session.onExit = onExit
+  }
+
+  /**
+   * Actually spawn the PTY at the renderer-measured cols/rows. Safe to call
+   * once per session id; subsequent calls just resize.
+   */
+  start(id: string, cols: number, rows: number): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    if (session.ptyProcess) {
+      // Already started — treat as resize.
+      if (session.alive) session.ptyProcess.resize(cols, rows)
+      return
+    }
+    if (!session.pending) return
+    const { shellArgs, cwd, initialCommand, autoExecute } = session.pending
+    session.pending = undefined
+
     const shellName = getUserShell()
     const ptyName = isWindows ? undefined : 'xterm-256color'
 
     const ptyProcess = pty.spawn(shellName, shellArgs, {
       name: ptyName,
-      cols: DEFAULT_TERMINAL_COLS,
-      rows: DEFAULT_TERMINAL_ROWS,
+      cols: Math.max(1, cols),
+      rows: Math.max(1, rows),
       cwd,
       env: (() => {
         const env: Record<string, string> = {
@@ -170,44 +234,48 @@ class PtyManager {
       })()
     })
 
-    const session: PtySession = { id, cwd, folderName, ptyProcess, alive: true }
-    if (claudeSessionId) session.claudeSessionId = claudeSessionId
-    this.sessions.set(id, session)
+    session.ptyProcess = ptyProcess
 
-    ptyProcess.onExit(() => {
+    if (session.onData) {
+      ptyProcess.onData(session.onData)
+    }
+    ptyProcess.onExit(({ exitCode }) => {
       session.alive = false
-      disposeSession(claudeSessionId)
+      disposeSession(session.claudeSessionId)
+      session.onExit?.(exitCode)
     })
 
-    // Write initial command after shell init
-    if (options?.initialCommand) {
-      const cmd = options.initialCommand
-      const execute = options.autoExecute === true
+    // For plain-shell mode (no claude/gemini), honour an explicit initialCommand.
+    if (initialCommand) {
       setTimeout(() => {
-        if (session.alive) {
-          ptyProcess.write(execute ? cmd + '\r' : cmd)
+        if (session.alive && session.ptyProcess) {
+          session.ptyProcess.write(autoExecute === true ? initialCommand + '\r' : initialCommand)
         }
       }, INITIAL_COMMAND_DELAY_MS)
     }
-
-    return session
   }
 
   write(id: string, data: string): void {
-    this.sessions.get(id)?.ptyProcess.write(data)
+    this.sessions.get(id)?.ptyProcess?.write(data)
   }
 
   resize(id: string, cols: number, rows: number): void {
     const session = this.sessions.get(id)
-    if (session?.alive) {
-      session.ptyProcess.resize(cols, rows)
+    if (!session) return
+    if (!session.ptyProcess) {
+      // Not yet started — promote first resize into start().
+      this.start(id, cols, rows)
+      return
+    }
+    if (session.alive) {
+      session.ptyProcess.resize(Math.max(1, cols), Math.max(1, rows))
     }
   }
 
   kill(id: string): void {
-    const session = this.sessions.get(id) as (PtySession & { claudeSessionId?: string }) | undefined
+    const session = this.sessions.get(id)
     if (session) {
-      if (session.alive) {
+      if (session.alive && session.ptyProcess) {
         session.ptyProcess.kill()
       }
       disposeSession(session.claudeSessionId)
@@ -234,5 +302,8 @@ class PtyManager {
     }
   }
 }
+
+// Re-export the default constants so existing imports remain valid.
+export { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS }
 
 export const ptyManager = new PtyManager()
