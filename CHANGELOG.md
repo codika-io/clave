@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.38.0] — 2026-05-15
+
+### Added
+- The Git panel now shows a **Publish Branch** button when you're on a branch that has no upstream — committing on a new local branch used to look silent because the Push button only appeared when `ahead > 0` relative to a remote, which an unpublished branch never has. The Publish Branch button replaces Push in that state, shows the unpublished commit count, and runs `git push -u origin <branch>` so the branch is tracked from then on
+
 ## [1.37.3] — 2026-05-15
 
 ### Fixed

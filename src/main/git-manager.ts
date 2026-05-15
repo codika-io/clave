@@ -22,6 +22,7 @@ export interface GitStatusResult {
   branch: string
   ahead: number
   behind: number
+  hasUpstream: boolean
   files: GitFileStatus[]
   repoRoot: string
 }
@@ -217,6 +218,14 @@ class GitManager {
   async push(cwd: string): Promise<void> {
     const git = simpleGit(cwd)
     await git.push()
+  }
+
+  async publishBranch(cwd: string): Promise<void> {
+    const git = simpleGit(cwd)
+    const status = await git.status()
+    const branch = status.current
+    if (!branch) throw new Error('Could not determine current branch')
+    await git.push(['-u', 'origin', branch])
   }
 
   async pull(cwd: string, strategy: 'auto' | 'merge' | 'rebase' | 'ff-only' = 'auto'): Promise<void> {
@@ -704,7 +713,15 @@ No quotes, no markdown, no extra formatting. Just two lines of plain text.`
       const isRepo = await git.checkIsRepo()
 
       if (!isRepo) {
-        return { isRepo: false, branch: '', ahead: 0, behind: 0, files: [], repoRoot: '' }
+        return {
+          isRepo: false,
+          branch: '',
+          ahead: 0,
+          behind: 0,
+          hasUpstream: false,
+          files: [],
+          repoRoot: ''
+        }
       }
 
       const [status, repoRoot] = await Promise.all([
@@ -712,16 +729,38 @@ No quotes, no markdown, no extra formatting. Just two lines of plain text.`
         git.revparse(['--show-toplevel']).then((r) => r.trim())
       ])
 
+      const hasUpstream = status.tracking != null && status.tracking !== ''
+      let ahead = status.ahead
+      if (!hasUpstream && status.current) {
+        // Count commits on HEAD not present on any remote ref — so the user sees
+        // an accurate "unpublished commits" count for an unpublished branch.
+        try {
+          const out = await git.raw(['rev-list', '--count', 'HEAD', '--not', '--remotes'])
+          ahead = parseInt(out.trim(), 10) || 0
+        } catch {
+          ahead = 0
+        }
+      }
+
       return {
         isRepo: true,
         branch: status.current ?? '',
-        ahead: status.ahead,
+        ahead,
         behind: status.behind,
+        hasUpstream,
         files: mapFiles(status),
         repoRoot
       }
     } catch {
-      return { isRepo: false, branch: '', ahead: 0, behind: 0, files: [], repoRoot: '' }
+      return {
+        isRepo: false,
+        branch: '',
+        ahead: 0,
+        behind: 0,
+        hasUpstream: false,
+        files: [],
+        repoRoot: ''
+      }
     }
   }
 }

@@ -163,6 +163,7 @@ const electronAPI = {
   gitUnstage: (cwd: string, files: string[]) => ipcRenderer.invoke('git:unstage', cwd, files),
   gitCommit: (cwd: string, message: string) => ipcRenderer.invoke('git:commit', cwd, message),
   gitPush: (cwd: string) => ipcRenderer.invoke('git:push', cwd),
+  gitPublishBranch: (cwd: string) => ipcRenderer.invoke('git:publish-branch', cwd),
   gitPull: (cwd: string, strategy?: 'auto' | 'merge' | 'rebase' | 'ff-only') => ipcRenderer.invoke('git:pull', cwd, strategy),
   gitDiscard: (cwd: string, files: Array<{ path: string; status: string; staged: boolean }>) =>
     ipcRenderer.invoke('git:discard', cwd, files),

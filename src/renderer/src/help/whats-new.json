@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.38.0",
+    "title": "Publish Branch from the Git panel",
+    "description": "Committing on a brand-new local branch now surfaces a Publish Branch button in the Git panel — it pushes the branch to origin with upstream tracking so your commits don't sit there invisibly.",
+    "action": { "type": "navigate", "target": "side:git" }
+  },
+  {
     "version": "1.37.1",
     "title": "Undo in the sidebar",
     "description": "Press Cmd+Z to undo the last sidebar action — disbanding a group, dragging a session, renaming, or recoloring. Up to 50 steps are remembered.",

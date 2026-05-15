@@ -370,7 +370,7 @@ function RepoSection({
             {relativeFilterPrefix ? 'No changes in this folder' : 'Working tree clean'}
           </span>
         </div>
-        {(status.ahead > 0 || status.behind > 0) && (
+        {(status.ahead > 0 || status.behind > 0 || (!status.hasUpstream && !!status.branch)) && (
           <CommitBar
             cwd={cwd}
             stagedCount={0}
@@ -378,6 +378,7 @@ function RepoSection({
             unstagedFilePaths={[]}
             ahead={status.ahead}
             behind={status.behind}
+            hasUpstream={status.hasUpstream}
             operating={operating}
             onOperation={runOperation}
           />
@@ -542,6 +543,7 @@ function RepoSection({
         unstagedFilePaths={[...unstaged, ...untracked].map((f) => f.path)}
         ahead={status.ahead}
         behind={status.behind}
+        hasUpstream={status.hasUpstream}
         operating={operating}
         onOperation={runOperation}
       />

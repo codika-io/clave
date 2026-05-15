@@ -89,6 +89,7 @@ export function CommitBar({
   unstagedFilePaths,
   ahead,
   behind,
+  hasUpstream,
   operating,
   onOperation
 }: {
@@ -98,6 +99,7 @@ export function CommitBar({
   unstagedFilePaths: string[]
   ahead: number
   behind: number
+  hasUpstream: boolean
   operating: boolean
   onOperation: (fn: () => Promise<void>) => void
 }) {
@@ -143,6 +145,12 @@ export function CommitBar({
   const handlePush = useCallback(() => {
     onOperation(async () => {
       await window.electronAPI.gitPush(cwd)
+    })
+  }, [cwd, onOperation])
+
+  const handlePublishBranch = useCallback(() => {
+    onOperation(async () => {
+      await window.electronAPI.gitPublishBranch(cwd)
     })
   }, [cwd, onOperation])
 
@@ -198,19 +206,33 @@ export function CommitBar({
         >
           Commit
         </button>
-        {ahead > 0 && (
+        {!hasUpstream ? (
           <IconButton
             className="text-xs font-medium px-2 py-1 rounded bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40 transition-all"
             disabled={operating}
-            onClick={handlePush}
-            tooltip="Push to remote"
+            onClick={handlePublishBranch}
+            tooltip="Publish branch to origin (git push -u)"
             side="top"
           >
-            {'\u2191'} Push
+            {'\u2191'} Publish Branch{ahead > 0 ? ` (${ahead})` : ''}
           </IconButton>
-        )}
-        {behind > 0 && (
-          <PullButton cwd={cwd} operating={operating} onOperation={onOperation} />
+        ) : (
+          <>
+            {ahead > 0 && (
+              <IconButton
+                className="text-xs font-medium px-2 py-1 rounded bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40 transition-all"
+                disabled={operating}
+                onClick={handlePush}
+                tooltip="Push to remote"
+                side="top"
+              >
+                {'\u2191'} Push
+              </IconButton>
+            )}
+            {behind > 0 && (
+              <PullButton cwd={cwd} operating={operating} onOperation={onOperation} />
+            )}
+          </>
         )}
       </div>
     </div>

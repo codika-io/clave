@@ -17,6 +17,7 @@ export function registerGitHandlers(): void {
     gitManager.commit(cwd, message)
   )
   ipcMain.handle('git:push', (_event, cwd: string) => gitManager.push(cwd))
+  ipcMain.handle('git:publish-branch', (_event, cwd: string) => gitManager.publishBranch(cwd))
   ipcMain.handle(
     'git:pull',
     (_event, cwd: string, strategy?: 'auto' | 'merge' | 'rebase' | 'ff-only') =>
