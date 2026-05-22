@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.38.1] — 2026-05-22
+
+### Fixed
+- Gemini CLI session tabs now use a clean star icon that matches the other tab icons, instead of the previous heavy custom glyph that looked out of place and garbled at small sizes
+
 ## [1.38.0] — 2026-05-15
 
 ### Added
