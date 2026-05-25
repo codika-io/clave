@@ -14,7 +14,6 @@ import { registerClaveFileHandlers } from './clave-file-handlers'
 import { registerClaudeHistoryHandlers } from './claude-history-handlers'
 import { registerSessionExportHandlers } from './session-export-handlers'
 import { registerJournalHandlers } from './journal-handlers'
-import { registerInventoryHandlers } from './inventory-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -33,5 +32,4 @@ export function registerIpcHandlers(): void {
   registerClaudeHistoryHandlers()
   registerSessionExportHandlers()
   registerJournalHandlers()
-  registerInventoryHandlers()
 }

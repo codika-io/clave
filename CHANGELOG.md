@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Removed
+- The **model-info pill** and the **context-inventory pill** in the terminal header have been removed. These started as a community contribution, and we're grateful for it — the removal is not a judgment on the work. Claude Code now reports the same information natively in its own statusline (active model, reasoning effort, thinking, context-window size and the live context-fill percentage), so the pills duplicated what CC already shows. The context-inventory pill in particular could mislead: it estimated a static footprint of your config files against a guessed context window (often 200k even on 1M-context models), whereas CC's statusline reports true live usage against the real window. To let CC's native statusline show through, Clave no longer injects its own `statusLine` hook into sessions — your configured statusline (or CC's default) now appears directly, unmodified
+
 ## [1.38.1] — 2026-05-22
 
 ### Fixed

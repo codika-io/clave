@@ -145,7 +145,7 @@ export function useTerminal(sessionId: string) {
       window.electronAPI.resizeSession(sessionId, cols, rows)
     })
 
-    const { setSessionActivity, setSessionPromptWaiting, setSessionDetectedUrl, setSessionServerStatus, setSessionServerCommand, setSessionUnseenActivity, updateSessionAlive, autoRenameSession, resetSessionName, setSessionPlanFile, setSessionStatus } = useSessionStore.getState()
+    const { setSessionActivity, setSessionPromptWaiting, setSessionDetectedUrl, setSessionServerStatus, setSessionServerCommand, setSessionUnseenActivity, updateSessionAlive, autoRenameSession, resetSessionName, setSessionPlanFile } = useSessionStore.getState()
 
     // Listen for auto-generated titles from the main process
     const cleanupAutoTitle = window.electronAPI.onSessionAutoTitle(sessionId, (title) => {
@@ -155,11 +155,6 @@ export function useTerminal(sessionId: string) {
     // Listen for plan file detection
     const cleanupPlanDetected = window.electronAPI.onPlanDetected(sessionId, (planPath) => {
       setSessionPlanFile(sessionId, planPath)
-    })
-
-    // Listen for Claude Code status updates (model, effort, context window, etc.)
-    const cleanupSessionStatus = window.electronAPI.onSessionStatus(sessionId, (status) => {
-      setSessionStatus(sessionId, status)
     })
 
     // Listen for /clear command — reset session name to folder name
@@ -447,7 +442,6 @@ export function useTerminal(sessionId: string) {
       cleanupAutoTitle()
       cleanupPlanDetected()
       cleanupClearDetected()
-      cleanupSessionStatus()
       cleanupData()
       cleanupExit()
       resizeObserver.disconnect()

@@ -2,7 +2,6 @@ import * as pty from 'node-pty'
 import { execFile, execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
 import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS, INITIAL_COMMAND_DELAY_MS } from './constants'
-import { prepareSessionSettings, disposeSession } from './session-status-manager'
 
 const isWindows = process.platform === 'win32'
 
@@ -139,8 +138,6 @@ class PtyManager {
           parts.push('--session-id', claudeSessionId)
         }
         if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
-        const settingsPath = prepareSessionSettings(claudeSessionId, id)
-        if (settingsPath) parts.push('--settings', settingsPath)
         shellArgs = ['/c', ...parts]
       }
     } else {
@@ -160,8 +157,6 @@ class PtyManager {
           parts.push('--session-id', claudeSessionId)
         }
         if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
-        const settingsPath = prepareSessionSettings(claudeSessionId, id)
-        if (settingsPath) parts.push('--settings', settingsPath)
         shellArgs = ['-l', '-c', parts.join(' ')]
       }
     }
@@ -241,7 +236,6 @@ class PtyManager {
     }
     ptyProcess.onExit(({ exitCode }) => {
       session.alive = false
-      disposeSession(session.claudeSessionId)
       session.onExit?.(exitCode)
     })
 
@@ -278,7 +272,6 @@ class PtyManager {
       if (session.alive && session.ptyProcess) {
         session.ptyProcess.kill()
       }
-      disposeSession(session.claudeSessionId)
       this.sessions.delete(id)
     }
   }

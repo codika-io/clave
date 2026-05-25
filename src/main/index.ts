@@ -11,7 +11,6 @@ import { locationManager } from './location-manager'
 import { openclawClient } from './openclaw-client'
 import { preferencesManager } from './preferences-manager'
 import { cleanupClaveWatchers } from './ipc-handlers/clave-file-handlers'
-import { initSessionStatusManager } from './session-status-manager'
 
 function createWindow(): void {
   const savedIcon = preferencesManager.get('appIcon')
@@ -97,7 +96,6 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
-  initSessionStatusManager()
   initNotificationManager()
   applyPersistedIcon()
   createWindow()

@@ -13,7 +13,6 @@ import type {
   SessionType
 } from './session-types'
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
-import type { ClaudeSessionStatus } from '../../../preload/index.d'
 
 // Re-export types and constants so existing imports continue to work
 export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, Session, SessionGroup, FileTab, ActiveView, SessionType }
@@ -53,10 +52,7 @@ interface SessionState {
   commitMessages: Record<string, string>
   generatingCommitCwds: Set<string>
   hiddenAgentIds: Set<string>
-  sessionStatuses: Record<string, ClaudeSessionStatus>
   sidebarUndoStack: SidebarSnapshot[]
-  setSessionStatus: (id: string, status: ClaudeSessionStatus) => void
-  clearSessionStatus: (id: string) => void
   addSession: (session: Session) => void
   removeSession: (id: string) => void
   selectSession: (id: string, addToSelection: boolean) => void
@@ -243,19 +239,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   hiddenAgentIds: new Set<string>(
     JSON.parse(localStorage.getItem('clave-hidden-agent-ids') || '[]')
   ),
-  sessionStatuses: {} as Record<string, ClaudeSessionStatus>,
   sidebarUndoStack: [] as SidebarSnapshot[],
-  setSessionStatus: (id, status) =>
-    set((state) => ({
-      sessionStatuses: { ...state.sessionStatuses, [id]: status }
-    })),
-  clearSessionStatus: (id) =>
-    set((state) => {
-      if (!(id in state.sessionStatuses)) return state
-      const next = { ...state.sessionStatuses }
-      delete next[id]
-      return { sessionStatuses: next }
-    }),
   addSession: (session) =>
     set((state) => {
       const newSession = { ...session, geminiMode: session.geminiMode ?? false, detectedUrl: session.detectedUrl ?? null, serverStatus: session.serverStatus ?? null, serverCommand: session.serverCommand ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false, userRenamed: session.userRenamed ?? false, planFilePath: session.planFilePath ?? null }
@@ -299,13 +283,6 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => {
       const sessions = state.sessions.filter((s) => s.id !== id)
       const selectedSessionIds = state.selectedSessionIds.filter((sid) => sid !== id)
-      const sessionStatuses = id in state.sessionStatuses
-        ? (() => {
-            const next = { ...state.sessionStatuses }
-            delete next[id]
-            return next
-          })()
-        : state.sessionStatuses
       const groups = state.groups.map((g) => ({
         ...g,
         sessionIds: g.sessionIds.filter((sid) => sid !== id),
@@ -326,12 +303,11 @@ export const useSessionStore = create<SessionState>((set) => ({
           selectedSessionIds: [lastId],
           focusedSessionId: lastId,
           groups,
-          displayOrder,
-          sessionStatuses
+          displayOrder
         }
       }
 
-      return { sessions, selectedSessionIds, focusedSessionId, groups, displayOrder, sessionStatuses }
+      return { sessions, selectedSessionIds, focusedSessionId, groups, displayOrder }
     }),
 
   selectSession: (id, addToSelection) =>

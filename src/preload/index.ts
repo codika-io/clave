@@ -41,9 +41,6 @@ const electronAPI = {
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) =>
     createIpcListener<[string]>(`session:plan-detected:${sessionId}`, callback),
 
-  onSessionStatus: (sessionId: string, callback: (status: unknown) => void) =>
-    createIpcListener<[unknown]>(`cc-status:update:${sessionId}`, callback),
-
   onClearDetected: (sessionId: string, callback: () => void) =>
     createIpcListener<[]>(`session:clear-detected:${sessionId}`, callback),
 
@@ -281,13 +278,7 @@ const electronAPI = {
   preferencesGet: (key: string) =>
     ipcRenderer.invoke('preferences:get', key),
   preferencesSet: (key: string, value: unknown) =>
-    ipcRenderer.invoke('preferences:set', key, value),
-
-  // Inventory
-  getInventory: (cwd: string, model?: string) =>
-    ipcRenderer.invoke('inventory:get', cwd, model),
-  invalidateInventory: () =>
-    ipcRenderer.invoke('inventory:invalidate')
+    ipcRenderer.invoke('preferences:set', key, value)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
