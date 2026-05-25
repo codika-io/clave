@@ -15,7 +15,7 @@ function LocationBadge({ locationId }: { locationId: string }) {
 }
 
 function SessionIcon({ session }: { session: Session }) {
-  const iconClass = cn('w-4 h-4 transition-colors duration-300', session.hasUnseenActivity ? 'text-accent' : 'text-text-tertiary')
+  const iconClass = cn('w-3.5 h-3.5 transition-colors duration-300', session.hasUnseenActivity ? 'text-accent' : 'text-text-tertiary')
 
   const Icon = session.sessionType === 'agent'
     ? BoltIcon
@@ -30,11 +30,11 @@ function SessionIcon({ session }: { session: Session }) {
             : CommandLineIcon
 
   return (
-    <span className="relative flex-shrink-0 w-4 h-4">
+    <span className="relative flex-shrink-0 w-3.5 h-3.5">
       <Icon className={iconClass} />
       <span
         className={cn(
-          'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-surface-50',
+          'absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full border border-surface-50',
           session.activityStatus === 'active' && 'bg-status-working',
           session.activityStatus === 'idle' && 'bg-status-ready',
           session.activityStatus === 'ended' && 'bg-status-inactive'
