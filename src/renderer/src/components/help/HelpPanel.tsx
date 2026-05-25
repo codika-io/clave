@@ -10,13 +10,11 @@ import git from '../../help/git.md?raw'
 import groups from '../../help/groups.md?raw'
 import files from '../../help/files.md?raw'
 import history from '../../help/history.md?raw'
-import journal from '../../help/journal.md?raw'
 import workTracker from '../../help/work-tracker.md?raw'
 import usage from '../../help/usage.md?raw'
 import shortcuts from '../../help/shortcuts.md?raw'
 import remote from '../../help/remote.md?raw'
 import settings from '../../help/settings.md?raw'
-import inspector from '../../help/inspector.md?raw'
 
 const helpDocsMap: Record<string, string> = {
   'getting-started': gettingStarted,
@@ -26,10 +24,8 @@ const helpDocsMap: Record<string, string> = {
   groups,
   files,
   history,
-  journal,
   'work-tracker': workTracker,
   usage,
-  inspector,
   shortcuts,
   remote,
   settings

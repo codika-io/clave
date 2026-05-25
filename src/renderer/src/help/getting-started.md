@@ -20,7 +20,6 @@ Clave is a desktop app for managing multiple Claude Code terminal sessions side 
 - **[Git Panel](clave://navigate/side:git)**: Stage, commit, push, and visualize your git history
 - **[File Browser](clave://navigate/side:files)**: Browse, preview, and edit files in your project
 - **[History](clave://navigate/history)**: Browse past Claude Code conversations
-- **[Daily Log](clave://navigate/journal)**: AI-generated daily summaries of your work
 - **[Usage Analytics](clave://navigate/usage)**: Track token usage and costs
 
 ## Navigation

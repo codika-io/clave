@@ -42,12 +42,6 @@
     "keywords": ["history", "past", "session", "conversation", "search", "chat"]
   },
   {
-    "id": "journal",
-    "title": "Daily Log",
-    "subtitle": "AI-generated daily summaries of your work by project",
-    "keywords": ["journal", "daily", "log", "summary", "ai", "project", "recap"]
-  },
-  {
     "id": "work-tracker",
     "title": "Work Tracker",
     "subtitle": "Daily time tracking, streaks, and break reminders",
@@ -58,12 +52,6 @@
     "title": "Usage Analytics",
     "subtitle": "Token usage, cost estimates, and activity patterns",
     "keywords": ["usage", "token", "cost", "analytics", "model"]
-  },
-  {
-    "id": "inspector",
-    "title": "Context Inventory",
-    "subtitle": "See what Claude Code loads at session start and estimated token cost",
-    "keywords": ["inspector", "inventory", "context", "tokens", "skills", "plugins", "mcp", "claude.md", "memory", "hooks"]
   },
   {
     "id": "shortcuts",

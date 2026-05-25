@@ -30,12 +30,6 @@
     "action": { "type": "navigate", "target": "side:help" }
   },
   {
-    "version": "1.33.0",
-    "title": "Daily Log Redesigned",
-    "description": "See your day at a glance with a 7-day heatmap week strip, stat cards, a project-coloured timeline, and a Timeline / By project toggle",
-    "action": { "type": "navigate", "target": "journal" }
-  },
-  {
     "version": "1.32.6",
     "title": "Open Git Diffs as Tabs",
     "description": "Double-click any changed file to preview, then open the diff as a persistent document tab — with live stage/unstage and right-click access from the git tree",
@@ -64,12 +58,6 @@
     "title": "Design System & Chat History",
     "description": "Unified design tokens across the app, and a new chat bubble layout for browsing conversation history",
     "action": { "type": "navigate", "target": "history" }
-  },
-  {
-    "version": "1.30.0",
-    "title": "AI Journal",
-    "description": "Your daily work automatically summarized by project, with smart session summaries",
-    "action": { "type": "navigate", "target": "journal" }
   },
   {
     "version": "1.29.0",

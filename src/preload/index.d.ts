@@ -119,27 +119,6 @@ export interface BoardData {
   tasks: BoardTask[]
 }
 
-export interface JournalEntryData {
-  sessionId: string
-  claudeSessionId?: string
-  sessionName: string
-  summary?: string
-  startTime: number
-  endTime?: number
-  status: 'active' | 'completed'
-}
-
-export interface JournalProjectData {
-  cwd: string
-  name: string
-  entries: JournalEntryData[]
-}
-
-export interface JournalData {
-  date: string
-  projects: JournalProjectData[]
-}
-
 export interface ModelTokenUsage {
   inputTokens: number
   outputTokens: number
@@ -359,12 +338,6 @@ export interface ElectronAPI {
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => () => void
   boardLoad: () => Promise<BoardData>
   boardSave: (data: BoardData) => Promise<void>
-  journalLoad: () => Promise<JournalData>
-  journalSave: (data: JournalData) => Promise<void>
-  journalArchive: (data: JournalData) => Promise<void>
-  journalSummarize: (claudeSessionId: string, cwd: string) => Promise<string | null>
-  journalListArchives: () => Promise<string[]>
-  journalLoadArchive: (date: string) => Promise<JournalData | null>
   templatesLoad: () => Promise<LaunchTemplatesData>
   templatesSave: (data: LaunchTemplatesData) => Promise<void>
   templatesValidate: (template: LaunchTemplate) => Promise<ValidationResult>

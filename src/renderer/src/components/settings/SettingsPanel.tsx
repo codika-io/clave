@@ -9,7 +9,6 @@ import { CheckIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarOutline, TrashIcon, PlusIcon, PencilIcon, FolderIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { LocationsTab } from './LocationsTab'
-import { useAssistantStore } from '../../store/assistant-store'
 
 const cLogoPath = 'M742,232 L322,232 A100,100 0 0 0 222,332 L222,732 A100,100 0 0 0 322,832 L742,832 L742,680 L424,680 A50,50 0 0 1 374,630 L374,434 A50,50 0 0 1 424,384 L742,384 Z'
 const cDepthBack = 'M802,172 L382,172 A100,100 0 0 0 282,272 L282,672 A100,100 0 0 0 382,772 L802,772 L802,620 L484,620 A50,50 0 0 1 434,570 L434,374 A50,50 0 0 1 484,324 L802,324 Z'
@@ -467,10 +466,6 @@ function ToggleRow({
 function SidebarWidgetsSection() {
   const workTrackerEnabled = useWorkTrackerStore((s) => s.enabled)
   const setWorkTrackerEnabled = useWorkTrackerStore((s) => s.setEnabled)
-  const assistantEnabled = useAssistantStore((s) => s.enabled)
-  const setAssistantEnabled = useAssistantStore((s) => s.setEnabled)
-  const aiSummaries = useAssistantStore((s) => s.aiSummaries)
-  const setAiSummaries = useAssistantStore((s) => s.setAiSummaries)
 
   return (
     <section className="mt-8">
@@ -484,20 +479,6 @@ function SidebarWidgetsSection() {
           checked={workTrackerEnabled}
           onChange={setWorkTrackerEnabled}
         />
-        <ToggleRow
-          label="Daily Log"
-          description="Session activity grouped by project with daily summaries"
-          checked={assistantEnabled}
-          onChange={setAssistantEnabled}
-        />
-        {assistantEnabled && (
-          <ToggleRow
-            label="AI session summaries"
-            description="Generate smart summaries when sessions end (uses Claude Haiku)"
-            checked={aiSummaries}
-            onChange={setAiSummaries}
-          />
-        )}
       </div>
     </section>
   )
