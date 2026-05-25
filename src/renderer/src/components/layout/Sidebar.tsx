@@ -1066,7 +1066,7 @@ export function Sidebar() {
               isFileDragOver={isFileDragOverWindow}
             />
             <div>
-              <div className="px-2 space-y-1">
+              <div className="px-2 space-y-0.5">
                 {filteredSessions ? (
                   filteredSessions.length === 0 ? (
                     <div className="px-3 py-6 text-center text-xs text-text-tertiary">
