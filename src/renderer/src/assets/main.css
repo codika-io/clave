@@ -51,6 +51,11 @@
      session/file/group tabs in the sidebar. Change here to resize all of them. */
   --sidebar-tab-icon-size: 0.875rem; /* 14px */
 
+  /* Sidebar row horizontal padding — distance from a tab row's edge to its
+     leading/trailing icons. Tab rows, the group header, and the section-label
+     alignment all derive from this, so changing it keeps everything in sync. */
+  --sidebar-row-px: 0.4375rem; /* 7px (was 10px) */
+
   --color-status-working: #3b82f6;
   --color-status-ready: #22c55e;
   --color-status-waiting: #f59e0b;
@@ -293,7 +298,7 @@ body,
   align-items: center;
   gap: 0.5rem;             /* gap-2 */
   height: var(--control-h-md);
-  padding: 0 0.625rem;     /* px-2.5 */
+  padding: 0 var(--sidebar-row-px);
   border-radius: 0.5rem;   /* rounded-lg */
   font-size: 13px;
   font-weight: var(--font-weight-medium);

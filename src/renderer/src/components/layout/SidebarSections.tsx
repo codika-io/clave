@@ -18,10 +18,10 @@ export function SectionHeading({
   actions?: React.ReactNode
 }) {
   // Label left-padding aligns with the leading icon of tab rows:
-  // px-2 container (0.5rem) + .sidebar-item padding (0.625rem) = 1.125rem.
+  // px-2 list container (0.5rem) + .sidebar-item padding (--sidebar-row-px).
   const label = <span className="text-[13px] font-medium text-text-tertiary">{title}</span>
   return (
-    <div className="w-full flex items-center pl-[1.125rem] pr-3 pt-3.5 pb-1 flex-shrink-0">
+    <div className="w-full flex items-center pl-[calc(0.5rem+var(--sidebar-row-px))] pr-3 pt-3.5 pb-1 flex-shrink-0">
       {onToggle ? (
         <button onClick={onToggle} className="text-left">{label}</button>
       ) : (

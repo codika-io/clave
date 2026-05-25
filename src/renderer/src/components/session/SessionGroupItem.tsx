@@ -91,7 +91,7 @@ export function SessionGroupItem({
         onContextMenu={onContextMenu}
         onKeyDown={handleButtonKeyDown}
         className={cn(
-          'group w-full flex items-center gap-2 px-2.5 h-[var(--control-h-md)] rounded-lg text-left transition-colors outline-none',
+          'group w-full flex items-center gap-2 px-[var(--sidebar-row-px)] h-[var(--control-h-md)] rounded-lg text-left transition-colors outline-none',
           allSelected ? 'text-text-primary' : 'text-text-secondary',
           isDragging && 'opacity-30'
         )}
