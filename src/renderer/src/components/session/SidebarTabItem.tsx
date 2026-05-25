@@ -96,7 +96,6 @@ export function SidebarTabItem({
         data-selected={isSelected && !grouped ? 'true' : undefined}
         className={cn(
           'sidebar-item group',
-          grouped ? 'pl-1 pr-2' : '',
           groupSelected
             ? 'text-text-primary'
             : isSelected

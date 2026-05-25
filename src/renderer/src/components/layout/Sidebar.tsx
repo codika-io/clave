@@ -1230,7 +1230,7 @@ export function Sidebar() {
                                 style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
                               >
                                 <div className="overflow-hidden">
-                                  <div className="px-1 pb-1 space-y-0.5">
+                                  <div className="px-0 pb-1 space-y-0.5">
                                     {group.sessionIds.map((sid, sIdx) => {
                                       const prevSid = sIdx > 0 ? group.sessionIds[sIdx - 1] : null
                                       const isLastInGroup = sIdx === group.sessionIds.length - 1

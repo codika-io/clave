@@ -7,7 +7,8 @@ import {
   resolveColorHex
 } from '../../store/session-store'
 import {
-  ChevronRightIcon,
+  FolderIcon,
+  FolderOpenIcon,
   CommandLineIcon,
   PlusIcon
 } from '@heroicons/react/24/outline'
@@ -90,19 +91,21 @@ export function SessionGroupItem({
         onContextMenu={onContextMenu}
         onKeyDown={handleButtonKeyDown}
         className={cn(
-          'group w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors outline-none',
+          'group w-full flex items-center gap-2 px-2.5 py-1 rounded-lg text-left transition-colors outline-none',
           allSelected ? 'text-text-primary' : 'text-text-secondary',
           isDragging && 'opacity-30'
         )}
       >
-        {/* Disclosure triangle */}
+        {/* Folder disclosure — open when expanded, closed when collapsed */}
         <span
           onClick={handleToggleCollapse}
-          className="flex-shrink-0 w-3 h-3 flex items-center justify-center text-text-tertiary cursor-pointer"
+          className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center text-text-tertiary cursor-pointer"
         >
-          <ChevronRightIcon
-            className={cn('w-3 h-3 transition-transform', group.collapsed ? '' : 'rotate-90')}
-          />
+          {group.collapsed ? (
+            <FolderIcon className="w-3.5 h-3.5" />
+          ) : (
+            <FolderOpenIcon className="w-3.5 h-3.5" />
+          )}
         </span>
 
         {/* Group name */}
