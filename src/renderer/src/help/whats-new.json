@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.39.0",
+    "title": "Redesigned sidebar",
+    "description": "A cleaner sidebar: New session and Queue as top tabs, your sessions under one Sessions header with pinned groups inline, consistent spacing and alignment from shared design tokens, and slightly less round corners across the app.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.38.0",
     "title": "Publish Branch from the Git panel",
     "description": "Committing on a brand-new local branch now surfaces a Publish Branch button in the Git panel — it pushes the branch to origin with upstream tracking so your commits don't sit there invisibly.",

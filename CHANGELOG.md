@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.39.0] — 2026-05-25
+
+### Changed
+- The sidebar has been reorganized for a cleaner, more consistent layout. **New session** (now a pencil-square tab) and **Queue** sit at the top as permanent tabs, your sessions live under a single **Sessions** header, and pinned groups appear inline beneath it. Tab heights, row spacing, leading/trailing icon padding, and corner roundness are now driven by shared design tokens, so rows line up and the whole app feels a touch tighter and less round. Group and pinned cards align to the same width as normal tabs, and a selected tab inside a group no longer looks like it touches the card border
+- The sidebar search box and the reset button were removed from the top of the sidebar
+
 ### Removed
 - The **model-info pill** and the **context-inventory pill** in the terminal header have been removed. These started as a community contribution, and we're grateful for it — the removal is not a judgment on the work. Claude Code now reports the same information natively in its own statusline (active model, reasoning effort, thinking, context-window size and the live context-fill percentage), so the pills duplicated what CC already shows. The context-inventory pill in particular could mislead: it estimated a static footprint of your config files against a guessed context window (often 200k even on 1M-context models), whereas CC's statusline reports true live usage against the real window. To let CC's native statusline show through, Clave no longer injects its own `statusLine` hook into sessions — your configured statusline (or CC's default) now appears directly, unmodified
 - The **Daily Log** sidebar widget (the per-project session journal with daily/AI summaries) has been removed, along with its Settings toggles and the background session-summarization it ran. It watched every session lifecycle change and summarized completed sessions, costing CPU for a feature that did not work reliably. The matching Settings options and help docs are gone too
