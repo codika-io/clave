@@ -55,7 +55,7 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
             data-selected={activeView === 'board' ? 'true' : undefined}
             className="sidebar-item"
           >
-            <QueueListIcon className="sidebar-tab-icon flex-shrink-0 text-text-tertiary" />
+            <QueueListIcon className="sidebar-tab-icon flex-shrink-0" />
             <span className="truncate">Queue</span>
             {tasks.length > 0 && (
               <span className="ml-auto flex items-center gap-1.5">

@@ -15,7 +15,7 @@ function LocationBadge({ locationId }: { locationId: string }) {
 }
 
 function SessionIcon({ session }: { session: Session }) {
-  const iconClass = cn('transition-colors duration-300', session.hasUnseenActivity ? 'text-accent' : 'text-text-tertiary')
+  const iconClass = cn('transition-colors duration-300', session.hasUnseenActivity && 'text-accent')
 
   const Icon = session.sessionType === 'agent'
     ? BoltIcon

@@ -77,6 +77,10 @@
   --text-primary: rgba(255, 255, 255, 0.95);
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-tertiary: rgba(255, 255, 255, 0.4);
+  /* Resting text color for sidebar rows — slightly more opaque than --text-secondary */
+  --sidebar-item-text: rgba(255, 255, 255, 0.78);
+  /* Resting color for sidebar tab icons — more opaque than --text-tertiary */
+  --sidebar-icon-color: rgba(255, 255, 255, 0.6);
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
   --danger-toggle-bg: rgba(255, 255, 255, 0.08);
@@ -106,6 +110,8 @@
   --text-primary: #1b1b18;
   --text-secondary: #6c6c65;
   --text-tertiary: #9b9b94;
+  --sidebar-item-text: #45453f;
+  --sidebar-icon-color: #6c6c65;
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.22);
   --danger-toggle-bg: rgba(0, 0, 0, 0.05);
@@ -141,6 +147,8 @@
   --text-primary: #1b1610;
   --text-secondary: #756e66;
   --text-tertiary: #9b9590;
+  --sidebar-item-text: #4d4840;
+  --sidebar-icon-color: #756e66;
   --scrollbar-thumb: rgba(120, 100, 80, 0.18);
   --scrollbar-thumb-hover: rgba(120, 100, 80, 0.3);
   --danger-toggle-bg: rgba(120, 100, 80, 0.08);
@@ -286,7 +294,7 @@ body,
   text-align: left;
   transition: color 150ms, background-color 150ms;
   outline: none;
-  color: var(--text-secondary);
+  color: var(--sidebar-item-text);
 }
 .sidebar-item:hover {
   color: var(--text-primary);
@@ -300,6 +308,9 @@ body,
 
 /* Leading icon on sidebar tabs (session/file/group). Sizes both the wrapper
    and the inner SVG from --sidebar-tab-icon-size so all tab icons stay uniform. */
+.sidebar-tab-icon {
+  color: var(--sidebar-icon-color);
+}
 .sidebar-tab-icon,
 .sidebar-tab-icon > svg {
   width: var(--sidebar-tab-icon-size);

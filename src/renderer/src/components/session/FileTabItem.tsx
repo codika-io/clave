@@ -53,9 +53,9 @@ export function FileTabItem({
       icon={
         <span className="sidebar-tab-icon flex-shrink-0">
           {isDiff ? (
-            <CodeBracketSquareIcon className="text-text-tertiary" />
+            <CodeBracketSquareIcon />
           ) : (
-            <DocumentTextIcon className="text-text-tertiary" />
+            <DocumentTextIcon />
           )}
         </span>
       }
