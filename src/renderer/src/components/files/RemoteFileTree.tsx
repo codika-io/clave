@@ -89,7 +89,7 @@ function RemoteFileTreeRow({
     <button
       onClick={() => onClick(node)}
       className="w-full flex items-center gap-1.5 py-0.5 pr-2 rounded hover:bg-surface-100 transition-colors text-left"
-      style={{ paddingLeft: `${node.depth * 12 + 8}px` }}
+      style={{ paddingLeft: `${node.depth * 8 + 8}px` }}
     >
       {node.type === 'directory' && (
         <svg
@@ -102,7 +102,7 @@ function RemoteFileTreeRow({
         </svg>
       )}
       {node.type === 'file' && <span className="w-2.5 flex-shrink-0" />}
-      <FileIcon name={node.name} isDirectory={node.type === 'directory'} className="text-[color:var(--sidebar-icon-color)]" />
+      <FileIcon name={node.name} isDirectory={node.type === 'directory'} isOpen={node.expanded} className="text-[color:var(--sidebar-icon-color)]" />
       <span className="text-[12px] font-medium text-[color:var(--sidebar-item-text)] truncate">
         {node.name}
       </span>

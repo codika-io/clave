@@ -151,7 +151,7 @@ export function GitTreeDirRow({
       className={`flex items-center gap-1.5 py-0.5 text-xs transition-colors cursor-pointer pr-3 ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       }`}
-      style={{ paddingLeft: `${8 + node.depth * 12}px` }}
+      style={{ paddingLeft: `${8 + node.depth * 8}px` }}
       onClick={handleClick}
       draggable
       onDragStart={handleDragStart}
@@ -242,7 +242,7 @@ export function GitTreeFileRow({
       className={`flex items-center gap-1.5 py-0.5 text-xs transition-colors cursor-pointer group pr-3 ${
         disabled ? 'opacity-50 pointer-events-none' : isActiveDiff ? 'bg-accent/15 border-l-2 border-l-accent' : isSelected ? 'bg-surface-200 border-l-2 border-l-transparent' : 'hover:bg-surface-100 border-l-2 border-l-transparent'
       }`}
-      style={{ paddingLeft: `${8 + node.depth * 12}px` }}
+      style={{ paddingLeft: `${8 + node.depth * 8}px` }}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       draggable

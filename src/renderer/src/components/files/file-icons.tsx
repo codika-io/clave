@@ -1,5 +1,6 @@
 import {
   FolderIcon,
+  FolderOpenIcon,
   CodeBracketIcon,
   Cog6ToothIcon,
   PhotoIcon,
@@ -40,9 +41,19 @@ const ICON_COMPONENTS: Record<IconType, typeof DocumentIcon> = {
   generic: DocumentIcon
 }
 
-export function FileIcon({ name, isDirectory, className }: { name: string; isDirectory?: boolean; className?: string }) {
+export function FileIcon({
+  name,
+  isDirectory,
+  isOpen,
+  className
+}: {
+  name: string
+  isDirectory?: boolean
+  isOpen?: boolean
+  className?: string
+}) {
   const cls = `w-3.5 h-3.5 ${className ?? ''}`
-  if (isDirectory) return <FolderIcon className={cls} />
+  if (isDirectory) return isOpen ? <FolderOpenIcon className={cls} /> : <FolderIcon className={cls} />
   const ext = name.split('.').pop()?.toLowerCase() ?? ''
   const iconType = EXT_MAP[ext] ?? 'generic'
   const Component = ICON_COMPONENTS[iconType]

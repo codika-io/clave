@@ -80,7 +80,7 @@ export function FileTreeItem({
       className={`relative flex items-center h-7 px-2 cursor-pointer select-none transition-colors text-sm ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       } ${node.ignored ? 'opacity-40' : ''}`}
-      style={{ paddingLeft: `${8 + node.depth * 12}px` }}
+      style={{ paddingLeft: `${8 + node.depth * 8}px` }}
       title={node.name}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
@@ -92,7 +92,7 @@ export function FileTreeItem({
         <span
           key={i}
           className="absolute top-0 bottom-0 w-px bg-border"
-          style={{ left: `${8 + i * 12 + 6}px` }}
+          style={{ left: `${8 + i * 8 + 6}px` }}
         />
       ))}
 
@@ -122,6 +122,7 @@ export function FileTreeItem({
       <FileIcon
         name={node.name}
         isDirectory={node.type === 'directory'}
+        isOpen={node.expanded}
         className="flex-shrink-0 text-[color:var(--sidebar-icon-color)] ml-0.5 mr-1.5"
       />
 
