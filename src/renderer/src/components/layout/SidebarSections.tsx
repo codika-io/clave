@@ -14,21 +14,26 @@ export function SectionHeading({
   actions
 }: {
   title: string
-  collapsed: boolean
-  onToggle: () => void
+  /** When omitted, the heading is static (no disclosure arrow, not clickable). */
+  collapsed?: boolean
+  onToggle?: () => void
   actions?: React.ReactNode
 }) {
   return (
     <div className="w-full flex items-center gap-1.5 px-3 pt-3.5 pb-1 flex-shrink-0">
-      <button onClick={onToggle} className="flex items-center gap-1.5">
-        <ChevronRightIcon
-          className={cn(
-            'w-3 h-3 text-text-tertiary transition-transform duration-150',
-            collapsed ? 'rotate-0' : 'rotate-90'
-          )}
-        />
+      {onToggle ? (
+        <button onClick={onToggle} className="flex items-center gap-1.5">
+          <ChevronRightIcon
+            className={cn(
+              'w-3 h-3 text-text-tertiary transition-transform duration-150',
+              collapsed ? 'rotate-0' : 'rotate-90'
+            )}
+          />
+          <span className="text-[13px] font-medium text-text-tertiary">{title}</span>
+        </button>
+      ) : (
         <span className="text-[13px] font-medium text-text-tertiary">{title}</span>
-      </button>
+      )}
       {actions && <div className="ml-auto flex items-center gap-0.5">{actions}</div>}
     </div>
   )

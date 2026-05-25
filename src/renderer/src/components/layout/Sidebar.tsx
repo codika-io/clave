@@ -119,8 +119,6 @@ export function Sidebar() {
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
   const searchQuery = useSessionStore((s) => s.searchQuery)
   const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
-  const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
-  const [boardCollapsed, setBoardCollapsed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -1063,13 +1061,14 @@ export function Sidebar() {
           isFileDragOver={isFileDragOverWindow}
         />
 
+        {/* Queue tab — pinned at the top, above active sessions */}
+        <TaskQueueSection collapsed={false} />
+
         {!isSearchMode && (
           <>
             {/* Sessions section */}
             <SectionHeading
               title="Active Sessions"
-              collapsed={sessionsCollapsed}
-              onToggle={() => setSessionsCollapsed((c) => !c)}
               actions={
                 <NewSessionDropdown
                   onNewSession={({ claudeMode, geminiMode, dangerousMode, locationId }) => {
@@ -1103,11 +1102,7 @@ export function Sidebar() {
                 />
               }
             />
-            <div
-              className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
-              style={{ gridTemplateRows: sessionsCollapsed ? '0fr' : '1fr', opacity: sessionsCollapsed ? 0 : 1, transform: sessionsCollapsed ? 'translateY(-4px)' : 'translateY(0)' }}
-            >
-              <div className="overflow-hidden">
+            <div>
               <div className="px-2 space-y-1">
                 {filteredSessions ? (
                   filteredSessions.length === 0 ? (
@@ -1307,14 +1302,9 @@ export function Sidebar() {
                   </>
                 ) : null}
               </div>
-              </div>
             </div>
           </>
         )}
-
-        {/* Activity section */}
-        <SectionHeading title="Activity" collapsed={boardCollapsed} onToggle={() => setBoardCollapsed((c) => !c)} />
-        <TaskQueueSection collapsed={boardCollapsed} />
       </ScrollArea>
 
       {/* Announcements — above the bottom bar */}

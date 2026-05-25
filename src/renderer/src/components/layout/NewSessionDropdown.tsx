@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
 import {
-  PlusIcon,
+  PencilSquareIcon,
   CommandLineIcon,
   ShieldExclamationIcon,
   BoltIcon
@@ -77,7 +77,7 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
             className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-50"
             title="New session"
           >
-            <PlusIcon className="w-3.5 h-3.5" />
+            <PencilSquareIcon className="w-3.5 h-3.5" />
           </button>
         </DropdownMenuTrigger>
 
