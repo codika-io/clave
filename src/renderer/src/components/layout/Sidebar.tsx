@@ -1153,7 +1153,7 @@ export function Sidebar() {
                             <DropGap active={gapBefore} />
                             <div
                               className={cn(
-                                'relative rounded-xl border transition-colors',
+                                'relative rounded-xl border transition-colors px-1',
                                 !groupColorHex && (allGroupSelected
                                   ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
                                   : 'bg-surface-100/30 border-border-subtle hover:bg-surface-100/60')
