@@ -7,6 +7,7 @@
 | Cmd+N | New Claude Code session |
 | Cmd+T | New terminal session |
 | Cmd+D | New dangerous mode session |
+| Cmd+I | New Gemini CLI session |
 | Cmd+Backspace | Kill focused session |
 | Cmd+1-9 | Switch to session by index |
 | Cmd+Shift+] | Next session |
@@ -19,7 +20,6 @@
 | Cmd+B | Toggle left sidebar |
 | Cmd+E | Toggle right sidebar |
 | Cmd+P | File palette (quick search) |
-| Cmd+F | Focus sidebar search |
 | Cmd+, | Open settings |
 | Cmd+Shift+G | Open git panel |
 | Cmd+? | Open help panel |

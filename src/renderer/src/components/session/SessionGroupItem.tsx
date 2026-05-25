@@ -25,6 +25,8 @@ interface SessionGroupItemProps {
   aliveSessionIds: Set<string>
   focusedSessionId: string | null
   allSelected?: boolean
+  /** Fades the group header when the group is not the active selection */
+  dimmed?: boolean
   forceEditing?: boolean
   onEditingDone?: () => void
   onPointerDown?: (e: React.PointerEvent) => void
@@ -41,6 +43,7 @@ export function SessionGroupItem({
   aliveSessionIds,
   focusedSessionId,
   allSelected,
+  dimmed,
   forceEditing,
   onEditingDone,
   onPointerDown,
@@ -79,6 +82,10 @@ export function SessionGroupItem({
     [onClick]
   )
 
+  // Header fades a touch more than its tabs (0.45 vs 0.55) so a dimmed group
+  // header reads differently from a dimmed tab. Dragging still wins.
+  const headerOpacity = isDragging ? 0.3 : dimmed ? 0.45 : undefined
+
   return (
     <div
       className="relative"
@@ -91,10 +98,10 @@ export function SessionGroupItem({
         onContextMenu={onContextMenu}
         onKeyDown={handleButtonKeyDown}
         className={cn(
-          'group w-full flex items-center gap-2 px-[var(--sidebar-row-px)] h-[var(--control-h-md)] rounded-lg text-left transition-colors outline-none',
-          allSelected ? 'text-text-primary' : 'text-text-secondary',
-          isDragging && 'opacity-30'
+          'group w-full flex items-center gap-2 px-[var(--sidebar-row-px)] h-[var(--control-h-md)] rounded-lg text-left transition-[color,opacity] outline-none',
+          allSelected ? 'text-text-primary' : 'text-text-secondary'
         )}
+        style={headerOpacity !== undefined ? { opacity: headerOpacity } : undefined}
       >
         {/* Folder disclosure — open when expanded, closed when collapsed */}
         <span

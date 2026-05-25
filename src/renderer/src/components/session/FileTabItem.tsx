@@ -10,6 +10,7 @@ interface FileTabItemProps {
   onContextMenu: (e: React.MouseEvent) => void
   grouped?: boolean
   groupSelected?: boolean
+  dimmed?: boolean
   forceEditing?: boolean
   onEditingDone?: () => void
   onPointerDown?: (e: React.PointerEvent) => void
@@ -23,6 +24,7 @@ export function FileTabItem({
   onContextMenu,
   grouped,
   groupSelected,
+  dimmed,
   forceEditing,
   onEditingDone,
   onPointerDown,
@@ -61,6 +63,7 @@ export function FileTabItem({
       }
       grouped={grouped}
       groupSelected={groupSelected}
+      dimmed={dimmed}
       forceEditing={forceEditing}
       onEditingDone={onEditingDone}
       onPointerDown={onPointerDown}

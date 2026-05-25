@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.40.0] — 2026-05-25
+
+### Added
+- When you select a session, group, or file tab in the sidebar, the unselected rows now fade back so your active selection stands out by contrast. Dragging still takes visual priority over the fade
+- The help docs now cover **Gemini CLI** sessions (Cmd+I) — the shortcut, the session type, and its star icon are documented alongside Claude Code, Terminal, and Dangerous mode
+
+### Removed
+- Dropped the stale **Cmd+F "Focus sidebar search"** entry from the shortcuts help — the sidebar search box was removed in 1.39.0, so the shortcut no longer exists
+
 ## [1.39.0] — 2026-05-25
 
 ### Changed

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.40.0",
+    "title": "Sidebar selection focus",
+    "description": "Selecting a session, group, or file tab now fades the unselected rows so your active selection stands out at a glance.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.39.0",
     "title": "Redesigned sidebar",
     "description": "A cleaner sidebar: New session and Queue as top tabs, your sessions under one Sessions header with pinned groups inline, consistent spacing and alignment from shared design tokens, and slightly less round corners across the app.",

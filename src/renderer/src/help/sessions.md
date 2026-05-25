@@ -9,6 +9,7 @@ Sessions are the core of Clave. Each session is an independent terminal running 
 | Cmd+N | Claude Code | AI-assisted coding session |
 | Cmd+T | Terminal | Plain shell session |
 | Cmd+D | Dangerous | Claude Code without permission prompts |
+| Cmd+I | Gemini CLI | Gemini CLI coding session |
 
 You can also create sessions from the **+** button in the sidebar.
 
@@ -28,8 +29,10 @@ Session icons in the sidebar reflect their type:
 
 - **Sparkles**: Claude Code session
 - **Fire**: Dangerous mode session
+- **Star**: Gemini CLI session
 - **Bolt**: Agent session
 - **Globe**: Remote session
+- **Terminal**: Plain shell session
 
 ## Session Groups
 

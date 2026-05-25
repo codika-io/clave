@@ -53,6 +53,7 @@ interface SessionItemProps {
   grouped?: boolean
   groupSelected?: boolean
   groupColorHex?: string
+  dimmed?: boolean
   forceEditing?: boolean
   onEditingDone?: () => void
   onPointerDown?: (e: React.PointerEvent) => void
@@ -68,6 +69,7 @@ export function SessionItem({
   grouped,
   groupSelected,
   groupColorHex,
+  dimmed,
   forceEditing,
   onEditingDone,
   onPointerDown,
@@ -95,6 +97,7 @@ export function SessionItem({
       grouped={grouped}
       groupSelected={groupSelected}
       groupColorHex={groupColorHex}
+      dimmed={dimmed}
       forceEditing={forceEditing}
       onEditingDone={onEditingDone}
       onPointerDown={onPointerDown}

@@ -96,6 +96,9 @@ function shouldShowGapBefore(
 export function Sidebar() {
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
+  // When there's an active selection, unselected tabs/groups fade so the
+  // selection stands out by contrast.
+  const hasSelection = selectedSessionIds.length > 0
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const selectSession = useSessionStore((s) => s.selectSession)
   const selectSessions = useSessionStore((s) => s.selectSessions)
@@ -1101,6 +1104,7 @@ export function Sidebar() {
                             <FileTabItem
                               fileTab={fileTab}
                               isSelected={selectedSessionIds.includes(fileTab.id)}
+                              dimmed={hasSelection && !selectedSessionIds.includes(fileTab.id)}
                               onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
                               onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
                               forceEditing={renamingId === fileTab.id}
@@ -1124,6 +1128,7 @@ export function Sidebar() {
                             <SessionItem
                               session={session}
                               isSelected={selectedSessionIds.includes(session.id)}
+                              dimmed={hasSelection && !selectedSessionIds.includes(session.id)}
                               onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
                               onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
                               forceEditing={renamingId === session.id}
@@ -1179,6 +1184,7 @@ export function Sidebar() {
                                 aliveSessionIds={aliveSessionIds}
                                 focusedSessionId={focusedSessionId}
                                 allSelected={allGroupSelected}
+                                dimmed={hasSelection && !allGroupSelected}
                                 forceEditing={renamingId === group.id}
                                 onEditingDone={clearRenaming}
                                 onPointerDown={(e) => handlePointerDown(e, group.id, true)}
@@ -1205,6 +1211,7 @@ export function Sidebar() {
                                             <FileTabItem
                                               fileTab={fileTab}
                                               isSelected={selectedSessionIds.includes(fileTab.id)}
+                                              dimmed={hasSelection && !selectedSessionIds.includes(fileTab.id)}
                                               onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
                                               onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
                                               grouped
@@ -1230,6 +1237,7 @@ export function Sidebar() {
                                           <SessionItem
                                             session={session}
                                             isSelected={selectedSessionIds.includes(session.id)}
+                                            dimmed={hasSelection && !selectedSessionIds.includes(session.id)}
                                             onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
                                             onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
                                             grouped

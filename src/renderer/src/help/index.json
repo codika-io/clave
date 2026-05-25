@@ -8,8 +8,8 @@
   {
     "id": "sessions",
     "title": "Sessions",
-    "subtitle": "Claude, terminal, dangerous, and remote session types",
-    "keywords": ["claude", "terminal", "dangerous", "create", "close", "kill", "remote", "agent"]
+    "subtitle": "Claude, terminal, dangerous, Gemini, and remote session types",
+    "keywords": ["claude", "terminal", "dangerous", "gemini", "create", "close", "kill", "remote", "agent"]
   },
   {
     "id": "board",

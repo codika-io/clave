@@ -29,6 +29,8 @@ export interface SidebarTabItemProps {
   groupSelected?: boolean
   /** When set, applies tinted hover/selection backgrounds */
   groupColorHex?: string
+  /** Fades the tab when another item is the active selection */
+  dimmed?: boolean
 
   // Inline rename
   forceEditing?: boolean
@@ -53,6 +55,7 @@ export function SidebarTabItem({
   grouped,
   groupSelected,
   groupColorHex,
+  dimmed,
   forceEditing,
   onEditingDone,
   onPointerDown,
@@ -81,6 +84,13 @@ export function SidebarTabItem({
     [onClick]
   )
 
+  // Dragging takes visual priority; otherwise fade dimmed (unselected) tabs.
+  const itemOpacity = isDragging ? 0.3 : dimmed ? 0.55 : undefined
+  const tintBackground =
+    groupColorHex && isSelected && !groupSelected && grouped
+      ? `${groupColorHex}30`
+      : undefined
+
   return (
     <div
       className="relative"
@@ -104,12 +114,12 @@ export function SidebarTabItem({
                 : ''
               : groupColorHex
                 ? 'text-text-secondary'
-                : '',
-          isDragging && 'opacity-30'
+                : ''
         )}
-        style={groupColorHex && isSelected && !groupSelected && grouped
-          ? { backgroundColor: `${groupColorHex}30` }
-          : undefined
+        style={
+          tintBackground !== undefined || itemOpacity !== undefined
+            ? { backgroundColor: tintBackground, opacity: itemOpacity }
+            : undefined
         }
         onMouseEnter={(e) => {
           if (groupColorHex && !isSelected) {
