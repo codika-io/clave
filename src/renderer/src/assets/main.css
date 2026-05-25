@@ -59,6 +59,12 @@
   --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 
+  /* Single source of truth for "medium" UI text weight. Overrides Tailwind's
+     default font-medium (500) so every `font-medium` utility and every design-
+     system class that references this token gets a lighter weight at once.
+     Geist is loaded at 400/500/600 only — keep this to one of those. */
+  --font-weight-medium: 400;
+
   --ease-out-expo: cubic-bezier(0.2, 0, 0, 1);
 
   --animate-fade-in: fade-in 150ms var(--ease-out-expo);
@@ -290,7 +296,7 @@ body,
   padding: 0 0.625rem;     /* px-2.5 */
   border-radius: 0.5rem;   /* rounded-lg */
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   text-align: left;
   transition: color 150ms, background-color 150ms;
   outline: none;
@@ -329,7 +335,7 @@ body,
   padding: 0 1rem;         /* px-4 */
   border-radius: 0.5rem;   /* rounded-lg */
   font-size: 0.75rem;      /* text-xs */
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   color: white;
   background-color: var(--color-accent);
   transition: background-color 150ms;
@@ -352,7 +358,7 @@ body,
   padding: 0 0.75rem;      /* px-3 */
   border-radius: 0.5rem;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
   background-color: transparent;
   transition: color 150ms, background-color 150ms;
@@ -371,7 +377,7 @@ body,
   flex: 1;
   padding: 0.625rem 0;     /* py-2.5 */
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   transition: color 150ms, background-color 150ms;
 }
 .btn-dialog:hover {
@@ -453,7 +459,7 @@ body,
   border-radius: 9999px;   /* rounded-full */
   padding: 2px 6px;        /* py-0.5 px-1.5 */
   font-size: 10px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .badge-uppercase {
@@ -476,7 +482,7 @@ body,
   background-color: var(--surface-100);
   color: var(--text-secondary);
   font-size: 10px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   line-height: 1;
   white-space: nowrap;
   transition: color 150ms, background-color 150ms;
