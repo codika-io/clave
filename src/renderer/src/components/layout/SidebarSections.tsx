@@ -9,30 +9,23 @@ import { cn } from '../../lib/utils'
 
 export function SectionHeading({
   title,
-  collapsed,
   onToggle,
   actions
 }: {
   title: string
-  /** When omitted, the heading is static (no disclosure arrow, not clickable). */
-  collapsed?: boolean
+  /** When provided, the whole label toggles the section (no disclosure arrow). */
   onToggle?: () => void
   actions?: React.ReactNode
 }) {
+  // Label left-padding aligns with the leading icon of tab rows:
+  // px-2 container (0.5rem) + .sidebar-item padding (0.625rem) = 1.125rem.
+  const label = <span className="text-[13px] font-medium text-text-tertiary">{title}</span>
   return (
-    <div className="w-full flex items-center gap-1.5 px-3 pt-3.5 pb-1 flex-shrink-0">
+    <div className="w-full flex items-center pl-[1.125rem] pr-3 pt-3.5 pb-1 flex-shrink-0">
       {onToggle ? (
-        <button onClick={onToggle} className="flex items-center gap-1.5">
-          <ChevronRightIcon
-            className={cn(
-              'w-3 h-3 text-text-tertiary transition-transform duration-150',
-              collapsed ? 'rotate-0' : 'rotate-90'
-            )}
-          />
-          <span className="text-[13px] font-medium text-text-tertiary">{title}</span>
-        </button>
+        <button onClick={onToggle} className="text-left">{label}</button>
       ) : (
-        <span className="text-[13px] font-medium text-text-tertiary">{title}</span>
+        label
       )}
       {actions && <div className="ml-auto flex items-center gap-0.5">{actions}</div>}
     </div>

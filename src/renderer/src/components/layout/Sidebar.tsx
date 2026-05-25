@@ -30,13 +30,11 @@ import { SidebarFooter, UpdateBanner } from './SidebarFooter'
 import { WorkTracker } from '../work-tracker/WorkTracker'
 import { ScrollArea } from '../ui/scroll-area'
 import {
-  MagnifyingGlassIcon,
   PencilSquareIcon,
   TrashIcon,
   Squares2X2Icon,
   FolderMinusIcon,
   CommandLineIcon,
-  ArrowPathIcon,
   XMarkIcon,
   DocumentDuplicateIcon,
   BookmarkIcon,
@@ -118,13 +116,11 @@ export function Sidebar() {
   const fileTabs = useSessionStore((s) => s.fileTabs)
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
   const searchQuery = useSessionStore((s) => s.searchQuery)
-  const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
   const [loading, setLoading] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null)
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
-  const searchInputRef = useRef<HTMLInputElement>(null)
   const [terminalDialogState, setTerminalDialogState] = useState<{
     groupId: string
     terminalId: string | null // null = adding new
@@ -1010,97 +1006,64 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
-      {/* Action bar with traffic-light offset — top padding is draggable */}
+      {/* Draggable top spacer — clears the macOS traffic lights */}
       <div
-        className="pt-11 px-3 pb-2 flex items-center gap-1.5 flex-shrink-0"
+        className="pt-11 pb-1 flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        <div
-          className="flex-1 relative flex items-center"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
-          <input
-            ref={searchInputRef}
-            data-sidebar-search
-            type="text"
-            placeholder=""
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setSearchQuery('')
-                searchInputRef.current?.blur()
-              }
-            }}
-            className="w-full h-7 pl-8 pr-2 rounded-lg bg-surface-100 border-none text-xs text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors"
-          />
-        </div>
-        <button
-          onClick={() => setResetConfirmOpen(true)}
-          disabled={sessions.length === 0}
-          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-30 disabled:pointer-events-none"
-          title="Reset sessions"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <ArrowPathIcon className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      />
 
       {/* Single scrollable area for all sections */}
       <ScrollArea
         viewportRef={scrollContainerRef}
         className="flex-1 min-h-0"
       >
-        {/* Pinned groups section */}
-        <PinnedSection
-          setContextMenu={setContextMenu}
-          pinnedZoneRef={pinnedZoneRef}
-          isOverPinnedZone={isOverPinnedZone}
-          draggedGroupId={draggedGroupId}
-          isFileDragOver={isFileDragOverWindow}
-        />
+        {/* New session tab */}
+        <div className="px-2 pb-1">
+          <NewSessionDropdown
+            onNewSession={({ claudeMode, geminiMode, dangerousMode, locationId }) => {
+              if (locationId) {
+                // Remote: open directory picker
+                const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
+                setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, geminiMode })
+              } else if (geminiMode) {
+                // Gemini: spawn directly without mode override
+                const store = useSessionStore.getState()
+                const prevGemini = store.geminiMode
+                const prevClaude = store.claudeMode
+                useSessionStore.setState({ geminiMode: true, claudeMode: false })
+                handleNewSession().finally(() => {
+                  useSessionStore.setState({ geminiMode: prevGemini, claudeMode: prevClaude })
+                })
+              } else {
+                // Local: existing flow (temporary mode override -> handleNewSession)
+                const store = useSessionStore.getState()
+                const prevClaude = store.claudeMode
+                const prevDangerous = store.dangerousMode
+                if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode })
+                if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode })
+                handleNewSession().finally(() => {
+                  if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode: prevClaude })
+                  if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode: prevDangerous })
+                })
+              }
+            }}
+            loading={loading}
+          />
+        </div>
 
-        {/* Queue tab — pinned at the top, above active sessions */}
+        {/* Queue tab */}
         <TaskQueueSection collapsed={false} />
 
         {!isSearchMode && (
           <>
-            {/* Sessions section */}
-            <SectionHeading
-              title="Active Sessions"
-              actions={
-                <NewSessionDropdown
-                  onNewSession={({ claudeMode, geminiMode, dangerousMode, locationId }) => {
-                    if (locationId) {
-                      // Remote: open directory picker
-                      const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
-                      setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, geminiMode })
-                    } else if (geminiMode) {
-                      // Gemini: spawn directly without mode override
-                      const store = useSessionStore.getState()
-                      const prevGemini = store.geminiMode
-                      const prevClaude = store.claudeMode
-                      useSessionStore.setState({ geminiMode: true, claudeMode: false })
-                      handleNewSession().finally(() => {
-                        useSessionStore.setState({ geminiMode: prevGemini, claudeMode: prevClaude })
-                      })
-                    } else {
-                      // Local: existing flow (temporary mode override -> handleNewSession)
-                      const store = useSessionStore.getState()
-                      const prevClaude = store.claudeMode
-                      const prevDangerous = store.dangerousMode
-                      if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode })
-                      if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode })
-                      handleNewSession().finally(() => {
-                        if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode: prevClaude })
-                        if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode: prevDangerous })
-                      })
-                    }
-                  }}
-                  loading={loading}
-                />
-              }
+            {/* Sessions section — pinned groups render directly under this header */}
+            <SectionHeading title="Sessions" />
+            <PinnedSection
+              setContextMenu={setContextMenu}
+              pinnedZoneRef={pinnedZoneRef}
+              isOverPinnedZone={isOverPinnedZone}
+              draggedGroupId={draggedGroupId}
+              isFileDragOver={isFileDragOverWindow}
             />
             <div>
               <div className="px-2 space-y-1">
@@ -1465,8 +1428,6 @@ function PinnedSection({
   isFileDragOver: boolean
 }) {
   const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
-  const pinnedCollapsed = usePinnedStore((s) => s.pinnedCollapsed)
-  const togglePinnedCollapsed = usePinnedStore((s) => s.togglePinnedCollapsed)
   const [exportDialogPinnedId, setExportDialogPinnedId] = useState<string | null>(null)
 
   const handleContextMenu = useCallback(
@@ -1503,35 +1464,20 @@ function PinnedSection({
     [setContextMenu]
   )
 
-  // Show pinned section when there are pins, dragging a group, or dragging a .clave file
+  // Show pinned groups when there are pins, dragging a group, or dragging a .clave file
   const showSection = pinnedGroups.length > 0 || !!draggedGroupId || isFileDragOver
-
-  // Force expand when dragging a group or file over
-  const effectiveCollapsed = pinnedCollapsed && !draggedGroupId && !isFileDragOver
 
   if (!showSection) return null
 
   return (
     <>
-      <SectionHeading
-        title="Pinned"
-        collapsed={pinnedCollapsed}
-        onToggle={togglePinnedCollapsed}
+      <PinnedGroupsGrid
+        ref={pinnedZoneRef}
+        onContextMenu={handleContextMenu}
+        isOverPinnedZone={isOverPinnedZone}
+        draggedGroupId={draggedGroupId}
+        isFileDragOver={isFileDragOver}
       />
-      <div
-        className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
-        style={{ gridTemplateRows: effectiveCollapsed ? '0fr' : '1fr', opacity: effectiveCollapsed ? 0 : 1, transform: effectiveCollapsed ? 'translateY(-4px)' : 'translateY(0)' }}
-      >
-        <div className="overflow-hidden">
-          <PinnedGroupsGrid
-            ref={pinnedZoneRef}
-            onContextMenu={handleContextMenu}
-            isOverPinnedZone={isOverPinnedZone}
-            draggedGroupId={draggedGroupId}
-            isFileDragOver={isFileDragOver}
-          />
-        </div>
-      </div>
       <ExportClaveDialog
         isOpen={exportDialogPinnedId !== null}
         defaultFileName={exportDialogPinnedId ? getExportFileName(exportDialogPinnedId) : 'group.clave'}

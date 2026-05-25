@@ -74,10 +74,11 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
           <button
             ref={(el) => { btnRef.current = el }}
             disabled={loading}
-            className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-surface-200 text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0 disabled:opacity-50"
+            className="sidebar-item w-full disabled:opacity-50"
             title="New session"
           >
-            <PencilSquareIcon className="w-3.5 h-3.5" />
+            <PencilSquareIcon className="sidebar-tab-icon flex-shrink-0 text-text-tertiary" />
+            <span className="truncate">New session</span>
           </button>
         </DropdownMenuTrigger>
 
