@@ -9,7 +9,6 @@ import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
 import { AgentChatPanel } from '../agents/AgentChatPanel'
-import { HistoryPanel } from '../history/HistoryPanel'
 import { useLaunchTemplate } from '../../hooks/use-launch-template'
 import { useWorkTracker } from '../../store/work-tracker-store'
 import { FilePalette } from '../files/FilePalette'
@@ -530,9 +529,6 @@ export function AppShell() {
           </div>
           <div className={activeView === 'agents' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <AgentChatPanel />
-          </div>
-          <div className={activeView === 'history' ? 'flex-1 flex min-h-0 min-w-0' : 'hidden'}>
-            <HistoryPanel />
           </div>
         </div>
 

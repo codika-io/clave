@@ -4,7 +4,6 @@ import type { ActiveView } from '../store/session-types'
 const VIEW_TARGETS: Set<string> = new Set([
   'terminals',
   'board',
-  'history',
   'settings',
   'usage',
   'agents'

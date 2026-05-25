@@ -58,16 +58,6 @@ const electronAPI = {
     extras?: { sessionType?: string | null; locationId?: string | null }
   ) => ipcRenderer.invoke('session:save-plan', cwd, claudeSessionId, sessionName, extras),
 
-  // Claude history
-  historyListProjects: () =>
-    ipcRenderer.invoke('claude-history:list-projects'),
-  historyLoadSessions: (projectId: string) =>
-    ipcRenderer.invoke('claude-history:load-sessions', projectId),
-  historyLoadMessages: (sourcePath: string) =>
-    ipcRenderer.invoke('claude-history:load-messages', sourcePath),
-  historySearch: (query: string, roleFilter: 'all' | 'user' | 'assistant' = 'all') =>
-    ipcRenderer.invoke('claude-history:search', query, roleFilter),
-
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   checkPort: (port: number) =>
     ipcRenderer.invoke('net:check-port', port) as Promise<boolean>,

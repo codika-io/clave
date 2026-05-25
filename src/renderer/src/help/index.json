@@ -36,12 +36,6 @@
     "keywords": ["file", "browse", "tree", "preview", "palette", "markdown", "edit", "image"]
   },
   {
-    "id": "history",
-    "title": "History",
-    "subtitle": "Browse and search past Claude Code conversations",
-    "keywords": ["history", "past", "session", "conversation", "search", "chat"]
-  },
-  {
     "id": "work-tracker",
     "title": "Work Tracker",
     "subtitle": "Daily time tracking, streaks, and break reminders",

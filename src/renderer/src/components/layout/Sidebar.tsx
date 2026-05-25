@@ -17,7 +17,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { GroupCommandDialog } from '../ui/GroupCommandDialog'
 import { ExportClaveDialog } from '../ui/ExportClaveDialog'
 import { cn } from '../../lib/utils'
-import { SectionHeading, TaskQueueSection, HistorySection } from './SidebarSections'
+import { SectionHeading, TaskQueueSection } from './SidebarSections'
 import { WhatsNewBanner } from '../help/WhatsNewBanner'
 import { NewSessionDropdown } from './NewSessionDropdown'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
@@ -1315,7 +1315,6 @@ export function Sidebar() {
         {/* Activity section */}
         <SectionHeading title="Activity" collapsed={boardCollapsed} onToggle={() => setBoardCollapsed((c) => !c)} />
         <TaskQueueSection collapsed={boardCollapsed} />
-        <HistorySection collapsed={boardCollapsed} />
       </ScrollArea>
 
       {/* Announcements — above the bottom bar */}
