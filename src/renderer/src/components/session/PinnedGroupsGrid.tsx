@@ -102,7 +102,9 @@ export const PinnedGroupsGrid = forwardRef<HTMLDivElement, PinnedGroupsGridProps
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="px-2 pt-0.5 pb-1 flex flex-col gap-1">
+        {/* px-1 matches the session-group card's bleed (-mx-1) so pinned cards
+            and group cards share the same left/right edges */}
+        <div className="px-1 pt-0.5 pb-1 flex flex-col gap-1">
           {categorizedGroups.map(({ category, groups }) => {
             const catGridColumns = getGridColumns(groups.length, sidebarWidth)
             return (
@@ -130,7 +132,7 @@ export const PinnedGroupsGrid = forwardRef<HTMLDivElement, PinnedGroupsGridProps
             <div className="grid gap-1.5" style={{ gridTemplateColumns: '1fr' }}>
               {showGroupPlaceholder && (
                 <div className={`
-                  flex items-center justify-center px-2 py-2 rounded-lg border-2 border-dashed
+                  flex items-center justify-center px-2 py-2 rounded-xl border-2 border-dashed
                   text-[12px] font-medium transition-all duration-150
                   ${isOverPinnedZone
                     ? 'border-accent/60 text-accent/80 bg-accent/10'
@@ -141,7 +143,7 @@ export const PinnedGroupsGrid = forwardRef<HTMLDivElement, PinnedGroupsGridProps
                 </div>
               )}
               {showFilePlaceholder && !showGroupPlaceholder && (
-                <div className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg border-2 border-dashed border-accent/60 text-accent/80 bg-accent/10 text-[12px] font-medium transition-all duration-150">
+                <div className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border-2 border-dashed border-accent/60 text-accent/80 bg-accent/10 text-[12px] font-medium transition-all duration-150">
                   <DocumentIcon className="w-3.5 h-3.5" />
                   <span className="truncate">Drop .clave</span>
                 </div>
@@ -190,7 +192,7 @@ function PinnedGroupButton({
         onContextMenu(e, pinnedGroup.id)
       }}
       className={`
-        relative flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg
+        relative flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl
         border text-[12px] font-medium truncate transition-all duration-150
         ${flashing ? 'ring-2 ring-accent animate-pulse' : ''}
         ${highlighted
