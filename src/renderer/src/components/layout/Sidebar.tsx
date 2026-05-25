@@ -1017,8 +1017,8 @@ export function Sidebar() {
         viewportRef={scrollContainerRef}
         className="flex-1 min-h-0"
       >
-        {/* New session tab */}
-        <div className="px-2 pb-1">
+        {/* Permanent tabs — share the same row gap as the session tabs below */}
+        <div className="px-2 space-y-0.5">
           <NewSessionDropdown
             onNewSession={({ claudeMode, geminiMode, dangerousMode, locationId }) => {
               if (locationId) {
@@ -1049,10 +1049,8 @@ export function Sidebar() {
             }}
             loading={loading}
           />
+          <TaskQueueSection />
         </div>
-
-        {/* Queue tab */}
-        <TaskQueueSection collapsed={false} />
 
         {!isSearchMode && (
           <>
@@ -1153,7 +1151,10 @@ export function Sidebar() {
                             <DropGap active={gapBefore} />
                             <div
                               className={cn(
-                                'relative rounded-xl border transition-colors px-1',
+                                // Bleed the card outward (-mx-1) and pad back in (px-1) so the
+                                // header + child tabs stay on the same left rail as ungrouped
+                                // tabs, while the border gains a gutter from the tab highlights.
+                                'relative rounded-xl border transition-colors -mx-1 px-1',
                                 !groupColorHex && (allGroupSelected
                                   ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
                                   : 'bg-surface-100/30 border-border-subtle hover:bg-surface-100/60')

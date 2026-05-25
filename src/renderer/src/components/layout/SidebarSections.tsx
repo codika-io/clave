@@ -32,81 +32,70 @@ export function SectionHeading({
   )
 }
 
-export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
+export function TaskQueueSection() {
   const activeView = useSessionStore((s) => s.activeView)
   const setActiveView = useSessionStore((s) => s.setActiveView)
   const tasks = useBoardStore((s) => s.tasks)
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div
-      className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out flex-shrink-0"
-      style={{
-        gridTemplateRows: collapsed ? '0fr' : '1fr',
-        opacity: collapsed ? 0 : 1,
-        transform: collapsed ? 'translateY(-4px)' : 'translateY(0)'
-      }}
-    >
-      <div className="overflow-hidden">
-        <div className="px-2 pb-1">
-          {/* Queue row — clickable to navigate, chevron to expand sub-items */}
-          <button
-            onClick={() => setActiveView('board')}
-            data-selected={activeView === 'board' ? 'true' : undefined}
-            className="sidebar-item"
-          >
-            <QueueListIcon className="sidebar-tab-icon flex-shrink-0" />
-            <span className="truncate">Queue</span>
-            {tasks.length > 0 && (
-              <span className="ml-auto flex items-center gap-1.5">
-                <span
-                  role="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setExpanded((v) => !v)
-                  }}
-                  className="btn-icon btn-icon-xs hover:bg-surface-300/50"
-                >
-                  <ChevronRightIcon
-                    className={cn(
-                      'w-3 h-3 text-text-tertiary transition-transform duration-150',
-                      expanded ? 'rotate-90' : 'rotate-0'
-                    )}
-                  />
-                </span>
-              </span>
-            )}
-          </button>
+    <div>
+      {/* Queue row — clickable to navigate, chevron to expand sub-items */}
+      <button
+        onClick={() => setActiveView('board')}
+        data-selected={activeView === 'board' ? 'true' : undefined}
+        className="sidebar-item"
+      >
+        <QueueListIcon className="sidebar-tab-icon flex-shrink-0" />
+        <span className="truncate">Queue</span>
+        {tasks.length > 0 && (
+          <span className="ml-auto flex items-center gap-1.5">
+            <span
+              role="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setExpanded((v) => !v)
+              }}
+              className="btn-icon btn-icon-xs hover:bg-surface-300/50"
+            >
+              <ChevronRightIcon
+                className={cn(
+                  'w-3 h-3 text-text-tertiary transition-transform duration-150',
+                  expanded ? 'rotate-90' : 'rotate-0'
+                )}
+              />
+            </span>
+          </span>
+        )}
+      </button>
 
-          {/* Expanded sub-items: task list with vertical connecting line */}
-          {expanded && tasks.length > 0 && (
-            <div className="relative ml-[18px] mt-0.5">
-              {/* Vertical connecting line */}
-              <div className="absolute left-0 top-0 bottom-0 w-px bg-border-subtle" />
+      {/* Expanded sub-items: task list with vertical connecting line */}
+      {expanded && tasks.length > 0 && (
+        <div className="relative ml-[18px] mt-0.5">
+          {/* Vertical connecting line */}
+          <div className="absolute left-0 top-0 bottom-0 w-px bg-border-subtle" />
 
-              {tasks.map((task) => {
-                const label = task.title || task.prompt
-                return (
-                  <button
-                    key={task.id}
-                    onClick={() => setActiveView('board')}
-                    className="group relative w-full flex items-center gap-2 pl-4 pr-2 py-1 text-left rounded-r-md hover:bg-surface-100 transition-colors"
-                  >
-                    {/* Horizontal branch tick */}
-                    <div className="absolute left-0 top-1/2 w-2.5 h-px bg-border-subtle" />
-                    <span className="text-[12px] text-text-secondary truncate">{label}</span>
-                    {task.dangerousMode && (
-                      <span className="flex-shrink-0 text-[9px] text-red-400 font-medium">
-                        skip
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          {tasks.map((task) => {
+            const label = task.title || task.prompt
+            return (
+              <button
+                key={task.id}
+                onClick={() => setActiveView('board')}
+                className="group relative w-full flex items-center gap-2 pl-4 pr-2 py-1 text-left rounded-r-md hover:bg-surface-100 transition-colors"
+              >
+                {/* Horizontal branch tick */}
+                <div className="absolute left-0 top-1/2 w-2.5 h-px bg-border-subtle" />
+                <span className="text-[12px] text-text-secondary truncate">{label}</span>
+                {task.dangerousMode && (
+                  <span className="flex-shrink-0 text-[9px] text-red-400 font-medium">
+                    skip
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
-      </div>
+      )}
     </div>
   )
 }
