@@ -460,7 +460,7 @@ export function AppShell() {
           <div
             className={cn(
               'h-8 flex items-center justify-between px-0.5 flex-shrink-0',
-              !sidebarOpen && 'pl-[5.5rem]'
+              !sidebarOpen && 'pl-[4.75rem]'
             )}
             style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
           >
@@ -471,7 +471,7 @@ export function AppShell() {
             >
               <button
                 onClick={toggleSidebar}
-                className="btn-icon btn-icon-md"
+                className="btn-icon btn-icon-sm"
                 title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
               >
                 <Bars3BottomLeftIcon className="w-4 h-4" />
@@ -493,7 +493,7 @@ export function AppShell() {
               {/* File palette button */}
               <button
                 onClick={toggleFilePalette}
-                className="btn-icon btn-icon-md"
+                className="btn-icon btn-icon-sm"
                 title="Search files (Cmd+P)"
               >
                 <MagnifyingGlassIcon className="w-4 h-4" />
@@ -502,7 +502,7 @@ export function AppShell() {
               <button
                 onClick={toggleFileTree}
                 className={cn(
-                  'btn-icon btn-icon-md',
+                  'btn-icon btn-icon-sm',
                   fileTreeOpen && '!text-accent'
                 )}
                 title="File tree (Cmd+E)"

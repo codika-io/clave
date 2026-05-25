@@ -27,7 +27,7 @@ function createWindow(): void {
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset' as const,
-          trafficLightPosition: { x: 16, y: 16 }
+          trafficLightPosition: { x: 16, y: 18 }
         }
       : {}),
     webPreferences: {
