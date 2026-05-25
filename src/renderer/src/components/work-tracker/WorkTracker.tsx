@@ -28,7 +28,7 @@ export function WorkTracker() {
     <button
       onClick={() => setActiveView('usage')}
       className={cn(
-        'w-full flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors text-left',
+        'w-full flex items-center gap-2 px-2.5 h-[var(--control-h-md)] rounded-xl transition-colors text-left',
         hasBreak
           ? isStrong
             ? 'bg-wellbeing-strong-bg'

@@ -154,7 +154,7 @@ export function SidebarFooter() {
                   setPopoverOpen(false)
                 }}
                 className={cn(
-                  'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] transition-colors cursor-default select-none',
+                  'w-full flex items-center gap-2 px-2 h-[var(--control-h-md)] rounded-md text-[13px] transition-colors cursor-default select-none',
                   activeView === view
                     ? 'bg-surface-200 text-text-primary'
                     : 'text-text-secondary hover:text-text-primary hover:bg-surface-200'
@@ -174,7 +174,7 @@ export function SidebarFooter() {
                 onClick={() => {
                   undismiss()
                 }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] transition-colors cursor-default select-none text-accent hover:bg-surface-200"
+                className="w-full flex items-center gap-2 px-2 h-[var(--control-h-md)] rounded-md text-[13px] transition-colors cursor-default select-none text-accent hover:bg-surface-200"
               >
                 <ArrowDownTrayIcon className="w-4 h-4 flex-shrink-0" />
                 <span>Update available</span>
