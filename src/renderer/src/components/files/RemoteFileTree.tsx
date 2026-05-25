@@ -96,14 +96,14 @@ function RemoteFileTreeRow({
           width="10"
           height="10"
           viewBox="0 0 10 10"
-          className={`flex-shrink-0 text-text-tertiary transition-transform ${node.expanded ? 'rotate-90' : ''}`}
+          className={`flex-shrink-0 text-[color:var(--sidebar-icon-color)] transition-transform ${node.expanded ? 'rotate-90' : ''}`}
         >
           <path d="M3 1.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
       {node.type === 'file' && <span className="w-2.5 flex-shrink-0" />}
-      <FileIcon name={node.name} isDirectory={node.type === 'directory'} />
-      <span className="text-[12px] text-text-primary truncate">
+      <FileIcon name={node.name} isDirectory={node.type === 'directory'} className="text-[color:var(--sidebar-icon-color)]" />
+      <span className="text-[12px] font-medium text-[color:var(--sidebar-item-text)] truncate">
         {node.name}
       </span>
       {node.loading && (

@@ -98,7 +98,7 @@ export function FileTreeItem({
 
       {/* Chevron for directories */}
       {node.type === 'directory' ? (
-        <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-text-tertiary">
+        <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-[color:var(--sidebar-icon-color)]">
           {node.loading ? (
             <svg width="12" height="12" viewBox="0 0 12 12" className="animate-spin">
               <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeDasharray="20" strokeDashoffset="10" />
@@ -122,11 +122,11 @@ export function FileTreeItem({
       <FileIcon
         name={node.name}
         isDirectory={node.type === 'directory'}
-        className="flex-shrink-0 text-text-tertiary ml-0.5 mr-1.5"
+        className="flex-shrink-0 text-[color:var(--sidebar-icon-color)] ml-0.5 mr-1.5"
       />
 
-      <span className="truncate text-xs">
-        <span className="text-text-primary">{node.name}</span>
+      <span className="truncate text-xs font-medium">
+        <span className="text-[color:var(--sidebar-item-text)]">{node.name}</span>
         {node.type === 'file' && node.path.includes('/') && node.depth === 0 && (
           <span className="text-text-tertiary ml-1.5">{node.path.slice(0, node.path.lastIndexOf('/'))}</span>
         )}
