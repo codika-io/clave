@@ -99,12 +99,12 @@ export function SessionGroupItem({
         {/* Folder disclosure — open when expanded, closed when collapsed */}
         <span
           onClick={handleToggleCollapse}
-          className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center text-text-tertiary cursor-pointer"
+          className="sidebar-tab-icon flex-shrink-0 flex items-center justify-center text-text-tertiary cursor-pointer"
         >
           {group.collapsed ? (
-            <FolderIcon className="w-3.5 h-3.5" />
+            <FolderIcon />
           ) : (
-            <FolderOpenIcon className="w-3.5 h-3.5" />
+            <FolderOpenIcon />
           )}
         </span>
 

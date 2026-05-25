@@ -61,7 +61,7 @@ export function TaskQueueSection({ collapsed }: { collapsed: boolean }) {
             data-selected={activeView === 'board' ? 'true' : undefined}
             className="sidebar-item"
           >
-            <QueueListIcon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />
+            <QueueListIcon className="sidebar-tab-icon flex-shrink-0 text-text-tertiary" />
             <span className="truncate">Queue</span>
             {tasks.length > 0 && (
               <span className="ml-auto flex items-center gap-1.5">
@@ -183,7 +183,7 @@ export function HistorySection({ collapsed }: { collapsed: boolean }) {
             data-selected={activeView === 'history' ? 'true' : undefined}
             className="sidebar-item"
           >
-            <ClockIcon className="flex-shrink-0 w-4 h-4 text-text-tertiary" />
+            <ClockIcon className="sidebar-tab-icon flex-shrink-0 text-text-tertiary" />
             <span className="truncate">History</span>
             <span className="ml-auto flex items-center gap-1.5">
               <span

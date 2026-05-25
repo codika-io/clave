@@ -51,11 +51,11 @@ export function FileTabItem({
       onRename={renameFileTab}
       onDelete={() => removeFileTab(fileTab.id)}
       icon={
-        <span className="flex-shrink-0 w-4 h-4">
+        <span className="sidebar-tab-icon flex-shrink-0">
           {isDiff ? (
-            <CodeBracketSquareIcon className="w-4 h-4 text-text-tertiary" />
+            <CodeBracketSquareIcon className="text-text-tertiary" />
           ) : (
-            <DocumentTextIcon className="w-4 h-4 text-text-tertiary" />
+            <DocumentTextIcon className="text-text-tertiary" />
           )}
         </span>
       }
