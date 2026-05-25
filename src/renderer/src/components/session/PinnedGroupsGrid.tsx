@@ -102,9 +102,8 @@ export const PinnedGroupsGrid = forwardRef<HTMLDivElement, PinnedGroupsGridProps
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* px-1 matches the session-group card's bleed (-mx-1) so pinned cards
-            and group cards share the same left/right edges */}
-        <div className="px-1 pt-0.5 pb-1 flex flex-col gap-1">
+        {/* px-2 matches the normal tab width so pinned/group cards align with tabs */}
+        <div className="px-2 pt-0.5 pb-1 flex flex-col gap-1">
           {categorizedGroups.map(({ category, groups }) => {
             const catGridColumns = getGridColumns(groups.length, sidebarWidth)
             return (
@@ -192,7 +191,7 @@ function PinnedGroupButton({
         onContextMenu(e, pinnedGroup.id)
       }}
       className={`
-        relative flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl
+        relative flex items-center justify-center gap-1.5 px-1.5 py-2 rounded-xl
         border text-[12px] font-medium truncate transition-all duration-150
         ${flashing ? 'ring-2 ring-accent animate-pulse' : ''}
         ${highlighted

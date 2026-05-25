@@ -1151,10 +1151,10 @@ export function Sidebar() {
                             <DropGap active={gapBefore} />
                             <div
                               className={cn(
-                                // Bleed the card outward (-mx-1) and pad back in (px-1) so the
-                                // header + child tabs stay on the same left rail as ungrouped
-                                // tabs, while the border gains a gutter from the tab highlights.
-                                'relative rounded-xl border transition-colors -mx-1 px-1',
+                                // Same outer width as ungrouped tabs (no bleed). Child-tab
+                                // highlights are inset instead (see grouped children container)
+                                // so they don't feel like they touch the card border.
+                                'relative rounded-xl border transition-colors',
                                 !groupColorHex && (allGroupSelected
                                   ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
                                   : 'bg-surface-100/30 border-border-subtle hover:bg-surface-100/60')
@@ -1189,7 +1189,8 @@ export function Sidebar() {
                                 style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
                               >
                                 <div className="overflow-hidden">
-                                  <div className="px-0 pb-1 space-y-0.5">
+                                  {/* px-1 narrows the child-tab highlight so it doesn't touch the group border */}
+                                  <div className="px-1 pb-1 space-y-0.5">
                                     {group.sessionIds.map((sid, sIdx) => {
                                       const prevSid = sIdx > 0 ? group.sessionIds[sIdx - 1] : null
                                       const isLastInGroup = sIdx === group.sessionIds.length - 1
