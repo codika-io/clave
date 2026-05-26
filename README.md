@@ -24,6 +24,10 @@ Download the `.dmg`, drag to Applications, done.
 
 Auto-updates are built in — once installed, new versions download silently in the background.
 
+### Uninstall
+
+Quit Clave and drag it from `/Applications` to the Trash. To also remove local settings and cached session data, delete `~/Library/Application Support/clave`.
+
 ## Agent plugin
 
 Clave ships a companion agent plugin ([`codika-io/clave-plugin`](https://github.com/codika-io/clave-plugin)) that lets any Claude Code, Cursor, or other [Open-Plugin-compatible](https://github.com/vercel-labs/open-plugin-spec) coding agent generate `.clave` workspace files for you.
@@ -84,6 +88,20 @@ npx plugins add codika-io/clave-plugin   # re-run to pull latest
 
 - macOS (Apple Silicon or Intel)
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+
+## Privacy & network
+
+Clave is local-first. It has no account or sign-in, and sends **no telemetry, analytics, or tracking** of any kind. Your sessions, history, and settings stay on your machine.
+
+The only network requests Clave makes are:
+
+- **Claude Code** reaches the Anthropic API through your own local Claude Code install — Clave never proxies or sees that traffic.
+- **Auto-updates** — [electron-updater](https://www.electron.build/auto-update) checks [GitHub Releases](https://github.com/codika-io/clave/releases) for new versions and installs the signed, notarized build on quit. Auto-download is off by default.
+- **Git operations** — standard fetch/pull/push to whatever remotes your own repositories use.
+- **SSH / SFTP** — only to remote hosts you explicitly add.
+- **OpenClaw agent chat** — an optional WebSocket connection, established only when you connect an SSH location that has OpenClaw running.
+
+> A "Dangerous Mode" session (Cmd+D) launches Claude Code with `--dangerously-skip-permissions`. It is never the default and is clearly labelled in the UI.
 
 ## Build from source
 
