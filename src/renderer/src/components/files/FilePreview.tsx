@@ -3,7 +3,14 @@ import { motion } from 'framer-motion'
 import { useSessionStore } from '../../store/session-store'
 import { useSyntaxHighlight } from '../../hooks/use-syntax-highlight'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import { CopyIcon, ExternalLinkIcon, CloseIcon, EditIcon, OpenInTabIcon, fileActionButtonClass } from './FileActionIcons'
+import {
+  DocumentDuplicateIcon,
+  ArrowTopRightOnSquareIcon,
+  XMarkIcon,
+  PencilIcon,
+  WindowIcon
+} from '@heroicons/react/24/outline'
+import { fileActionButtonClass } from './FileActionIcons'
 import type { FileReadResult } from '../../../../preload/index.d'
 
 const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'])
@@ -278,23 +285,23 @@ export function FilePreview() {
             ) : (
               <>
                 <button onClick={openInTab} className={fileActionButtonClass} title="Open in tab">
-                  <OpenInTabIcon />
+                  <WindowIcon className="w-3.5 h-3.5" />
                 </button>
                 {canOpenExternally && (
                   <button onClick={openExternally} className={fileActionButtonClass} title="Open externally">
-                    <ExternalLinkIcon />
+                    <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
                   </button>
                 )}
                 {canEdit && (
                   <button onClick={enterEditMode} className={fileActionButtonClass} title="Edit file">
-                    <EditIcon />
+                    <PencilIcon className="w-3.5 h-3.5" />
                   </button>
                 )}
                 <button onClick={() => navigator.clipboard.writeText(`./${previewFile}`)} className={fileActionButtonClass} title="Copy path">
-                  <CopyIcon />
+                  <DocumentDuplicateIcon className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={close} className={fileActionButtonClass}>
-                  <CloseIcon />
+                <button onClick={close} className={fileActionButtonClass} title="Close">
+                  <XMarkIcon className="w-3.5 h-3.5" />
                 </button>
               </>
             )}

@@ -18,7 +18,16 @@ interface ContextMenuProps {
   header?: React.ReactNode
 }
 
+// Estimated menu footprint, used to decide which side of the cursor to open on.
+const ESTIMATED_MENU_WIDTH = 220
+const ESTIMATED_MENU_HEIGHT = 280
+
 export function ContextMenu({ items, x, y, onClose, header }: ContextMenuProps) {
+  // Open leftward / upward when the cursor is too close to the viewport edge,
+  // so the menu is never cropped off-screen.
+  const align = x > window.innerWidth - ESTIMATED_MENU_WIDTH ? 'end' : 'start'
+  const side = y > window.innerHeight - ESTIMATED_MENU_HEIGHT ? 'top' : 'bottom'
+
   return (
     <DropdownMenuPrimitive.Root open onOpenChange={(open) => { if (!open) onClose() }}>
       <DropdownMenuPrimitive.Trigger
@@ -37,10 +46,12 @@ export function ContextMenu({ items, x, y, onClose, header }: ContextMenuProps) 
       />
       <DropdownMenuPrimitive.Portal>
         <DropdownMenuPrimitive.Content
-          side="bottom"
-          align="start"
+          side={side}
+          align={align}
           sideOffset={0}
           alignOffset={0}
+          avoidCollisions
+          collisionPadding={8}
           className="z-50 min-w-[160px] overflow-hidden rounded-lg border border-border bg-surface-100 py-1 shadow-xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
           onCloseAutoFocus={(e) => e.preventDefault()}
         >

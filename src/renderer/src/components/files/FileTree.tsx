@@ -4,11 +4,24 @@ import { useFileTree, type FlatTreeNode } from '../../hooks/use-file-tree'
 import { FileTreeItem } from './FileTreeItem'
 import { ContextMenu } from '../ui/ContextMenu'
 import { IconButton } from '../ui/tooltip'
+import {
+  EyeIcon,
+  WindowIcon,
+  PencilSquareIcon,
+  ArrowTopRightOnSquareIcon,
+  FolderOpenIcon,
+  MapIcon,
+  DocumentPlusIcon,
+  FolderPlusIcon,
+  DocumentDuplicateIcon,
+  ClipboardDocumentIcon,
+  MagnifyingGlassIcon
+} from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
   x: number
   y: number
-  items: { label: string; onClick: () => void; shortcut?: string }[]
+  items: { label: string; onClick: () => void; shortcut?: string; icon?: React.ReactNode }[]
 }
 
 interface InlineCreateState {
@@ -230,15 +243,17 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
     (e: React.MouseEvent, node: FlatTreeNode) => {
       if (!cwd) return
       const absPath = `${cwd}/${node.path}`
-      const items: { label: string; onClick: () => void; shortcut?: string }[] = []
+      const items: ContextMenuState['items'] = []
 
       if (node.type === 'file') {
         items.push({
           label: 'Preview',
+          icon: <EyeIcon className="w-3.5 h-3.5" />,
           onClick: () => setPreviewFile(node.path, 'tree', cwd)
         })
         items.push({
           label: 'Open in Tab',
+          icon: <WindowIcon className="w-3.5 h-3.5" />,
           onClick: () => {
             const filename = node.path.split('/').pop() ?? node.path
             addFileTab({
@@ -250,6 +265,7 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
         })
         items.push({
           label: 'Edit',
+          icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
           onClick: () => setPreviewFile(node.path, 'tree', cwd)
         })
         const fileExt = node.path.split('.').pop()?.toLowerCase() ?? ''
@@ -257,6 +273,7 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
         if (externalExts.has(fileExt)) {
           items.push({
             label: 'Open Externally',
+            icon: <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />,
             onClick: () => { window.electronAPI?.openPath(absPath) }
           })
         }
@@ -264,10 +281,12 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
       if (node.type === 'directory') {
         items.push({
           label: 'Open as Root',
+          icon: <FolderOpenIcon className="w-3.5 h-3.5" />,
           onClick: () => onNavigateToFolder(absPath)
         })
         items.push({
           label: 'Journey',
+          icon: <MapIcon className="w-3.5 h-3.5" />,
           onClick: () => {
             const folderName = node.path.split('/').pop() ?? node.path
             useSessionStore.getState().openJourneyPanel(absPath, folderName)
@@ -275,23 +294,28 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
         })
         items.push({
           label: 'New File...',
+          icon: <DocumentPlusIcon className="w-3.5 h-3.5" />,
           onClick: () => setInlineCreate({ parentPath: node.path, type: 'file' })
         })
         items.push({
           label: 'New Folder...',
+          icon: <FolderPlusIcon className="w-3.5 h-3.5" />,
           onClick: () => setInlineCreate({ parentPath: node.path, type: 'directory' })
         })
       }
       items.push({
         label: 'Copy Relative Path',
+        icon: <DocumentDuplicateIcon className="w-3.5 h-3.5" />,
         onClick: () => navigator.clipboard.writeText(`./${node.path}`)
       })
       items.push({
         label: 'Copy Absolute Path',
+        icon: <ClipboardDocumentIcon className="w-3.5 h-3.5" />,
         onClick: () => navigator.clipboard.writeText(absPath)
       })
       items.push({
         label: 'Reveal in Finder',
+        icon: <MagnifyingGlassIcon className="w-3.5 h-3.5" />,
         onClick: () => { window.electronAPI?.showItemInFolder(absPath) }
       })
       setContextMenu({ x: e.clientX, y: e.clientY, items })
@@ -312,10 +336,12 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
         items: [
           {
             label: 'New File...',
+            icon: <DocumentPlusIcon className="w-3.5 h-3.5" />,
             onClick: () => setInlineCreate({ parentPath: '.', type: 'file' })
           },
           {
             label: 'New Folder...',
+            icon: <FolderPlusIcon className="w-3.5 h-3.5" />,
             onClick: () => setInlineCreate({ parentPath: '.', type: 'directory' })
           }
         ]
