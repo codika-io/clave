@@ -78,6 +78,7 @@ export interface PtySpawnOptions {
   dangerousMode?: boolean
   claudeMode?: boolean
   geminiMode?: boolean
+  codexMode?: boolean
   resumeSessionId?: string
   claudeSessionId?: string
   initialCommand?: string
@@ -117,8 +118,9 @@ class PtyManager {
   spawn(cwd: string, options?: PtySpawnOptions): PtySession {
     const id = randomUUID()
     const folderName = (isWindows ? cwd.split('\\') : cwd.split('/')).pop() || cwd
-    const useClaudeMode = options?.claudeMode !== false && !options?.geminiMode
+    const useClaudeMode = options?.claudeMode !== false && !options?.geminiMode && !options?.codexMode
     const useGeminiMode = options?.geminiMode === true
+    const useCodexMode = options?.codexMode === true
 
     let claudeSessionId: string | undefined
     let shellArgs: string[]
@@ -126,6 +128,8 @@ class PtyManager {
       // Windows: cmd.exe with /c to exec the command directly (no echoed prompt).
       if (useGeminiMode) {
         shellArgs = ['/c', 'gemini']
+      } else if (useCodexMode) {
+        shellArgs = ['/c', 'codex']
       } else if (!useClaudeMode) {
         shellArgs = []
       } else {
@@ -145,6 +149,8 @@ class PtyManager {
       // prompt, no rc-file chatter like the macOS bash→zsh notice).
       if (useGeminiMode) {
         shellArgs = ['-l', '-c', 'gemini']
+      } else if (useCodexMode) {
+        shellArgs = ['-l', '-c', 'codex']
       } else if (!useClaudeMode) {
         shellArgs = ['-l']
       } else {

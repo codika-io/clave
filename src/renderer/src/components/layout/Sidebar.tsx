@@ -135,10 +135,11 @@ export function Sidebar() {
     locationName: string
     claudeMode: boolean
     geminiMode: boolean
+    codexMode: boolean
   } | null>(null)
 
   const spawnRemoteSession = useCallback(async (
-    locationId: string, cwd: string, claudeMode: boolean, geminiMode?: boolean
+    locationId: string, cwd: string, claudeMode: boolean, geminiMode?: boolean, codexMode?: boolean
   ) => {
     setLoading(true)
     try {
@@ -147,6 +148,10 @@ export function Sidebar() {
       if (geminiMode) {
         setTimeout(() => {
           window.electronAPI.sshShellWrite(shellId, 'gemini\r')
+        }, 500)
+      } else if (codexMode) {
+        setTimeout(() => {
+          window.electronAPI.sshShellWrite(shellId, 'codex\r')
         }, 500)
       } else if (claudeMode) {
         // Write claude command after shell initializes (login shell needs time)
@@ -165,8 +170,9 @@ export function Sidebar() {
         alive: true,
         activityStatus: 'idle',
         promptWaiting: null,
-        claudeMode: geminiMode ? false : claudeMode,
+        claudeMode: (geminiMode || codexMode) ? false : claudeMode,
         geminiMode: geminiMode ?? false,
+        codexMode: codexMode ?? false,
         dangerousMode: false,
         claudeSessionId: null,
         locationId,
@@ -235,8 +241,9 @@ export function Sidebar() {
       const state = useSessionStore.getState()
       const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
         dangerousMode: state.dangerousMode,
-        claudeMode: state.geminiMode ? false : state.claudeMode,
-        geminiMode: state.geminiMode
+        claudeMode: (state.geminiMode || state.codexMode) ? false : state.claudeMode,
+        geminiMode: state.geminiMode,
+        codexMode: state.codexMode
       })
       addSession({
         id: sessionInfo.id,
@@ -246,8 +253,9 @@ export function Sidebar() {
         alive: sessionInfo.alive,
         activityStatus: 'idle',
         promptWaiting: null,
-        claudeMode: state.geminiMode ? false : state.claudeMode,
+        claudeMode: (state.geminiMode || state.codexMode) ? false : state.claudeMode,
         geminiMode: state.geminiMode,
+        codexMode: state.codexMode,
         dangerousMode: state.dangerousMode,
         claudeSessionId: sessionInfo.claudeSessionId,
         sessionType: 'local'
@@ -640,6 +648,10 @@ export function Sidebar() {
             setTimeout(() => {
               window.electronAPI.sshShellWrite(shellId, 'gemini\r')
             }, 500)
+          } else if (session.codexMode) {
+            setTimeout(() => {
+              window.electronAPI.sshShellWrite(shellId, 'codex\r')
+            }, 500)
           } else if (session.claudeMode) {
             setTimeout(() => {
               window.electronAPI.sshShellWrite(shellId, 'claude\r')
@@ -656,6 +668,7 @@ export function Sidebar() {
             promptWaiting: null,
             claudeMode: session.claudeMode,
             geminiMode: session.geminiMode,
+            codexMode: session.codexMode,
             dangerousMode: false,
             claudeSessionId: null,
             locationId: session.locationId,
@@ -669,8 +682,9 @@ export function Sidebar() {
         // Local session
         try {
           const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
-            claudeMode: session.geminiMode ? false : session.claudeMode,
+            claudeMode: (session.geminiMode || session.codexMode) ? false : session.claudeMode,
             geminiMode: session.geminiMode,
+            codexMode: session.codexMode,
             dangerousMode: session.dangerousMode
           })
           addSession({
@@ -681,8 +695,9 @@ export function Sidebar() {
             alive: sessionInfo.alive,
             activityStatus: 'idle',
             promptWaiting: null,
-            claudeMode: session.geminiMode ? false : session.claudeMode,
+            claudeMode: (session.geminiMode || session.codexMode) ? false : session.claudeMode,
             geminiMode: session.geminiMode,
+            codexMode: session.codexMode,
             dangerousMode: session.dangerousMode,
             claudeSessionId: sessionInfo.claudeSessionId,
             sessionType: 'local',
@@ -1023,11 +1038,11 @@ export function Sidebar() {
         {/* Permanent tabs — share the same row gap as the session tabs below */}
         <div className="px-2 space-y-0.5">
           <NewSessionDropdown
-            onNewSession={({ claudeMode, geminiMode, dangerousMode, locationId }) => {
+            onNewSession={({ claudeMode, geminiMode, codexMode, dangerousMode, locationId }) => {
               if (locationId) {
                 // Remote: open directory picker
                 const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
-                setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, geminiMode })
+                setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, geminiMode, codexMode })
               } else if (geminiMode) {
                 // Gemini: spawn directly without mode override
                 const store = useSessionStore.getState()
@@ -1036,6 +1051,15 @@ export function Sidebar() {
                 useSessionStore.setState({ geminiMode: true, claudeMode: false })
                 handleNewSession().finally(() => {
                   useSessionStore.setState({ geminiMode: prevGemini, claudeMode: prevClaude })
+                })
+              } else if (codexMode) {
+                // Codex: spawn directly without mode override
+                const store = useSessionStore.getState()
+                const prevCodex = store.codexMode
+                const prevClaude = store.claudeMode
+                useSessionStore.setState({ codexMode: true, claudeMode: false })
+                handleNewSession().finally(() => {
+                  useSessionStore.setState({ codexMode: prevCodex, claudeMode: prevClaude })
                 })
               } else {
                 // Local: existing flow (temporary mode override -> handleNewSession)
@@ -1414,7 +1438,7 @@ export function Sidebar() {
           locationId={remotePickerState.locationId}
           locationName={remotePickerState.locationName}
           onSelect={(path) => {
-            spawnRemoteSession(remotePickerState.locationId, path, remotePickerState.claudeMode, remotePickerState.geminiMode)
+            spawnRemoteSession(remotePickerState.locationId, path, remotePickerState.claudeMode, remotePickerState.geminiMode, remotePickerState.codexMode)
             setRemotePickerState(null)
           }}
           onCancel={() => setRemotePickerState(null)}

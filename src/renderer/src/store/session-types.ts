@@ -111,6 +111,7 @@ export interface Session {
   promptWaiting: string | null
   claudeMode: boolean
   geminiMode: boolean
+  codexMode: boolean
   dangerousMode: boolean
   claudeSessionId: string | null
   locationId?: string
@@ -159,6 +160,7 @@ export interface PinnedGroupSession {
   name: string
   claudeMode: boolean
   geminiMode: boolean
+  codexMode: boolean
   dangerousMode: boolean
 }
 

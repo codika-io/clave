@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.41.0] — 2026-05-26
+
+### Added
+- **Codex CLI** sessions — launch OpenAI's Codex CLI straight from the New session menu (or press Cmd+U), the same way you start Claude Code or Gemini CLI. Codex sessions get their own OpenAI mark in the menu and a chip-style icon in the sidebar, and they're remembered in pinned groups, templates, and `.clave` workspace files
+- The file tree now shows distinct icons for more file types: spreadsheets and tables (`.csv`, `.tsv`, `.xls`, `.xlsx`), `LICENSE`, `.gitignore`, `.json`, `.yml`/`.yaml`, `README.md`, and files with no extension each get their own icon instead of the generic document
+
+### Changed
+- The **New session** menu now opens to the right of the New session tab instead of dropping straight down, matching how the user menu in the sidebar footer opens
+
 ## [1.40.0] — 2026-05-25
 
 ### Added

@@ -8,6 +8,7 @@ export interface LaunchTemplateSession {
   name: string
   claudeMode: boolean
   geminiMode: boolean
+  codexMode: boolean
   dangerousMode: boolean
 }
 

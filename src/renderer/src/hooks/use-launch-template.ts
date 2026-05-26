@@ -83,14 +83,16 @@ export async function applyTemplate(template: ReturnType<typeof useTemplateStore
 
     // Use per-session flags from the template, falling back to global defaults
     const geminiMode = templateSession.geminiMode ?? false
-    const claudeMode = geminiMode ? false : (templateSession.claudeMode ?? true)
+    const codexMode = templateSession.codexMode ?? false
+    const claudeMode = (geminiMode || codexMode) ? false : (templateSession.claudeMode ?? true)
     const dangerousMode = templateSession.dangerousMode ?? false
 
     try {
       const sessionInfo = await window.electronAPI.spawnSession(templateSession.cwd, {
         dangerousMode,
         claudeMode,
-        geminiMode
+        geminiMode,
+        codexMode
       })
 
       idMap.set(templateSession.id, sessionInfo.id)
@@ -105,6 +107,7 @@ export async function applyTemplate(template: ReturnType<typeof useTemplateStore
         promptWaiting: null,
         claudeMode,
         geminiMode,
+        codexMode,
         dangerousMode,
         claudeSessionId: sessionInfo.claudeSessionId,
         sessionType: 'local'

@@ -1,7 +1,7 @@
 import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
-import { CommandLineIcon, BoltIcon, GlobeAltIcon, SparklesIcon, FireIcon, StarIcon } from '@heroicons/react/24/outline'
+import { CommandLineIcon, BoltIcon, GlobeAltIcon, SparklesIcon, FireIcon, StarIcon, CpuChipIcon } from '@heroicons/react/24/outline'
 import { SidebarTabItem } from './SidebarTabItem'
 
 function LocationBadge({ locationId }: { locationId: string }) {
@@ -25,9 +25,11 @@ function SessionIcon({ session }: { session: Session }) {
         ? FireIcon
         : session.geminiMode
           ? StarIcon
-          : session.claudeMode
-            ? SparklesIcon
-            : CommandLineIcon
+          : session.codexMode
+            ? CpuChipIcon
+            : session.claudeMode
+              ? SparklesIcon
+              : CommandLineIcon
 
   return (
     <span className="sidebar-tab-icon relative flex-shrink-0">

@@ -192,6 +192,7 @@ async function saveInitWorkspace(): Promise<void> {
         name: s.name,
         claudeMode: s.claudeMode,
         geminiMode: s.geminiMode,
+        codexMode: s.codexMode,
         dangerousMode: s.dangerousMode
       })),
       terminals: pg.terminals.map((t) => ({

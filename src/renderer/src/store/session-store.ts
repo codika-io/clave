@@ -32,6 +32,7 @@ interface SessionState {
   searchQuery: string
   claudeMode: boolean
   geminiMode: boolean
+  codexMode: boolean
   dangerousMode: boolean
   filePaletteOpen: boolean
   fileTreeOpen: boolean
@@ -93,6 +94,7 @@ interface SessionState {
   setSearchQuery: (query: string) => void
   toggleClaudeMode: () => void
   toggleGeminiMode: () => void
+  toggleCodexMode: () => void
   toggleDangerousMode: () => void
   toggleFilePalette: () => void
   setFilePaletteOpen: (open: boolean) => void
@@ -217,6 +219,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   searchQuery: '',
   claudeMode: true,
   geminiMode: false,
+  codexMode: false,
   dangerousMode: false,
   filePaletteOpen: false,
   fileTreeOpen: false,
@@ -242,7 +245,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidebarUndoStack: [] as SidebarSnapshot[],
   addSession: (session) =>
     set((state) => {
-      const newSession = { ...session, geminiMode: session.geminiMode ?? false, detectedUrl: session.detectedUrl ?? null, serverStatus: session.serverStatus ?? null, serverCommand: session.serverCommand ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false, userRenamed: session.userRenamed ?? false, planFilePath: session.planFilePath ?? null }
+      const newSession = { ...session, geminiMode: session.geminiMode ?? false, codexMode: session.codexMode ?? false, detectedUrl: session.detectedUrl ?? null, serverStatus: session.serverStatus ?? null, serverCommand: session.serverCommand ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false, userRenamed: session.userRenamed ?? false, planFilePath: session.planFilePath ?? null }
 
       // Check if selected sessions all belong to a single group
       const selectedIds = state.selectedSessionIds
@@ -722,6 +725,8 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   toggleGeminiMode: () => set((state) => ({ geminiMode: !state.geminiMode })),
 
+  toggleCodexMode: () => set((state) => ({ codexMode: !state.codexMode })),
+
   toggleDangerousMode: () => set((state) => ({ dangerousMode: !state.dangerousMode })),
 
   toggleFilePalette: () => set((state) => ({ filePaletteOpen: !state.filePaletteOpen })),
@@ -860,6 +865,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         promptWaiting: null,
         claudeMode: false,
         geminiMode: false,
+        codexMode: false,
         dangerousMode: false,
         claudeSessionId: null,
         locationId,

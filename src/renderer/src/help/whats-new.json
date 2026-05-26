@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.41.0",
+    "title": "Codex CLI sessions",
+    "description": "Launch OpenAI's Codex CLI from the New session menu or with Cmd+U, just like Claude Code and Gemini CLI.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.40.0",
     "title": "Sidebar selection focus",
     "description": "Selecting a session, group, or file tab now fades the unselected rows so your active selection stands out at a glance.",
