@@ -35,5 +35,8 @@ temp_trash/
 .env
 .certificates*
 
+# Source demo video (kept locally, AVIF lives in assets/)
+assets/*.mp4
+
 # ── Entire ───────────────────────────────────────────────────
 .entire/
