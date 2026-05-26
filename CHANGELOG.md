@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.41.1] — 2026-05-26
+
+### Changed
+- The file action buttons in the preview panel (open in tab, open externally, edit, copy path, close) and every option in the file right-click menu now use the same Heroicons as the rest of the app, so the file panels look consistent with the session menus
+
+### Fixed
+- Right-click menus no longer get cropped near the screen edge — they now open leftward when close to the right edge and upward when close to the bottom
+
 ## [1.41.0] — 2026-05-26
 
 ### Added
