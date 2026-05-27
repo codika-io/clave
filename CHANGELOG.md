@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.42.0] — 2026-05-27
+
+### Added
+- Session templates (your `.clave` workspaces) now open from a **folder-plus icon** next to the **Sessions** header, in a searchable popover — so having lots of templates no longer pushes your session list down the sidebar. Click a template to launch it; active ones stay highlighted. You can still drag a group or drop a `.clave` file onto the sidebar to pin a new one
+
+### Changed
+- The templates popover, the **New session** menu, and the user menu now open just to the right of the sidebar divider, and the Sessions header's action icon lines up with the row icons below it
+
 ## [1.41.1] — 2026-05-26
 
 ### Changed

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.42.0",
+    "title": "Templates launcher",
+    "description": "Your .clave session templates now open from a folder-plus icon next to the Sessions header, in a searchable popover — so a long list of templates no longer crowds your sessions.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.41.0",
     "title": "Codex CLI sessions",
     "description": "Launch OpenAI's Codex CLI from the New session menu or with Cmd+U, just like Claude Code and Gemini CLI.",
