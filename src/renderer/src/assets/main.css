@@ -66,6 +66,13 @@
      alignment all derive from this, so changing it keeps everything in sync. */
   --sidebar-row-px: 0.4375rem; /* 7px (was 10px) */
 
+  /* Sidebar content keyline — the vertical guide that row content aligns to on
+     both edges: the list container's padding (px-2 = 0.5rem) plus the row's own
+     horizontal padding. Section headers and any sidebar chrome (leading labels,
+     trailing action icons) must pad to this so everything lines up vertically
+     across components instead of each picking its own padding. */
+  --sidebar-gutter: calc(0.5rem + var(--sidebar-row-px)); /* 15px */
+
   --color-status-working: #3b82f6;
   --color-status-ready: #22c55e;
   --color-status-waiting: #f59e0b;
@@ -325,6 +332,17 @@ body,
   color: var(--text-primary);
   background-color: var(--surface-200);
   box-shadow: 0 0 0.5px rgba(0,0,0,0.12);
+}
+
+/* Use on elevated surfaces (popovers/menus that sit on --surface-100). Shifts
+   the hover/selected fills one shade up so they stay visible against the
+   elevated background, keeping the same +1/+2 contrast steps the sidebar has
+   against --surface-50. Placed after the base rules to win on equal specificity. */
+.sidebar-item--elevated:hover {
+  background-color: var(--surface-200);
+}
+.sidebar-item--elevated[data-selected="true"] {
+  background-color: var(--surface-300);
 }
 
 /* Leading icon on sidebar tabs (session/file/group). Sizes both the wrapper

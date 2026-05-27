@@ -25,6 +25,7 @@ import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
 import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName, initClaveFileWatchers } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
+import { TemplatePickerPopover } from '../session/TemplatePickerPopover'
 import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
 import { WorkTracker } from '../work-tracker/WorkTracker'
@@ -34,6 +35,7 @@ import {
   TrashIcon,
   Squares2X2Icon,
   FolderMinusIcon,
+  FolderPlusIcon,
   CommandLineIcon,
   XMarkIcon,
   DocumentDuplicateIcon,
@@ -362,6 +364,10 @@ export function Sidebar() {
   // Track pinned group visibility to filter hidden groups from the sessions list
   const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
   const hiddenGroupIds = useMemo(() => getHiddenGroupIds(), [pinnedGroups])
+
+  // Templates launcher popover (anchored to the Sessions header's folder-plus icon)
+  const templateBtnRef = useRef<HTMLButtonElement>(null)
+  const [templatePopoverOpen, setTemplatePopoverOpen] = useState(false)
 
   const orderedVisibleSessions = useMemo(() => {
     const order =
@@ -1081,14 +1087,32 @@ export function Sidebar() {
 
         {!isSearchMode && (
           <>
-            {/* Sessions section — pinned groups render directly under this header */}
-            <SectionHeading title="Sessions" />
+            {/* Sessions section — templates open from the folder-plus icon; the
+                inline pinned grid only appears as a drop target while dragging. */}
+            <SectionHeading
+              title="Sessions"
+              actions={
+                <button
+                  ref={templateBtnRef}
+                  onClick={() => setTemplatePopoverOpen((v) => !v)}
+                  data-active={templatePopoverOpen ? 'true' : undefined}
+                  className="btn-icon btn-icon-xs"
+                  title="Templates"
+                  aria-label="Templates"
+                >
+                  <FolderPlusIcon className="w-4 h-4" />
+                </button>
+              }
+            />
             <PinnedSection
               setContextMenu={setContextMenu}
               pinnedZoneRef={pinnedZoneRef}
               isOverPinnedZone={isOverPinnedZone}
               draggedGroupId={draggedGroupId}
               isFileDragOver={isFileDragOverWindow}
+              templatePopoverOpen={templatePopoverOpen}
+              templateBtnRef={templateBtnRef}
+              onCloseTemplatePopover={() => setTemplatePopoverOpen(false)}
             />
             <div>
               <div className="px-2 space-y-0.5">
@@ -1453,15 +1477,20 @@ function PinnedSection({
   pinnedZoneRef,
   isOverPinnedZone,
   draggedGroupId,
-  isFileDragOver
+  isFileDragOver,
+  templatePopoverOpen,
+  templateBtnRef,
+  onCloseTemplatePopover
 }: {
   setContextMenu: (menu: ContextMenuState | null) => void
   pinnedZoneRef: React.RefObject<HTMLDivElement | null>
   isOverPinnedZone: boolean
   draggedGroupId: string | null
   isFileDragOver: boolean
+  templatePopoverOpen: boolean
+  templateBtnRef: React.RefObject<HTMLButtonElement | null>
+  onCloseTemplatePopover: () => void
 }) {
-  const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
   const [exportDialogPinnedId, setExportDialogPinnedId] = useState<string | null>(null)
 
   const handleContextMenu = useCallback(
@@ -1498,20 +1527,29 @@ function PinnedSection({
     [setContextMenu]
   )
 
-  // Show pinned groups when there are pins, dragging a group, or dragging a .clave file
-  const showSection = pinnedGroups.length > 0 || !!draggedGroupId || isFileDragOver
-
-  if (!showSection) return null
+  // The inline grid is now only a drop target — it appears while dragging a
+  // group to pin or dragging a .clave file over the sidebar. The full launcher
+  // lives in the TemplatePickerPopover behind the Sessions header icon.
+  const showDropZone = !!draggedGroupId || isFileDragOver
 
   return (
     <>
-      <PinnedGroupsGrid
-        ref={pinnedZoneRef}
-        onContextMenu={handleContextMenu}
-        isOverPinnedZone={isOverPinnedZone}
-        draggedGroupId={draggedGroupId}
-        isFileDragOver={isFileDragOver}
-      />
+      {showDropZone && (
+        <PinnedGroupsGrid
+          ref={pinnedZoneRef}
+          onContextMenu={handleContextMenu}
+          isOverPinnedZone={isOverPinnedZone}
+          draggedGroupId={draggedGroupId}
+          isFileDragOver={isFileDragOver}
+        />
+      )}
+      {templatePopoverOpen && (
+        <TemplatePickerPopover
+          anchorRef={templateBtnRef}
+          onClose={onCloseTemplatePopover}
+          onContextMenu={handleContextMenu}
+        />
+      )}
       <ExportClaveDialog
         isOpen={exportDialogPinnedId !== null}
         defaultFileName={exportDialogPinnedId ? getExportFileName(exportDialogPinnedId) : 'group.clave'}

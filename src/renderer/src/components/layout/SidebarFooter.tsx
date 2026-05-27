@@ -130,7 +130,7 @@ export function SidebarFooter() {
           open={popoverOpen}
           side="right"
           align="end"
-          sideOffset={0}
+          sideOffset={16}
           alignOffset={6}
           className="min-w-[220px] p-1.5 shadow-md shadow-black/5"
         >
