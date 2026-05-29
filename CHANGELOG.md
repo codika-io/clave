@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.42.1] — 2026-05-29
+
+### Fixed
+- The session templates grid no longer randomly reappears in the sidebar after dragging a file in and out — the file-drop target now reliably disappears once a drag ends
+
 ## [1.42.0] — 2026-05-27
 
 ### Added

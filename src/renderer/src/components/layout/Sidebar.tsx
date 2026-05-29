@@ -325,34 +325,42 @@ export function Sidebar() {
     return cleanup
   }, [])
 
-  // Detect file drag over window (for showing pinned section as drop target)
+  // Detect file drag over window (for showing pinned section as drop target).
+  //
+  // We deliberately avoid the classic dragenter/dragleave counter: those events
+  // bubble per-element and must net out perfectly, but Chromium/Electron does
+  // not reliably deliver the final dragleave/drop to `window` when a file drag
+  // ends outside the normal flow (dragged back to Finder, ESC-cancelled, or
+  // consumed by a child drop target). The counter then sticks > 0 and the drop
+  // zone stays visible forever. Instead we debounce `dragover`, which fires
+  // continuously while a file drag is over the window and stops the instant the
+  // drag ends in any way — so the flag can never get stuck.
   const [isFileDragOverWindow, setIsFileDragOverWindow] = useState(false)
   useEffect(() => {
-    let dragCounter = 0
-    const handleDragEnter = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes('Files')) {
-        dragCounter++
-        setIsFileDragOverWindow(true)
-      }
-    }
-    const handleDragLeave = () => {
-      dragCounter--
-      if (dragCounter <= 0) {
-        dragCounter = 0
-        setIsFileDragOverWindow(false)
-      }
-    }
-    const handleDrop = () => {
-      dragCounter = 0
+    let clearTimer: ReturnType<typeof setTimeout> | null = null
+    const clear = () => {
+      if (clearTimer) clearTimeout(clearTimer)
+      clearTimer = null
       setIsFileDragOverWindow(false)
     }
-    window.addEventListener('dragenter', handleDragEnter)
-    window.addEventListener('dragleave', handleDragLeave)
-    window.addEventListener('drop', handleDrop)
+    const handleDragOver = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes('Files')) return
+      setIsFileDragOverWindow(true)
+      if (clearTimer) clearTimeout(clearTimer)
+      // If no dragover fires for a beat, the drag has ended — hide the zone.
+      clearTimer = setTimeout(() => {
+        clearTimer = null
+        setIsFileDragOverWindow(false)
+      }, 120)
+    }
+    window.addEventListener('dragover', handleDragOver)
+    window.addEventListener('drop', clear)
+    window.addEventListener('dragend', clear)
     return () => {
-      window.removeEventListener('dragenter', handleDragEnter)
-      window.removeEventListener('dragleave', handleDragLeave)
-      window.removeEventListener('drop', handleDrop)
+      if (clearTimer) clearTimeout(clearTimer)
+      window.removeEventListener('dragover', handleDragOver)
+      window.removeEventListener('drop', clear)
+      window.removeEventListener('dragend', clear)
     }
   }, [])
 
