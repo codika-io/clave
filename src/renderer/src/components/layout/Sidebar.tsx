@@ -42,7 +42,9 @@ import {
   BookmarkIcon,
   ArrowDownTrayIcon,
   PlayIcon,
-  ShieldExclamationIcon
+  ShieldExclamationIcon,
+  ClipboardDocumentIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
@@ -913,10 +915,12 @@ export function Sidebar() {
           },
           {
             label: 'Copy Path',
+            icon: <ClipboardDocumentIcon className="w-3.5 h-3.5" />,
             onClick: () => navigator.clipboard.writeText(fileTab.filePath)
           },
           {
             label: 'Reveal in Finder',
+            icon: <MagnifyingGlassIcon className="w-3.5 h-3.5" />,
             onClick: () => window.electronAPI?.showItemInFolder(fileTab.filePath)
           },
           {

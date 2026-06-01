@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.42.2] — 2026-06-01
+
+### Fixed
+- Right-clicking an open file in the sidebar now shows icons next to **Copy Path** and **Reveal in Finder**, matching the other items in the menu and the rest of the app
+
 ## [1.42.1] — 2026-05-29
 
 ### Fixed
