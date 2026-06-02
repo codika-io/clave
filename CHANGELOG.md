@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.43.1] — 2026-06-02
+
+### Changed
+- The **Sessions** header's templates button now uses a tiles-with-plus icon instead of a folder-plus icon, so it reads as "launch from a template" rather than "add a folder"
+
 ## [1.43.0] — 2026-06-02
 
 ### Added

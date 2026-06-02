@@ -35,7 +35,7 @@ import {
   TrashIcon,
   Squares2X2Icon,
   FolderMinusIcon,
-  FolderPlusIcon,
+  SquaresPlusIcon,
   CommandLineIcon,
   XMarkIcon,
   DocumentDuplicateIcon,
@@ -1112,7 +1112,7 @@ export function Sidebar() {
                   title="Templates"
                   aria-label="Templates"
                 >
-                  <FolderPlusIcon className="w-4 h-4" />
+                  <SquaresPlusIcon className="w-4 h-4" />
                 </button>
               }
             />
