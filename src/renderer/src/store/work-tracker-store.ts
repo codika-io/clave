@@ -101,7 +101,7 @@ export const useWorkTrackerStore = create<WorkTrackerState>((set, get) => ({
   todayProjects: [],
   todayTotalMinutes: 0,
   todaySessionCount: 0,
-  enabled: localStorage.getItem('clave-work-tracker-enabled') !== 'false',
+  enabled: localStorage.getItem('clave-work-tracker-enabled') === 'true',
 
   setEnabled: (enabled) => {
     localStorage.setItem('clave-work-tracker-enabled', String(enabled))
