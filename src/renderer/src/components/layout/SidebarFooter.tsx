@@ -100,7 +100,7 @@ export function SidebarFooter() {
         <PopoverTrigger asChild>
           <button
             className={cn(
-              'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl transition-colors',
+              'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition-colors',
               'hover:bg-surface-100 text-text-primary data-[state=open]:bg-surface-200'
             )}
           >
