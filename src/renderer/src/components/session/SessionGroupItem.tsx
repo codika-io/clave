@@ -179,13 +179,13 @@ export function SessionGroupItem({
                     onTerminalIconContextMenu(t.id, e)
                   }}
                   className={cn(
-                    'btn-icon btn-icon-sm',
+                    'btn-icon btn-icon-xs',
                     focused && 'bg-surface-200/80'
                   )}
                   style={{ color: colorHex, opacity: alive ? 1 : 0.35 }}
                   title={`${t.command || 'Shell'}${alive ? ' (running)' : ''}`}
                 >
-                  <IconComp className="w-[18px] h-[18px]" />
+                  <IconComp className="w-4 h-4" />
                 </span>
               )
             })}
