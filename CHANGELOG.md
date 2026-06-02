@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.43.0] — 2026-06-02
+
 ### Added
 - Files now open in a real code editor — syntax-highlighted **and** editable the moment they open, with no separate "Edit" step. Just click into the code, type, and press ⌘S to save. Highlighting now follows your theme (dark, light, and coffee), so code looks at home instead of washed out
 - Markdown files open rendered, with a **Preview / Source** toggle to edit the raw text
