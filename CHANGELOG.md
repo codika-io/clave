@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ### Changed
 - The file preview panel and the file tab now share one editor, so they look and behave the same everywhere
+- When a file is open in a tab, the path row shows a live save-status indicator — a **Save** button (with the ⌘S hint) while you have unsaved edits, and **Saved** once it's up to date — instead of a separate Save button above the file
 - Closing the preview panel while you have unsaved edits now asks before discarding them, instead of silently dropping the changes
 
 ## [1.42.2] — 2026-06-01

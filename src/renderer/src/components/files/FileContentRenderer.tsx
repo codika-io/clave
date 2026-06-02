@@ -3,47 +3,24 @@ import { useFileEditor } from '../../hooks/use-file-editor'
 import { formatSize, countLines } from './file-types'
 
 interface FileContentRendererProps {
+  editor: ReturnType<typeof useFileEditor>
   filePath: string | null
   cwd: string | null
   className?: string
 }
 
 export function FileContentRenderer({
+  editor,
   filePath,
   cwd,
   className
 }: FileContentRendererProps): React.JSX.Element | null {
-  const editor = useFileEditor({ cwd, filePath })
-  const { fileData, content, isDirty, canEdit, saving, saveError, loadError, save } = editor
+  const { fileData, content, saveError, loadError } = editor
 
   if (!filePath) return null
 
   return (
     <div className={`flex flex-col min-h-0 ${className ?? ''}`}>
-      {/* Edit toolbar */}
-      {canEdit && (
-        <div className="flex items-center justify-between px-4 py-1.5 border-b border-border-subtle flex-shrink-0">
-          <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
-            {isDirty && (
-              <>
-                <span
-                  className="inline-block w-2 h-2 rounded-full bg-accent flex-shrink-0"
-                  title="Unsaved changes"
-                />
-                <span>Unsaved changes</span>
-              </>
-            )}
-          </div>
-          <button
-            onClick={save}
-            disabled={saving || !isDirty}
-            className="px-2.5 py-1 rounded text-xs font-medium bg-accent text-white hover:bg-accent/90 transition-colors disabled:opacity-40"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      )}
-
       {/* Content */}
       <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
         <FileContent editor={editor} cwd={cwd} filePath={filePath} />
