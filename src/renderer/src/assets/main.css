@@ -123,6 +123,21 @@
   --heatmap-2: rgba(94, 106, 210, 0.5);
   --heatmap-3: rgba(94, 106, 210, 0.7);
   --heatmap-4: rgba(94, 106, 210, 0.95);
+  /* CodeMirror syntax tokens — driven by CSS vars so the editor recolors on theme switch */
+  --cm-selection: rgba(94, 106, 210, 0.3);
+  --cm-active-line: rgba(255, 255, 255, 0.04);
+  --cm-keyword: #ff7b72;
+  --cm-comment: #8b949e;
+  --cm-string: #a5d6ff;
+  --cm-number: #79c0ff;
+  --cm-constant: #79c0ff;
+  --cm-function: #d2a8ff;
+  --cm-variable: #e6edf3;
+  --cm-type: #ffa657;
+  --cm-property: #79c0ff;
+  --cm-tag: #7ee787;
+  --cm-operator: #8b949e;
+  --cm-punctuation: #8b949e;
 }
 
 /* Light theme — Linear-inspired warm grays */
@@ -160,6 +175,21 @@
   --color-wellbeing-strong: oklch(0.5 0.15 50);
   --color-wellbeing-strong-bg: oklch(0.95 0.03 50);
   --color-wellbeing-strong-border: oklch(0.8 0.08 50);
+  /* CodeMirror syntax tokens — GitHub-light-inspired, tuned for the warm light surface */
+  --cm-selection: rgba(94, 106, 210, 0.18);
+  --cm-active-line: rgba(0, 0, 0, 0.03);
+  --cm-keyword: #cf222e;
+  --cm-comment: #6e7781;
+  --cm-string: #0a3069;
+  --cm-number: #0550ae;
+  --cm-constant: #0550ae;
+  --cm-function: #8250df;
+  --cm-variable: #1b1b18;
+  --cm-type: #953800;
+  --cm-property: #0550ae;
+  --cm-tag: #116329;
+  --cm-operator: #57606a;
+  --cm-punctuation: #57606a;
 }
 
 /* Coffee theme — warm light, matching Claude's cream/beige aesthetic */
@@ -197,6 +227,21 @@
   --color-wellbeing-strong: oklch(0.45 0.15 50);
   --color-wellbeing-strong-bg: oklch(0.85 0.04 50);
   --color-wellbeing-strong-border: oklch(0.7 0.08 50);
+  /* CodeMirror syntax tokens — warm palette tuned for the cream surface */
+  --cm-selection: rgba(94, 106, 210, 0.18);
+  --cm-active-line: rgba(120, 100, 80, 0.05);
+  --cm-keyword: #b02a37;
+  --cm-comment: #9b8d7a;
+  --cm-string: #3a6b35;
+  --cm-number: #9a5b00;
+  --cm-constant: #1f5fa8;
+  --cm-function: #7a4fbf;
+  --cm-variable: #1b1610;
+  --cm-type: #9a5b00;
+  --cm-property: #1f5fa8;
+  --cm-tag: #3a6b35;
+  --cm-operator: #756e66;
+  --cm-punctuation: #756e66;
 }
 
 @keyframes pulse-dot {
