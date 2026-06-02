@@ -73,34 +73,20 @@ export interface BoardData {
   tasks: BoardTask[]
 }
 
-export interface ModelTokenUsage {
-  inputTokens: number
-  outputTokens: number
-  cacheReadInputTokens: number
-  cacheCreationInputTokens: number
+export interface UsageWindow {
+  key: string
+  label: string
+  usedPercentage: number
+  resetsAt: number | null
 }
 
-export interface DailyCost {
-  date: string
-  cost: number
+export interface UsageLimits {
+  windows: UsageWindow[]
+  fetchedAt: number
 }
 
-export interface HourlyCost {
-  date: string
-  hours: number[] // 24 entries, index 0 = midnight
-}
-
-export interface UsageData {
-  dailyActivity: { date: string; messageCount: number; sessionCount: number; toolCallCount: number }[]
-  dailyModelTokens: { date: string; tokensByModel: Record<string, ModelTokenUsage> }[]
-  dailyCost: DailyCost[]
-  hourlyCost: HourlyCost[]
-  modelUsage: Record<string, ModelTokenUsage>
-  totalSessions: number
-  totalMessages: number
-  firstSessionDate: string | null
-  estimatedCost: number
-  totalTokens: number
+export interface UsageError {
+  error: string
 }
 
 export interface GitFileStatus {
@@ -292,7 +278,7 @@ export interface ElectronAPI {
   templatesLoad: () => Promise<LaunchTemplatesData>
   templatesSave: (data: LaunchTemplatesData) => Promise<void>
   templatesValidate: (template: LaunchTemplate) => Promise<ValidationResult>
-  getUsageStats: () => Promise<UsageData>
+  getUsageLimits: () => Promise<UsageLimits | UsageError>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>
   gitFetch: (cwd: string) => Promise<void>

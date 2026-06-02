@@ -528,9 +528,11 @@ export function AppShell() {
           <div className={activeView === 'board' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <TaskQueue />
           </div>
-          <div className={activeView === 'usage' ? 'flex-1 flex min-h-0' : 'hidden'}>
-            <UsagePanel />
-          </div>
+          {activeView === 'usage' && (
+            <div className="flex-1 flex min-h-0">
+              <UsagePanel />
+            </div>
+          )}
           <div className={activeView === 'settings' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <SettingsPanel />
           </div>

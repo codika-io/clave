@@ -131,7 +131,7 @@ const electronAPI = {
   templatesValidate: (template: unknown) => ipcRenderer.invoke('templates:validate', template),
 
   // Usage
-  getUsageStats: () => ipcRenderer.invoke('usage:get-stats'),
+  getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),
 
   // Git
   gitCheckIgnored: (cwd: string, paths: string[]) =>
