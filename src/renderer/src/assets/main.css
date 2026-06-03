@@ -488,6 +488,28 @@ body,
   padding: 6px;            /* p-1.5 */
 }
 
+/* Dashed "add" button — full-width row for adding workspaces, locations, etc. */
+.btn-add {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;             /* gap-2 */
+  height: var(--control-h-lg);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-subtle-color);
+  font-size: 0.75rem;      /* text-xs */
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+  background-color: transparent;
+  transition: color 150ms, border-color 150ms, background-color 150ms;
+}
+.btn-add:hover {
+  color: var(--text-secondary);
+  border-color: var(--color-border);
+  background-color: var(--surface-100);
+}
+
 /* ── Form inputs ── */
 
 .input-field {
@@ -546,6 +568,17 @@ body,
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-weight: 600;
+}
+
+/* ── Settings ── */
+
+/* Section heading used across the Settings panel */
+.settings-section-title {
+  font-size: 0.75rem;          /* text-xs */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;       /* tracking-widest */
+  color: var(--text-tertiary);
 }
 
 /* ── Pills ── */

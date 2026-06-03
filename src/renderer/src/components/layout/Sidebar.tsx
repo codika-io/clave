@@ -6,9 +6,6 @@ import {
   type GroupTerminalColor
 } from '../../store/session-store'
 import ColorPicker from '../ui/ColorPicker'
-import { useTemplateStore } from '../../store/template-store'
-
-import { resetToDefaultTemplate } from '../../hooks/use-launch-template'
 import { SessionItem } from '../session/SessionItem'
 import { FileTabItem } from '../session/FileTabItem'
 import { SessionGroupItem } from '../session/SessionGroupItem'
@@ -190,20 +187,12 @@ export function Sidebar() {
     }
   }, [addSession])
 
-  const defaultTemplateId = useTemplateStore((s) => s.defaultTemplateId)
-  const templates = useTemplateStore((s) => s.templates)
-
-  const defaultTemplateName = useMemo(() => {
-    if (defaultTemplateId === 'blank') return null
-    return templates.find((t) => t.id === defaultTemplateId)?.name ?? null
-  }, [defaultTemplateId, templates])
-
-
+  const resetSessions = useSessionStore((s) => s.resetSessions)
 
   const handleResetSessions = useCallback(async () => {
     setResetConfirmOpen(false)
-    await resetToDefaultTemplate()
-  }, [])
+    await resetSessions()
+  }, [resetSessions])
 
   // Selection anchor for Cmd+Shift range select (Finder behavior)
   const selectionAnchorRef = useRef<string | null>(null)
@@ -1381,11 +1370,7 @@ export function Sidebar() {
       <ConfirmDialog
         isOpen={resetConfirmOpen}
         title="Reset sessions"
-        message={
-          defaultTemplateName
-            ? `Close all sessions and load "${defaultTemplateName}" template?`
-            : 'Close all sessions and start fresh?'
-        }
+        message="Close all sessions and start fresh?"
         onConfirm={handleResetSessions}
         onCancel={() => setResetConfirmOpen(false)}
       />

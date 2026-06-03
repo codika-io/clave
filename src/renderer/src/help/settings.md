@@ -16,10 +16,6 @@ Choose between three themes:
 - **Light**: Light theme
 - **Coffee**: Warm-toned dark theme
 
-## App Icon
-
-Pick the Clave dock icon variant: Dark, Light, or Claude.
-
 ## Workspaces
 
 Manage multiple workspaces. Each workspace has its own sessions, groups, and settings.
@@ -27,7 +23,3 @@ Manage multiple workspaces. Each workspace has its own sessions, groups, and set
 ## Locations
 
 Configure remote SSH locations for running sessions on other machines. See the **Remote Sessions** doc for details.
-
-## Launch Templates
-
-Save your current workspace layout (sessions, groups, directories) as a named template. Set a default template to auto-load on startup, or keep "Blank" for a fresh start.

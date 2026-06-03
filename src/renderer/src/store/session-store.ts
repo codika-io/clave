@@ -56,6 +56,7 @@ interface SessionState {
   sidebarUndoStack: SidebarSnapshot[]
   addSession: (session: Session) => void
   removeSession: (id: string) => void
+  resetSessions: () => Promise<void>
   selectSession: (id: string, addToSelection: boolean) => void
   selectSessions: (ids: string[]) => void
   setFocusedSession: (id: string) => void
@@ -281,6 +282,24 @@ export const useSessionStore = create<SessionState>((set) => ({
         displayOrder: [...getDisplayOrder(state), session.id]
       }
     }),
+
+  resetSessions: async () => {
+    const { sessions } = useSessionStore.getState()
+
+    // Kill all PTYs
+    await Promise.allSettled(
+      sessions.map((s) => window.electronAPI?.killSession(s.id).catch(() => {}))
+    )
+
+    set({
+      sessions: [],
+      groups: [],
+      displayOrder: [],
+      focusedSessionId: null,
+      selectedSessionIds: [],
+      searchQuery: ''
+    })
+  },
 
   removeSession: (id) =>
     set((state) => {

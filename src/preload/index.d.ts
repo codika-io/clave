@@ -166,54 +166,6 @@ export interface MagicPullResult {
   error: string | null
 }
 
-export interface LaunchTemplateSession {
-  id: string
-  cwd: string
-  name: string
-  claudeMode: boolean
-  geminiMode: boolean
-  codexMode: boolean
-  dangerousMode: boolean
-}
-
-export interface LaunchTemplateGroupTerminal {
-  id: string
-  command: string
-  commandMode: 'prefill' | 'auto'
-  color: string
-}
-
-export interface LaunchTemplateGroup {
-  id: string
-  name: string
-  sessionIds: string[]
-  collapsed?: boolean
-  cwd?: string | null
-  terminals?: LaunchTemplateGroupTerminal[]
-  command?: string | null
-  commandMode?: 'prefill' | 'auto'
-}
-
-export interface LaunchTemplate {
-  id: string
-  name: string
-  sessions: LaunchTemplateSession[]
-  groups: LaunchTemplateGroup[]
-  displayOrder: string[]
-  createdAt: number
-  updatedAt: number
-}
-
-export interface LaunchTemplatesData {
-  templates: LaunchTemplate[]
-  defaultTemplateId: string
-}
-
-export interface ValidationResult {
-  valid: LaunchTemplateSession[]
-  missing: LaunchTemplateSession[]
-}
-
 export interface DownloadProgress {
   percent: number
   bytesPerSecond: number
@@ -275,9 +227,6 @@ export interface ElectronAPI {
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => () => void
   boardLoad: () => Promise<BoardData>
   boardSave: (data: BoardData) => Promise<void>
-  templatesLoad: () => Promise<LaunchTemplatesData>
-  templatesSave: (data: LaunchTemplatesData) => Promise<void>
-  templatesValidate: (template: LaunchTemplate) => Promise<ValidationResult>
   getUsageLimits: () => Promise<UsageLimits | UsageError>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>

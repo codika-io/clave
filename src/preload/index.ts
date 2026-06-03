@@ -125,11 +125,6 @@ const electronAPI = {
   boardLoad: () => ipcRenderer.invoke('board:load'),
   boardSave: (data: unknown) => ipcRenderer.invoke('board:save', data),
 
-  // Templates
-  templatesLoad: () => ipcRenderer.invoke('templates:load'),
-  templatesSave: (data: unknown) => ipcRenderer.invoke('templates:save', data),
-  templatesValidate: (template: unknown) => ipcRenderer.invoke('templates:validate', template),
-
   // Usage
   getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),
 

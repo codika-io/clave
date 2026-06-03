@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Changed
+- The **Settings** page is now centered for a more balanced layout that matches the rest of the app
+- Polished the **Settings** page to match the rest of the app — consistent buttons, fonts, inputs, and list rows (the **Add Location** and **Add Workspace** buttons now look identical)
+
+### Removed
+- Removed the **App Icon** picker from Settings (only one icon was ever applied)
+- Removed the **Launch Templates** feature — use `.clave` workspace files and session templates instead
+
 ## [1.43.1] — 2026-06-02
 
 ### Changed

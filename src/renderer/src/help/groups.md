@@ -35,7 +35,3 @@ Share `.clave` files with your team to standardize workspace setups.
 ## Toolbar Quick Actions
 
 Mark a terminal inside a pinned group as a **toolbar** item. It appears as an icon button in the main toolbar for one-click session spawning.
-
-## Launch Templates
-
-Templates save your entire workspace layout (sessions, groups, working directories) for one-click restore. Manage them in [Settings](clave://navigate/settings). Set a default template that loads on startup, or keep the "Blank" template for a fresh start.

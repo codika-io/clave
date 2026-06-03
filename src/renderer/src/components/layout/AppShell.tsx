@@ -9,7 +9,6 @@ import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
 import { AgentChatPanel } from '../agents/AgentChatPanel'
-import { useLaunchTemplate } from '../../hooks/use-launch-template'
 import { useWorkTracker } from '../../store/work-tracker-store'
 import { FilePalette } from '../files/FilePalette'
 import { SidePanel } from '../git/SidePanel'
@@ -48,7 +47,6 @@ export function AppShell() {
   const removeSession = useSessionStore((s) => s.removeSession)
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
 
-  useLaunchTemplate()
   useWorkTracker()
 
   const spawnSessionWithOptions = useCallback(
