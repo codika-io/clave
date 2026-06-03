@@ -5,7 +5,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ContextMenu } from '../ui/ContextMenu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import { shortenPath } from '../../lib/utils'
-import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon } from '@heroicons/react/24/outline'
+import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { buildGitTree, compactTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import { GitLogView } from './GitLogView'
 import { FileRow, GitTreeSection } from './GitFileRows'
@@ -661,6 +661,10 @@ function MultiRepoSection({
   const changeCount = status.files.length
   const hasChanges = changeCount > 0
   const hasRemoteChanges = status.behind > 0
+  // The opened folder isn't itself a repo root — git resolved it to a parent
+  // repository, so the changes shown actually belong to that parent.
+  const isParentRepo = !!status.repoRoot && status.repoRoot !== repoPath
+  const parentRepoName = isParentRepo ? status.repoRoot.split(/[\\/]/).pop() || status.repoRoot : ''
   const shouldExpand = hasChanges || hasRemoteChanges
   const [expanded, setExpanded] = useState(shouldExpand)
   const initializedRef = useRef(false)
@@ -766,6 +770,21 @@ function MultiRepoSection({
           )}
         </span>
       </button>
+
+      {/* Parent-repo notice — the opened folder isn't a repo; changes come from above */}
+      {isParentRepo && (
+        <div className="flex items-center gap-1 px-3 pb-1.5 text-[10px] text-text-tertiary">
+          <InformationCircleIcon className="w-3 h-3 flex-shrink-0" />
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <span className="truncate cursor-default">Part of {parentRepoName}</span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="font-mono max-w-[300px]">
+              This folder isn’t a git repository. The changes shown belong to the parent repository {shortenPath(status.repoRoot)}, which contains it.
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
 
       {/* Expanded content */}
       {expanded && (

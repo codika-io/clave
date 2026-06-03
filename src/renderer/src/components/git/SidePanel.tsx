@@ -10,7 +10,8 @@ import { useMultiRepoStatus } from '../../hooks/use-multi-repo-status'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { shortenPath } from '../../lib/utils'
 import { HelpPanel } from '../help/HelpPanel'
-import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
+import { QuestionMarkCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 
 function getParentPaths(fullPath: string): { path: string; name: string }[] {
   const homedir = fullPath.match(/^\/Users\/[^/]+/)?.[0] ?? ''
@@ -436,6 +437,26 @@ export function SidePanel() {
               )}
             </span>
           )}
+          {/* Parent-repo notice — opened folder isn't a repo, changes come from above */}
+          {isSingleRepo &&
+            !isNavigatedSubfolder &&
+            singleRepoGit.status?.repoRoot &&
+            cwd &&
+            singleRepoGit.status.repoRoot !== cwd && (
+              <span className="flex items-center gap-1 text-[10px] text-text-tertiary truncate min-w-0">
+                <InformationCircleIcon className="w-3 h-3 flex-shrink-0" />
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <span className="truncate cursor-default">
+                      Part of {singleRepoGit.status.repoRoot.split(/[\\/]/).pop() || singleRepoGit.status.repoRoot}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="font-mono max-w-[300px]">
+                    This folder isn’t a git repository. The changes shown belong to the parent repository {shortenPath(singleRepoGit.status.repoRoot)}, which contains it.
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+            )}
           <span className="flex-1" />
           <MagicPullButton repoPaths={allRepoPaths} onDone={gitRefresh} />
           <MagicSyncButton repoPaths={allRepoPaths} onDone={gitRefresh} />
