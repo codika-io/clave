@@ -2,6 +2,10 @@
 
 <img width="80" height="80" alt="Clave" src="resources/icon.png" />
 
+[![License](https://img.shields.io/github/license/codika-io/clave)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/codika-io/clave/total)](https://github.com/codika-io/clave/releases)
+[![Stars](https://img.shields.io/github/stars/codika-io/clave?style=flat)](https://github.com/codika-io/clave/stargazers)
+
 **Clave is a macOS desktop app for managing multiple coding-agent sessions in parallel.**
 
 Provider-agnostic: run Claude Code, Gemini CLI, and Codex CLI sessions side by side. Open as many as you need, arrange them in split or grid layouts, and switch between them instantly.
@@ -61,29 +65,11 @@ npx plugins add codika-io/clave-plugin   # re-run to pull latest
 
 ## Features
 
-- **Multi-session management** — Open unlimited agent sessions, each in its own PTY
-- **Provider-agnostic** — Run Claude Code (Cmd+N), Gemini CLI (Cmd+I), and Codex CLI (Cmd+U) sessions side by side, mixed across layouts and groups
-- **Session types** — Claude Code, Gemini CLI, Codex CLI, plain terminal (Cmd+T), or Dangerous Mode (Cmd+D, runs Claude Code with `--dangerously-skip-permissions`)
-- **Session groups** — Organize sessions into color-coded groups with pinned configs and `.clave` files
-- **Flexible layouts** — Single, split (2-panel), or grid (4-panel) view modes
-- **Searchable sidebar** — Filter sessions by name, folder, or path
-- **Task Queue** — Queue up prompts and launch them as new Claude sessions with one click
-- **Git panel** — Status, diff viewer, commit history, stage/unstage, commit, push, pull, plus **MagicSync** (pull → stage → AI commit message → commit → push in one click) and **Git Journey** (visual commit history grouped by push batch)
-- **File browser** — Local and remote file trees with syntax-highlighted preview, markdown rendering, and Cmd+P search palette
-- **History** — Browse and search past Claude Code conversations, restart any session from history
-- **Daily Log** — AI-generated daily summaries of your work, grouped by project, with a week heatmap strip and timeline view
-- **Work Tracker** — Daily time tracking with streaks, weekly charts, and break reminders
-- **Usage analytics** — Token usage, per-day cost tracking (day/week/month), GitHub-style year-long activity heatmap
-- **SSH / Remote sessions** — Connect to remote hosts via SSH for terminal sessions and SFTP file browsing
-- **Agent chat panel** — Integrated agent chat via WebSocket connection to OpenClaw
-- **Session templates** — Launch pre-configured sessions with saved directories and modes
-- **Internationalization** — English and Simplified Chinese UI
-- **Keyboard shortcuts** — Cmd+P (file palette), Cmd+E (file tree), Cmd+T (new terminal), Cmd+N (new Claude session), Cmd+D (dangerous mode), Cmd+W (close tab)
-- **Dark / Light / Coffee themes** — Full theming for both terminal and UI
-- **URL detection** — Detects localhost URLs in terminal output and makes them clickable
-- **Native macOS feel** — Hidden inset titlebar with traffic light controls, native notifications
-- **Auto-updates** — New versions install automatically on quit via `electron-updater`
-- **Signed & notarized** — Passes macOS Gatekeeper without warnings
+- **Run a fleet of agents** — Open unlimited CLI coding-agent sessions, each in its own PTY. Provider-agnostic: Claude Code, Gemini CLI, and Codex CLI side by side, plus plain terminals. Arrange them single, split, or in a grid, group them by project, and queue prompts to launch with one click.
+- **Git, built in** — A full git panel with diff viewer and commit history, plus MagicSync: pull, stage, write an AI commit message, commit, and push in one click.
+- **Local & remote files** — Browse and edit files with syntax-highlighted previews, on your machine or on remote hosts over SSH/SFTP.
+- **Remote sessions** — Connect to any host over SSH and run your agents there with the same UI and shortcuts.
+- **Fully local** — A desktop app with no cloud backend and no account; your code, sessions, and keys stay on your machine.
 
 ## Requirements
 
