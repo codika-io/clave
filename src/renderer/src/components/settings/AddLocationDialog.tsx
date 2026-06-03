@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocationStore } from '../../store/location-store'
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 
@@ -110,7 +111,9 @@ export function AddLocationDialog({ onClose }: AddLocationDialogProps) {
 
   const credentialsValid = host.trim() && username.trim()
 
-  return (
+  // Portal to body so the overlay escapes the main content's z-10 stacking
+  // context. Otherwise it cannot cover the z-[45] git side panel.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleRemoveOnCancel}>
       <div
         className="bg-surface-0 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-border-subtle"
@@ -329,6 +332,7 @@ export function AddLocationDialog({ onClose }: AddLocationDialogProps) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
