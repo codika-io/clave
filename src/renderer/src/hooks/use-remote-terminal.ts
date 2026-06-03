@@ -35,10 +35,10 @@ function detectPrompt(buffer: string): string | null {
 }
 
 const DARK_THEME = {
-  background: '#000000',
+  background: '#0e0d0c',
   foreground: 'rgba(255, 255, 255, 0.9)',
   cursor: 'rgba(255, 255, 255, 0.8)',
-  cursorAccent: '#000000',
+  cursorAccent: '#0e0d0c',
   selectionBackground: 'rgba(255, 255, 255, 0.15)',
   selectionForeground: undefined,
   black: '#1a1a1a',

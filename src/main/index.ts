@@ -23,7 +23,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     icon,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#ffffff',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e0d0c' : '#ffffff',
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset' as const,
