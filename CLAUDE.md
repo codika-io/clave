@@ -1,6 +1,6 @@
 # Clave
 
-Mac desktop app for managing multiple Claude Code terminal sessions. Electron + React + TypeScript.
+Mac desktop app for managing multiple coding-agent CLI sessions in parallel. Provider-agnostic: it orchestrates Claude Code (Cmd+N), Gemini CLI (Cmd+I), and Codex CLI (Cmd+U) sessions side by side, plus plain terminals (Cmd+T) and remote agents over OpenClaw. Electron + React + TypeScript.
 
 Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` for generating `.clave` workspace files) lives in its own repo at [`codika-io/clave-plugin`](https://github.com/codika-io/clave-plugin). Install with `npx plugins add codika-io/clave-plugin`. The Electron app reads installed plugins from `~/.claude/plugins/` at runtime and does not depend on the plugin repo being local.
 

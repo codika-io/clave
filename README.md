@@ -2,9 +2,9 @@
 
 <img width="80" height="80" alt="Clave" src="resources/icon.png" />
 
-**Clave is a macOS desktop app for managing multiple Claude Code sessions.**
+**Clave is a macOS desktop app for managing multiple coding-agent sessions in parallel.**
 
-Open as many sessions as you need, arrange them side-by-side, and switch between them instantly.
+Provider-agnostic: run Claude Code, Gemini CLI, and Codex CLI sessions side by side. Open as many as you need, arrange them in split or grid layouts, and switch between them instantly.
 
 [Features](#features) · [Download](#download) · [Build from Source](#build-from-source) · [Contributing](#contributing)
 
@@ -61,8 +61,9 @@ npx plugins add codika-io/clave-plugin   # re-run to pull latest
 
 ## Features
 
-- **Multi-session management** — Open unlimited Claude Code sessions, each in its own PTY
-- **Session types** — Claude Code (Cmd+N), plain terminal (Cmd+T), or Dangerous Mode (Cmd+D, runs with `--dangerously-skip-permissions`)
+- **Multi-session management** — Open unlimited agent sessions, each in its own PTY
+- **Provider-agnostic** — Run Claude Code (Cmd+N), Gemini CLI (Cmd+I), and Codex CLI (Cmd+U) sessions side by side, mixed across layouts and groups
+- **Session types** — Claude Code, Gemini CLI, Codex CLI, plain terminal (Cmd+T), or Dangerous Mode (Cmd+D, runs Claude Code with `--dangerously-skip-permissions`)
 - **Session groups** — Organize sessions into color-coded groups with pinned configs and `.clave` files
 - **Flexible layouts** — Single, split (2-panel), or grid (4-panel) view modes
 - **Searchable sidebar** — Filter sessions by name, folder, or path
@@ -87,7 +88,7 @@ npx plugins add codika-io/clave-plugin   # re-run to pull latest
 ## Requirements
 
 - macOS (Apple Silicon or Intel)
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- At least one supported agent CLI installed and authenticated — [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), and/or [Codex CLI](https://github.com/openai/codex). Clave detects whichever you have.
 
 ## Privacy & network
 
