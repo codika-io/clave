@@ -6,9 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.44.0] — 2026-06-03
+
 ### Changed
 - The **Settings** page is now centered for a more balanced layout that matches the rest of the app
 - Polished the **Settings** page to match the rest of the app — consistent buttons, fonts, inputs, and list rows (the **Add Location** and **Add Workspace** buttons now look identical)
+
+### Fixed
+- The **Git** panel now names the parent repository when the folder you opened isn't itself a git repository, so it's clear why changes from outside that folder appear
+- Opening the **Add Location** dialog now dims the whole window, including the **Git** panel, instead of leaving it bright
 
 ### Removed
 - Removed the **App Icon** picker from Settings (only one icon was ever applied)
