@@ -2,9 +2,9 @@
 
 <img width="80" height="80" alt="Clave" src="resources/icon.png" />
 
-[![License](https://img.shields.io/github/license/codika-io/clave)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/codika-io/clave/total)](https://github.com/codika-io/clave/releases)
-[![Stars](https://img.shields.io/github/stars/codika-io/clave?style=flat)](https://github.com/codika-io/clave/stargazers)
+[![License](https://img.shields.io/github/license/codika-io/clave?labelColor=333333&color=666666)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/codika-io/clave/total?labelColor=333333&color=666666)](https://github.com/codika-io/clave/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/codika-io/clave?labelColor=333333&color=666666)](https://github.com/codika-io/clave)
 
 **Clave is a macOS desktop app for managing multiple coding-agent sessions in parallel.**
 
