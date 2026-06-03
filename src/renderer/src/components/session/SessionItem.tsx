@@ -1,7 +1,8 @@
 import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
-import { CommandLineIcon, BoltIcon, GlobeAltIcon, SparklesIcon, FireIcon, StarIcon, CpuChipIcon } from '@heroicons/react/24/outline'
+import { CommandLineIcon, BoltIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
+import { ClaudeLogo, GeminiLogo, CodexLogo } from '../icons/cli-logos'
 import { SidebarTabItem } from './SidebarTabItem'
 
 function LocationBadge({ locationId }: { locationId: string }) {
@@ -17,19 +18,19 @@ function LocationBadge({ locationId }: { locationId: string }) {
 function SessionIcon({ session }: { session: Session }) {
   const iconClass = cn('transition-colors duration-300', session.hasUnseenActivity && 'text-accent')
 
+  // Provider sessions show their brand mark (Claude for both normal and skip-permissions
+  // modes); plain terminals keep the terminal icon. Agents and remote sessions are special.
   const Icon = session.sessionType === 'agent'
     ? BoltIcon
     : session.sessionType === 'remote-terminal' || session.sessionType === 'remote-claude'
       ? GlobeAltIcon
-      : session.dangerousMode
-        ? FireIcon
-        : session.geminiMode
-          ? StarIcon
-          : session.codexMode
-            ? CpuChipIcon
-            : session.claudeMode
-              ? SparklesIcon
-              : CommandLineIcon
+      : session.geminiMode
+        ? GeminiLogo
+        : session.codexMode
+          ? CodexLogo
+          : session.claudeMode
+            ? ClaudeLogo
+            : CommandLineIcon
 
   return (
     <span className="sidebar-tab-icon relative flex-shrink-0">

@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.45.0] — 2026-06-03
+
+### Changed
+- Sidebar sessions now show their provider's actual logo — Claude Code, Gemini, and Codex sessions each display their brand mark instead of a generic icon. Claude sessions use the Claude logo whether or not permissions are skipped, and plain terminals keep the terminal icon
+
 ## [1.44.0] — 2026-06-03
 
 ### Changed

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.45.0",
+    "title": "Provider logos in the sidebar",
+    "description": "Sessions now show their provider's real logo — Claude Code, Gemini, and Codex each display their brand mark in the sidebar, so you can tell them apart at a glance.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.43.0",
     "title": "Edit files right in Clave",
     "description": "Files now open syntax-highlighted and instantly editable — just click into the code, type, and press ⌘S to save. Highlighting follows your theme, and markdown opens rendered with a Source toggle.",
