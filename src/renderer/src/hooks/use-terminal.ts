@@ -346,7 +346,7 @@ export function useTerminal(sessionId: string) {
       }
     }
 
-    const handleDrop = (e: DragEvent): void => {
+    const handleDrop = async (e: DragEvent): Promise<void> => {
       e.preventDefault()
       e.stopPropagation()
 
@@ -394,10 +394,16 @@ export function useTerminal(sessionId: string) {
         }
       }
 
-      // Shell-escape and write to PTY
-      const escaped = paths
-        .filter(Boolean)
-        .map((p) => shellEscape(p))
+      // Persist any transient sources (e.g. macOS screenshot previews that live
+      // in a temp dir and get deleted before the agent reads them) into stable
+      // storage, then shell-escape and write the resulting paths to the PTY.
+      const stablePaths = (
+        await Promise.all(
+          paths.filter(Boolean).map((p) => window.electronAPI.persistDroppedFile(p))
+        )
+      ).filter((p): p is string => Boolean(p))
+
+      const escaped = stablePaths.map((p) => shellEscape(p))
 
       if (escaped.length > 0) {
         window.electronAPI.writeSession(sessionId, escaped.join(' '))

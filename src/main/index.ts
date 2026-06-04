@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
 import { applyPersistedIcon } from './ipc-handlers/app-handlers'
+import { cleanupDroppedFiles } from './ipc-handlers/dropped-file-handlers'
 import { ptyManager, preloadLoginShellEnv } from './pty-manager'
 import { initAutoUpdater, cleanupAutoUpdater } from './auto-updater'
 import { initNotificationManager } from './notification-manager'
@@ -96,6 +97,7 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
+  cleanupDroppedFiles()
   initNotificationManager()
   applyPersistedIcon()
   createWindow()

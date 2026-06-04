@@ -97,6 +97,8 @@ const electronAPI = {
   cancelDownload: () => ipcRenderer.invoke('updater:cancel-download'),
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  persistDroppedFile: (sourcePath: string) =>
+    ipcRenderer.invoke('files:persist-dropped', sourcePath) as Promise<string | null>,
 
   // File system
   listFiles: (cwd: string) => ipcRenderer.invoke('fs:list-files', cwd),

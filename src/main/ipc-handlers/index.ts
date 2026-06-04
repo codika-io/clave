@@ -11,6 +11,7 @@ import { registerSshHandlers } from './ssh-handlers'
 import { registerAgentHandlers } from './agent-handlers'
 import { registerClaveFileHandlers } from './clave-file-handlers'
 import { registerSessionExportHandlers } from './session-export-handlers'
+import { registerDroppedFileHandlers } from './dropped-file-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -26,4 +27,5 @@ export function registerIpcHandlers(): void {
   registerAgentHandlers()
   registerClaveFileHandlers()
   registerSessionExportHandlers()
+  registerDroppedFileHandlers()
 }
