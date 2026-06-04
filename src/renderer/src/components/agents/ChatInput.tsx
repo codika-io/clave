@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { PaperAirplaneIcon } from '@heroicons/react/24/outline'
+import { ArrowUpIcon } from '@heroicons/react/24/outline'
 
 interface ChatInputProps {
   onSend: (content: string) => void
@@ -36,8 +36,8 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   )
 
   return (
-    <div className="border-t border-border-subtle p-4">
-      <div className="flex items-end gap-2 bg-surface-100 rounded-xl px-4 py-2">
+    <div className="px-4 pb-4 pt-2 mx-auto w-full max-w-3xl">
+      <div className="flex flex-col gap-2 bg-surface-50 border border-border-subtle rounded-3xl px-4 py-3 focus-within:border-border transition-colors">
         <textarea
           ref={textareaRef}
           value={value}
@@ -46,15 +46,18 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           placeholder="Send a message..."
           disabled={disabled}
           rows={1}
-          className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-tertiary outline-none resize-none py-1.5 max-h-40"
+          className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-tertiary outline-none resize-none max-h-40 leading-relaxed"
         />
-        <button
-          onClick={handleSend}
-          disabled={!value.trim() || disabled}
-          className="p-1.5 rounded-lg bg-accent text-white hover:opacity-90 disabled:opacity-30 transition-opacity flex-shrink-0"
-        >
-          <PaperAirplaneIcon className="w-4 h-4" />
-        </button>
+        <div className="flex items-center justify-end">
+          <button
+            onClick={handleSend}
+            disabled={!value.trim() || disabled}
+            aria-label="Send message"
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-accent text-white hover:bg-accent-hover disabled:opacity-30 disabled:hover:bg-accent transition-colors flex-shrink-0"
+          >
+            <ArrowUpIcon className="w-4 h-4 stroke-2" />
+          </button>
+        </div>
       </div>
     </div>
   )
