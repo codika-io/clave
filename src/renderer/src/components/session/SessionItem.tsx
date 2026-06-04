@@ -2,7 +2,7 @@ import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
 import { CommandLineIcon, BoltIcon } from '@heroicons/react/24/outline'
-import { ClaudeLogo, GeminiLogo, CodexLogo } from '../icons/cli-logos'
+import { ClaudeLogo, GeminiLogo, CodexLogo, ClaudeVariantGlyph } from '../icons/cli-logos'
 import { SidebarTabItem } from './SidebarTabItem'
 
 function LocationBadge({ locationId }: { locationId: string }) {
@@ -18,19 +18,30 @@ function LocationBadge({ locationId }: { locationId: string }) {
   )
 }
 
+// Distinguish the Claude variants without touching the brand logo: a faint trailing
+// glyph after the name marks `claude agents` (bolt) and skip-permissions (shield).
+// Plain Claude Code stays unmarked as the baseline.
+function getClaudeVariant(session: Session): 'agents' | 'skip' | null {
+  if (session.sessionType === 'agent') return null
+  if (session.claudeAgentsMode) return 'agents'
+  if (session.claudeMode && session.dangerousMode) return 'skip'
+  return null
+}
+
 function SessionIcon({ session }: { session: Session }) {
   const iconClass = cn('transition-colors duration-300', session.hasUnseenActivity && 'text-accent')
 
-  // Provider sessions show their brand mark (Claude for both normal and skip-permissions
-  // modes); plain terminals keep the terminal icon. Agents use the bolt. Remote sessions
-  // use the same provider marks as local ones — the location badge already signals "remote".
+  // Provider sessions show their brand mark; plain terminals keep the terminal icon.
+  // OpenClaw remote agents use the bolt. The local Claude variants share the Claude mark
+  // (the trailing glyph tells them apart). Remote sessions reuse the same provider marks —
+  // the location badge already signals "remote".
   const Icon = session.sessionType === 'agent'
     ? BoltIcon
     : session.geminiMode
       ? GeminiLogo
       : session.codexMode
         ? CodexLogo
-        : session.claudeMode
+        : (session.claudeMode || session.claudeAgentsMode)
           ? ClaudeLogo
           : CommandLineIcon
 
@@ -97,7 +108,9 @@ export function SessionItem({
       extraContent={
         session.locationId && session.sessionType !== 'local'
           ? <LocationBadge locationId={session.locationId} />
-          : undefined
+          : getClaudeVariant(session)
+            ? <ClaudeVariantGlyph variant={getClaudeVariant(session)!} />
+            : undefined
       }
       grouped={grouped}
       groupSelected={groupSelected}

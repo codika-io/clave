@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.47.0] — 2026-06-04
+
+### Added
+- New **Claude Agents** session type that launches `claude agents` instead of plain Claude Code — available from the New Session menu and with the **⌘⇧A** shortcut
+- The three Claude session types are now distinguishable at a glance in the sidebar: a faint trailing glyph marks **Claude Agents** (bolt) and **skip-permissions** (shield) sessions, while plain **Claude Code** stays unmarked — the Claude logo itself is left clean
+
 ## [1.46.0] — 2026-06-04
 
 ### Changed

@@ -112,6 +112,8 @@ export interface Session {
   claudeMode: boolean
   geminiMode: boolean
   codexMode: boolean
+  /** Claude session launched via the `claude agents` subcommand. */
+  claudeAgentsMode?: boolean
   dangerousMode: boolean
   claudeSessionId: string | null
   locationId?: string
@@ -161,6 +163,7 @@ export interface PinnedGroupSession {
   claudeMode: boolean
   geminiMode: boolean
   codexMode: boolean
+  claudeAgentsMode?: boolean
   dangerousMode: boolean
 }
 

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.47.0",
+    "title": "Claude Agents sessions",
+    "description": "Launch a `claude agents` session from the New session menu or with ⌘⇧A. A faint trailing glyph in the sidebar tells Claude Agents and skip-permissions sessions apart from plain Claude Code.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.46.0",
     "title": "Redesigned agent conversations",
     "description": "The remote agent chat has a fresh look — your messages in clean rounded bubbles, agent replies as easy-to-read flowing text, and a refined composer with a circular send button.",

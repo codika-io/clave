@@ -232,11 +232,13 @@ export function Sidebar() {
       if (!folderPath) return
 
       const state = useSessionStore.getState()
+      const otherProvider = state.geminiMode || state.codexMode || state.claudeAgentsMode
       const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
         dangerousMode: state.dangerousMode,
-        claudeMode: (state.geminiMode || state.codexMode) ? false : state.claudeMode,
+        claudeMode: otherProvider ? false : state.claudeMode,
         geminiMode: state.geminiMode,
-        codexMode: state.codexMode
+        codexMode: state.codexMode,
+        claudeAgentsMode: state.claudeAgentsMode
       })
       addSession({
         id: sessionInfo.id,
@@ -246,9 +248,10 @@ export function Sidebar() {
         alive: sessionInfo.alive,
         activityStatus: 'idle',
         promptWaiting: null,
-        claudeMode: (state.geminiMode || state.codexMode) ? false : state.claudeMode,
+        claudeMode: otherProvider ? false : state.claudeMode,
         geminiMode: state.geminiMode,
         codexMode: state.codexMode,
+        claudeAgentsMode: state.claudeAgentsMode,
         dangerousMode: state.dangerousMode,
         claudeSessionId: sessionInfo.claudeSessionId,
         sessionType: 'local'
@@ -686,10 +689,12 @@ export function Sidebar() {
       } else {
         // Local session
         try {
+          const dupOtherProvider = session.geminiMode || session.codexMode || session.claudeAgentsMode
           const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
-            claudeMode: (session.geminiMode || session.codexMode) ? false : session.claudeMode,
+            claudeMode: dupOtherProvider ? false : session.claudeMode,
             geminiMode: session.geminiMode,
             codexMode: session.codexMode,
+            claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode
           })
           addSession({
@@ -700,9 +705,10 @@ export function Sidebar() {
             alive: sessionInfo.alive,
             activityStatus: 'idle',
             promptWaiting: null,
-            claudeMode: (session.geminiMode || session.codexMode) ? false : session.claudeMode,
+            claudeMode: dupOtherProvider ? false : session.claudeMode,
             geminiMode: session.geminiMode,
             codexMode: session.codexMode,
+            claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
             claudeSessionId: sessionInfo.claudeSessionId,
             sessionType: 'local',
@@ -729,8 +735,12 @@ export function Sidebar() {
       if (!session || !session.claudeSessionId) return
 
       try {
+        // Preserve the variant: resuming a `claude agents` session relaunches it as
+        // `claude agents --resume`, not plain `claude --resume`.
+        const isAgents = !!session.claudeAgentsMode
         const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
-          claudeMode: true,
+          claudeMode: !isAgents,
+          claudeAgentsMode: isAgents,
           dangerousMode,
           resumeSessionId: session.claudeSessionId
         })
@@ -742,7 +752,8 @@ export function Sidebar() {
           alive: sessionInfo.alive,
           activityStatus: 'idle',
           promptWaiting: null,
-          claudeMode: true,
+          claudeMode: !isAgents,
+          claudeAgentsMode: isAgents,
           dangerousMode,
           claudeSessionId: sessionInfo.claudeSessionId,
           sessionType: 'local'
@@ -1045,11 +1056,20 @@ export function Sidebar() {
         {/* Permanent tabs — share the same row gap as the session tabs below */}
         <div className="px-2 space-y-0.5">
           <NewSessionDropdown
-            onNewSession={({ claudeMode, geminiMode, codexMode, dangerousMode, locationId }) => {
+            onNewSession={({ claudeMode, geminiMode, codexMode, claudeAgentsMode, dangerousMode, locationId }) => {
               if (locationId) {
                 // Remote: open directory picker
                 const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
                 setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, geminiMode, codexMode })
+              } else if (claudeAgentsMode) {
+                // Claude Agents: spawn `claude agents` via temporary mode override
+                const store = useSessionStore.getState()
+                const prevAgents = store.claudeAgentsMode
+                const prevClaude = store.claudeMode
+                useSessionStore.setState({ claudeAgentsMode: true, claudeMode: false })
+                handleNewSession().finally(() => {
+                  useSessionStore.setState({ claudeAgentsMode: prevAgents, claudeMode: prevClaude })
+                })
               } else if (geminiMode) {
                 // Gemini: spawn directly without mode override
                 const store = useSessionStore.getState()

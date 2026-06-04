@@ -5,7 +5,7 @@ export interface ClaveFileGroupData {
   toolbar?: boolean
   category?: string
   logo?: string
-  sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; dangerousMode: boolean }[]
+  sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]
   terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; autoLaunchLocalhost?: boolean }[]
 }
 
@@ -17,7 +17,7 @@ export interface ClaveFileWriteData {
   name?: string
   cwd?: string | null
   color?: string | null
-  sessions?: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; dangerousMode: boolean }[]
+  sessions?: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]
   terminals?: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[]
   groups?: Array<{
     name: string
@@ -26,7 +26,7 @@ export interface ClaveFileWriteData {
     toolbar?: boolean
     category?: string
     logo?: string
-    sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; dangerousMode: boolean }[]
+    sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]
     terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; autoLaunchLocalhost?: boolean }[]
   }>
 }
@@ -174,7 +174,7 @@ export interface DownloadProgress {
 }
 
 export interface ElectronAPI {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; codexMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => Promise<SessionInfo>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; codexMode?: boolean; claudeAgentsMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
   startSession: (id: string, cols: number, rows: number) => void
   resizeSession: (id: string, cols: number, rows: number) => void

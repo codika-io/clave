@@ -50,15 +50,17 @@ export function AppShell() {
   useWorkTracker()
 
   const spawnSessionWithOptions = useCallback(
-    async (claudeMode: boolean, dangerousMode: boolean, geminiMode?: boolean, codexMode?: boolean) => {
+    async (claudeMode: boolean, dangerousMode: boolean, geminiMode?: boolean, codexMode?: boolean, claudeAgentsMode?: boolean) => {
       try {
         const folderPath = await window.electronAPI.openFolderDialog()
         if (!folderPath) return
 
+        const otherProvider = geminiMode || codexMode || claudeAgentsMode
         const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
-          claudeMode: (geminiMode || codexMode) ? false : claudeMode,
+          claudeMode: otherProvider ? false : claudeMode,
           geminiMode,
           codexMode,
+          claudeAgentsMode,
           dangerousMode
         })
         addSession({
@@ -69,9 +71,10 @@ export function AppShell() {
           alive: sessionInfo.alive,
           activityStatus: 'idle',
           promptWaiting: null,
-          claudeMode: (geminiMode || codexMode) ? false : claudeMode,
+          claudeMode: otherProvider ? false : claudeMode,
           geminiMode: geminiMode ?? false,
           codexMode: codexMode ?? false,
+          claudeAgentsMode: claudeAgentsMode ?? false,
           dangerousMode,
           claudeSessionId: sessionInfo.claudeSessionId,
           sessionType: 'local'
@@ -222,6 +225,11 @@ export function AppShell() {
       if (e.metaKey && !e.shiftKey && !e.altKey && e.key === 'u') {
         e.preventDefault()
         spawnSessionWithOptions(false, false, false, true)
+      }
+      // Cmd+Shift+A: New Claude Agents session (`claude agents`)
+      if (e.metaKey && e.shiftKey && !e.altKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault()
+        spawnSessionWithOptions(false, false, false, false, true)
       }
       // Cmd+W: Close focused file tab
       if (e.metaKey && e.key === 'w') {

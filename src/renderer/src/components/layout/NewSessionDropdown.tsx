@@ -4,7 +4,6 @@ import { useLocationStore } from '../../store/location-store'
 import {
   PencilSquareIcon,
   CommandLineIcon,
-  ShieldExclamationIcon,
   BoltIcon
 } from '@heroicons/react/24/outline'
 import { AgentPickerPopover } from '../agents/AgentPickerPopover'
@@ -20,7 +19,7 @@ import {
 } from '../ui/dropdown-menu'
 
 interface NewSessionDropdownProps {
-  onNewSession: (options: { claudeMode: boolean; geminiMode: boolean; codexMode: boolean; dangerousMode: boolean; locationId?: string }) => void
+  onNewSession: (options: { claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode: boolean; dangerousMode: boolean; locationId?: string }) => void
   loading: boolean
 }
 
@@ -38,9 +37,9 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
   const hasAgentLocations = agents.length > 0
 
   const handleOption = useCallback(
-    (claudeMode: boolean, dangerousMode: boolean, locationId?: string, geminiMode?: boolean, codexMode?: boolean) => {
+    (claudeMode: boolean, dangerousMode: boolean, locationId?: string, geminiMode?: boolean, codexMode?: boolean, claudeAgentsMode?: boolean) => {
       setOpen(false)
-      onNewSession({ claudeMode, geminiMode: geminiMode ?? false, codexMode: codexMode ?? false, dangerousMode, locationId })
+      onNewSession({ claudeMode, geminiMode: geminiMode ?? false, codexMode: codexMode ?? false, claudeAgentsMode: claudeAgentsMode ?? false, dangerousMode, locationId })
     },
     [onNewSession]
   )
@@ -76,9 +75,14 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
             <DropdownMenuShortcut>{'\u2318N'}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => handleOption(true, true)}>
-            <ShieldExclamationIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+            <ClaudeLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
             <span className="flex-1">Claude Code (skip permissions)</span>
             <DropdownMenuShortcut>{'\u2318D'}</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleOption(false, false, undefined, false, false, true)}>
+            <ClaudeLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+            <span className="flex-1">Claude Agents</span>
+            <DropdownMenuShortcut>{'\u2318\u21e7A'}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => handleOption(false, false, undefined, true)}>
             <GeminiLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />

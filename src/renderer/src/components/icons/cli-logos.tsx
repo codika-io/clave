@@ -2,6 +2,28 @@
 // Usage panel render the exact same logos. (Custom SVGs are intentional here — these
 // are vendor brand marks, not standard UI icons covered by Heroicons.)
 
+import { BoltIcon, ShieldExclamationIcon } from '@heroicons/react/16/solid'
+
+export type ClaudeVariant = 'agents' | 'skip'
+
+/**
+ * Faint trailing marker for a Claude session variant, rendered after the session
+ * name (in the same right-side slot as the remote-location badge). Keeps the
+ * Claude logo itself untouched: a bolt for `claude agents`, a shield for
+ * skip-permissions. Plain Claude Code shows no marker.
+ */
+export function ClaudeVariantGlyph({ variant }: { variant: ClaudeVariant }) {
+  const Glyph = variant === 'agents' ? BoltIcon : ShieldExclamationIcon
+  return (
+    <span
+      className="flex-shrink-0 text-text-tertiary"
+      title={variant === 'agents' ? 'Claude Agents' : 'Skip permissions'}
+    >
+      <Glyph className="w-3 h-3" />
+    </span>
+  )
+}
+
 export function ClaudeLogo({ className }: { className?: string }) {
   return (
     <svg className={className} width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

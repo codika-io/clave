@@ -79,6 +79,7 @@ export interface PtySpawnOptions {
   claudeMode?: boolean
   geminiMode?: boolean
   codexMode?: boolean
+  claudeAgentsMode?: boolean
   resumeSessionId?: string
   claudeSessionId?: string
   initialCommand?: string
@@ -118,9 +119,10 @@ class PtyManager {
   spawn(cwd: string, options?: PtySpawnOptions): PtySession {
     const id = randomUUID()
     const folderName = (isWindows ? cwd.split('\\') : cwd.split('/')).pop() || cwd
-    const useClaudeMode = options?.claudeMode !== false && !options?.geminiMode && !options?.codexMode
+    const useAgentsMode = options?.claudeAgentsMode === true
     const useGeminiMode = options?.geminiMode === true
     const useCodexMode = options?.codexMode === true
+    const useClaudeMode = options?.claudeMode !== false && !useGeminiMode && !useCodexMode && !useAgentsMode
 
     let claudeSessionId: string | undefined
     let shellArgs: string[]
@@ -130,6 +132,10 @@ class PtyManager {
         shellArgs = ['/c', 'gemini']
       } else if (useCodexMode) {
         shellArgs = ['/c', 'codex']
+      } else if (useAgentsMode) {
+        // `claude agents` is an interactive subcommand and does not accept
+        // --session-id / --resume / --dangerously-skip-permissions, so spawn it bare.
+        shellArgs = ['/c', 'claude', 'agents']
       } else if (!useClaudeMode) {
         shellArgs = []
       } else {
@@ -151,6 +157,10 @@ class PtyManager {
         shellArgs = ['-l', '-c', 'gemini']
       } else if (useCodexMode) {
         shellArgs = ['-l', '-c', 'codex']
+      } else if (useAgentsMode) {
+        // `claude agents` is an interactive subcommand and does not accept
+        // --session-id / --resume / --dangerously-skip-permissions, so spawn it bare.
+        shellArgs = ['-l', '-c', 'claude agents']
       } else if (!useClaudeMode) {
         shellArgs = ['-l']
       } else {
