@@ -36,8 +36,8 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   )
 
   return (
-    <div className="px-4 pb-4 pt-2 mx-auto w-full max-w-3xl">
-      <div className="flex flex-col gap-2 bg-surface-50 border border-border-subtle rounded-3xl px-4 py-3 focus-within:border-border transition-colors">
+    <div className="px-4 pb-4 pt-2 mx-auto w-full max-w-2xl">
+      <div className="flex flex-col gap-2 bg-surface-0 border border-border rounded-3xl px-4 py-3 focus-within:border-border transition-colors">
         <textarea
           ref={textareaRef}
           value={value}
@@ -53,9 +53,9 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             onClick={handleSend}
             disabled={!value.trim() || disabled}
             aria-label="Send message"
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-accent text-white hover:bg-accent-hover disabled:opacity-30 disabled:hover:bg-accent transition-colors flex-shrink-0"
+            className="flex items-center justify-center w-7 h-7 rounded-full bg-accent text-white hover:bg-accent-hover disabled:opacity-30 disabled:hover:bg-accent transition-colors flex-shrink-0"
           >
-            <ArrowUpIcon className="w-4 h-4 stroke-2" />
+            <ArrowUpIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

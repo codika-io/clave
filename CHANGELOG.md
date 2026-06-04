@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.46.0] — 2026-06-04
+
+### Changed
+- Redesigned the remote agent conversation view: your messages now sit in a clean rounded bubble, the agent's replies flow as plain text for easier reading, and the whole thread is centered in a comfortable reading column
+- New message composer with a rounded input and a circular send button that blends into the conversation background for a calmer, more focused look
+
 ## [1.45.1] — 2026-06-04
 
 ### Changed

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.46.0",
+    "title": "Redesigned agent conversations",
+    "description": "The remote agent chat has a fresh look — your messages in clean rounded bubbles, agent replies as easy-to-read flowing text, and a refined composer with a circular send button.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.45.0",
     "title": "Provider logos in the sidebar",
     "description": "Sessions now show their provider's real logo — Claude Code, Gemini, and Codex each display their brand mark in the sidebar, so you can tell them apart at a glance.",
