@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.45.1] — 2026-06-04
+
+### Changed
+- Remote sessions now show their provider's logo in the sidebar (Claude Code, Gemini, Codex, or terminal) instead of a generic globe — the server-name badge already marks them as remote, so they now read just like local sessions
+- The remote file tree now matches the local file tree's design — same row height, spacing, icons, and font size
+- Refreshed the remote folder picker (shown when opening a session on a remote server) with a cleaner layout, Up and Home shortcuts, an editable breadcrumb path, keyboard navigation, and polished folder rows
+
+### Fixed
+- The remote server-name badge in the sidebar no longer crops longer names at a fixed width — it now grows to fit and truncates with an ellipsis, with the full name on hover
+
 ## [1.45.0] — 2026-06-03
 
 ### Changed
