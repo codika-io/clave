@@ -1,7 +1,7 @@
 import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
-import { CommandLineIcon, BoltIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
+import { CommandLineIcon, BoltIcon } from '@heroicons/react/24/outline'
 import { ClaudeLogo, GeminiLogo, CodexLogo } from '../icons/cli-logos'
 import { SidebarTabItem } from './SidebarTabItem'
 
@@ -9,7 +9,10 @@ function LocationBadge({ locationId }: { locationId: string }) {
   const location = useLocationStore((s) => s.locations.find((l) => l.id === locationId))
   if (!location || location.type !== 'remote') return null
   return (
-    <span className="badge flex-shrink-0 bg-surface-100 text-text-tertiary truncate max-w-[60px]">
+    <span
+      className="badge flex-shrink-0 bg-surface-100 text-text-tertiary truncate max-w-[120px]"
+      title={location.name}
+    >
       {location.name}
     </span>
   )
@@ -19,18 +22,17 @@ function SessionIcon({ session }: { session: Session }) {
   const iconClass = cn('transition-colors duration-300', session.hasUnseenActivity && 'text-accent')
 
   // Provider sessions show their brand mark (Claude for both normal and skip-permissions
-  // modes); plain terminals keep the terminal icon. Agents and remote sessions are special.
+  // modes); plain terminals keep the terminal icon. Agents use the bolt. Remote sessions
+  // use the same provider marks as local ones — the location badge already signals "remote".
   const Icon = session.sessionType === 'agent'
     ? BoltIcon
-    : session.sessionType === 'remote-terminal' || session.sessionType === 'remote-claude'
-      ? GlobeAltIcon
-      : session.geminiMode
-        ? GeminiLogo
-        : session.codexMode
-          ? CodexLogo
-          : session.claudeMode
-            ? ClaudeLogo
-            : CommandLineIcon
+    : session.geminiMode
+      ? GeminiLogo
+      : session.codexMode
+        ? CodexLogo
+        : session.claudeMode
+          ? ClaudeLogo
+          : CommandLineIcon
 
   return (
     <span className="sidebar-tab-icon relative flex-shrink-0">
