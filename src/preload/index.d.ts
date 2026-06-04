@@ -212,6 +212,7 @@ export interface ElectronAPI {
   startDownload: () => Promise<void>
   cancelDownload: () => Promise<void>
   getPathForFile: (file: File) => string
+  persistDroppedFile: (sourcePath: string) => Promise<string | null>
   showNotification: (options: { title: string; body: string; sessionId: string }) => Promise<void>
   onNotificationClicked: (callback: (sessionId: string) => void) => () => void
   listFiles: (cwd: string) => Promise<{ files: string[]; truncated: boolean }>
