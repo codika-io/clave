@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.47.1] — 2026-06-04
+
 ### Fixed
 - Screenshots dragged into a session straight from the macOS preview thumbnail are now copied into stable storage on drop, so the agent can still read them after macOS removes the original temporary file. Old copies are cleaned up automatically after 7 days.
 
