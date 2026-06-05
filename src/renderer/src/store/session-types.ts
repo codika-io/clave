@@ -4,6 +4,14 @@ export type AppIcon = 'dark' | 'light' | 'claude'
 
 export type ActivityStatus = 'active' | 'idle' | 'ended'
 
+/**
+ * Deterministic Claude Code run state, sourced from CC lifecycle hooks (see
+ * main/agent-state-manager.ts). Drives the sidebar tab status visuals for Claude
+ * sessions only — other providers stay neutral. `ended` is derived from `alive`
+ * at render time, so the hook-fed values are idle/working/blocked/done.
+ */
+export type AgentRunState = 'idle' | 'working' | 'blocked' | 'done'
+
 export type SessionType = 'local' | 'remote-terminal' | 'remote-claude' | 'agent'
 
 export type GroupTerminalColor =
@@ -108,6 +116,8 @@ export interface Session {
   name: string
   alive: boolean
   activityStatus: ActivityStatus
+  /** Deterministic Claude run state from CC hooks; undefined until first signal. */
+  agentState?: AgentRunState
   promptWaiting: string | null
   claudeMode: boolean
   geminiMode: boolean

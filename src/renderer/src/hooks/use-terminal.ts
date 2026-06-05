@@ -145,7 +145,7 @@ export function useTerminal(sessionId: string) {
       window.electronAPI.resizeSession(sessionId, cols, rows)
     })
 
-    const { setSessionActivity, setSessionPromptWaiting, setSessionDetectedUrl, setSessionServerStatus, setSessionServerCommand, setSessionUnseenActivity, updateSessionAlive, autoRenameSession, resetSessionName, setSessionPlanFile } = useSessionStore.getState()
+    const { setSessionActivity, setAgentState, setSessionPromptWaiting, setSessionDetectedUrl, setSessionServerStatus, setSessionServerCommand, setSessionUnseenActivity, updateSessionAlive, autoRenameSession, resetSessionName, setSessionPlanFile } = useSessionStore.getState()
 
     // Listen for auto-generated titles from the main process
     const cleanupAutoTitle = window.electronAPI.onSessionAutoTitle(sessionId, (title) => {
@@ -160,6 +160,14 @@ export function useTerminal(sessionId: string) {
     // Listen for /clear command — reset session name to folder name
     const cleanupClearDetected = window.electronAPI.onClearDetected(sessionId, () => {
       resetSessionName(sessionId)
+    })
+
+    // Deterministic Claude run state from CC lifecycle hooks (working/blocked/done).
+    const cleanupAgentState = window.electronAPI.onAgentState(sessionId, (state) => {
+      if (state === 'idle' || state === 'working' || state === 'blocked' || state === 'done') {
+        setAgentState(sessionId, state)
+      }
+      // 'ended' is derived from the PTY exit / alive flag, so it's ignored here.
     })
 
     // Activity tracking: debounce from active → idle after silence
@@ -448,6 +456,7 @@ export function useTerminal(sessionId: string) {
       cleanupAutoTitle()
       cleanupPlanDetected()
       cleanupClearDetected()
+      cleanupAgentState()
       cleanupData()
       cleanupExit()
       resizeObserver.disconnect()

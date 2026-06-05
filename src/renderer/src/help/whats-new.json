@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.48.0",
+    "title": "Live status on session tabs",
+    "description": "Claude Code tabs now show their status at a glance: the icon pulses blue while working, an amber dot means Claude is waiting on your input, and a green dot flags a session that finished while you were away. Driven by Claude Code's own lifecycle signals, so it's accurate, not guessed.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.47.0",
     "title": "Claude Agents sessions",
     "description": "Launch a `claude agents` session from the New session menu or with ⌘⇧A. A faint trailing glyph in the sidebar tells Claude Agents and skip-permissions sessions apart from plain Claude Code.",

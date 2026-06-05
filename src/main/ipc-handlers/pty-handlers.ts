@@ -1,10 +1,18 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { ptyManager, type PtySpawnOptions } from '../pty-manager'
 import * as titleGenerator from '../title-generator'
+import { startWatching as startAgentStateWatching, clearState as clearAgentState } from '../agent-state-manager'
 
 export function registerPtyHandlers(): void {
   // Buffer PTY input per session to detect /clear command
   const inputBuffers = new Map<string, string>()
+
+  // Deterministic Claude session state (from CC lifecycle hooks) → renderer.
+  startAgentStateWatching((claveSessionId, state) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(`agent:state:${claveSessionId}`, state)
+    }
+  })
 
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: PtySpawnOptions) => {
     const session = ptyManager.spawn(cwd, options)
@@ -29,6 +37,7 @@ export function registerPtyHandlers(): void {
       (exitCode) => {
         titleGenerator.cleanup(session.id)
         inputBuffers.delete(session.id)
+        clearAgentState(session.id)
         if (win && !win.isDestroyed()) {
           win.webContents.send(`pty:exit:${session.id}`, exitCode)
         }

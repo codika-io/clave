@@ -185,6 +185,7 @@ export interface ElectronAPI {
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) => () => void
   onClearDetected: (sessionId: string, callback: () => void) => () => void
+  onAgentState: (sessionId: string, callback: (state: string) => void) => () => void
   saveDiscussion: (
     cwd: string,
     claudeSessionId: string,

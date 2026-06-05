@@ -84,6 +84,7 @@ interface SessionState {
   setAppIcon: (icon: AppIcon) => void
   updateSessionAlive: (id: string, alive: boolean) => void
   setSessionActivity: (id: string, status: ActivityStatus) => void
+  setAgentState: (id: string, state: import('./session-types').AgentRunState) => void
   setSessionPromptWaiting: (id: string, promptType: string | null) => void
   setSessionDetectedUrl: (id: string, url: string | null) => void
   setSessionServerStatus: (id: string, status: import('./session-types').ServerStatus) => void
@@ -653,6 +654,15 @@ export const useSessionStore = create<SessionState>((set) => ({
       if (!session || session.activityStatus === status) return state
       return {
         sessions: state.sessions.map((s) => (s.id === id ? { ...s, activityStatus: status } : s))
+      }
+    }),
+
+  setAgentState: (id, agentState) =>
+    set((state) => {
+      const session = state.sessions.find((s) => s.id === id)
+      if (!session || session.agentState === agentState) return state
+      return {
+        sessions: state.sessions.map((s) => (s.id === id ? { ...s, agentState } : s))
       }
     }),
 

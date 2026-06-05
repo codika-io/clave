@@ -29,8 +29,6 @@ function getClaudeVariant(session: Session): 'agents' | 'skip' | null {
 }
 
 function SessionIcon({ session }: { session: Session }) {
-  const iconClass = cn('transition-colors duration-300', session.hasUnseenActivity && 'text-accent')
-
   // Provider sessions show their brand mark; plain terminals keep the terminal icon.
   // OpenClaw remote agents use the bolt. The local Claude variants share the Claude mark
   // (the trailing glyph tells them apart). Remote sessions reuse the same provider marks —
@@ -45,18 +43,50 @@ function SessionIcon({ session }: { session: Session }) {
           ? ClaudeLogo
           : CommandLineIcon
 
+  // Tab status visuals are Claude Code only and complementary, not redundant:
+  // the ICON color carries "is it running" and the DOT carries "does it need me".
+  //   working → blue pulsing icon, no dot
+  //   blocked → neutral icon, amber dot (waiting on a permission/selection prompt)
+  //   done & unseen → neutral icon, green dot (finished while you were away; clears on view)
+  //   idle / done-seen / empty → neutral icon, no dot
+  //   ended → dimmed icon, no dot
+  // Gemini/Codex/terminals/agents have no deterministic state signal, so they stay
+  // fully neutral — no color, no dot (see ROADMAP.md).
+  const isClaudeCode =
+    session.claudeMode === true &&
+    !session.claudeAgentsMode &&
+    !session.geminiMode &&
+    !session.codexMode &&
+    session.sessionType === 'local'
+
+  const state = !session.alive ? 'ended' : session.agentState ?? 'idle'
+  const working = isClaudeCode && state === 'working'
+  const blocked = isClaudeCode && state === 'blocked'
+  const doneUnseen = isClaudeCode && state === 'done' && session.hasUnseenActivity
+  const ended = isClaudeCode && state === 'ended'
+
+  const dotColor = blocked ? 'bg-status-waiting' : doneUnseen ? 'bg-status-ready' : null
+
   return (
-    <span className="sidebar-tab-icon relative flex-shrink-0">
-      <Icon className={iconClass} />
-      <span
+    <span
+      className="sidebar-tab-icon relative flex-shrink-0"
+      style={working ? { animation: 'pulse-dot 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' } : undefined}
+    >
+      <Icon
         className={cn(
-          'absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full border border-surface-50',
-          session.activityStatus === 'active' && 'bg-status-working',
-          session.activityStatus === 'idle' && 'bg-status-ready',
-          session.activityStatus === 'ended' && 'bg-status-inactive'
+          'transition-colors duration-300',
+          working && 'text-status-working',
+          ended && 'text-text-tertiary opacity-50'
         )}
-        style={session.activityStatus === 'active' ? { animation: 'pulse-dot 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' } : undefined}
       />
+      {dotColor && (
+        <span
+          className={cn(
+            'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-surface-50',
+            dotColor
+          )}
+        />
+      )}
     </span>
   )
 }

@@ -44,6 +44,9 @@ const electronAPI = {
   onClearDetected: (sessionId: string, callback: () => void) =>
     createIpcListener<[]>(`session:clear-detected:${sessionId}`, callback),
 
+  onAgentState: (sessionId: string, callback: (state: string) => void) =>
+    createIpcListener<[string]>(`agent:state:${sessionId}`, callback),
+
   saveDiscussion: (
     cwd: string,
     claudeSessionId: string,

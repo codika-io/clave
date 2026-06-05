@@ -2,8 +2,56 @@ import * as pty from 'node-pty'
 import { execFile, execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
 import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS, INITIAL_COMMAND_DELAY_MS } from './constants'
+import { stateFilePath } from './agent-state-manager'
 
 const isWindows = process.platform === 'win32'
+
+/** Wrap a string as a single shell-quoted token (safe for embedding in `zsh -c`). */
+function shellSingleQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
+/**
+ * Build the `--settings` argument that wires Claude Code lifecycle hooks to a
+ * per-session state file owned by agent-state-manager. Returns a fully
+ * shell-quoted token ready to drop into the `zsh -lc '<cmd>'` command string,
+ * or null on Windows (hooks use POSIX `printf`/`grep`; the app ships macOS-only).
+ *
+ * State words written: idle (start), working (prompt/tool activity), blocked
+ * (permission/elicitation prompt), done (turn complete), ended (session end).
+ * `--settings` merges with (never replaces) the user's own settings.
+ */
+function buildClaudeHookSettingsArg(claveSessionId: string): string | null {
+  if (isWindows) return null
+  const q = JSON.stringify(stateFilePath(claveSessionId)) // double-quoted shell token for the path
+  const write = (word: string): { hooks: { type: 'command'; command: string }[] } => ({
+    hooks: [{ type: 'command', command: `printf ${word} > ${q}` }]
+  })
+  const settings = {
+    hooks: {
+      SessionStart: [write('idle')],
+      UserPromptSubmit: [write('working')],
+      PreToolUse: [write('working')],
+      PostToolUse: [write('working')],
+      // Notification fires for both permission prompts and ~60s idle. Only the
+      // permission/elicitation case is a real "blocked"; match the payload text
+      // (robust to the exact field name) and ignore the idle case.
+      Notification: [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: `grep -qiE "permission|elicitation" && printf blocked > ${q} || true`
+            }
+          ]
+        }
+      ],
+      Stop: [write('done')],
+      SessionEnd: [write('ended')]
+    }
+  }
+  return shellSingleQuote(JSON.stringify(settings))
+}
 
 let loginShellEnv: Record<string, string> | null = null
 
@@ -173,6 +221,9 @@ class PtyManager {
           parts.push('--session-id', claudeSessionId)
         }
         if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
+        // Wire lifecycle hooks → per-session state file for deterministic tab status.
+        const settingsArg = buildClaudeHookSettingsArg(id)
+        if (settingsArg) parts.push('--settings', settingsArg)
         shellArgs = ['-l', '-c', parts.join(' ')]
       }
     }
