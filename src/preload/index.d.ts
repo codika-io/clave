@@ -39,6 +39,19 @@ export interface SessionInfo {
   claudeSessionId: string | null
 }
 
+export interface AdoptableTmuxSession {
+  tmuxName: string
+  id: string
+  claudeSessionId?: string
+  cwd: string
+  folderName: string
+  claudeMode: boolean
+  geminiMode: boolean
+  codexMode: boolean
+  claudeAgentsMode: boolean
+  dangerousMode: boolean
+}
+
 export interface DirEntry {
   name: string
   path: string
@@ -174,12 +187,15 @@ export interface DownloadProgress {
 }
 
 export interface ElectronAPI {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; codexMode?: boolean; claudeAgentsMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean }) => Promise<SessionInfo>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; codexMode?: boolean; claudeAgentsMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean; tmuxMode?: boolean; adoptTmuxName?: string; adoptSessionId?: string }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
   startSession: (id: string, cols: number, rows: number) => void
   resizeSession: (id: string, cols: number, rows: number) => void
   killSession: (id: string) => Promise<void>
   listSessions: () => Promise<SessionInfo[]>
+  tmuxAvailable: () => Promise<boolean>
+  tmuxListAdoptable: () => Promise<AdoptableTmuxSession[]>
+  tmuxDiscard: (tmuxName: string) => Promise<void>
   onSessionData: (id: string, callback: (data: string) => void) => () => void
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void

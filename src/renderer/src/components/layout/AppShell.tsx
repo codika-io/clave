@@ -27,6 +27,10 @@ const sidebarTransition = {
   ease: [0.2, 0, 0, 1] as const
 }
 
+/** Process-wide latch so tmux-session adoption runs exactly once per launch,
+ *  even across React StrictMode's mount→unmount→mount in development. */
+let tmuxAdoptionStarted = false
+
 export function AppShell() {
   const sidebarOpen = useSessionStore((s) => s.sidebarOpen)
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
@@ -85,6 +89,59 @@ export function AppShell() {
     },
     [addSession]
   )
+
+  // On launch, re-adopt tmux-backed sessions that survived a previous run:
+  // recreate each tab and reattach the live agent. The module-level latch makes
+  // this run once per process even under React StrictMode's mount/remount (a
+  // component-scoped ref would be recreated). The main process also dedupes by
+  // tmux name, so a re-adopted survivor is never spawned twice.
+  useEffect(() => {
+    if (tmuxAdoptionStarted) return
+    tmuxAdoptionStarted = true
+    void (async () => {
+      try {
+        const survivors = await window.electronAPI?.tmuxListAdoptable?.()
+        if (!survivors?.length) return
+        for (const s of survivors) {
+          try {
+            const info = await window.electronAPI.spawnSession(s.cwd, {
+              claudeMode: s.claudeMode,
+              geminiMode: s.geminiMode,
+              codexMode: s.codexMode,
+              claudeAgentsMode: s.claudeAgentsMode,
+              dangerousMode: s.dangerousMode,
+              tmuxMode: true,
+              adoptTmuxName: s.tmuxName,
+              // Reuse the original id + claude session id so lifecycle-hook
+              // status routing and resume keep working after reattach.
+              adoptSessionId: s.id,
+              claudeSessionId: s.claudeSessionId
+            })
+            addSession({
+              id: info.id,
+              cwd: info.cwd,
+              folderName: info.folderName,
+              name: s.folderName,
+              alive: info.alive,
+              activityStatus: 'idle',
+              promptWaiting: null,
+              claudeMode: s.claudeMode,
+              geminiMode: s.geminiMode,
+              codexMode: s.codexMode,
+              claudeAgentsMode: s.claudeAgentsMode,
+              dangerousMode: s.dangerousMode,
+              claudeSessionId: info.claudeSessionId,
+              sessionType: 'local'
+            })
+          } catch (err) {
+            console.error('Failed to adopt persistent session:', s.tmuxName, err)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to list adoptable tmux sessions:', err)
+      }
+    })()
+  }, [addSession])
 
   const sidebarRef = useRef<HTMLDivElement>(null)
   const fileTreeRef = useRef<HTMLDivElement>(null)

@@ -465,3 +465,9 @@ class PreferencesManager {
 }
 
 const preferencesManager = new PreferencesManager()
+
+/** Read a persisted app preference from the main process (e.g. the global
+ *  tmux toggle, which the PTY spawn handler consults as a default). */
+export function getPreference(key: string): unknown {
+  return preferencesManager.get(key)
+}
