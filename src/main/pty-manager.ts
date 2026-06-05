@@ -462,7 +462,13 @@ class PtyManager {
       if (sidecarOk) {
         tmuxName = candidateName
         const confPath = getTmuxConfigPath()
-        const tmuxArgs: string[] = ['-L', TMUX_SOCKET]
+        // `-u` forces UTF-8 client output. Electron apps are launched without a
+        // UTF-8 locale (no LANG/LC_* in the GUI environment), so tmux would
+        // otherwise run the client in non-UTF-8 mode and downsample every
+        // multibyte glyph — box-drawing, the agent's logo, em-dashes — to `_`.
+        // (Direct, non-tmux PTYs are unaffected: the agent + xterm.js are always
+        // UTF-8; only tmux gates UTF-8 on the locale env.)
+        const tmuxArgs: string[] = ['-u', '-L', TMUX_SOCKET]
         if (confPath) tmuxArgs.push('-f', confPath)
         // `new-session -A`: attach if the session already exists (reattach a live
         // agent after an app restart / from elsewhere), otherwise create it and
