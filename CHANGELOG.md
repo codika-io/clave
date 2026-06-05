@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.49.0] — 2026-06-05
+
+### Added
+- **Persistent sessions (tmux)** — sessions now run inside a tmux session, so your agents keep running after you quit Clave, survive crashes, and reattach automatically on the next launch. They're also reachable from any terminal with `tmux -L clave attach`. On by default when tmux is installed (sessions fall back to normal otherwise); you can turn it off in Settings → Sessions.
+
+## [1.48.0] — 2026-06-05
+
 ### Added
 - Claude Code session tabs now show their live status at a glance: the icon turns blue and pulses while Claude is **working**, an amber dot appears when Claude is **blocked** waiting for your input (a permission or selection prompt), and a green dot marks a session that **finished while you were away** — clearing as soon as you open the tab. Idle and freshly-started sessions stay clean. Status is driven by Claude Code's own lifecycle signals, so it's accurate rather than guessed. Gemini and Codex sessions stay neutral for now (see ROADMAP.md).
 
