@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { type Theme, useSessionStore } from '../../store/session-store'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { useUserStore, USER_ICONS, USER_ICON_COLORS } from '../../store/user-store'
@@ -196,8 +196,47 @@ export function SettingsPanel() {
         </section>
 
         <SidebarWidgetsSection />
+
+        <SessionsSection />
       </div>
     </div>
+  )
+}
+
+function SessionsSection() {
+  const tmuxMode = useSessionStore((s) => s.tmuxMode)
+  const setTmuxMode = useSessionStore((s) => s.setTmuxMode)
+  const [tmuxAvailable, setTmuxAvailable] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    window.electronAPI?.tmuxAvailable().then((available) => {
+      if (!cancelled) setTmuxAvailable(available)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const unavailable = tmuxAvailable === false
+
+  return (
+    <section className="mt-8">
+      <h3 className="settings-section-title mb-3">Sessions</h3>
+      <div className="space-y-4">
+        <ToggleRow
+          label="Persistent sessions (tmux)"
+          description={
+            unavailable
+              ? 'Install tmux (e.g. `brew install tmux`) to enable. New sessions then keep running after you quit Clave and reattach on next launch.'
+              : 'Run new sessions inside tmux so agents keep running after you quit Clave, survive crashes, and reattach on next launch. Also reachable from any terminal via `tmux -L clave attach`.'
+          }
+          checked={tmuxMode && !unavailable}
+          onChange={setTmuxMode}
+          disabled={unavailable}
+        />
+      </div>
+    </section>
   )
 }
 
@@ -205,15 +244,17 @@ function ToggleRow({
   label,
   description,
   checked,
-  onChange
+  onChange,
+  disabled = false
 }: {
   label: string
   description: string
   checked: boolean
   onChange: (value: boolean) => void
+  disabled?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className={`flex items-center justify-between gap-4 ${disabled ? 'opacity-50' : ''}`}>
       <div className="min-w-0">
         <p className="text-sm text-text-secondary">{label}</p>
         <p className="text-xs text-text-tertiary mt-0.5">{description}</p>
@@ -221,10 +262,11 @@ function ToggleRow({
       <button
         role="switch"
         aria-checked={checked}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`relative flex-shrink-0 w-9 h-5 rounded-full transition-colors ${
-          checked ? 'bg-accent' : 'bg-surface-300'
-        }`}
+          disabled ? 'cursor-not-allowed ' : ''
+        }${checked ? 'bg-accent' : 'bg-surface-300'}`}
       >
         <div
           className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${

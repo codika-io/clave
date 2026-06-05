@@ -29,6 +29,8 @@ interface SessionState {
   sidebarWidth: number
   theme: Theme
   appIcon: AppIcon
+  /** Opt-in: run new sessions inside persistent tmux sessions. */
+  tmuxMode: boolean
   searchQuery: string
   claudeMode: boolean
   geminiMode: boolean
@@ -82,6 +84,7 @@ interface SessionState {
   setSidebarWidth: (width: number) => void
   setTheme: (theme: Theme) => void
   setAppIcon: (icon: AppIcon) => void
+  setTmuxMode: (enabled: boolean) => void
   updateSessionAlive: (id: string, alive: boolean) => void
   setSessionActivity: (id: string, status: ActivityStatus) => void
   setAgentState: (id: string, state: import('./session-types').AgentRunState) => void
@@ -220,6 +223,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidebarWidth: 260,
   theme: (localStorage.getItem('clave-theme') as Theme) || 'light',
   appIcon: (localStorage.getItem('clave-app-icon') as AppIcon) || 'dark',
+  tmuxMode: localStorage.getItem('clave-tmux-mode') === 'true',
   searchQuery: '',
   claudeMode: true,
   geminiMode: false,
@@ -639,6 +643,13 @@ export const useSessionStore = create<SessionState>((set) => ({
     localStorage.setItem('clave-app-icon', appIcon)
     set({ appIcon })
     window.electronAPI?.setAppIcon(appIcon)
+  },
+
+  setTmuxMode: (tmuxMode) => {
+    localStorage.setItem('clave-tmux-mode', String(tmuxMode))
+    set({ tmuxMode })
+    // Persist to the main process too: pty:spawn reads this as the default.
+    window.electronAPI?.preferencesSet('tmuxMode', tmuxMode)
   },
 
   updateSessionAlive: (id, alive) =>

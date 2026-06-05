@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { ptyManager, type PtySpawnOptions } from '../pty-manager'
+import { ptyManager, isTmuxAvailable, type PtySpawnOptions } from '../pty-manager'
+import { getPreference } from './clave-file-handlers'
 import * as titleGenerator from '../title-generator'
 import { startWatching as startAgentStateWatching, clearState as clearAgentState } from '../agent-state-manager'
 
@@ -15,7 +16,10 @@ export function registerPtyHandlers(): void {
   })
 
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: PtySpawnOptions) => {
-    const session = ptyManager.spawn(cwd, options)
+    // tmux mode is a global app setting; honour it as the default unless a
+    // caller explicitly overrides per-spawn.
+    const tmuxMode = options?.tmuxMode ?? getPreference('tmuxMode') === true
+    const session = ptyManager.spawn(cwd, { ...options, tmuxMode })
     const win = BrowserWindow.fromWebContents(_event.sender)
     const isClaudeMode = options?.claudeMode !== false && !options?.geminiMode && !options?.codexMode && !options?.claudeAgentsMode
     const isResumed = !!options?.resumeSessionId
@@ -99,5 +103,22 @@ export function registerPtyHandlers(): void {
 
   ipcMain.handle('pty:list', () => {
     return ptyManager.getAllSessions()
+  })
+
+  // Lets the settings UI enable/disable the "persistent sessions" toggle.
+  ipcMain.handle('tmux:available', () => {
+    return isTmuxAvailable()
+  })
+
+  // On launch the renderer asks which tmux-backed sessions survived a previous
+  // run so it can recreate their tabs and reattach. This call also prunes stale
+  // sidecars and reaps orphaned clave sessions.
+  ipcMain.handle('tmux:list-adoptable', () => {
+    return ptyManager.listAdoptableTmuxSessions()
+  })
+
+  // User declined to adopt a survivor → destroy it.
+  ipcMain.handle('tmux:discard', (_event, tmuxName: string) => {
+    ptyManager.discardTmuxSession(tmuxName)
   })
 }
