@@ -16,9 +16,10 @@ export function registerPtyHandlers(): void {
   })
 
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: PtySpawnOptions) => {
-    // tmux mode is a global app setting; honour it as the default unless a
-    // caller explicitly overrides per-spawn.
-    const tmuxMode = options?.tmuxMode ?? getPreference('tmuxMode') === true
+    // tmux mode is a global app setting, ON by default. Honour it unless a
+    // caller overrides per-spawn or the user explicitly turned it off. (When
+    // tmux isn't installed the spawn transparently falls back to a plain shell.)
+    const tmuxMode = options?.tmuxMode ?? getPreference('tmuxMode') !== false
     const session = ptyManager.spawn(cwd, { ...options, tmuxMode })
     const win = BrowserWindow.fromWebContents(_event.sender)
     const isClaudeMode = options?.claudeMode !== false && !options?.geminiMode && !options?.codexMode && !options?.claudeAgentsMode

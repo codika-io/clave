@@ -29,7 +29,8 @@ interface SessionState {
   sidebarWidth: number
   theme: Theme
   appIcon: AppIcon
-  /** Opt-in: run new sessions inside persistent tmux sessions. */
+  /** Run new sessions inside persistent tmux sessions. On by default; falls
+   *  back to a plain shell automatically when tmux isn't installed. */
   tmuxMode: boolean
   searchQuery: string
   claudeMode: boolean
@@ -223,7 +224,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidebarWidth: 260,
   theme: (localStorage.getItem('clave-theme') as Theme) || 'light',
   appIcon: (localStorage.getItem('clave-app-icon') as AppIcon) || 'dark',
-  tmuxMode: localStorage.getItem('clave-tmux-mode') === 'true',
+  tmuxMode: localStorage.getItem('clave-tmux-mode') !== 'false',
   searchQuery: '',
   claudeMode: true,
   geminiMode: false,
