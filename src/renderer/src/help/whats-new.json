@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.50.0",
+    "title": "Run multiple Claude accounts side by side",
+    "description": "Define Claude Code accounts in Settings, each pointing at its own config directory. With more than one, a picker appears when you start a Claude session and each session's header shows which account it's running under — so a work and a personal account can run in parallel without touching environment variables.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.49.0",
     "title": "Sessions that survive quitting",
     "description": "Sessions now run inside tmux, so your agents keep going after you quit Clave, survive crashes, and reattach automatically next launch — reachable from any terminal via `tmux -L clave attach`. On by default when tmux is installed; toggle it in Settings → Sessions.",
