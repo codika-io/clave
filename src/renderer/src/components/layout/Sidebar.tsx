@@ -1554,7 +1554,6 @@ function PinnedSection({
       {showDropZone && (
         <PinnedGroupsGrid
           ref={pinnedZoneRef}
-          onContextMenu={handleContextMenu}
           isOverPinnedZone={isOverPinnedZone}
           draggedGroupId={draggedGroupId}
           isFileDragOver={isFileDragOver}
