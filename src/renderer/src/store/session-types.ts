@@ -126,6 +126,11 @@ export interface Session {
   claudeAgentsMode?: boolean
   dangerousMode: boolean
   claudeSessionId: string | null
+  /** Claude account/profile this session runs under (issue #22). Undefined =
+   *  the Default profile. `claudeProfileLabel` drives the session-header badge. */
+  claudeProfileId?: string
+  claudeProfileLabel?: string
+  claudeConfigDir?: string
   locationId?: string
   shellId?: string
   sessionType: SessionType

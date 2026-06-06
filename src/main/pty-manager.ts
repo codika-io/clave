@@ -256,6 +256,11 @@ export interface AdoptableTmuxSession {
   codexMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
+  /** Claude account/profile this session runs under, so the badge + config dir
+   *  survive an app restart and re-adoption. */
+  configDir?: string
+  claudeProfileId?: string
+  claudeProfileLabel?: string
 }
 
 /** tmux session names we create are always `clave-<sanitized>`. Validate before
@@ -326,6 +331,12 @@ export interface PtySpawnOptions {
   /** Reuse this exact PTY session id (instead of a fresh UUID) when adopting,
    *  so the Claude lifecycle-hook state file keeps matching the live agent. */
   adoptSessionId?: string
+  /** CLAUDE_CONFIG_DIR for this session — selects the Claude account/profile.
+   *  Empty/undefined leaves the env untouched (default passthrough). */
+  configDir?: string
+  /** Profile metadata persisted for restore + the session-header badge. */
+  claudeProfileId?: string
+  claudeProfileLabel?: string
 }
 
 interface PendingSpawn {
@@ -334,6 +345,8 @@ interface PendingSpawn {
   cwd: string
   initialCommand?: string
   autoExecute?: boolean
+  /** CLAUDE_CONFIG_DIR to set on the spawn env (account/profile selection). */
+  configDir?: string
 }
 
 export interface PtySession {
@@ -456,7 +469,10 @@ class PtyManager {
         geminiMode: useGeminiMode,
         codexMode: useCodexMode,
         claudeAgentsMode: useAgentsMode,
-        dangerousMode: options?.dangerousMode === true
+        dangerousMode: options?.dangerousMode === true,
+        configDir: options?.configDir,
+        claudeProfileId: options?.claudeProfileId,
+        claudeProfileLabel: options?.claudeProfileLabel
       })
 
       if (sidecarOk) {
@@ -492,7 +508,8 @@ class PtyManager {
         args: spawnArgs,
         cwd,
         initialCommand: options?.initialCommand,
-        autoExecute: options?.autoExecute
+        autoExecute: options?.autoExecute,
+        configDir: options?.configDir
       }
     }
     if (claudeSessionId) session.claudeSessionId = claudeSessionId
@@ -548,7 +565,7 @@ class PtyManager {
       return
     }
     if (!session.pending) return
-    const { file, args, cwd, initialCommand, autoExecute } = session.pending
+    const { file, args, cwd, initialCommand, autoExecute, configDir } = session.pending
     session.pending = undefined
 
     const ptyName = isWindows ? undefined : 'xterm-256color'
@@ -565,6 +582,10 @@ class PtyManager {
           COLORTERM: 'truecolor'
         }
         delete env.CLAUDECODE
+        // Per-session Claude account: point this session at an alternate config
+        // dir. Only set when a non-default profile was chosen, so default
+        // sessions keep honouring whatever the shell already exports.
+        if (configDir) env.CLAUDE_CONFIG_DIR = configDir
         return env
       })()
     })

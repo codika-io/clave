@@ -3,6 +3,7 @@ import { type Theme, useSessionStore } from '../../store/session-store'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { useUserStore, USER_ICONS, USER_ICON_COLORS } from '../../store/user-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
+import { useClaudeProfileStore, DEFAULT_CLAUDE_PROFILE_ID } from '../../store/claude-profile-store'
 import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import { TrashIcon, PlusIcon, PencilIcon, FolderIcon } from '@heroicons/react/24/outline'
@@ -198,8 +199,110 @@ export function SettingsPanel() {
         <SidebarWidgetsSection />
 
         <SessionsSection />
+
+        <ClaudeProfilesSection />
       </div>
     </div>
+  )
+}
+
+function ClaudeProfilesSection() {
+  const profiles = useClaudeProfileStore((s) => s.profiles)
+  const selectedProfileId = useClaudeProfileStore((s) => s.selectedProfileId)
+  const addProfile = useClaudeProfileStore((s) => s.addProfile)
+  const updateProfile = useClaudeProfileStore((s) => s.updateProfile)
+  const removeProfile = useClaudeProfileStore((s) => s.removeProfile)
+  const setSelectedProfile = useClaudeProfileStore((s) => s.setSelectedProfile)
+
+  const handleAdd = async () => {
+    const dir = await window.electronAPI?.openFolderDialog()
+    if (!dir) return
+    const suggested = dir.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'Account'
+    addProfile(suggested, dir)
+  }
+
+  const handlePickDir = async (id: string) => {
+    const dir = await window.electronAPI?.openFolderDialog()
+    if (!dir) return
+    updateProfile(id, { configDir: dir })
+  }
+
+  return (
+    <section className="mt-8">
+      <h3 className="settings-section-title mb-3">Claude Code accounts</h3>
+      <p className="text-xs text-text-tertiary mb-3">
+        Run sessions under different Claude accounts by pointing each at its own
+        config directory (<code>CLAUDE_CONFIG_DIR</code>). With more than one
+        account, a picker appears when you start a Claude session, and the
+        selected default is used by the keyboard shortcuts. New accounts start
+        signed out — the first session on one runs Claude’s normal login.
+      </p>
+
+      <div className="space-y-2">
+        {profiles.map((p) => {
+          const isDefault = p.id === DEFAULT_CLAUDE_PROFILE_ID
+          const isSelected = p.id === selectedProfileId
+          return (
+            <div
+              key={p.id}
+              className="flex items-center gap-3 rounded-lg border border-border-subtle bg-surface-100 px-3 py-2"
+            >
+              <button
+                onClick={() => setSelectedProfile(p.id)}
+                title={isSelected ? 'Default account for new sessions' : 'Make default'}
+                className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center ${
+                  isSelected ? 'border-accent' : 'border-border hover:border-text-tertiary'
+                }`}
+              >
+                {isSelected && <span className="w-2 h-2 rounded-full bg-accent" />}
+              </button>
+
+              <div className="flex-1 min-w-0">
+                {isDefault ? (
+                  <p className="text-sm text-text-secondary">{p.label}</p>
+                ) : (
+                  <input
+                    className="input-compact w-full"
+                    value={p.label}
+                    onChange={(e) => updateProfile(p.id, { label: e.target.value })}
+                    placeholder="Account name"
+                  />
+                )}
+                <p className="text-xs text-text-tertiary truncate mt-0.5">
+                  {isDefault ? '~/.claude (default)' : p.configDir || 'No directory set'}
+                </p>
+              </div>
+
+              {!isDefault && (
+                <>
+                  <button
+                    onClick={() => handlePickDir(p.id)}
+                    className="btn-icon btn-icon-xs"
+                    title="Change directory"
+                    aria-label="Change directory"
+                  >
+                    <FolderIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => removeProfile(p.id)}
+                    className="btn-icon btn-icon-xs text-red-400 hover:text-red-300"
+                    title="Remove account"
+                    aria-label="Remove account"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <button onClick={handleAdd} className="btn-secondary mt-3 flex items-center gap-1.5">
+        <PlusIcon className="w-4 h-4" />
+        Add account
+      </button>
+    </section>
   )
 }
 
