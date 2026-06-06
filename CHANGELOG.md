@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.50.1] — 2026-06-06
+
+### Fixed
+- Groups now survive quitting and reopening Clave. Previously, when persistent (tmux) sessions reattached on launch, the sessions came back but their groups were lost — a group's sessions and attached terminals reappeared loose in the sidebar. Groups (with their names, colors, terminals, and ordering) are now saved to disk and restored around the reattached sessions, surviving a crash or force-quit as well as a normal quit.
+
 ## [1.50.0] — 2026-06-06
 
 ### Added

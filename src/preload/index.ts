@@ -136,6 +136,12 @@ const electronAPI = {
   boardLoad: () => ipcRenderer.invoke('board:load'),
   boardSave: (data: unknown) => ipcRenderer.invoke('board:save', data),
 
+  // Sidebar layout (session groups + display order) — persisted from the main
+  // process so it survives a hard kill that drops lazily-flushed localStorage.
+  sidebarLayoutLoad: () => ipcRenderer.invoke('sidebar-layout:load'),
+  sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) =>
+    ipcRenderer.invoke('sidebar-layout:save', data),
+
   // Usage
   getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),
 

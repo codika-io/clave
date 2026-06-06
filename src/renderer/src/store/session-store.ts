@@ -61,6 +61,13 @@ interface SessionState {
   addSession: (session: Session) => void
   removeSession: (id: string) => void
   resetSessions: () => Promise<void>
+  /** Rebuild groups + display order from a persisted layout after tmux-backed
+   *  sessions have been re-adopted on launch. Dangling references (sessions
+   *  whose tmux session did not survive) are pruned. */
+  restoreGroups: (
+    survivingSessionIds: string[],
+    persisted: { groups: SessionGroup[]; displayOrder: string[] }
+  ) => void
   selectSession: (id: string, addToSelection: boolean) => void
   selectSessions: (ids: string[]) => void
   setFocusedSession: (id: string) => void
@@ -134,6 +141,39 @@ interface SessionState {
 }
 
 let groupCounter = 0
+
+// Groups (and the sidebar ordering that nests them) live only in memory during
+// a run. tmux-backed sessions survive an app restart and get re-adopted, but
+// the group objects that organize them would otherwise be lost. They are
+// persisted from the main process (see sidebar-layout-manager) — written to a
+// file synchronously on every change so they survive a hard kill (Ctrl+C /
+// crash) that drops Chromium's lazily-flushed localStorage.
+//
+// Persistence stays disabled until `enableSidebarPersistence()` runs on launch,
+// AFTER the previous layout has been read and groups restored. This prevents the
+// empty initial state — written as sessions re-adopt — from clobbering the file
+// before we've had a chance to load it.
+let sidebarPersistEnabled = false
+let lastPersistedGroups: SessionGroup[] | null = null
+let lastPersistedOrder: string[] | null = null
+
+function persistSidebarLayout(groups: SessionGroup[], displayOrder: string[]): void {
+  if (groups === lastPersistedGroups && displayOrder === lastPersistedOrder) return
+  lastPersistedGroups = groups
+  lastPersistedOrder = displayOrder
+  window.electronAPI?.sidebarLayoutSave?.({ groups, displayOrder }).catch(() => {
+    // Persistence failures are non-fatal — groups stay in memory for this run.
+  })
+}
+
+/** Turn on sidebar-layout persistence. Call once on launch after the previous
+ *  layout has been loaded (and groups restored), so re-adoption writes can't
+ *  overwrite the saved file before we read it. */
+export function enableSidebarPersistence(): void {
+  sidebarPersistEnabled = true
+  const { groups, displayOrder } = useSessionStore.getState()
+  persistSidebarLayout(groups, displayOrder)
+}
 
 type SidebarSnapshot = {
   groups: SessionGroup[]
@@ -309,6 +349,70 @@ export const useSessionStore = create<SessionState>((set) => ({
       searchQuery: ''
     })
   },
+
+  restoreGroups: (survivingSessionIds, persisted) =>
+    set((state) => {
+      const persistedGroups = persisted?.groups ?? []
+      if (persistedGroups.length === 0) return state
+
+      const surviving = new Set(survivingSessionIds)
+
+      // Prune each group to the sessions/terminals that actually came back.
+      // A group whose members all vanished is dropped (it would render empty).
+      const groups: SessionGroup[] = []
+      for (const g of persistedGroups) {
+        const sessionIds = (g.sessionIds ?? []).filter((sid) => surviving.has(sid))
+        if (sessionIds.length === 0) continue
+        const terminals = (g.terminals ?? []).map((t) =>
+          t.sessionId && !surviving.has(t.sessionId) ? { ...t, sessionId: null } : t
+        )
+        groups.push({ ...g, sessionIds, terminals })
+      }
+      if (groups.length === 0) return state
+
+      const keptGroupIds = new Set(groups.map((g) => g.id))
+      // Sessions nested inside a kept group (as a member or a group terminal)
+      // must not also appear at the top level of the display order.
+      const nested = new Set<string>()
+      for (const g of groups) {
+        for (const sid of g.sessionIds) nested.add(sid)
+        for (const t of g.terminals) if (t.sessionId) nested.add(t.sessionId)
+      }
+
+      // Rebuild displayOrder from the persisted order, dropping dead references.
+      const order: string[] = []
+      const seen = new Set<string>()
+      for (const id of persisted?.displayOrder ?? []) {
+        if (seen.has(id)) continue
+        if (keptGroupIds.has(id)) {
+          order.push(id)
+          seen.add(id)
+        } else if (surviving.has(id) && !nested.has(id)) {
+          order.push(id)
+          seen.add(id)
+        }
+      }
+      // Append any surviving standalone session the persisted order missed,
+      // then any kept group not yet placed (belt-and-suspenders).
+      for (const s of state.sessions) {
+        if (!seen.has(s.id) && !nested.has(s.id)) {
+          order.push(s.id)
+          seen.add(s.id)
+        }
+      }
+      for (const g of groups) {
+        if (!seen.has(g.id)) {
+          order.push(g.id)
+          seen.add(g.id)
+        }
+      }
+
+      // Keep auto-generated group names ("Group N") from colliding with the
+      // restored ones on the next createGroup.
+      groupCounter = Math.max(groupCounter, groups.length)
+
+      return { ...state, groups, displayOrder: order }
+    }),
 
   removeSession: (id) =>
     set((state) => {
@@ -980,3 +1084,15 @@ export const useSessionStore = create<SessionState>((set) => ({
       }
     })
 }))
+
+// Persist groups + sidebar ordering (via the main process) whenever either
+// changes, so they survive an app restart. Sessions come back via tmux
+// adoption; the saved layout is read on launch to rebuild the groups around the
+// re-adopted sessions. Disabled until `enableSidebarPersistence()` runs so the
+// empty initial state can't clobber the saved file before it's loaded.
+useSessionStore.subscribe((state) => {
+  if (!sidebarPersistEnabled) return
+  if (state.groups !== lastPersistedGroups || state.displayOrder !== lastPersistedOrder) {
+    persistSidebarLayout(state.groups, state.displayOrder)
+  }
+})

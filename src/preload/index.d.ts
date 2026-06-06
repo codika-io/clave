@@ -248,6 +248,8 @@ export interface ElectronAPI {
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => () => void
   boardLoad: () => Promise<BoardData>
   boardSave: (data: BoardData) => Promise<void>
+  sidebarLayoutLoad: () => Promise<{ groups: unknown[]; displayOrder: string[] }>
+  sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) => Promise<void>
   getUsageLimits: () => Promise<UsageLimits | UsageError>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>

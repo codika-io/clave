@@ -12,6 +12,7 @@ import { registerAgentHandlers } from './agent-handlers'
 import { registerClaveFileHandlers } from './clave-file-handlers'
 import { registerSessionExportHandlers } from './session-export-handlers'
 import { registerDroppedFileHandlers } from './dropped-file-handlers'
+import { registerSidebarLayoutHandlers } from './sidebar-layout-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -28,4 +29,5 @@ export function registerIpcHandlers(): void {
   registerClaveFileHandlers()
   registerSessionExportHandlers()
   registerDroppedFileHandlers()
+  registerSidebarLayoutHandlers()
 }

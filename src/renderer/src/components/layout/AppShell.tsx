@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSessionStore, isFileTabId, getDisplayOrder } from '../../store/session-store'
+import { useSessionStore, isFileTabId, getDisplayOrder, enableSidebarPersistence } from '../../store/session-store'
+import type { SessionGroup } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
 import { getSelectedClaudeProfile, claudeProfileSpawnFields } from '../../store/claude-profile-store'
 import { Sidebar } from './Sidebar'
@@ -112,9 +113,19 @@ export function AppShell() {
     tmuxAdoptionStarted = true
     void (async () => {
       try {
+        // Read the previous run's saved groups BEFORE any session is adopted
+        // (re-adoption mutates the layout). Then rebuild groups around the
+        // survivors and only then turn persistence on, so the saved file is
+        // never overwritten before we've loaded it.
+        const savedLayout = await window.electronAPI?.sidebarLayoutLoad?.().catch(() => null)
+        const persisted = {
+          groups: (savedLayout?.groups ?? []) as SessionGroup[],
+          displayOrder: savedLayout?.displayOrder ?? []
+        }
+
         const survivors = await window.electronAPI?.tmuxListAdoptable?.()
-        if (!survivors?.length) return
-        for (const s of survivors) {
+        const adoptedIds: string[] = []
+        for (const s of survivors ?? []) {
           try {
             const info = await window.electronAPI.spawnSession(s.cwd, {
               claudeMode: s.claudeMode,
@@ -154,12 +165,21 @@ export function AppShell() {
               claudeConfigDir: s.configDir,
               sessionType: 'local'
             })
+            adoptedIds.push(info.id)
           } catch (err) {
             console.error('Failed to adopt persistent session:', s.tmuxName, err)
           }
         }
+        // Rebuild the persisted groups around the sessions that came back.
+        if (adoptedIds.length && persisted.groups.length) {
+          useSessionStore.getState().restoreGroups(adoptedIds, persisted)
+        }
       } catch (err) {
-        console.error('Failed to list adoptable tmux sessions:', err)
+        console.error('Failed to restore sessions/groups on launch:', err)
+      } finally {
+        // Turn persistence on only now — after the saved layout was loaded and
+        // groups restored — so adoption writes can't clobber the saved file.
+        enableSidebarPersistence()
       }
     })()
   }, [addSession])
