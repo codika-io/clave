@@ -50,6 +50,9 @@ export interface AdoptableTmuxSession {
   codexMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
+  configDir?: string
+  claudeProfileId?: string
+  claudeProfileLabel?: string
 }
 
 export interface DirEntry {
@@ -187,7 +190,7 @@ export interface DownloadProgress {
 }
 
 export interface ElectronAPI {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; codexMode?: boolean; claudeAgentsMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean; tmuxMode?: boolean; adoptTmuxName?: string; adoptSessionId?: string }) => Promise<SessionInfo>
+  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; codexMode?: boolean; claudeAgentsMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean; tmuxMode?: boolean; adoptTmuxName?: string; adoptSessionId?: string; configDir?: string; claudeProfileId?: string; claudeProfileLabel?: string }) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
   startSession: (id: string, cols: number, rows: number) => void
   resizeSession: (id: string, cols: number, rows: number) => void

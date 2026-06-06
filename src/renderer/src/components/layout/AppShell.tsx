@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSessionStore, isFileTabId, getDisplayOrder } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
+import { getSelectedClaudeProfile, claudeProfileSpawnFields } from '../../store/claude-profile-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
 import { TaskQueue } from '../board/TaskQueue'
@@ -60,12 +61,20 @@ export function AppShell() {
         if (!folderPath) return
 
         const otherProvider = geminiMode || codexMode || claudeAgentsMode
+        const effectiveClaudeMode = otherProvider ? false : claudeMode
+        // Keybinding/toolbar launches use the selected default Claude account.
+        // Profiles apply only to Claude Code + Claude Agents — never plain
+        // terminals (Cmd+T), Gemini, or Codex.
+        const isClaudeSession = effectiveClaudeMode || claudeAgentsMode
+        const profile = isClaudeSession ? getSelectedClaudeProfile() : null
+        const profileFields = profile ? claudeProfileSpawnFields(profile) : {}
         const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
           claudeMode: otherProvider ? false : claudeMode,
           geminiMode,
           codexMode,
           claudeAgentsMode,
-          dangerousMode
+          dangerousMode,
+          ...profileFields
         })
         addSession({
           id: sessionInfo.id,
@@ -81,6 +90,9 @@ export function AppShell() {
           claudeAgentsMode: claudeAgentsMode ?? false,
           dangerousMode,
           claudeSessionId: sessionInfo.claudeSessionId,
+          claudeProfileId: profile?.id,
+          claudeProfileLabel: profile?.label,
+          claudeConfigDir: profile?.configDir || undefined,
           sessionType: 'local'
         })
       } catch (err) {
@@ -115,7 +127,13 @@ export function AppShell() {
               // Reuse the original id + claude session id so lifecycle-hook
               // status routing and resume keep working after reattach.
               adoptSessionId: s.id,
-              claudeSessionId: s.claudeSessionId
+              claudeSessionId: s.claudeSessionId,
+              // Carry the account/profile forward so the badge is restored.
+              // (Reattach doesn't re-run the agent, so the env is moot here, but
+              // the sidecar metadata still drives the header badge.)
+              configDir: s.configDir,
+              claudeProfileId: s.claudeProfileId,
+              claudeProfileLabel: s.claudeProfileLabel
             })
             addSession({
               id: info.id,
@@ -131,6 +149,9 @@ export function AppShell() {
               claudeAgentsMode: s.claudeAgentsMode,
               dangerousMode: s.dangerousMode,
               claudeSessionId: info.claudeSessionId,
+              claudeProfileId: s.claudeProfileId,
+              claudeProfileLabel: s.claudeProfileLabel,
+              claudeConfigDir: s.configDir,
               sessionType: 'local'
             })
           } catch (err) {

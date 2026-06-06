@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Added
+- **Claude Code accounts** — run sessions under different Claude accounts side by side. Define named accounts in Settings → Claude Code accounts, each pointing at its own config directory, and once you have more than one a picker appears when you start a Claude session (hover Claude Code / Claude Agents in the New Session menu). The keyboard shortcuts use your selected default account, and each session's header shows which account it's running under. New accounts start signed out — the first session on one runs Claude's normal login. With a single account, nothing changes.
+
 ## [1.49.0] — 2026-06-05
 
 ### Added

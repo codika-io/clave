@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, PlayIcon, ArrowDownTrayIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
+import { useClaudeProfileStore } from '../../store/claude-profile-store'
 import { cn, safePort } from '../../lib/utils'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 
@@ -10,6 +11,7 @@ interface TerminalHeaderProps {
 
 export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
   const session = useSessionStore((s) => s.sessions.find((sess) => sess.id === sessionId))
+  const multiProfile = useClaudeProfileStore((s) => s.profiles.length > 1)
   const removeSession = useSessionStore((s) => s.removeSession)
   const setSessionServerStatus = useSessionStore((s) => s.setSessionServerStatus)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -62,6 +64,14 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
             style={session.activityStatus === 'active' ? { animation: 'pulse-dot 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' } : undefined}
           />
           <span className="text-xs font-medium text-text-secondary truncate">{session.name}</span>
+          {multiProfile && session.claudeProfileLabel && (session.claudeMode || session.claudeAgentsMode) && (
+            <span
+              className="badge flex-shrink-0"
+              title={`Claude account: ${session.claudeProfileLabel}${session.claudeConfigDir ? ` (${session.claudeConfigDir})` : ''}`}
+            >
+              {session.claudeProfileLabel}
+            </span>
+          )}
           {hasServer && (
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <button

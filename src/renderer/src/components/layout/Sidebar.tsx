@@ -20,6 +20,7 @@ import { NewSessionDropdown } from './NewSessionDropdown'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
+import { useClaudeProfileStore, getClaudeProfile, claudeProfileSpawnFields } from '../../store/claude-profile-store'
 import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName, initClaveFileWatchers } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { TemplatePickerPopover } from '../session/TemplatePickerPopover'
@@ -225,7 +226,7 @@ export function Sidebar() {
     return isGroup ? draggedIds[0] : null
   }, [isDragging, draggedIds, groups])
 
-  const handleNewSession = useCallback(async () => {
+  const handleNewSession = useCallback(async (claudeProfileId?: string) => {
     setLoading(true)
     try {
       const folderPath = await window.electronAPI.openFolderDialog()
@@ -233,12 +234,22 @@ export function Sidebar() {
 
       const state = useSessionStore.getState()
       const otherProvider = state.geminiMode || state.codexMode || state.claudeAgentsMode
+      const effectiveClaudeMode = otherProvider ? false : state.claudeMode
+      // Claude account/profile: applies only to Claude Code + Claude Agents
+      // sessions — never plain terminals, Gemini, or Codex. Default profile
+      // contributes no configDir (passthrough).
+      const isClaudeSession = effectiveClaudeMode || state.claudeAgentsMode
+      const profile = isClaudeSession
+        ? getClaudeProfile(claudeProfileId ?? useClaudeProfileStore.getState().selectedProfileId)
+        : null
+      const profileFields = profile ? claudeProfileSpawnFields(profile) : {}
       const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
         dangerousMode: state.dangerousMode,
         claudeMode: otherProvider ? false : state.claudeMode,
         geminiMode: state.geminiMode,
         codexMode: state.codexMode,
-        claudeAgentsMode: state.claudeAgentsMode
+        claudeAgentsMode: state.claudeAgentsMode,
+        ...profileFields
       })
       addSession({
         id: sessionInfo.id,
@@ -254,6 +265,9 @@ export function Sidebar() {
         claudeAgentsMode: state.claudeAgentsMode,
         dangerousMode: state.dangerousMode,
         claudeSessionId: sessionInfo.claudeSessionId,
+        claudeProfileId: profile?.id,
+        claudeProfileLabel: profile?.label,
+        claudeConfigDir: profile?.configDir || undefined,
         sessionType: 'local'
       })
     } catch (err) {
@@ -316,6 +330,7 @@ export function Sidebar() {
   useEffect(() => {
     const cleanup = initClaveFileWatchers()
     import('../../store/workspace-store').then(({ loadWorkspaces }) => loadWorkspaces())
+    import('../../store/claude-profile-store').then(({ loadClaudeProfiles }) => loadClaudeProfiles())
     return cleanup
   }, [])
 
@@ -1056,9 +1071,9 @@ export function Sidebar() {
         {/* Permanent tabs — share the same row gap as the session tabs below */}
         <div className="px-2 space-y-0.5">
           <NewSessionDropdown
-            onNewSession={({ claudeMode, geminiMode, codexMode, claudeAgentsMode, dangerousMode, locationId }) => {
+            onNewSession={({ claudeMode, geminiMode, codexMode, claudeAgentsMode, dangerousMode, locationId, claudeProfileId }) => {
               if (locationId) {
-                // Remote: open directory picker
+                // Remote: open directory picker (profiles are a local concept)
                 const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
                 setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, geminiMode, codexMode })
               } else if (claudeAgentsMode) {
@@ -1067,7 +1082,7 @@ export function Sidebar() {
                 const prevAgents = store.claudeAgentsMode
                 const prevClaude = store.claudeMode
                 useSessionStore.setState({ claudeAgentsMode: true, claudeMode: false })
-                handleNewSession().finally(() => {
+                handleNewSession(claudeProfileId).finally(() => {
                   useSessionStore.setState({ claudeAgentsMode: prevAgents, claudeMode: prevClaude })
                 })
               } else if (geminiMode) {
@@ -1095,7 +1110,7 @@ export function Sidebar() {
                 const prevDangerous = store.dangerousMode
                 if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode })
                 if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode })
-                handleNewSession().finally(() => {
+                handleNewSession(claudeProfileId).finally(() => {
                   if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode: prevClaude })
                   if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode: prevDangerous })
                 })
