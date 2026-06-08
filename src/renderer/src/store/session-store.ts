@@ -53,6 +53,11 @@ interface SessionState {
   sidePanelTab: 'files' | 'git' | 'help'
   gitViewMode: 'list' | 'tree'
   gitPanelMode: 'changes' | 'log'
+  /** Above this many repos, the multi-repo git panel stops auto-polling and
+   *  switches to event-driven + manual refresh (see use-multi-repo-status). */
+  gitLivePollLimit: number
+  /** When true, never pause live updates regardless of repo count. */
+  gitLivePollAlways: boolean
   journeyPanel: { cwd: string; repoName: string } | null
   commitMessages: Record<string, string>
   generatingCommitCwds: Set<string>
@@ -120,6 +125,8 @@ interface SessionState {
   setSidePanelTab: (tab: 'files' | 'git' | 'help') => void
   setGitViewMode: (mode: 'list' | 'tree') => void
   setGitPanelMode: (mode: 'changes' | 'log') => void
+  setGitLivePollLimit: (limit: number) => void
+  setGitLivePollAlways: (always: boolean) => void
   openJourneyPanel: (cwd: string, repoName: string) => void
   closeJourneyPanel: () => void
   setCommitMessage: (cwd: string, message: string) => void
@@ -286,6 +293,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidePanelTab: 'files' as const,
   gitViewMode: (localStorage.getItem('clave-git-view-mode') === 'tree' ? 'tree' : 'list') as 'list' | 'tree',
   gitPanelMode: 'changes' as const,
+  gitLivePollLimit: (() => {
+    const raw = Number(localStorage.getItem('clave-git-live-poll-limit'))
+    return Number.isFinite(raw) && raw > 0 ? raw : 50
+  })(),
+  gitLivePollAlways: localStorage.getItem('clave-git-live-poll-always') === 'true',
   journeyPanel: null,
   commitMessages: {} as Record<string, string>,
   generatingCommitCwds: new Set<string>(),
@@ -899,6 +911,17 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 
   setGitPanelMode: (mode) => set({ gitPanelMode: mode }),
+
+  setGitLivePollLimit: (limit) => {
+    const clamped = Math.max(1, Math.round(limit))
+    localStorage.setItem('clave-git-live-poll-limit', String(clamped))
+    set({ gitLivePollLimit: clamped })
+  },
+
+  setGitLivePollAlways: (always) => {
+    localStorage.setItem('clave-git-live-poll-always', String(always))
+    set({ gitLivePollAlways: always })
+  },
 
   openJourneyPanel: (cwd, repoName) =>
     set({ journeyPanel: { cwd, repoName }, diffPreview: null, previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null }),

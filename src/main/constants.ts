@@ -97,10 +97,3 @@ export const STATUS_BATCH_CONCURRENCY = 6
 
 /** Max concurrent `git fetch` calls when refreshing many repos at once */
 export const FETCH_BATCH_CONCURRENCY = 4
-
-/**
- * Above this many discovered repos, the multi-repo panel does a one-shot load and
- * stops auto-polling/fetching — manual refresh only. Keeps huge trees (e.g. "/")
- * from spawning a perpetual status+fetch cascade.
- */
-export const MULTI_REPO_LIVE_POLL_MAX = 50

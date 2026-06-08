@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.51.1] — 2026-06-08
+
+### Added
+- In folders with many repositories, you can now control when the Git panel pauses live updates. A new **Git** section in Settings lets you raise the "pause above N repos" threshold or turn pausing off entirely so live updates always run.
+
+### Fixed
+- The Git panel no longer feels frozen in large folders where live updates are paused. Committing in a subfolder used to leave the panel unchanged until you manually refreshed, which made it look like nothing had happened. The panel now refreshes itself automatically when an agent finishes a turn and when the window regains focus, and the paused banner shows the last update time plus a spinner while refreshing — so you can always tell it's current.
+
 ## [1.51.0] — 2026-06-08
 
 ### Fixed

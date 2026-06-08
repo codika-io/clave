@@ -5,7 +5,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ContextMenu } from '../ui/ContextMenu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import { shortenPath } from '../../lib/utils'
-import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
+import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon, InformationCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { buildGitTree, compactTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import { GitLogView } from './GitLogView'
 import { FileRow, GitTreeSection } from './GitFileRows'
@@ -32,6 +32,14 @@ function getExpandedCache(cwd: string): ExpandedCache {
     expandedCacheMap.set(cwd, cache)
   }
   return cache
+}
+
+// Short clock label (HH:MM) for the "Updated …" hint in the paused banner.
+function formatUpdatedAt(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -816,13 +824,17 @@ export function MultiRepoGitPanel({
   rootPath,
   refresh,
   truncated = false,
-  live = true
+  live = true,
+  refreshing = false,
+  lastUpdated = null
 }: {
   repos: Array<{ name: string; path: string; status: GitStatusResult }>
   rootPath?: string | null
   refresh: () => void
   truncated?: boolean
   live?: boolean
+  refreshing?: boolean
+  lastUpdated?: number | null
 }) {
   const [nestedDocked, setNestedDocked] = useState(false)
   const [selectedRepoPaths, setSelectedRepoPaths] = useState<Set<string>>(new Set())
@@ -855,13 +867,23 @@ export function MultiRepoGitPanel({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {(truncated || !live) && (
-        <div className="px-3 py-1.5 text-[11px] text-text-tertiary border-b border-border">
-          {truncated
-            ? `Large folder — showing first ${repos.length} repos. `
-            : `${repos.length} repos — `}
-          live updates paused.{' '}
-          <button className="underline hover:text-text-secondary" onClick={refresh}>
-            Refresh
+        <div className="px-3 py-1.5 text-[11px] text-text-tertiary border-b border-border flex items-center gap-1.5">
+          <span className="flex-1 min-w-0">
+            {truncated
+              ? `Large folder — showing first ${repos.length} repos. `
+              : `${repos.length} repos — `}
+            live updates paused.
+            {lastUpdated !== null && (
+              <span className="opacity-70">{' '}Updated {formatUpdatedAt(lastUpdated)}.</span>
+            )}
+          </span>
+          <button
+            className="flex-shrink-0 inline-flex items-center gap-1 underline hover:text-text-secondary disabled:opacity-60 disabled:no-underline"
+            onClick={refresh}
+            disabled={refreshing}
+          >
+            <ArrowPathIcon className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       )}

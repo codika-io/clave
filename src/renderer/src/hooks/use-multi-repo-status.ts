@@ -1,15 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { GitStatusResult } from '../../../preload/index.d'
+import { useSessionStore } from '../store/session-store'
 
 const POLL_INTERVAL = 5000
 const FETCH_INTERVAL = 30000
-
-/**
- * Above this many repos the panel does a one-shot load and stops auto-polling /
- * fetching (manual refresh only). Mirrors MULTI_REPO_LIVE_POLL_MAX in the main
- * process — keeps huge trees (e.g. "/") from spawning a perpetual cascade.
- */
-const LIVE_POLL_MAX = 50
 
 type RepoEntry = { name: string; path: string; status: GitStatusResult }
 
@@ -22,10 +16,29 @@ export type MultiRepoMode =
 export function useMultiRepoStatus(
   cwd: string | null,
   active: boolean
-): { result: MultiRepoMode; refresh: () => void; hasNestedRepos: boolean } {
+): {
+  result: MultiRepoMode
+  refresh: () => void
+  refreshing: boolean
+  lastUpdated: number | null
+  hasNestedRepos: boolean
+} {
   const [result, setResult] = useState<MultiRepoMode>({ mode: 'loading' })
   const [hasNestedRepos, setHasNestedRepos] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null)
   const cwdRef = useRef(cwd)
+
+  // Live-update settings. Above `pollLimit` repos the panel stops auto-polling
+  // (manual + event-driven refresh only) to keep huge trees (e.g. "/") from
+  // spawning a perpetual cascade — unless the user opts out via `pollAlways`.
+  const pollLimit = useSessionStore((s) => s.gitLivePollLimit)
+  const pollAlways = useSessionStore((s) => s.gitLivePollAlways)
+
+  const isLive = useCallback(
+    (count: number) => pollAlways || count <= pollLimit,
+    [pollAlways, pollLimit]
+  )
 
   const fetchAll = useCallback(
     async (force = false) => {
@@ -51,7 +64,7 @@ export function useMultiRepoStatus(
         for (const r of nested) nameByPath.set(r.path, r.name)
 
         const allPaths = [cwd, ...nested.map((r) => r.path)]
-        const live = allPaths.length <= LIVE_POLL_MAX
+        const live = isLive(allPaths.length)
         const statuses = await window.electronAPI.getGitStatusBatch(nested.map((r) => r.path))
         if (cwdRef.current !== cwd) return
 
@@ -64,6 +77,7 @@ export function useMultiRepoStatus(
           }))
         ]
         setResult({ mode: 'multi', repos, truncated: false, live })
+        setLastUpdated(Date.now())
         return
       }
 
@@ -78,7 +92,7 @@ export function useMultiRepoStatus(
         return
       }
 
-      const live = discovered.length <= LIVE_POLL_MAX
+      const live = isLive(discovered.length)
       const nameByPath = new Map(discovered.map((r) => [r.path, r.name]))
       const statuses = await window.electronAPI.getGitStatusBatch(discovered.map((r) => r.path))
       if (cwdRef.current !== cwd) return
@@ -89,8 +103,9 @@ export function useMultiRepoStatus(
         status: s.status
       }))
       setResult({ mode: 'multi', repos, truncated, live })
+      setLastUpdated(Date.now())
     },
-    [cwd]
+    [cwd, isLive]
   )
 
   // Reset + initial fetch when cwd or active changes
@@ -134,9 +149,46 @@ export function useMultiRepoStatus(
     return () => clearInterval(interval)
   }, [cwd, active, isLiveMulti, repoPaths])
 
-  const refresh = useCallback(() => {
-    fetchAll(true)
+  // Event-driven refresh — keeps the panel fresh even when live polling is
+  // paused (large multi-repo trees). Statuses are always re-read by fetchAll,
+  // so an un-forced refresh is enough to reflect new commits.
+  const isPausedMulti = result.mode === 'multi' && !result.live
+
+  // (a) Window/git-tab regains focus — catches commits made in a terminal
+  //     while the window was in the background.
+  useEffect(() => {
+    if (!cwd || !active || !isPausedMulti) return
+    const onFocus = (): void => {
+      fetchAll()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [cwd, active, isPausedMulti, fetchAll])
+
+  // (b) Focused session's agent finishes a turn (active → idle) — catches the
+  //     common case of an agent committing in a subfolder.
+  const focusedActivity = useSessionStore((s) => {
+    const id = s.focusedSessionId
+    return id ? s.sessions.find((x) => x.id === id)?.activityStatus ?? null : null
+  })
+  const prevActivityRef = useRef(focusedActivity)
+  useEffect(() => {
+    const prev = prevActivityRef.current
+    prevActivityRef.current = focusedActivity
+    if (!cwd || !active || !isPausedMulti) return
+    if (focusedActivity === 'idle' && prev === 'active') {
+      fetchAll()
+    }
+  }, [focusedActivity, cwd, active, isPausedMulti, fetchAll])
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await fetchAll(true)
+    } finally {
+      setRefreshing(false)
+    }
   }, [fetchAll])
 
-  return { result, refresh, hasNestedRepos }
+  return { result, refresh, refreshing, lastUpdated, hasNestedRepos }
 }

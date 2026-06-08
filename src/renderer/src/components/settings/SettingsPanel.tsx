@@ -198,6 +198,8 @@ export function SettingsPanel() {
 
         <SidebarWidgetsSection />
 
+        <GitSection />
+
         <SessionsSection />
 
         <ClaudeProfilesSection />
@@ -378,6 +380,64 @@ function ToggleRow({
         />
       </button>
     </div>
+  )
+}
+
+function GitSection() {
+  const livePollLimit = useSessionStore((s) => s.gitLivePollLimit)
+  const livePollAlways = useSessionStore((s) => s.gitLivePollAlways)
+  const setLivePollLimit = useSessionStore((s) => s.setGitLivePollLimit)
+  const setLivePollAlways = useSessionStore((s) => s.setGitLivePollAlways)
+
+  // Local string state so the field can be edited freely; commit on blur.
+  const [draft, setDraft] = useState(String(livePollLimit))
+  useEffect(() => {
+    setDraft(String(livePollLimit))
+  }, [livePollLimit])
+
+  const commitLimit = () => {
+    const n = Number(draft)
+    if (Number.isFinite(n) && n > 0) setLivePollLimit(n)
+    else setDraft(String(livePollLimit))
+  }
+
+  return (
+    <section className="mt-8">
+      <h3 className="settings-section-title mb-3">Git</h3>
+      <div className="space-y-4">
+        <ToggleRow
+          label="Always keep live updates on"
+          description="Never pause auto-refresh, regardless of how many repositories a folder contains. May be heavy on very large folders (e.g. opening '/')."
+          checked={livePollAlways}
+          onChange={setLivePollAlways}
+        />
+        <div className={`flex items-center justify-between gap-4 ${livePollAlways ? 'opacity-50' : ''}`}>
+          <div className="min-w-0">
+            <p className="text-sm text-text-secondary">Pause live updates above</p>
+            <p className="text-xs text-text-tertiary mt-0.5">
+              When a folder has more repositories than this, the git panel stops
+              auto-polling and refreshes on demand (and when an agent finishes or
+              the window regains focus).
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <input
+              type="number"
+              min={1}
+              value={draft}
+              disabled={livePollAlways}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitLimit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+              }}
+              className="input-compact w-20 text-right"
+            />
+            <span className="text-xs text-text-tertiary">repos</span>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 

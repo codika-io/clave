@@ -498,6 +498,8 @@ export function SidePanel() {
                 refresh={multiRepo.refresh}
                 truncated={multiRepo.result.truncated}
                 live={multiRepo.result.live}
+                refreshing={multiRepo.refreshing}
+                lastUpdated={multiRepo.lastUpdated}
               />
             ) : multiRepo.result.mode === 'none' ? (
               <div className="flex-1 flex items-center justify-center px-3">

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.51.1",
+    "title": "Git panel stays current in large folders",
+    "description": "When a folder has many repositories, the Git panel pauses live polling — but it no longer goes stale silently. It now refreshes automatically when an agent finishes a turn or the window regains focus, shows the last update time with a refresh spinner, and a new Git section in Settings lets you change the pause threshold or turn pausing off entirely.",
+    "action": { "type": "navigate", "target": "side:git" }
+  },
+  {
     "version": "1.50.0",
     "title": "Run multiple Claude accounts side by side",
     "description": "Define Claude Code accounts in Settings, each pointing at its own config directory. With more than one, a picker appears when you start a Claude session and each session's header shows which account it's running under — so a work and a personal account can run in parallel without touching environment variables.",
