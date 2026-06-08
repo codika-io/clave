@@ -185,10 +185,22 @@ function getTmuxConfigPath(): string {
     'set -as terminal-features ",xterm-256color:RGB"',
     'set -g destroy-unattached off',
     'set -g status off',
-    'set -g mouse on',
     'set -g history-limit 50000',
     'set -sg escape-time 10',
     'set -g focus-events on',
+    // Mouse on, but with scrollback wiring: a bare `set -g mouse on` makes the
+    // wheel send arrow keys to the shell (it mangles the prompt). Instead, the
+    // wheel scrolls tmux's scrollback (entering copy-mode) unless the app inside
+    // the pane wants the mouse itself (#{mouse_any_flag}), in which case we pass
+    // the event through. Drag copies the selection to the macOS clipboard and a
+    // click drops back to the live prompt — so it feels like a normal terminal.
+    'set -g mouse on',
+    'bind -n WheelUpPane if -Ft= "#{mouse_any_flag}" "send -M" "if -Ft= \'#{pane_in_mode}\' \'send -X -N 3 scroll-up\' \'copy-mode -e\'"',
+    'bind -n WheelDownPane if -Ft= "#{mouse_any_flag}" "send -M" "if -Ft= \'#{pane_in_mode}\' \'send -X -N 3 scroll-down\' \'send -M\'"',
+    'bind -T copy-mode    MouseDragEnd1Pane send -X copy-pipe-and-cancel pbcopy',
+    'bind -T copy-mode-vi MouseDragEnd1Pane send -X copy-pipe-and-cancel pbcopy',
+    'bind -T copy-mode    MouseDown1Pane send -X cancel',
+    'bind -T copy-mode-vi MouseDown1Pane send -X cancel',
     // If a second client (e.g. an external `tmux attach`) joins, follow the
     // most-recently-active client's size instead of shrinking to the smallest.
     'set -g window-size latest',
