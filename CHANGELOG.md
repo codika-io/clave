@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.51.0] — 2026-06-08
+
 ### Fixed
 - The Files panel no longer spikes CPU when opened on a very large folder (e.g. your home directory or the filesystem root). It previously watched the entire folder tree recursively for changes — on a huge tree that means reacting to every file change anywhere on disk. It now watches only the directories you can actually see (the current folder plus the ones you've expanded), adding and removing watches as you expand and collapse, so the cost scales with what's on screen rather than what's on disk.
 - The Git panel no longer spikes CPU when opened on a very large folder (e.g. your home directory or the filesystem root). Repo discovery is now bounded and cached: it skips system and dependency directories, finds repos breadth-first so shallow repos surface quickly, stops cleanly on huge trees instead of crawling everything, and reuses earlier scans — opening a subfolder of an already-scanned folder costs nothing, and scanning a parent reuses what it already knows about its children. Status and fetch updates run with a capped number of parallel git calls, and in folders with many repos (50+) live polling is paused in favor of a manual Refresh, shown in a small banner. The Git panel only does this work while it's open.
