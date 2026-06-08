@@ -142,7 +142,7 @@ const electronAPI = {
   showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
 
   // File system watching
-  watchDir: (cwd: string) => ipcRenderer.invoke('fs:watch', cwd),
+  watchDir: (cwd: string, dirs?: string[]) => ipcRenderer.invoke('fs:watch', cwd, dirs ?? []),
   unwatchDir: () => ipcRenderer.invoke('fs:unwatch'),
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) =>
     createIpcListener<[string, string[]]>('fs:changed', callback),

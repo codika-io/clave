@@ -301,7 +301,7 @@ export interface ElectronAPI {
   createFile: (rootCwd: string, filePath: string) => Promise<void>
   createDirectory: (rootCwd: string, dirPath: string) => Promise<void>
   showItemInFolder: (fullPath: string) => Promise<void>
-  watchDir: (cwd: string) => Promise<void>
+  watchDir: (cwd: string, dirs?: string[]) => Promise<void>
   unwatchDir: () => Promise<void>
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => () => void
   boardLoad: () => Promise<BoardData>
@@ -354,9 +354,7 @@ export interface ElectronAPI {
   ) => Promise<import('../shared/remote-types').Location>
   locationUpdate: (id: string, updates: unknown) => Promise<void>
   locationRemove: (id: string) => Promise<void>
-  locationTestConnection: (
-    id: string
-  ) => Promise<{
+  locationTestConnection: (id: string) => Promise<{
     success: boolean
     error?: string
     openclawVersion?: string
@@ -431,9 +429,7 @@ export interface ElectronAPI {
     rootDir: string,
     config?: { patterns?: string[]; exclude?: string[]; maxDepth?: number; workspaceId?: string }
   ) => Promise<{ name: string; path: string; rootDir: string }[]>
-  readAutoDiscoverConfig: (
-    filePath: string
-  ) => Promise<{
+  readAutoDiscoverConfig: (filePath: string) => Promise<{
     enabled: boolean
     patterns?: string[]
     exclude?: string[]

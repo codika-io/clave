@@ -4,11 +4,36 @@ import * as path from 'path'
 import { fileManager } from '../file-manager'
 import { IGNORED_DIRECTORIES_SET, FS_WATCH_DEBOUNCE_MS } from '../constants'
 
-/** Active file system watchers keyed by webContents id */
-const fsWatchers = new Map<
-  number,
-  { cwd: string; watcher: fs.FSWatcher; cleanup: () => void }
->()
+/**
+ * Active file system watchers keyed by webContents id. Each window holds a SET
+ * of NON-recursive watchers — one per visible directory (the root plus every
+ * expanded folder) — rather than a single recursive watch over the whole tree.
+ * This keeps the watch scope equal to the display scope: opening "/" watches
+ * only "/" itself, not the entire filesystem.
+ */
+interface WatchEntry {
+  cwd: string
+  /** relDir ('.' for root, else path relative to cwd) -> watcher */
+  watchers: Map<string, fs.FSWatcher>
+  changedDirs: Set<string>
+  debounceTimer: NodeJS.Timeout | null
+}
+
+const fsWatchers = new Map<number, WatchEntry>()
+
+function closeWatchEntry(wcId: number): void {
+  const entry = fsWatchers.get(wcId)
+  if (!entry) return
+  if (entry.debounceTimer) clearTimeout(entry.debounceTimer)
+  for (const w of entry.watchers.values()) {
+    try {
+      w.close()
+    } catch {
+      /* already closed */
+    }
+  }
+  fsWatchers.delete(wcId)
+}
 
 export function registerFsHandlers(): void {
   ipcMain.handle('fs:list-files', (_event, cwd: string) => fileManager.listFiles(cwd))
@@ -34,56 +59,80 @@ export function registerFsHandlers(): void {
     shell.showItemInFolder(fullPath)
   })
 
-  // File system watcher — recursive fs.watch with debounced change events
-  ipcMain.handle('fs:watch', (_event, cwd: string) => {
+  // File system watcher — reconciles a set of non-recursive watches to exactly
+  // the directories currently visible in the tree (root + expanded folders).
+  // `relDirs` are paths relative to `cwd` ('.' for the root is implicit).
+  ipcMain.handle('fs:watch', (_event, cwd: string, relDirs: string[] = []) => {
     const win = BrowserWindow.fromWebContents(_event.sender)
     if (!win) return
 
     const wcId = _event.sender.id
 
-    // Close any existing watcher for this window
-    const existing = fsWatchers.get(wcId)
-    if (existing) existing.cleanup()
+    // A different cwd means a different tree — start fresh.
+    let entry = fsWatchers.get(wcId)
+    if (entry && entry.cwd !== cwd) {
+      closeWatchEntry(wcId)
+      entry = undefined
+    }
+    if (!entry) {
+      entry = { cwd, watchers: new Map(), changedDirs: new Set(), debounceTimer: null }
+      fsWatchers.set(wcId, entry)
+    }
+    const e = entry
 
-    try {
-      const changedDirs = new Set<string>()
-      let debounceTimer: NodeJS.Timeout | null = null
+    const flush = (): void => {
+      if (e.debounceTimer) clearTimeout(e.debounceTimer)
+      e.debounceTimer = setTimeout(() => {
+        if (win && !win.isDestroyed() && e.changedDirs.size > 0) {
+          win.webContents.send('fs:changed', cwd, Array.from(e.changedDirs))
+        }
+        e.changedDirs.clear()
+      }, FS_WATCH_DEBOUNCE_MS)
+    }
 
-      const watcher = fs.watch(cwd, { recursive: true }, (_eventType, filename) => {
-        if (!filename) return
+    const desired = new Set<string>(['.', ...relDirs])
 
-        // Skip ignored directories
-        const segments = filename.split(path.sep)
-        if (segments.some((s) => IGNORED_DIRECTORIES_SET.has(s))) return
-
-        const dir = path.dirname(filename)
-        changedDirs.add(dir === '.' ? '.' : dir)
-
-        if (debounceTimer) clearTimeout(debounceTimer)
-        debounceTimer = setTimeout(() => {
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('fs:changed', cwd, Array.from(changedDirs))
+    // Add watches for newly-visible directories.
+    for (const relDir of desired) {
+      if (e.watchers.has(relDir)) continue
+      const absDir = relDir === '.' ? cwd : path.join(cwd, relDir)
+      try {
+        const watcher = fs.watch(absDir, (_eventType, filename) => {
+          // Non-recursive: filename is the changed entry's basename in this dir.
+          if (filename) {
+            const base = filename.toString().split(path.sep).pop() ?? ''
+            if (IGNORED_DIRECTORIES_SET.has(base)) return
           }
-          changedDirs.clear()
-        }, FS_WATCH_DEBOUNCE_MS)
-      })
-
-      const cleanup = (): void => {
-        if (debounceTimer) clearTimeout(debounceTimer)
-        watcher.close()
-        fsWatchers.delete(wcId)
+          e.changedDirs.add(relDir)
+          flush()
+        })
+        watcher.on('error', () => {
+          try {
+            watcher.close()
+          } catch {
+            /* already closed */
+          }
+          e.watchers.delete(relDir)
+        })
+        e.watchers.set(relDir, watcher)
+      } catch {
+        // Directory may not exist or be unreadable — skip it.
       }
+    }
 
-      watcher.on('error', cleanup)
-      fsWatchers.set(wcId, { cwd, watcher, cleanup })
-    } catch (err) {
-      console.warn('[fs] Watch failed for:', cwd, (err as Error).message)
+    // Drop watches for directories that are no longer visible.
+    for (const relDir of [...e.watchers.keys()]) {
+      if (desired.has(relDir)) continue
+      try {
+        e.watchers.get(relDir)?.close()
+      } catch {
+        /* already closed */
+      }
+      e.watchers.delete(relDir)
     }
   })
 
   ipcMain.handle('fs:unwatch', (_event) => {
-    const wcId = _event.sender.id
-    const existing = fsWatchers.get(wcId)
-    if (existing) existing.cleanup()
+    closeWatchEntry(_event.sender.id)
   })
 }

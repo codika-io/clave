@@ -106,6 +106,17 @@ function mergeNodeChildren(
   })
 }
 
+/** Collect the relative paths of every expanded directory (the visible dirs) */
+function collectExpandedDirs(nodes: TreeNode[], acc: string[] = []): string[] {
+  for (const node of nodes) {
+    if (node.type === 'directory' && node.expanded) {
+      acc.push(node.path)
+      if (node.children) collectExpandedDirs(node.children, acc)
+    }
+  }
+  return acc
+}
+
 /** Recursively collapse all nodes */
 function collapseAllNodes(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((node) => {
@@ -195,14 +206,14 @@ export function useFileTree(cwd: string | null) {
       setAllFiles(result.files)
     })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [cwd, hasFilter])
 
   // Watch for file system changes and merge updates into the tree
   useEffect(() => {
     if (!cwd) return
-
-    window.electronAPI?.watchDir(cwd)
 
     const unsub = window.electronAPI?.onFsChanged((changedCwd, changedDirs) => {
       if (changedCwd !== cwd) return
@@ -263,12 +274,18 @@ export function useFileTree(cwd: string | null) {
     }
   }, [cwd])
 
+  // Keep the set of watched directories equal to the visible (expanded) ones.
+  // Resends only when the expanded-dir set actually changes, not on every
+  // status/ignore re-render. The main process reconciles add/remove.
+  const watchKey = useMemo(() => collectExpandedDirs(rootNodes).sort().join('\n'), [rootNodes])
+  useEffect(() => {
+    if (!cwd) return
+    const dirs = watchKey ? watchKey.split('\n') : []
+    window.electronAPI?.watchDir(cwd, dirs)
+  }, [cwd, watchKey])
+
   const loadChildren = useCallback(
-    async (
-      rootCwd: string,
-      dirPath: string,
-      currentNodes?: TreeNode[]
-    ) => {
+    async (rootCwd: string, dirPath: string, currentNodes?: TreeNode[]) => {
       try {
         const entries = await window.electronAPI?.readDir(rootCwd, dirPath)
         if (!entries) return
@@ -421,4 +438,3 @@ export function useFileTree(cwd: string | null) {
 
   return { rootNodes, flatList, loading, filter, setFilter, toggleDir, refreshDir, collapseAll }
 }
-
