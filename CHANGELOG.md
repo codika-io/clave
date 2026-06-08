@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Fixed
+- Sessions now come back after a reboot, not just after quitting and reopening. Persistent (tmux) sessions live in a background process that a shutdown or restart kills, so previously they were lost on the next launch. Clave now keeps each session's details on disk and, when it finds the tmux process gone, re-opens the tabs in their original folders automatically. Claude Code sessions also resume their previous conversation.
+
 ## [1.50.1] — 2026-06-06
 
 ### Fixed

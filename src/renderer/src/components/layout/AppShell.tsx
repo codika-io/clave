@@ -135,13 +135,20 @@ export function AppShell() {
               dangerousMode: s.dangerousMode,
               tmuxMode: true,
               adoptTmuxName: s.tmuxName,
-              // Reuse the original id + claude session id so lifecycle-hook
-              // status routing and resume keep working after reattach.
+              // Reuse the original id so lifecycle-hook status routing keeps
+              // working after the session comes back.
               adoptSessionId: s.id,
-              claudeSessionId: s.claudeSessionId,
+              // Live survivor (quit/reopen): reattach to the running process —
+              // claudeSessionId only drives the header badge, the agent isn't
+              // re-run. Dead sidecar (reboot killed tmux): re-spawn fresh, so
+              // pass resumeSessionId to relaunch Claude with `--resume <id>` and
+              // reload the prior conversation.
+              ...(s.live
+                ? { claudeSessionId: s.claudeSessionId }
+                : s.claudeMode && s.claudeSessionId
+                  ? { resumeSessionId: s.claudeSessionId }
+                  : {}),
               // Carry the account/profile forward so the badge is restored.
-              // (Reattach doesn't re-run the agent, so the env is moot here, but
-              // the sidecar metadata still drives the header badge.)
               configDir: s.configDir,
               claudeProfileId: s.claudeProfileId,
               claudeProfileLabel: s.claudeProfileLabel

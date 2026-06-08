@@ -53,6 +53,9 @@ export interface AdoptableTmuxSession {
   configDir?: string
   claudeProfileId?: string
   claudeProfileLabel?: string
+  /** True → reattach to a still-running tmux session. False → the tmux server
+   *  died (reboot) but the sidecar survived; re-spawn fresh (Claude resumes). */
+  live?: boolean
 }
 
 export interface DirEntry {

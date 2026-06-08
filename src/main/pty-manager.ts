@@ -261,6 +261,12 @@ export interface AdoptableTmuxSession {
   configDir?: string
   claudeProfileId?: string
   claudeProfileLabel?: string
+  /** Populated only on the listAdoptableTmuxSessions() path (not persisted in
+   *  the sidecar). True when the backing tmux session is still running (app
+   *  quit/reopen, no reboot) → reattach to the live process. False when the
+   *  tmux server died (e.g. a shutdown/reboot killed it) but the sidecar
+   *  metadata survives → re-spawn fresh (Claude resumes via claudeSessionId). */
+  live?: boolean
 }
 
 /** tmux session names we create are always `clave-<sanitized>`. Validate before
@@ -658,13 +664,23 @@ class PtyManager {
 
   /**
    * Reconcile sidecars with the live tmux server and return the sessions that
-   * survived a previous run and should be re-adopted as tabs. Sidecars whose
-   * tmux session is gone are pruned. We deliberately do NOT kill live sessions
-   * that lack a sidecar: the `clave` socket is user-attachable (the settings
-   * panel advertises `tmux -L clave attach`), so a name prefix isn't proof of
-   * ownership. Because every Clave-created session is written a sidecar before
-   * it is spawned (and falls back to a non-tmux spawn if that write fails), our
-   * own sessions are always tracked and adopted — they can't accumulate.
+   * survived a previous run and should be brought back as tabs. Each is flagged
+   * `live`:
+   *   - `live: true`  → the tmux session is still running (app quit/reopen, no
+   *     reboot). The caller reattaches to the live process.
+   *   - `live: false` → the tmux server is gone (a shutdown/reboot killed it)
+   *     but the sidecar survived on disk. The caller re-spawns the session fresh
+   *     in the same cwd; Claude sessions resume their conversation via
+   *     claudeSessionId. The agent's in-memory state is unrecoverable across a
+   *     reboot, so a fresh spawn is the best we can do.
+   *
+   * We deliberately do NOT kill live sessions that lack a sidecar: the `clave`
+   * socket is user-attachable (the settings panel advertises `tmux -L clave
+   * attach`), so a name prefix isn't proof of ownership. Because every
+   * Clave-created session is written a sidecar before it is spawned (and falls
+   * back to a non-tmux spawn if that write fails), our own sessions are always
+   * tracked. Sidecars are pruned only when malformed or when their cwd no longer
+   * exists (un-restorable) — so they can't accumulate across reboots.
    */
   listAdoptableTmuxSessions(): AdoptableTmuxSession[] {
     const tmuxPath = detectTmux()
@@ -701,11 +717,15 @@ class PtyManager {
         }
         continue
       }
-      if (!live.has(meta.tmuxName)) {
-        // Session is gone — its sidecar is stale.
+      const isLive = live.has(meta.tmuxName)
+      if (!isLive && !fs.existsSync(meta.cwd)) {
+        // The working directory is gone — the session can't be re-spawned, so
+        // its sidecar is dead weight. Prune it.
         deleteTmuxSidecar(meta.tmuxName)
-      } else if (!alreadyAdopted.has(meta.tmuxName)) {
-        adoptable.push(meta)
+        continue
+      }
+      if (!alreadyAdopted.has(meta.tmuxName)) {
+        adoptable.push({ ...meta, live: isLive })
       }
     }
 
