@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 ## [Unreleased]
 
 ### Fixed
+- The Git panel no longer spikes CPU when opened on a very large folder (e.g. your home directory or the filesystem root). Repo discovery is now bounded and cached: it skips system and dependency directories, finds repos breadth-first so shallow repos surface quickly, stops cleanly on huge trees instead of crawling everything, and reuses earlier scans — opening a subfolder of an already-scanned folder costs nothing, and scanning a parent reuses what it already knows about its children. Status and fetch updates run with a capped number of parallel git calls, and in folders with many repos (50+) live polling is paused in favor of a manual Refresh, shown in a small banner. The Git panel only does this work while it's open.
 - Sessions now come back after a reboot, not just after quitting and reopening. Persistent (tmux) sessions live in a background process that a shutdown or restart kills, so previously they were lost on the next launch. Clave now keeps each session's details on disk and, when it finds the tmux process gone, re-opens the tabs in their original folders automatically. Claude Code sessions also resume their previous conversation.
 
 ## [1.50.1] — 2026-06-06

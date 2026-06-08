@@ -3,6 +3,25 @@ import { execFile } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
 import { getLoginShellEnv } from './pty-manager'
+import { STATUS_BATCH_CONCURRENCY, FETCH_BATCH_CONCURRENCY } from './constants'
+
+/** Run an async op over items with a bounded number of concurrent workers. */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i], i)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()))
+  return results
+}
 
 export interface GitFileStatus {
   path: string
@@ -148,38 +167,19 @@ function mapFiles(status: StatusResult): GitFileStatus[] {
 }
 
 class GitManager {
-  async discoverRepos(cwd: string): Promise<Array<{ name: string; path: string }>> {
-    const SKIP = new Set(['.git', 'node_modules'])
-    const MAX_DEPTH = 5
-    const repos: Array<{ name: string; path: string }> = []
+  /** Git status for many repos at once, with bounded concurrency. */
+  async getStatusBatch(
+    paths: string[]
+  ): Promise<Array<{ path: string; status: GitStatusResult }>> {
+    return mapWithConcurrency(paths, STATUS_BATCH_CONCURRENCY, async (p) => ({
+      path: p,
+      status: await this.getStatus(p)
+    }))
+  }
 
-    const scan = async (dir: string, depth: number): Promise<void> => {
-      if (depth > MAX_DEPTH) return
-      try {
-        const entries = await fs.promises.readdir(dir, { withFileTypes: true })
-        await Promise.all(
-          entries
-            .filter((e) => e.isDirectory() && !SKIP.has(e.name))
-            .map(async (e) => {
-              const dirPath = path.join(dir, e.name)
-              try {
-                await fs.promises.access(path.join(dirPath, '.git'))
-                repos.push({ name: e.name, path: dirPath })
-              } catch {
-                // Not a repo — recurse deeper
-                if (depth < MAX_DEPTH) {
-                  await scan(dirPath, depth + 1)
-                }
-              }
-            })
-        )
-      } catch {
-        // unreadable directory
-      }
-    }
-
-    await scan(cwd, 1)
-    return repos.sort((a, b) => a.name.localeCompare(b.name))
+  /** Git fetch for many repos at once, with bounded concurrency. */
+  async fetchBatch(paths: string[]): Promise<void> {
+    await mapWithConcurrency(paths, FETCH_BATCH_CONCURRENCY, (p) => this.fetch(p))
   }
 
   async getDiff(

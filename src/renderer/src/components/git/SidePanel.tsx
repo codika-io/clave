@@ -496,6 +496,8 @@ export function SidePanel() {
                 repos={multiRepo.result.repos}
                 rootPath={multiRepo.hasNestedRepos ? cwd : null}
                 refresh={multiRepo.refresh}
+                truncated={multiRepo.result.truncated}
+                live={multiRepo.result.live}
               />
             ) : multiRepo.result.mode === 'none' ? (
               <div className="flex-1 flex items-center justify-center px-3">

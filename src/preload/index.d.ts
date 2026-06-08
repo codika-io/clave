@@ -5,8 +5,22 @@ export interface ClaveFileGroupData {
   toolbar?: boolean
   category?: string
   logo?: string
-  sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]
-  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; autoLaunchLocalhost?: boolean }[]
+  sessions: {
+    cwd: string
+    name: string
+    claudeMode: boolean
+    geminiMode: boolean
+    codexMode: boolean
+    claudeAgentsMode?: boolean
+    dangerousMode: boolean
+  }[]
+  terminals: {
+    command: string
+    commandMode: 'prefill' | 'auto'
+    color: string
+    icon?: string
+    autoLaunchLocalhost?: boolean
+  }[]
 }
 
 export type ClaveFileReadResult =
@@ -17,7 +31,15 @@ export interface ClaveFileWriteData {
   name?: string
   cwd?: string | null
   color?: string | null
-  sessions?: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]
+  sessions?: {
+    cwd: string
+    name: string
+    claudeMode: boolean
+    geminiMode: boolean
+    codexMode: boolean
+    claudeAgentsMode?: boolean
+    dangerousMode: boolean
+  }[]
   terminals?: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[]
   groups?: Array<{
     name: string
@@ -26,8 +48,22 @@ export interface ClaveFileWriteData {
     toolbar?: boolean
     category?: string
     logo?: string
-    sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]
-    terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; autoLaunchLocalhost?: boolean }[]
+    sessions: {
+      cwd: string
+      name: string
+      claudeMode: boolean
+      geminiMode: boolean
+      codexMode: boolean
+      claudeAgentsMode?: boolean
+      dangerousMode: boolean
+    }[]
+    terminals: {
+      command: string
+      commandMode: 'prefill' | 'auto'
+      color: string
+      icon?: string
+      autoLaunchLocalhost?: boolean
+    }[]
   }>
 }
 
@@ -193,7 +229,26 @@ export interface DownloadProgress {
 }
 
 export interface ElectronAPI {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; codexMode?: boolean; claudeAgentsMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean; tmuxMode?: boolean; adoptTmuxName?: string; adoptSessionId?: string; configDir?: string; claudeProfileId?: string; claudeProfileLabel?: string }) => Promise<SessionInfo>
+  spawnSession: (
+    cwd: string,
+    options?: {
+      dangerousMode?: boolean
+      claudeMode?: boolean
+      geminiMode?: boolean
+      codexMode?: boolean
+      claudeAgentsMode?: boolean
+      resumeSessionId?: string
+      claudeSessionId?: string
+      initialCommand?: string
+      autoExecute?: boolean
+      tmuxMode?: boolean
+      adoptTmuxName?: string
+      adoptSessionId?: string
+      configDir?: string
+      claudeProfileId?: string
+      claudeProfileLabel?: string
+    }
+  ) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
   startSession: (id: string, cols: number, rows: number) => void
   resizeSession: (id: string, cols: number, rows: number) => void
@@ -256,15 +311,23 @@ export interface ElectronAPI {
   getUsageLimits: () => Promise<UsageLimits | UsageError>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>
+  getGitStatusBatch: (paths: string[]) => Promise<Array<{ path: string; status: GitStatusResult }>>
   gitFetch: (cwd: string) => Promise<void>
-  discoverGitRepos: (cwd: string) => Promise<Array<{ name: string; path: string }>>
+  gitFetchBatch: (paths: string[]) => Promise<void>
+  discoverGitRepos: (
+    cwd: string,
+    force?: boolean
+  ) => Promise<{ repos: Array<{ name: string; path: string }>; truncated: boolean }>
   gitStage: (cwd: string, files: string[]) => Promise<void>
   gitUnstage: (cwd: string, files: string[]) => Promise<void>
   gitCommit: (cwd: string, message: string) => Promise<GitCommitResult>
   gitPush: (cwd: string) => Promise<void>
   gitPublishBranch: (cwd: string) => Promise<void>
   gitPull: (cwd: string, strategy?: 'auto' | 'merge' | 'rebase' | 'ff-only') => Promise<void>
-  gitDiscard: (cwd: string, files: Array<{ path: string; status: string; staged: boolean }>) => Promise<void>
+  gitDiscard: (
+    cwd: string,
+    files: Array<{ path: string; status: string; staged: boolean }>
+  ) => Promise<void>
   gitDiff: (cwd: string, filePath: string, staged: boolean, isUntracked: boolean) => Promise<string>
   gitLog: (cwd: string, maxCount?: number) => Promise<GitLogEntry[]>
   gitOutgoingCommits: (cwd: string) => Promise<GitLogEntry[]>
@@ -277,20 +340,40 @@ export interface ElectronAPI {
   gitMagicPull: (repoPaths: string[]) => Promise<MagicPullResult[]>
   onMagicPullProgress: (callback: (repoPath: string, step: MagicPullStep) => void) => () => void
   gitJourney: (cwd: string, maxCount?: number) => Promise<GitJourneyResult>
-  gitSummarizePush: (cwd: string, commitMessages: string[], diffStats: string) => Promise<{ title: string; description: string }>
+  gitSummarizePush: (
+    cwd: string,
+    commitMessages: string[],
+    diffStats: string
+  ) => Promise<{ title: string; description: string }>
 
   // Locations
   locationList: () => Promise<import('../shared/remote-types').Location[]>
-  locationAdd: (loc: unknown, password?: string) => Promise<import('../shared/remote-types').Location>
+  locationAdd: (
+    loc: unknown,
+    password?: string
+  ) => Promise<import('../shared/remote-types').Location>
   locationUpdate: (id: string, updates: unknown) => Promise<void>
   locationRemove: (id: string) => Promise<void>
-  locationTestConnection: (id: string) => Promise<{ success: boolean; error?: string; openclawVersion?: string; openclawPort?: number; openclawToken?: string }>
-  locationInstallPlugin: (id: string) => Promise<{ success: boolean; output?: string; error?: string }>
+  locationTestConnection: (
+    id: string
+  ) => Promise<{
+    success: boolean
+    error?: string
+    openclawVersion?: string
+    openclawPort?: number
+    openclawToken?: string
+  }>
+  locationInstallPlugin: (
+    id: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
 
   // SSH / Remote Terminal
   sshConnect: (locationId: string) => Promise<void>
   sshDisconnect: (locationId: string) => Promise<void>
-  sshExec: (locationId: string, command: string) => Promise<{ stdout: string; stderr: string; code: number }>
+  sshExec: (
+    locationId: string,
+    command: string
+  ) => Promise<{ stdout: string; stderr: string; code: number }>
   sshOpenShell: (locationId: string, cwd?: string) => Promise<string>
   sshShellWrite: (shellId: string, data: string) => void
   sshShellResize: (shellId: string, cols: number, rows: number) => void
@@ -300,9 +383,15 @@ export interface ElectronAPI {
   onSshConnectionClosed: (callback: (locationId: string) => void) => () => void
 
   // Remote FS (SFTP)
-  sftpReadDir: (locationId: string, dirPath: string) => Promise<import('../shared/remote-types').RemoteDirEntry[]>
+  sftpReadDir: (
+    locationId: string,
+    dirPath: string
+  ) => Promise<import('../shared/remote-types').RemoteDirEntry[]>
   sftpReadFile: (locationId: string, filePath: string) => Promise<string>
-  sftpStat: (locationId: string, filePath: string) => Promise<{ isDirectory: boolean; isFile: boolean; size: number; mtime: number }>
+  sftpStat: (
+    locationId: string,
+    filePath: string
+  ) => Promise<{ isDirectory: boolean; isFile: boolean; size: number; mtime: number }>
 
   // Agents
   agentList: (locationId: string) => Promise<import('../shared/remote-types').Agent[]>
@@ -310,23 +399,46 @@ export interface ElectronAPI {
   agentDisconnect: (locationId: string) => Promise<void>
   agentSessions: (locationId: string) => Promise<unknown>
   agentChatHistory: (locationId: string, sessionKey: string) => Promise<unknown>
-  agentSend: (agentId: string, locationId: string, content: string) => Promise<import('../shared/remote-types').ChatMessage>
+  agentSend: (
+    agentId: string,
+    locationId: string,
+    content: string
+  ) => Promise<import('../shared/remote-types').ChatMessage>
   onAgentMessage: (agentId: string, callback: (message: unknown) => void) => () => void
   onAgentsUpdated: (callback: (locationId: string, agents: unknown[]) => void) => () => void
 
   // .clave files
   readClaveFile: (absolutePath: string, rootDir?: string) => Promise<ClaveFileReadResult | null>
-  writeClaveFile: (absolutePath: string, data: ClaveFileWriteData, rootDir?: string) => Promise<void>
+  writeClaveFile: (
+    absolutePath: string,
+    data: ClaveFileWriteData,
+    rootDir?: string
+  ) => Promise<void>
   watchClaveFile: (absolutePath: string) => Promise<void>
   unwatchClaveFile: (absolutePath: string) => Promise<void>
   onClaveFileChanged: (callback: (filePath: string) => void) => () => void
-  saveFileDialog: (defaultName: string, filters: { name: string; extensions: string[] }[]) => Promise<string | null>
+  saveFileDialog: (
+    defaultName: string,
+    filters: { name: string; extensions: string[] }[]
+  ) => Promise<string | null>
   getDownloadsPath: () => Promise<string>
   getUserDataPath: () => Promise<string>
   claveFileExists: (absolutePath: string) => Promise<boolean>
-  discoverClaveFiles: (folderPath: string) => Promise<{ name: string; path: string; rootDir: string | null }[]>
-  discoverClaveFilesRecursive: (rootDir: string, config?: { patterns?: string[]; exclude?: string[]; maxDepth?: number; workspaceId?: string }) => Promise<{ name: string; path: string; rootDir: string }[]>
-  readAutoDiscoverConfig: (filePath: string) => Promise<{ enabled: boolean; patterns?: string[]; exclude?: string[]; maxDepth?: number } | null>
+  discoverClaveFiles: (
+    folderPath: string
+  ) => Promise<{ name: string; path: string; rootDir: string | null }[]>
+  discoverClaveFilesRecursive: (
+    rootDir: string,
+    config?: { patterns?: string[]; exclude?: string[]; maxDepth?: number; workspaceId?: string }
+  ) => Promise<{ name: string; path: string; rootDir: string }[]>
+  readAutoDiscoverConfig: (
+    filePath: string
+  ) => Promise<{
+    enabled: boolean
+    patterns?: string[]
+    exclude?: string[]
+    maxDepth?: number
+  } | null>
   readImageAsDataUrl: (absolutePath: string) => Promise<string | null>
   preferencesGet: (key: string) => Promise<unknown>
   preferencesSet: (key: string, value: unknown) => Promise<void>

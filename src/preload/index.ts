@@ -5,8 +5,7 @@ function createIpcListener<T extends unknown[]>(
   channel: string,
   callback: (...args: T) => void
 ): () => void {
-  const listener = (_event: Electron.IpcRendererEvent, ...args: T): void =>
-    callback(...args)
+  const listener = (_event: Electron.IpcRendererEvent, ...args: T): void => callback(...args)
   ipcRenderer.on(channel, listener)
   return (): void => {
     ipcRenderer.removeListener(channel, listener)
@@ -14,8 +13,26 @@ function createIpcListener<T extends unknown[]>(
 }
 
 const electronAPI = {
-  spawnSession: (cwd: string, options?: { dangerousMode?: boolean; claudeMode?: boolean; geminiMode?: boolean; codexMode?: boolean; claudeAgentsMode?: boolean; resumeSessionId?: string; claudeSessionId?: string; initialCommand?: string; autoExecute?: boolean; tmuxMode?: boolean; adoptTmuxName?: string; adoptSessionId?: string; configDir?: string; claudeProfileId?: string; claudeProfileLabel?: string }) =>
-    ipcRenderer.invoke('pty:spawn', cwd, options),
+  spawnSession: (
+    cwd: string,
+    options?: {
+      dangerousMode?: boolean
+      claudeMode?: boolean
+      geminiMode?: boolean
+      codexMode?: boolean
+      claudeAgentsMode?: boolean
+      resumeSessionId?: string
+      claudeSessionId?: string
+      initialCommand?: string
+      autoExecute?: boolean
+      tmuxMode?: boolean
+      adoptTmuxName?: string
+      adoptSessionId?: string
+      configDir?: string
+      claudeProfileId?: string
+      claudeProfileLabel?: string
+    }
+  ) => ipcRenderer.invoke('pty:spawn', cwd, options),
 
   writeSession: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),
 
@@ -68,8 +85,7 @@ const electronAPI = {
   ) => ipcRenderer.invoke('session:save-plan', cwd, claudeSessionId, sessionName, extras),
 
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
-  checkPort: (port: number) =>
-    ipcRenderer.invoke('net:check-port', port) as Promise<boolean>,
+  checkPort: (port: number) => ipcRenderer.invoke('net:check-port', port) as Promise<boolean>,
 
   openPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 
@@ -88,17 +104,18 @@ const electronAPI = {
       transferred: number
       total: number
     }) => void
-  ) => createIpcListener<[{ percent: number; bytesPerSecond: number; transferred: number; total: number }]>(
-    'updater:download-progress',
-    callback
-  ),
+  ) =>
+    createIpcListener<
+      [{ percent: number; bytesPerSecond: number; transferred: number; total: number }]
+    >('updater:download-progress', callback),
 
   onDownloadError: (callback: (message: string) => void) =>
     createIpcListener<[string]>('updater:download-error', callback),
 
   setAppIcon: (icon: string) => ipcRenderer.invoke('app:set-icon', icon),
   getUsername: () => ipcRenderer.invoke('app:get-username') as Promise<string | null>,
-  saveAvatar: (sourcePath: string) => ipcRenderer.invoke('app:save-avatar', sourcePath) as Promise<string | null>,
+  saveAvatar: (sourcePath: string) =>
+    ipcRenderer.invoke('app:save-avatar', sourcePath) as Promise<string | null>,
   getAppVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
 
   installUpdate: () => ipcRenderer.invoke('updater:install'),
@@ -115,16 +132,14 @@ const electronAPI = {
     ipcRenderer.invoke('fs:read-dir', rootCwd, dirPath),
   readFile: (rootCwd: string, filePath: string) =>
     ipcRenderer.invoke('fs:read-file', rootCwd, filePath),
-  statFile: (rootCwd: string, filePath: string) =>
-    ipcRenderer.invoke('fs:stat', rootCwd, filePath),
+  statFile: (rootCwd: string, filePath: string) => ipcRenderer.invoke('fs:stat', rootCwd, filePath),
   writeFile: (rootCwd: string, filePath: string, content: string) =>
     ipcRenderer.invoke('fs:write-file', rootCwd, filePath, content),
   createFile: (rootCwd: string, filePath: string) =>
     ipcRenderer.invoke('fs:create-file', rootCwd, filePath),
   createDirectory: (rootCwd: string, dirPath: string) =>
     ipcRenderer.invoke('fs:create-directory', rootCwd, dirPath),
-  showItemInFolder: (fullPath: string) =>
-    ipcRenderer.invoke('shell:showItemInFolder', fullPath),
+  showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
 
   // File system watching
   watchDir: (cwd: string) => ipcRenderer.invoke('fs:watch', cwd),
@@ -149,40 +164,36 @@ const electronAPI = {
   gitCheckIgnored: (cwd: string, paths: string[]) =>
     ipcRenderer.invoke('git:check-ignored', cwd, paths),
   getGitStatus: (cwd: string) => ipcRenderer.invoke('git:status', cwd),
+  getGitStatusBatch: (paths: string[]) => ipcRenderer.invoke('git:status-batch', paths),
   gitFetch: (cwd: string) => ipcRenderer.invoke('git:fetch', cwd),
-  discoverGitRepos: (cwd: string) => ipcRenderer.invoke('git:discover-repos', cwd),
+  gitFetchBatch: (paths: string[]) => ipcRenderer.invoke('git:fetch-batch', paths),
+  discoverGitRepos: (cwd: string, force?: boolean) =>
+    ipcRenderer.invoke('git:discover-repos', cwd, force),
   gitStage: (cwd: string, files: string[]) => ipcRenderer.invoke('git:stage', cwd, files),
   gitUnstage: (cwd: string, files: string[]) => ipcRenderer.invoke('git:unstage', cwd, files),
   gitCommit: (cwd: string, message: string) => ipcRenderer.invoke('git:commit', cwd, message),
   gitPush: (cwd: string) => ipcRenderer.invoke('git:push', cwd),
   gitPublishBranch: (cwd: string) => ipcRenderer.invoke('git:publish-branch', cwd),
-  gitPull: (cwd: string, strategy?: 'auto' | 'merge' | 'rebase' | 'ff-only') => ipcRenderer.invoke('git:pull', cwd, strategy),
+  gitPull: (cwd: string, strategy?: 'auto' | 'merge' | 'rebase' | 'ff-only') =>
+    ipcRenderer.invoke('git:pull', cwd, strategy),
   gitDiscard: (cwd: string, files: Array<{ path: string; status: string; staged: boolean }>) =>
     ipcRenderer.invoke('git:discard', cwd, files),
   gitDiff: (cwd: string, filePath: string, staged: boolean, isUntracked: boolean) =>
     ipcRenderer.invoke('git:diff', cwd, filePath, staged, isUntracked),
-  gitLog: (cwd: string, maxCount?: number) =>
-    ipcRenderer.invoke('git:log', cwd, maxCount),
-  gitOutgoingCommits: (cwd: string) =>
-    ipcRenderer.invoke('git:outgoing-commits', cwd),
-  gitIncomingCommits: (cwd: string) =>
-    ipcRenderer.invoke('git:incoming-commits', cwd),
-  gitCommitFiles: (cwd: string, hash: string) =>
-    ipcRenderer.invoke('git:commit-files', cwd, hash),
+  gitLog: (cwd: string, maxCount?: number) => ipcRenderer.invoke('git:log', cwd, maxCount),
+  gitOutgoingCommits: (cwd: string) => ipcRenderer.invoke('git:outgoing-commits', cwd),
+  gitIncomingCommits: (cwd: string) => ipcRenderer.invoke('git:incoming-commits', cwd),
+  gitCommitFiles: (cwd: string, hash: string) => ipcRenderer.invoke('git:commit-files', cwd, hash),
   gitCommitDiff: (cwd: string, hash: string, filePath: string) =>
     ipcRenderer.invoke('git:commit-diff', cwd, hash, filePath),
-  gitGenerateCommitMessage: (cwd: string) =>
-    ipcRenderer.invoke('git:generate-commit-message', cwd),
-  gitMagicSync: (repoPaths: string[]) =>
-    ipcRenderer.invoke('git:magic-sync', repoPaths),
+  gitGenerateCommitMessage: (cwd: string) => ipcRenderer.invoke('git:generate-commit-message', cwd),
+  gitMagicSync: (repoPaths: string[]) => ipcRenderer.invoke('git:magic-sync', repoPaths),
   onMagicSyncProgress: (callback: (repoPath: string, step: string) => void) =>
     createIpcListener<[string, string]>('git:magic-sync-progress', callback),
-  gitMagicPull: (repoPaths: string[]) =>
-    ipcRenderer.invoke('git:magic-pull', repoPaths),
+  gitMagicPull: (repoPaths: string[]) => ipcRenderer.invoke('git:magic-pull', repoPaths),
   onMagicPullProgress: (callback: (repoPath: string, step: string) => void) =>
     createIpcListener<[string, string]>('git:magic-pull-progress', callback),
-  gitJourney: (cwd: string, maxCount?: number) =>
-    ipcRenderer.invoke('git:journey', cwd, maxCount),
+  gitJourney: (cwd: string, maxCount?: number) => ipcRenderer.invoke('git:journey', cwd, maxCount),
   gitSummarizePush: (cwd: string, commitMessages: string[], diffStats: string) =>
     ipcRenderer.invoke('git:summarize-push', cwd, commitMessages, diffStats),
 
@@ -199,10 +210,8 @@ const electronAPI = {
   locationUpdate: (id: string, updates: unknown) =>
     ipcRenderer.invoke('location:update', id, updates),
   locationRemove: (id: string) => ipcRenderer.invoke('location:remove', id),
-  locationTestConnection: (id: string) =>
-    ipcRenderer.invoke('location:test-connection', id),
-  locationInstallPlugin: (id: string) =>
-    ipcRenderer.invoke('location:install-plugin', id),
+  locationTestConnection: (id: string) => ipcRenderer.invoke('location:test-connection', id),
+  locationInstallPlugin: (id: string) => ipcRenderer.invoke('location:install-plugin', id),
 
   // ── SSH / Remote Terminal ──
   sshConnect: (locationId: string) => ipcRenderer.invoke('ssh:connect', locationId),
@@ -250,8 +259,7 @@ const electronAPI = {
     ipcRenderer.invoke('clave:read-file', absolutePath, rootDir),
   writeClaveFile: (absolutePath: string, data: unknown, rootDir?: string) =>
     ipcRenderer.invoke('clave:write-file', absolutePath, data, rootDir),
-  watchClaveFile: (absolutePath: string) =>
-    ipcRenderer.invoke('clave:watch-file', absolutePath),
+  watchClaveFile: (absolutePath: string) => ipcRenderer.invoke('clave:watch-file', absolutePath),
   unwatchClaveFile: (absolutePath: string) =>
     ipcRenderer.invoke('clave:unwatch-file', absolutePath),
   onClaveFileChanged: (callback: (filePath: string) => void) =>
@@ -263,17 +271,27 @@ const electronAPI = {
   claveFileExists: (absolutePath: string) =>
     ipcRenderer.invoke('clave:file-exists', absolutePath) as Promise<boolean>,
   discoverClaveFiles: (folderPath: string) =>
-    ipcRenderer.invoke('clave:discover-files', folderPath) as Promise<{ name: string; path: string; rootDir: string | null }[]>,
-  discoverClaveFilesRecursive: (rootDir: string, config?: { patterns?: string[]; exclude?: string[]; maxDepth?: number; workspaceId?: string }) =>
-    ipcRenderer.invoke('clave:discover-files-recursive', rootDir, config) as Promise<{ name: string; path: string; rootDir: string }[]>,
+    ipcRenderer.invoke('clave:discover-files', folderPath) as Promise<
+      { name: string; path: string; rootDir: string | null }[]
+    >,
+  discoverClaveFilesRecursive: (
+    rootDir: string,
+    config?: { patterns?: string[]; exclude?: string[]; maxDepth?: number; workspaceId?: string }
+  ) =>
+    ipcRenderer.invoke('clave:discover-files-recursive', rootDir, config) as Promise<
+      { name: string; path: string; rootDir: string }[]
+    >,
   readAutoDiscoverConfig: (filePath: string) =>
-    ipcRenderer.invoke('clave:read-auto-discover', filePath) as Promise<{ enabled: boolean; patterns?: string[]; exclude?: string[]; maxDepth?: number } | null>,
+    ipcRenderer.invoke('clave:read-auto-discover', filePath) as Promise<{
+      enabled: boolean
+      patterns?: string[]
+      exclude?: string[]
+      maxDepth?: number
+    } | null>,
   readImageAsDataUrl: (absolutePath: string) =>
     ipcRenderer.invoke('clave:read-image', absolutePath) as Promise<string | null>,
-  preferencesGet: (key: string) =>
-    ipcRenderer.invoke('preferences:get', key),
-  preferencesSet: (key: string, value: unknown) =>
-    ipcRenderer.invoke('preferences:set', key, value)
+  preferencesGet: (key: string) => ipcRenderer.invoke('preferences:get', key),
+  preferencesSet: (key: string, value: unknown) => ipcRenderer.invoke('preferences:set', key, value)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

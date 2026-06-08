@@ -814,11 +814,15 @@ function MultiRepoSection({
 export function MultiRepoGitPanel({
   repos,
   rootPath,
-  refresh
+  refresh,
+  truncated = false,
+  live = true
 }: {
   repos: Array<{ name: string; path: string; status: GitStatusResult }>
   rootPath?: string | null
   refresh: () => void
+  truncated?: boolean
+  live?: boolean
 }) {
   const [nestedDocked, setNestedDocked] = useState(false)
   const [selectedRepoPaths, setSelectedRepoPaths] = useState<Set<string>>(new Set())
@@ -850,6 +854,17 @@ export function MultiRepoGitPanel({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {(truncated || !live) && (
+        <div className="px-3 py-1.5 text-[11px] text-text-tertiary border-b border-border">
+          {truncated
+            ? `Large folder — showing first ${repos.length} repos. `
+            : `${repos.length} repos — `}
+          live updates paused.{' '}
+          <button className="underline hover:text-text-secondary" onClick={refresh}>
+            Refresh
+          </button>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto">
         {/* Root repo */}
         {rootRepo && (

@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { gitManager } from '../git-manager'
+import { repoIndexManager } from '../repo-index'
 import type { MagicSyncStep, MagicPullStep } from '../git-manager'
 
 export function registerGitHandlers(): void {
@@ -7,9 +8,15 @@ export function registerGitHandlers(): void {
     gitManager.checkIgnored(cwd, paths)
   )
   ipcMain.handle('git:fetch', (_event, cwd: string) => gitManager.fetch(cwd))
+  ipcMain.handle('git:fetch-batch', (_event, paths: string[]) => gitManager.fetchBatch(paths))
   ipcMain.handle('git:status', (_event, cwd: string) => gitManager.getStatus(cwd))
-  ipcMain.handle('git:discover-repos', (_event, cwd: string) => gitManager.discoverRepos(cwd))
-  ipcMain.handle('git:stage', (_event, cwd: string, files: string[]) => gitManager.stage(cwd, files))
+  ipcMain.handle('git:status-batch', (_event, paths: string[]) => gitManager.getStatusBatch(paths))
+  ipcMain.handle('git:discover-repos', (_event, cwd: string, force?: boolean) =>
+    repoIndexManager.discover(cwd, force)
+  )
+  ipcMain.handle('git:stage', (_event, cwd: string, files: string[]) =>
+    gitManager.stage(cwd, files)
+  )
   ipcMain.handle('git:unstage', (_event, cwd: string, files: string[]) =>
     gitManager.unstage(cwd, files)
   )
