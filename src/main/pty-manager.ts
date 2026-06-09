@@ -192,15 +192,15 @@ function getTmuxConfigPath(): string {
     // wheel send arrow keys to the shell (it mangles the prompt). Instead, the
     // wheel scrolls tmux's scrollback (entering copy-mode) unless the app inside
     // the pane wants the mouse itself (#{mouse_any_flag}), in which case we pass
-    // the event through. Drag copies the selection to the macOS clipboard and a
-    // click drops back to the live prompt — so it feels like a normal terminal.
+    // the event through. Drag copies the selection to the macOS clipboard; scroll
+    // back down (or finishing a selection) returns to the live prompt. We do NOT
+    // bind MouseDown1Pane to cancel: the press fires before the drag, so canceling
+    // on it jumps to the bottom and makes highlighting scrollback text impossible.
     'set -g mouse on',
     'bind -n WheelUpPane if -Ft= "#{mouse_any_flag}" "send -M" "if -Ft= \'#{pane_in_mode}\' \'send -X -N 3 scroll-up\' \'copy-mode -e\'"',
     'bind -n WheelDownPane if -Ft= "#{mouse_any_flag}" "send -M" "if -Ft= \'#{pane_in_mode}\' \'send -X -N 3 scroll-down\' \'send -M\'"',
     'bind -T copy-mode    MouseDragEnd1Pane send -X copy-pipe-and-cancel pbcopy',
     'bind -T copy-mode-vi MouseDragEnd1Pane send -X copy-pipe-and-cancel pbcopy',
-    'bind -T copy-mode    MouseDown1Pane send -X cancel',
-    'bind -T copy-mode-vi MouseDown1Pane send -X cancel',
     // If a second client (e.g. an external `tmux attach`) joins, follow the
     // most-recently-active client's size instead of shrinking to the smallest.
     'set -g window-size latest',
@@ -313,6 +313,28 @@ function deleteTmuxSidecar(tmuxName: string): void {
     fs.unlinkSync(path.join(tmuxSidecarDir(), `${tmuxName}.json`))
   } catch {
     // already gone
+  }
+}
+
+/** The tmux config (`-f`) is read only when the server *first* starts. Clave's
+ *  sessions outlive the app, so a server from before a config change keeps the
+ *  old key bindings. For bindings we've *removed* from the config, omission
+ *  can't unset them on a live server — reconcile them explicitly here. No-op
+ *  when no server is running: the fresh server loads the current config via -f.
+ *  (Starting a server here would race that load, so we only touch a live one.) */
+function reconcileTmuxBindings(tmuxPath: string): void {
+  if (liveTmuxSessions(tmuxPath).size === 0) return
+  // Drop the legacy `MouseDown1Pane -> cancel` binding: the press fires before
+  // the drag, so it snapped scrollback to the bottom on click and made
+  // highlighting impossible. Without it, copy-mode's default drag-select works.
+  for (const table of ['copy-mode', 'copy-mode-vi']) {
+    try {
+      execFileSync(tmuxPath, ['-L', TMUX_SOCKET, 'unbind', '-T', table, 'MouseDown1Pane'], {
+        stdio: 'ignore'
+      })
+    } catch {
+      // Best effort — the binding is already absent on a fresh-enough server.
+    }
   }
 }
 
@@ -496,6 +518,10 @@ class PtyManager {
       if (sidecarOk) {
         tmuxName = candidateName
         const confPath = getTmuxConfigPath()
+        // A server predating this fix still carries the old click-to-cancel
+        // binding; strip it from the live server so the fix applies without a
+        // server restart (the -f config below only takes effect on a new one).
+        reconcileTmuxBindings(tmuxPath)
         // `-u` forces UTF-8 client output. Electron apps are launched without a
         // UTF-8 locale (no LANG/LC_* in the GUI environment), so tmux would
         // otherwise run the client in non-UTF-8 mode and downsample every

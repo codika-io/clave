@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.51.2] — 2026-06-09
+
+### Fixed
+- You can now select and copy text from a terminal's scrollback. Previously, scrolling up and then pressing the mouse to highlight text snapped the view straight back to the bottom, so the selection never started. Pressing no longer jumps to the bottom — drag to highlight, and releasing copies the selection to your clipboard. The fix also applies to sessions that were already running, without needing to restart them.
+
 ## [1.51.1] — 2026-06-08
 
 ### Added
