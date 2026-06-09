@@ -352,11 +352,17 @@ export function useFileTree(cwd: string | null) {
         return toggleNodeExpanded(prev, dirPath)
       })
 
-      // Load children if needed
+      // `rootNodes` here is the pre-toggle snapshot, so `!node.expanded` means
+      // "we are expanding". Always refresh on expand — the watcher only covers
+      // currently-expanded dirs, so a branch that was collapsed (and therefore
+      // unwatched) can have gone stale on disk. Cached children paint instantly;
+      // loadChildren re-reads and recursively reconciles the expanded subtree.
       const node = findNode(rootNodes, dirPath)
-      if (node && !node.expanded && !node.children) {
+      if (node && !node.expanded) {
         await loadChildren(cwd, dirPath)
-        setRootNodes((prev) => setNodeLoading(prev, dirPath, false))
+        if (!node.children) {
+          setRootNodes((prev) => setNodeLoading(prev, dirPath, false))
+        }
       }
     },
     [cwd, rootNodes, loadChildren]

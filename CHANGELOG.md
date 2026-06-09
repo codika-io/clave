@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.51.3] — 2026-06-09
+
+### Fixed
+- The Files panel now shows files that were added while a folder was collapsed. After the recent change to watch only the folders you can see, a folder you had expanded and then collapsed kept showing its old contents — anything added inside it while it was collapsed (for example by a long-running agent) didn't appear when you expanded it again. Expanding a folder now re-reads it from disk, so its contents are always up to date.
+
 ## [1.51.2] — 2026-06-09
 
 ### Fixed
