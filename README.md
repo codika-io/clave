@@ -90,6 +90,10 @@ The only network requests Clave makes are:
 
 > A "Dangerous Mode" session (Cmd+D) launches Claude Code with `--dangerously-skip-permissions`. It is never the default and is clearly labelled in the UI.
 
+### How we measure adoption
+
+Since Clave sends nothing home, the only adoption numbers we look at are the aggregate statistics GitHub computes on its side: release download counts, repository stars, and repository traffic. A scheduled job snapshots those public-API numbers once a day. They contain no user identifiers, no IPs, and no device information — GitHub never exposes any of that to us, and nothing is ever collected from your machine. You can verify in this codebase that no analytics code exists.
+
 ## Build from source
 
 ```bash
