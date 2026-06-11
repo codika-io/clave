@@ -120,9 +120,23 @@ async function handleLaunchGroup(payload: { group: string }): Promise<unknown> {
     throw new Error(`No pinned group "${payload.group}". Available: ${available}`)
   }
 
-  const stateBefore = getPinnedState(pg)
+  // A pin can point at a group that was since deleted — e.g. an agent moved
+  // the pin's last tab out, which prunes the now-empty group. The pin still
+  // reads as active-visible (activeGroupId set, visible true), which would
+  // make both the early-return below AND togglePinnedGroup's hide-path treat
+  // it as live and never respawn. Reset the stale link so the toggle takes the
+  // fresh-spawn path.
+  const linkedGroupAlive = (g: string | null): boolean =>
+    !!g && useSessionStore.getState().groups.some((grp) => grp.id === g)
+  if (pg.activeGroupId && !linkedGroupAlive(pg.activeGroupId)) {
+    usePinnedStore.getState().setActiveGroupId(pg.id, null)
+    usePinnedStore.getState().setVisible(pg.id, false)
+  }
+
+  const current = usePinnedStore.getState().pinnedGroups.find((p) => p.id === pg.id) ?? pg
+  const stateBefore = getPinnedState(current)
   if (stateBefore === 'active-visible') {
-    return { pinnedId: pg.id, groupId: pg.activeGroupId, status: 'already-running' }
+    return { pinnedId: pg.id, groupId: current.activeGroupId, status: 'already-running' }
   }
   // idle → spawn all sessions + terminals; active-hidden → show the live group.
   await togglePinnedGroup(pg.id)
@@ -204,7 +218,15 @@ async function handleOpenSession(payload: {
   })
   // renameSession sets userRenamed, protecting the name from auto-title overwrite.
   if (payload.name) useSessionStore.getState().renameSession(info.id, payload.name)
-  if (targetGroup) useSessionStore.getState().moveItems([info.id], targetGroup.id, 'inside')
+  if (targetGroup) {
+    useSessionStore.getState().moveItems([info.id], targetGroup.id, 'inside')
+  } else if (groupOfSession(useSessionStore.getState().groups, info.id)) {
+    // addSession auto-groups a new tab into the group the USER currently has
+    // selected. An agent that didn't ask for a group must not inherit the
+    // user's live UI selection, so pull it back to top level (sentinel target
+    // → moveItems appends to displayOrder; same trick as moveSession "root").
+    useSessionStore.getState().moveItems([info.id], '__clave-mcp-root__', 'after')
+  }
 
   const groups = useSessionStore.getState().groups
   return { sessionId: info.id, groupId: groupOfSession(groups, info.id)?.id ?? null }

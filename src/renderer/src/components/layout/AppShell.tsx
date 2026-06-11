@@ -110,11 +110,10 @@ export function AppShell() {
     [addSession]
   )
 
-  // On launch, re-adopt tmux-backed sessions that survived a previous run:
-  // recreate each tab and reattach the live agent. The module-level latch makes
-  // this run once per process even under React StrictMode's mount/remount (a
-  // component-scoped ref would be recreated). The main process also dedupes by
-  // tmux name, so a re-adopted survivor is never spawned twice.
+  // Wire the in-app MCP command dispatcher and the secret-request store to
+  // their main-process push channels. The module-level latch makes this run
+  // exactly once per process even under React StrictMode's mount/remount, so
+  // neither channel is double-subscribed. Both live for the process lifetime.
   useEffect(() => {
     if (mcpDispatcherStarted) return
     mcpDispatcherStarted = true

@@ -486,10 +486,6 @@ class PtyManager {
         shellArgs = ['-l']
       } else {
         const parts = ['claude']
-        // Positional arg = initial prompt for the interactive REPL. It MUST
-        // precede the options: --mcp-config is variadic and would swallow a
-        // trailing positional as another config path.
-        if (options?.initialPrompt) parts.push(shellSingleQuote(options.initialPrompt))
         if (options?.resumeSessionId) {
           parts.push('--resume', options.resumeSessionId)
           claudeSessionId = options.resumeSessionId
@@ -506,6 +502,11 @@ class PtyManager {
         // inline JSON to keep the bearer token off ps/tmux-visible command lines.
         const mcpConfigPath = getMcpRuntime() ? writeSessionMcpConfig(id) : null
         if (mcpConfigPath) parts.push('--mcp-config', shellSingleQuote(mcpConfigPath))
+        // Initial prompt goes LAST after a `--` separator. `--` ends the
+        // variadic --mcp-config (so the prompt isn't read as another config
+        // path) AND stops a prompt that begins with `-` from being parsed as a
+        // flag. Verified: `claude <flags> --mcp-config F -- '<prompt>'`.
+        if (options?.initialPrompt) parts.push('--', shellSingleQuote(options.initialPrompt))
         // CLAVE_SESSION_ID rides inside the command string, not the pty env: when
         // a tmux server already exists, new-session inherits the server's
         // environment, so only the command string reliably reaches claude.

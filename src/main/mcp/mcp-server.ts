@@ -286,8 +286,10 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .int()
           .min(5)
           .max(300)
-          .default(55)
-          .describe('How long to block waiting for the user before returning status "pending"')
+          .default(30)
+          .describe(
+            'How long to block waiting for the user before returning status "pending". Keep this well under your MCP client\'s tool timeout (commonly ~60s): if the client aborts the call first, you never receive the requestId to poll with. Default 30 leaves margin; the user can still take as long as they like — you just poll clave_secret_result.'
+          )
       }
     },
     async (args) => {

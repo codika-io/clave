@@ -130,9 +130,12 @@ function SecretRequestCard({
         )}
       </div>
 
-      {/* Exact action under review — what will run once the secret is supplied */}
+      {/* Exact action under review — what will run once the secret is supplied.
+          Taller cap so an obfuscated exfiltration command can't hide below the
+          fold: the user is the security boundary here, so the full command must
+          be easy to read before they paste anything. */}
       <div
-        className="rounded p-2 max-h-24 overflow-auto select-text font-mono text-[11px] text-text-secondary"
+        className="rounded p-2 max-h-48 overflow-auto select-text font-mono text-[11px] text-text-secondary"
         style={{ backgroundColor: 'var(--surface-0)' }}
       >
         {action.type === 'run' ? (
