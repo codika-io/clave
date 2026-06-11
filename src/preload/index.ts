@@ -70,6 +70,13 @@ const electronAPI = {
   onAgentState: (sessionId: string, callback: (state: string) => void) =>
     createIpcListener<[string]>(`agent:state:${sessionId}`, callback),
 
+  onMcpCommand: (
+    callback: (msg: { requestId: string; command: string; payload: unknown }) => void
+  ) => createIpcListener<[{ requestId: string; command: string; payload: unknown }]>('mcp:command', callback),
+
+  mcpRespond: (response: { requestId: string; ok: boolean; result?: unknown; error?: string }) =>
+    ipcRenderer.send('mcp:response', response),
+
   saveDiscussion: (
     cwd: string,
     claudeSessionId: string,

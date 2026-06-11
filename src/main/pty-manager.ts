@@ -6,6 +6,7 @@ import * as path from 'path'
 import { app } from 'electron'
 import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS, INITIAL_COMMAND_DELAY_MS } from './constants'
 import { stateFilePath } from './agent-state-manager'
+import { getMcpRuntime, writeSessionMcpConfig, deleteSessionMcpConfig } from './mcp/mcp-runtime'
 
 const isWindows = process.platform === 'win32'
 
@@ -26,9 +27,14 @@ function shellSingleQuote(s: string): string {
  */
 function buildClaudeHookSettingsArg(claveSessionId: string): string | null {
   if (isWindows) return null
-  const q = JSON.stringify(stateFilePath(claveSessionId)) // double-quoted shell token for the path
+  const statePath = stateFilePath(claveSessionId)
+  const q = JSON.stringify(statePath) // double-quoted shell token for the path
+  // Recreate the parent dir on every write: the hook path is baked in at spawn,
+  // so a vanished userData dir (cleanup script, manual delete) must not turn
+  // every lifecycle hook into a visible "No such file or directory" error.
+  const qDir = JSON.stringify(path.dirname(statePath))
   const write = (word: string): { hooks: { type: 'command'; command: string }[] } => ({
-    hooks: [{ type: 'command', command: `printf ${word} > ${q}` }]
+    hooks: [{ type: 'command', command: `mkdir -p ${qDir} && printf ${word} > ${q}` }]
   })
   const settings = {
     hooks: {
@@ -44,7 +50,7 @@ function buildClaudeHookSettingsArg(claveSessionId: string): string | null {
           hooks: [
             {
               type: 'command',
-              command: `grep -qiE "permission|elicitation" && printf blocked > ${q} || true`
+              command: `grep -qiE "permission|elicitation" && mkdir -p ${qDir} && printf blocked > ${q} || true`
             }
           ]
         }
@@ -477,7 +483,15 @@ class PtyManager {
         // Wire lifecycle hooks → per-session state file for deterministic tab status.
         const settingsArg = buildClaudeHookSettingsArg(id)
         if (settingsArg) parts.push('--settings', settingsArg)
-        shellArgs = ['-l', '-c', parts.join(' ')]
+        // Wire the in-app MCP server so the agent can manipulate Clave (open
+        // tabs, create groups). The config rides in a 0600 file rather than
+        // inline JSON to keep the bearer token off ps/tmux-visible command lines.
+        const mcpConfigPath = getMcpRuntime() ? writeSessionMcpConfig(id) : null
+        if (mcpConfigPath) parts.push('--mcp-config', shellSingleQuote(mcpConfigPath))
+        // CLAVE_SESSION_ID rides inside the command string, not the pty env: when
+        // a tmux server already exists, new-session inherits the server's
+        // environment, so only the command string reliably reaches claude.
+        shellArgs = ['-l', '-c', `CLAVE_SESSION_ID=${shellSingleQuote(id)} ${parts.join(' ')}`]
       }
     }
 
@@ -693,6 +707,9 @@ class PtyManager {
         }
         deleteTmuxSidecar(session.tmuxName)
       }
+      // On a real close the session is gone for good; on app quit (tmux
+      // survivor) the config must stay valid for the reattached agent.
+      if (killTmuxSession) deleteSessionMcpConfig(id)
       if (session.alive && session.ptyProcess) {
         session.ptyProcess.kill()
       }

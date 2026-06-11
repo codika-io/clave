@@ -20,6 +20,7 @@ import { GitJourneyPanel } from '../git/GitJourneyPanel'
 import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { cn, safePort } from '../../lib/utils'
 import { usePinnedStore } from '../../store/pinned-store'
+import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
 import { resolveColorHex } from '../../store/session-types'
 import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
 import { ToolbarTerminalPopover } from './ToolbarTerminalPopover'
@@ -32,6 +33,10 @@ const sidebarTransition = {
 /** Process-wide latch so tmux-session adoption runs exactly once per launch,
  *  even across React StrictMode's mount→unmount→mount in development. */
 let tmuxAdoptionStarted = false
+
+/** Same latch pattern for the MCP command dispatcher: exactly one subscriber
+ *  per process, or concurrent tool calls would get duplicate responses. */
+let mcpDispatcherStarted = false
 
 export function AppShell() {
   const sidebarOpen = useSessionStore((s) => s.sidebarOpen)
@@ -108,6 +113,12 @@ export function AppShell() {
   // this run once per process even under React StrictMode's mount/remount (a
   // component-scoped ref would be recreated). The main process also dedupes by
   // tmux name, so a re-adopted survivor is never spawned twice.
+  useEffect(() => {
+    if (mcpDispatcherStarted) return
+    mcpDispatcherStarted = true
+    initMcpDispatcher()
+  }, [])
+
   useEffect(() => {
     if (tmuxAdoptionStarted) return
     tmuxAdoptionStarted = true

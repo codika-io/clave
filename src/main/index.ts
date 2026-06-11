@@ -12,6 +12,8 @@ import { locationManager } from './location-manager'
 import { openclawClient } from './openclaw-client'
 import { preferencesManager } from './preferences-manager'
 import { cleanupClaveWatchers } from './ipc-handlers/clave-file-handlers'
+import { startMcpServer, stopMcpServer } from './mcp/mcp-server'
+import { sweepSessionMcpConfigs } from './mcp/mcp-runtime'
 
 function createWindow(): void {
   const savedIcon = preferencesManager.get('appIcon')
@@ -97,6 +99,9 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
+  // MCP failure must not break the app — spawns just omit the --mcp-config flag.
+  void startMcpServer().catch((err) => console.error('[mcp] failed to start', err))
+  sweepSessionMcpConfigs()
   cleanupDroppedFiles()
   initNotificationManager()
   applyPersistedIcon()
@@ -130,6 +135,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   cleanupClaveWatchers()
   cleanupAutoUpdater()
+  stopMcpServer()
 })
 
 app.on('window-all-closed', () => {

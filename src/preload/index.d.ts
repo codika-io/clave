@@ -263,6 +263,15 @@ export interface ElectronAPI {
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) => () => void
   onClearDetected: (sessionId: string, callback: () => void) => () => void
   onAgentState: (sessionId: string, callback: (state: string) => void) => () => void
+  onMcpCommand: (
+    callback: (msg: { requestId: string; command: string; payload: unknown }) => void
+  ) => () => void
+  mcpRespond: (response: {
+    requestId: string
+    ok: boolean
+    result?: unknown
+    error?: string
+  }) => void
   saveDiscussion: (
     cwd: string,
     claudeSessionId: string,

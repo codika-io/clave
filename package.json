@@ -38,6 +38,7 @@
     "@fontsource/geist-sans": "^5.2.5",
     "@heroicons/react": "^2.2.0",
     "@lezer/highlight": "^1.2.3",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -61,6 +62,7 @@
     "ssh2": "^1.17.0",
     "tailwind-merge": "^3.5.0",
     "ws": "^8.19.0",
+    "zod": "^4.4.3",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
