@@ -9,7 +9,7 @@ import { loadOrCreateServerState, saveServerState, setMcpRuntime } from './mcp-r
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, gemini, codex, or a plain terminal, in any directory), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), and rename, focus, or close tabs. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, gemini, codex, or a plain terminal, in any directory — optionally with an initial prompt, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), and rename, focus, or close tabs. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -110,6 +110,12 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .optional()
           .describe(
             'Terminal mode only: execute the command immediately (default true); false just prefills it'
+          ),
+        prompt: z
+          .string()
+          .optional()
+          .describe(
+            'Agent modes only: an initial prompt the agent starts working on immediately'
           )
       }
     },

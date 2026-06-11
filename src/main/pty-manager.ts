@@ -369,6 +369,10 @@ export interface PtySpawnOptions {
   claudeSessionId?: string
   initialCommand?: string
   autoExecute?: boolean
+  /** Initial prompt handed to the agent CLI's interactive mode (claude/codex
+   *  positional arg, gemini -i). One-shot: not persisted to the tmux sidecar,
+   *  so adoption re-spawns never re-submit it. */
+  initialPrompt?: string
   /** Opt-in: run this session inside a persistent tmux session. */
   tmuxMode?: boolean
   /** Reattach to this exact existing tmux session instead of deriving a new
@@ -461,9 +465,19 @@ class PtyManager {
       // POSIX: -l -c '<cmd>' runs the command non-interactively (no echo, no
       // prompt, no rc-file chatter like the macOS bash→zsh notice).
       if (useGeminiMode) {
-        shellArgs = ['-l', '-c', 'gemini']
+        shellArgs = [
+          '-l',
+          '-c',
+          options?.initialPrompt
+            ? `gemini -i ${shellSingleQuote(options.initialPrompt)}`
+            : 'gemini'
+        ]
       } else if (useCodexMode) {
-        shellArgs = ['-l', '-c', 'codex']
+        shellArgs = [
+          '-l',
+          '-c',
+          options?.initialPrompt ? `codex ${shellSingleQuote(options.initialPrompt)}` : 'codex'
+        ]
       } else if (useAgentsMode) {
         // `claude agents` is an interactive subcommand and does not accept
         // --session-id / --resume / --dangerously-skip-permissions, so spawn it bare.
@@ -472,6 +486,10 @@ class PtyManager {
         shellArgs = ['-l']
       } else {
         const parts = ['claude']
+        // Positional arg = initial prompt for the interactive REPL. It MUST
+        // precede the options: --mcp-config is variadic and would swallow a
+        // trailing positional as another config path.
+        if (options?.initialPrompt) parts.push(shellSingleQuote(options.initialPrompt))
         if (options?.resumeSessionId) {
           parts.push('--resume', options.resumeSessionId)
           claudeSessionId = options.resumeSessionId

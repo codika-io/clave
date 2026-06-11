@@ -102,6 +102,7 @@ async function handleOpenSession(payload: {
   dangerous?: boolean
   command?: string
   autoRun?: boolean
+  prompt?: string
   callerSessionId?: string
 }): Promise<unknown> {
   const state = useSessionStore.getState()
@@ -122,7 +123,8 @@ async function handleOpenSession(payload: {
     codexMode,
     dangerousMode,
     initialCommand: mode === 'terminal' ? payload.command || undefined : undefined,
-    autoExecute: mode === 'terminal' && !!payload.command && payload.autoRun !== false
+    autoExecute: mode === 'terminal' && !!payload.command && payload.autoRun !== false,
+    initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined
   })
 
   state.addSession({

@@ -241,6 +241,7 @@ export interface ElectronAPI {
       claudeSessionId?: string
       initialCommand?: string
       autoExecute?: boolean
+      initialPrompt?: string
       tmuxMode?: boolean
       adoptTmuxName?: string
       adoptSessionId?: string
