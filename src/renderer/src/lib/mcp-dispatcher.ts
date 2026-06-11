@@ -1,5 +1,7 @@
 import { useSessionStore } from '../store/session-store'
 import type { GroupTerminalConfig, Session, SessionGroup } from '../store/session-store'
+import { usePinnedStore, getPinnedState, togglePinnedGroup } from '../store/pinned-store'
+import type { PinnedGroupSession } from '../store/session-types'
 
 /**
  * Renderer-side executor for the in-app MCP server. The sidebar state (groups,
@@ -74,15 +76,66 @@ function handleList(payload: { callerSessionId?: string }): unknown {
       sessionId: t.sessionId
     }))
   }))
+  const pinnedSessionMode = (s: PinnedGroupSession): SessionMode => {
+    if (s.geminiMode) return 'gemini'
+    if (s.codexMode) return 'codex'
+    if (s.claudeAgentsMode) return 'claude-agents'
+    if (s.claudeMode) return 'claude'
+    return 'terminal'
+  }
+  // Pinned groups = launchable templates from .clave files (auto-discovered or
+  // imported). clave_launch_group spawns them by id or name.
+  const pinnedGroups = usePinnedStore.getState().pinnedGroups.map((pg) => ({
+    id: pg.id,
+    name: pg.name,
+    cwd: pg.cwd,
+    category: pg.category ?? null,
+    sourceFile: pg.filePath ?? pg.discoveredBy ?? null,
+    state: getPinnedState(pg),
+    activeGroupId: pg.activeGroupId,
+    sessions: pg.sessions.map((s) => ({ name: s.name, cwd: s.cwd, mode: pinnedSessionMode(s) })),
+    terminals: pg.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode }))
+  }))
   const callerSessionId = payload.callerSessionId ?? null
   return {
     groups,
     sessions,
+    pinnedGroups,
     focusedSessionId: state.focusedSessionId,
     callerSessionId,
     callerGroupId: callerSessionId
       ? (groupOfSession(state.groups, callerSessionId)?.id ?? null)
       : null
+  }
+}
+
+async function handleLaunchGroup(payload: { group: string }): Promise<unknown> {
+  const pinnedGroups = usePinnedStore.getState().pinnedGroups
+  const pg =
+    pinnedGroups.find((p) => p.id === payload.group) ??
+    pinnedGroups.find((p) => p.name === payload.group) ??
+    pinnedGroups.find((p) => p.name.toLowerCase() === payload.group.toLowerCase())
+  if (!pg) {
+    const available = pinnedGroups.map((p) => p.name).join(', ') || '(none)'
+    throw new Error(`No pinned group "${payload.group}". Available: ${available}`)
+  }
+
+  const stateBefore = getPinnedState(pg)
+  if (stateBefore === 'active-visible') {
+    return { pinnedId: pg.id, groupId: pg.activeGroupId, status: 'already-running' }
+  }
+  // idle → spawn all sessions + terminals; active-hidden → show the live group.
+  await togglePinnedGroup(pg.id)
+  const after = usePinnedStore.getState().pinnedGroups.find((p) => p.id === pg.id)
+  if (!after?.activeGroupId) {
+    throw new Error(
+      `Launching "${pg.name}" spawned no sessions — check that its directories exist`
+    )
+  }
+  return {
+    pinnedId: pg.id,
+    groupId: after.activeGroupId,
+    status: stateBefore === 'idle' ? 'launched' : 'shown'
   }
 }
 
@@ -301,6 +354,8 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleOpenSession(payload as Parameters<typeof handleOpenSession>[0])
     case 'moveSession':
       return handleMoveSession(payload as Parameters<typeof handleMoveSession>[0])
+    case 'launchGroup':
+      return handleLaunchGroup(payload as Parameters<typeof handleLaunchGroup>[0])
     case 'addGroupTerminal':
       return handleAddGroupTerminal(payload as Parameters<typeof handleAddGroupTerminal>[0])
     case 'closeSession':

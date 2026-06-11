@@ -9,7 +9,7 @@ import { loadOrCreateServerState, saveServerState, setMcpRuntime } from './mcp-r
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, gemini, codex, or a plain terminal, in any directory — optionally with an initial prompt, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), and rename, focus, or close tabs. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, gemini, codex, or a plain terminal, in any directory — optionally with an initial prompt, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), and rename, focus, or close tabs. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -66,7 +66,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_list',
     {
       description:
-        'List all groups and sessions (tabs) currently open in Clave, the focused session, and — when called from inside a Clave tab — which session/group is yours.'
+        'List all groups and sessions (tabs) currently open in Clave, plus the pinned workspace groups (launchable templates from .clave files, with their state: idle / active-visible / active-hidden), the focused session, and — when called from inside a Clave tab — which session/group is yours.'
     },
     () => runCommand('list', { callerSessionId })
   )
@@ -120,6 +120,18 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       }
     },
     (args) => runCommand('openSession', { ...args, callerSessionId })
+  )
+
+  server.registerTool(
+    'clave_launch_group',
+    {
+      description:
+        'Launch a pinned workspace group (a template from a .clave file): spawns all its sessions and attaches its quick-launch terminals as one group. If the group is already running but hidden, it is shown instead. Use clave_list to see the available pinned groups and their state.',
+      inputSchema: {
+        group: z.string().describe('Pinned group id or name (case-insensitive)')
+      }
+    },
+    (args) => runCommand('launchGroup', args)
   )
 
   server.registerTool(
