@@ -1,4 +1,5 @@
 import * as http from 'http'
+import * as path from 'path'
 import { createHash, timingSafeEqual } from 'crypto'
 import { app } from 'electron'
 import { z } from 'zod'
@@ -6,10 +7,17 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { callRenderer, registerMcpBridge } from './mcp-bridge'
 import { loadOrCreateServerState, saveServerState, setMcpRuntime } from './mcp-runtime'
+import {
+  createRequest,
+  getRequest,
+  waitForOutcome,
+  type SecretAction,
+  type SecretRequest
+} from '../secret-request-manager'
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, gemini, codex, or a plain terminal, in any directory — optionally with an initial prompt, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), and rename, focus, or close tabs. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, gemini, codex, or a plain terminal, in any directory — optionally with an initial prompt, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), and rename, focus, or close tabs. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -236,7 +244,120 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     (args) => runCommand('focus', args)
   )
 
+  server.registerTool(
+    'clave_request_secret',
+    {
+      description:
+        'Ask the user for a sensitive value (API key, token) WITHOUT it ever entering the conversation. Clave shows the user your description and the exact action for review, with a private masked input. For "run" actions the command MUST reference the secret only via the env var (e.g. gh secret set MY_KEY --body "$SECRET") and MUST NOT contain the value itself. For "env-file" actions Clave natively upserts KEY=value in the file (no shell). The secret value is never returned to you; command output comes back with the secret redacted. If the result is {status:"pending"}, the user has not acted yet — poll clave_secret_result with the requestId.',
+      inputSchema: {
+        description: z
+          .string()
+          .describe(
+            'Human-readable explanation of what secret is needed and why — shown verbatim to the user'
+          ),
+        action: z
+          .discriminatedUnion('type', [
+            z.object({
+              type: z.literal('run'),
+              command: z
+                .string()
+                .describe(
+                  'Shell command to run with the secret injected as an env var. Reference it as "$SECRET" (or your envVar). Never inline the value.'
+                ),
+              cwd: z.string().describe('Absolute working directory for the command'),
+              envVar: z
+                .string()
+                .regex(/^[A-Z_][A-Z0-9_]*$/)
+                .default('SECRET')
+                .describe('Env var name the secret is injected as (default SECRET)')
+            }),
+            z.object({
+              type: z.literal('env-file'),
+              file: z.string().describe('Absolute path of the .env file to create or update'),
+              key: z
+                .string()
+                .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+                .describe('Variable name to upsert; the user-supplied value becomes KEY=value')
+            })
+          ])
+          .describe('What to do with the secret once the user provides it'),
+        timeoutSeconds: z
+          .number()
+          .int()
+          .min(5)
+          .max(300)
+          .default(55)
+          .describe('How long to block waiting for the user before returning status "pending"')
+      }
+    },
+    async (args) => {
+      const action = args.action as SecretAction
+      if (action.type === 'run') {
+        if (!path.isAbsolute(action.cwd)) {
+          return errorResult('cwd must be an absolute path')
+        }
+        const ref = `$${action.envVar}`
+        if (!action.command.includes(ref) && !action.command.includes(`\${${action.envVar}}`)) {
+          return errorResult(
+            `The command must reference the secret via ${ref} — never inline the value`
+          )
+        }
+      } else if (!path.isAbsolute(action.file)) {
+        return errorResult('file must be an absolute path')
+      }
+      const request = createRequest({
+        description: args.description,
+        action,
+        callerSessionId
+      })
+      const result = await waitForOutcome(request.id, args.timeoutSeconds * 1000)
+      return secretRequestResult(result)
+    }
+  )
+
+  server.registerTool(
+    'clave_secret_result',
+    {
+      description:
+        'Fetch the outcome of a clave_request_secret call that returned {status:"pending"}. Optionally wait up to waitSeconds for the user to act. Outcomes are kept ~10 minutes.',
+      inputSchema: {
+        requestId: z.string(),
+        waitSeconds: z.number().int().min(0).max(300).default(0)
+      }
+    },
+    async (args) => {
+      const request = getRequest(args.requestId)
+      // Scope to the creating session so other tabs can't snoop outcomes.
+      if (!request || (request.callerSessionId && request.callerSessionId !== callerSessionId)) {
+        return errorResult(`No secret request "${args.requestId}"`)
+      }
+      const result =
+        args.waitSeconds > 0
+          ? await waitForOutcome(args.requestId, args.waitSeconds * 1000)
+          : request
+      return secretRequestResult(result)
+    }
+  )
+
   return server
+}
+
+function errorResult(message: string): ToolResult {
+  return { content: [{ type: 'text', text: message }], isError: true }
+}
+
+/** Serialize a request for the agent: status + redacted outcome, no internals. */
+function secretRequestResult(request: SecretRequest): ToolResult {
+  const payload = {
+    requestId: request.id,
+    status: request.status,
+    description: request.description,
+    ...(request.outcome ? { outcome: request.outcome } : {})
+  }
+  return {
+    content: [{ type: 'text', text: JSON.stringify(payload) }],
+    ...(request.status === 'failed' ? { isError: true } : {})
+  }
 }
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {

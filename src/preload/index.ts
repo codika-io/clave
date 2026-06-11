@@ -78,6 +78,15 @@ const electronAPI = {
   mcpRespond: (response: { requestId: string; ok: boolean; result?: unknown; error?: string }) =>
     ipcRenderer.send('mcp:response', response),
 
+  secretList: () => ipcRenderer.invoke('secret:list'),
+
+  secretSubmit: (id: string, secret: string) => ipcRenderer.invoke('secret:submit', id, secret),
+
+  secretDismiss: (id: string) => ipcRenderer.invoke('secret:dismiss', id),
+
+  onSecretRequestsChanged: (callback: (requests: unknown[]) => void) =>
+    createIpcListener<[unknown[]]>('secret:requests-changed', callback),
+
   saveDiscussion: (
     cwd: string,
     claudeSessionId: string,

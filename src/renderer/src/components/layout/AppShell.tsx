@@ -21,6 +21,8 @@ import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/ou
 import { cn, safePort } from '../../lib/utils'
 import { usePinnedStore } from '../../store/pinned-store'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
+import { initSecretStore } from '../../store/secret-store'
+import { ToolbarSecretPopover } from './ToolbarSecretPopover'
 import { resolveColorHex } from '../../store/session-types'
 import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
 import { ToolbarTerminalPopover } from './ToolbarTerminalPopover'
@@ -117,6 +119,7 @@ export function AppShell() {
     if (mcpDispatcherStarted) return
     mcpDispatcherStarted = true
     initMcpDispatcher()
+    initSecretStore()
   }, [])
 
   useEffect(() => {
@@ -608,21 +611,22 @@ export function AppShell() {
             </div>
 
             {/* Center — workspace title */}
-            <span className="text-[11px] font-medium text-text-tertiary tracking-wide select-none">
+            <span className="text-[11px] font-medium text-text-tertiary tracking-wide select-none flex-shrink-0 whitespace-nowrap">
               Codika
             </span>
 
             {/* Right — active URLs + quick actions + divider + search + file tree */}
             <div
-              className="flex items-center gap-0.5"
+              className="flex items-center gap-0.5 min-w-0"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
               <ToolbarActiveUrls />
               <ToolbarQuickActions />
+              <ToolbarSecretPopover />
               {/* File palette button */}
               <button
                 onClick={toggleFilePalette}
-                className="btn-icon btn-icon-sm"
+                className="btn-icon btn-icon-sm flex-shrink-0"
                 title="Search files (Cmd+P)"
               >
                 <MagnifyingGlassIcon className="w-4 h-4" />
@@ -631,7 +635,7 @@ export function AppShell() {
               <button
                 onClick={toggleFileTree}
                 className={cn(
-                  'btn-icon btn-icon-sm',
+                  'btn-icon btn-icon-sm flex-shrink-0',
                   fileTreeOpen && '!text-accent'
                 )}
                 title="File tree (Cmd+E)"
@@ -727,7 +731,7 @@ function ToolbarQuickActions() {
   return (
     <>
       {toolbarPins.map((pg, pgIdx) => (
-        <div key={pg.id} className="flex items-center gap-0.5">
+        <div key={pg.id} className="flex items-center gap-0.5 flex-shrink-0">
           {pgIdx > 0 && (
             <div className="w-px h-3.5 bg-border-subtle mx-0.5" />
           )}
@@ -757,7 +761,7 @@ function ToolbarQuickActions() {
           })}
         </div>
       ))}
-      <div className="w-px h-3.5 bg-border-subtle mx-0.5" />
+      <div className="w-px h-3.5 bg-border-subtle mx-0.5 flex-shrink-0" />
     </>
   )
 }
@@ -793,49 +797,51 @@ function ToolbarActiveUrls() {
 
   return (
     <>
-      {urlEntries.map((entry, i) => (
-        <button
-          key={`${entry.url}-${i}`}
-          onClick={() => {
-            if (entry.serverStatus === 'running') {
-              window.electronAPI.openExternal(entry.url)
-            } else if (entry.serverStatus === 'stopped' && entry.serverCommand) {
-              setSessionServerStatus(entry.sessionId, 'starting')
-              window.electronAPI.writeSession(entry.sessionId, entry.serverCommand + '\r')
-            }
-          }}
-          disabled={entry.serverStatus === 'starting'}
-          className={cn(
-            'flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors',
-            entry.serverStatus === 'running' && 'bg-surface-100 hover:bg-surface-200',
-            entry.serverStatus === 'stopped' && 'bg-red-500/5 hover:bg-red-500/10',
-            entry.serverStatus === 'starting' && 'bg-amber-500/5 cursor-wait'
-          )}
-          title={
-            entry.serverStatus === 'running' ? entry.url :
-            entry.serverStatus === 'stopped' ? `Restart ${entry.serverCommand}` :
-            'Starting…'
-          }
-        >
-          <div
+      <div className="toolbar-url-scroll flex items-center gap-0.5 min-w-0">
+        {urlEntries.map((entry, i) => (
+          <button
+            key={`${entry.url}-${i}`}
+            onClick={() => {
+              if (entry.serverStatus === 'running') {
+                window.electronAPI.openExternal(entry.url)
+              } else if (entry.serverStatus === 'stopped' && entry.serverCommand) {
+                setSessionServerStatus(entry.sessionId, 'starting')
+                window.electronAPI.writeSession(entry.sessionId, entry.serverCommand + '\r')
+              }
+            }}
+            disabled={entry.serverStatus === 'starting'}
             className={cn(
-              'w-1.5 h-1.5 rounded-full flex-shrink-0',
-              entry.serverStatus === 'running' && 'bg-emerald-500',
-              entry.serverStatus === 'stopped' && 'bg-red-400',
-              entry.serverStatus === 'starting' && 'bg-amber-400'
+              'flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors',
+              entry.serverStatus === 'running' && 'bg-surface-100 hover:bg-surface-200',
+              entry.serverStatus === 'stopped' && 'bg-red-500/5 hover:bg-red-500/10',
+              entry.serverStatus === 'starting' && 'bg-amber-500/5 cursor-wait'
             )}
-            style={
-              entry.serverStatus === 'running' || entry.serverStatus === 'starting'
-                ? { animation: 'pulse-dot 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }
-                : undefined
+            title={
+              entry.serverStatus === 'running' ? entry.url :
+              entry.serverStatus === 'stopped' ? `Restart ${entry.serverCommand}` :
+              'Starting…'
             }
-          />
-          <span className="text-[10px] font-medium whitespace-nowrap text-text-primary">
-            {entry.groupName}
-          </span>
-        </button>
-      ))}
-      <div className="w-px h-3.5 bg-border-subtle mx-0.5" />
+          >
+            <div
+              className={cn(
+                'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                entry.serverStatus === 'running' && 'bg-emerald-500',
+                entry.serverStatus === 'stopped' && 'bg-red-400',
+                entry.serverStatus === 'starting' && 'bg-amber-400'
+              )}
+              style={
+                entry.serverStatus === 'running' || entry.serverStatus === 'starting'
+                  ? { animation: 'pulse-dot 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }
+                  : undefined
+              }
+            />
+            <span className="text-[10px] font-medium whitespace-nowrap text-text-primary">
+              {entry.groupName}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="w-px h-3.5 bg-border-subtle mx-0.5 flex-shrink-0" />
     </>
   )
 }

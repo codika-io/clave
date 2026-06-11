@@ -13,6 +13,7 @@ import { registerClaveFileHandlers } from './clave-file-handlers'
 import { registerSessionExportHandlers } from './session-export-handlers'
 import { registerDroppedFileHandlers } from './dropped-file-handlers'
 import { registerSidebarLayoutHandlers } from './sidebar-layout-handlers'
+import { registerSecretHandlers } from './secret-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -30,4 +31,5 @@ export function registerIpcHandlers(): void {
   registerSessionExportHandlers()
   registerDroppedFileHandlers()
   registerSidebarLayoutHandlers()
+  registerSecretHandlers()
 }

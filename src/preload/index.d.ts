@@ -1,3 +1,23 @@
+export interface SecretRequestView {
+  id: string
+  callerSessionId?: string
+  description: string
+  action:
+    | { type: 'run'; command: string; cwd: string; envVar: string }
+    | { type: 'env-file'; file: string; key: string }
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'dismissed' | 'expired'
+  createdAt: number
+  expiresAt: number
+  outcome?: {
+    ok: boolean
+    exitCode?: number | null
+    stdout?: string
+    stderr?: string
+    error?: string
+    envFile?: { file: string; key: string; created: boolean }
+  }
+}
+
 export interface ClaveFileGroupData {
   name: string
   cwd: string
@@ -273,6 +293,10 @@ export interface ElectronAPI {
     result?: unknown
     error?: string
   }) => void
+  secretList: () => Promise<SecretRequestView[]>
+  secretSubmit: (id: string, secret: string) => Promise<SecretRequestView>
+  secretDismiss: (id: string) => Promise<SecretRequestView>
+  onSecretRequestsChanged: (callback: (requests: SecretRequestView[]) => void) => () => void
   saveDiscussion: (
     cwd: string,
     claudeSessionId: string,

@@ -64,7 +64,7 @@ function buildClaudeHookSettingsArg(claveSessionId: string): string | null {
 
 let loginShellEnv: Record<string, string> | null = null
 
-function getUserShell(): string {
+export function getUserShell(): string {
   if (isWindows) {
     return process.env.COMSPEC || 'cmd.exe'
   }
