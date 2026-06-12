@@ -17,6 +17,17 @@ export interface Location {
   openclawVersion?: string
   openclawPort?: number
   openclawToken?: string
+  /**
+   * Transport policy for the OpenClaw WebSocket.
+   * - 'secure'  → wss:// with TLS certificate verification.
+   * - 'trusted' → ws:// permitted because the network layer is already
+   *               encrypted (e.g. Tailscale/WireGuard or a VPN).
+   * - undefined → legacy: treated as 'trusted' (ws://) with a console warning,
+   *               so existing connections keep working. New connections should
+   *               set 'secure'.
+   * Loopback hosts always use ws:// regardless of this field.
+   */
+  openclawTransport?: 'secure' | 'trusted'
 }
 
 // ── SSH connection config (subset for encrypted storage) ──

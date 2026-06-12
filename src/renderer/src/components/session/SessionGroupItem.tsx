@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, memo } from 'react'
 import { cn } from '../../lib/utils'
 import {
   useSessionStore,
@@ -33,7 +33,7 @@ interface SessionGroupItemProps {
   isDragging?: boolean
 }
 
-export function SessionGroupItem({
+function SessionGroupItemImpl({
   group,
   onClick,
   onContextMenu,
@@ -194,3 +194,28 @@ export function SessionGroupItem({
     </div>
   )
 }
+
+// `aliveSessionIds` is a fresh Set whenever any session changes, so we can't
+// compare it by reference. Instead, compare alive-membership only for the ids
+// this group actually references (its sessions + each terminal's bound session).
+// Function props are stable live handlers (see SessionItem) and are ignored.
+export const SessionGroupItem = memo(SessionGroupItemImpl, (prev, next) => {
+  if (
+    prev.group !== next.group ||
+    prev.focusedSessionId !== next.focusedSessionId ||
+    prev.allSelected !== next.allSelected ||
+    prev.dimmed !== next.dimmed ||
+    prev.forceEditing !== next.forceEditing ||
+    prev.isDragging !== next.isDragging
+  ) {
+    return false
+  }
+  const relevantIds = [
+    ...next.group.sessionIds,
+    ...next.group.terminals.map((t) => t.sessionId).filter((id): id is string => !!id)
+  ]
+  for (const id of relevantIds) {
+    if (prev.aliveSessionIds.has(id) !== next.aliveSessionIds.has(id)) return false
+  }
+  return true
+})

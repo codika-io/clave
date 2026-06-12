@@ -16,6 +16,16 @@ function shellSingleQuote(s: string): string {
 }
 
 /**
+ * Claude session ids are UUIDs. They are interpolated into the shell command
+ * string used to spawn the CLI, so a value carrying shell metacharacters (from
+ * a poisoned tmux sidecar or persisted session state) would be code execution.
+ * Restrict to the UUID-safe alphabet.
+ */
+function isValidClaudeSessionId(id: string): boolean {
+  return /^[A-Za-z0-9_-]{1,128}$/.test(id)
+}
+
+/**
  * Build the `--settings` argument that wires Claude Code lifecycle hooks to a
  * per-session state file owned by agent-state-manager. Returns a fully
  * shell-quoted token ready to drop into the `zsh -lc '<cmd>'` command string,
@@ -452,10 +462,14 @@ class PtyManager {
       } else {
         const parts = ['claude']
         if (options?.resumeSessionId) {
+          if (!isValidClaudeSessionId(options.resumeSessionId)) {
+            throw new Error('Invalid resume session id')
+          }
           parts.push('--resume', options.resumeSessionId)
           claudeSessionId = options.resumeSessionId
         } else {
-          claudeSessionId = options?.claudeSessionId ?? randomUUID()
+          const requested = options?.claudeSessionId
+          claudeSessionId = requested && isValidClaudeSessionId(requested) ? requested : randomUUID()
           parts.push('--session-id', claudeSessionId)
         }
         if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
@@ -487,10 +501,16 @@ class PtyManager {
       } else {
         const parts = ['claude']
         if (options?.resumeSessionId) {
+          // Interpolated into the `zsh -l -c` string below — reject ids carrying
+          // shell metacharacters (e.g. from a poisoned sidecar) rather than run them.
+          if (!isValidClaudeSessionId(options.resumeSessionId)) {
+            throw new Error('Invalid resume session id')
+          }
           parts.push('--resume', options.resumeSessionId)
           claudeSessionId = options.resumeSessionId
         } else {
-          claudeSessionId = options?.claudeSessionId ?? randomUUID()
+          const requested = options?.claudeSessionId
+          claudeSessionId = requested && isValidClaudeSessionId(requested) ? requested : randomUUID()
           parts.push('--session-id', claudeSessionId)
         }
         if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')

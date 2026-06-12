@@ -795,11 +795,17 @@ export const useSessionStore = create<SessionState>((set) => ({
     }),
 
   setSessionPromptWaiting: (id, promptType) =>
-    set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === id ? { ...s, promptWaiting: promptType } : s
-      )
-    })),
+    set((state) => {
+      // Called on every PTY data chunk; bail when unchanged so we don't allocate
+      // a new sessions array (and re-render every subscriber) tens of times/sec.
+      const session = state.sessions.find((s) => s.id === id)
+      if (!session || session.promptWaiting === promptType) return state
+      return {
+        sessions: state.sessions.map((s) =>
+          s.id === id ? { ...s, promptWaiting: promptType } : s
+        )
+      }
+    }),
 
   setSessionDetectedUrl: (id, url) =>
     set((state) => {

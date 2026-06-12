@@ -1,9 +1,35 @@
 import { Client, type ClientChannel, type SFTPWrapper } from 'ssh2'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
+import { join } from 'path'
+import { app } from 'electron'
 import type { SSHConnectionConfig } from '../shared/remote-types'
 
 type SSHEventHandler = (locationId: string, error?: Error) => void
+
+type KnownHostsStore = Record<string, string> // "host:port" → sha256 hex of host key
+
+function knownHostsPath(): string {
+  return join(app.getPath('userData'), 'ssh-known-hosts.json')
+}
+
+function loadKnownHosts(): KnownHostsStore {
+  try {
+    return JSON.parse(readFileSync(knownHostsPath(), 'utf-8')) as KnownHostsStore
+  } catch {
+    return {}
+  }
+}
+
+function saveKnownHost(key: string, fingerprint: string): void {
+  try {
+    const store = loadKnownHosts()
+    store[key] = fingerprint
+    writeFileSync(knownHostsPath(), JSON.stringify(store, null, 2), 'utf-8')
+  } catch {
+    // best effort
+  }
+}
 
 class SSHManager {
   private connections = new Map<string, Client>()
@@ -45,12 +71,37 @@ class SSHManager {
         for (const handler of this.onCloseHandlers) handler(locationId)
       })
 
+      // Host-key pinning (trust-on-first-use). Without a hostVerifier, ssh2
+      // accepts ANY host key, leaving the connection open to MITM (captured
+      // password, hijacked session). We pin the key on first connect and abort
+      // on any later mismatch.
+      const knownHostKey = `${config.host}:${config.port}`
+      const hostVerifier = (hashedKey: string, callback: (ok: boolean) => void): void => {
+        const known = loadKnownHosts()[knownHostKey]
+        if (!known) {
+          saveKnownHost(knownHostKey, hashedKey)
+          callback(true)
+          return
+        }
+        if (known === hashedKey) {
+          callback(true)
+          return
+        }
+        console.error(
+          `[ssh] host key mismatch for ${knownHostKey} — refusing connection (possible MITM). ` +
+            `Remove it from ssh-known-hosts.json to re-trust after a legitimate key change.`
+        )
+        callback(false)
+      }
+
       const connectOptions: Record<string, unknown> = {
         host: config.host,
         port: config.port,
         username: config.username,
         keepaliveInterval: 10000,
-        keepaliveCountMax: 3
+        keepaliveCountMax: 3,
+        hostHash: 'sha256',
+        hostVerifier
       }
 
       switch (config.authMethod) {

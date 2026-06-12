@@ -9,7 +9,7 @@ import { initAutoUpdater, cleanupAutoUpdater } from './auto-updater'
 import { initNotificationManager } from './notification-manager'
 import { sshManager } from './ssh-manager'
 import { locationManager } from './location-manager'
-import { openclawClient } from './openclaw-client'
+import { openclawClient, buildOpenclawWsUrl } from './openclaw-client'
 import { preferencesManager } from './preferences-manager'
 import { cleanupClaveWatchers } from './ipc-handlers/clave-file-handlers'
 import { startMcpServer, stopMcpServer } from './mcp/mcp-server'
@@ -118,7 +118,8 @@ app.whenReady().then(() => {
           locationManager.setLocationStatus(loc.id, 'connected')
           // Connect OpenClaw if detected
           if (loc.openclawPort && loc.host) {
-            openclawClient.connect(loc.id, `ws://${loc.host}:${loc.openclawPort}`, loc.openclawToken).catch(() => {})
+            const token = locationManager.getOpenclawToken(loc.id)
+            openclawClient.connect(loc.id, buildOpenclawWsUrl(loc), token).catch(() => {})
           }
         }).catch(() => {
           locationManager.setLocationStatus(loc.id, 'error')

@@ -1,10 +1,49 @@
 import WebSocket from 'ws'
 import { randomUUID } from 'crypto'
-import { Agent, ChatMessage } from '../shared/remote-types'
+import { Location, Agent, ChatMessage } from '../shared/remote-types'
 
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30000
+const RECONNECT_MAX_ATTEMPTS = 10 // circuit breaker — stop hammering an offline host
+const HANDSHAKE_TIMEOUT_MS = 20000 // reject connect() if the challenge never completes
 const TICK_TIMEOUT_FACTOR = 3 // close if no tick for 3x interval
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0'])
+
+/**
+ * Build the OpenClaw WebSocket URL for a location, choosing ws:// vs wss://
+ * according to the location's transport policy. Plaintext ws:// is only used for
+ * loopback or networks explicitly marked as already-encrypted (Tailscale/VPN).
+ */
+export function buildOpenclawWsUrl(loc: Pick<Location, 'host' | 'openclawPort' | 'openclawTransport'>): string {
+  const host = loc.host ?? ''
+  const port = loc.openclawPort
+  const isLoopback = LOOPBACK_HOSTS.has(host)
+
+  if (isLoopback) {
+    return `ws://${host}:${port}`
+  }
+
+  if (loc.openclawTransport === 'secure') {
+    return `wss://${host}:${port}`
+  }
+
+  // 'trusted' or legacy-undefined: plaintext over a transport assumed encrypted.
+  if (loc.openclawTransport !== 'trusted') {
+    console.warn(
+      `[openclaw] Location ${host} uses plaintext ws:// without an explicit transport policy. ` +
+        `Set openclawTransport: 'secure' (wss) or 'trusted' (Tailscale/VPN) to silence this warning.`
+    )
+  }
+  return `ws://${host}:${port}`
+}
+
+interface PendingRequest {
+  resolve: (v: unknown) => void
+  reject: (e: Error) => void
+  expectFinal?: boolean
+  timer: ReturnType<typeof setTimeout>
+}
 
 interface ConnectionEntry {
   ws: WebSocket
@@ -12,11 +51,12 @@ interface ConnectionEntry {
   token?: string
   reconnectAttempts: number
   reconnectTimer: ReturnType<typeof setTimeout> | null
+  handshakeTimer: ReturnType<typeof setTimeout> | null
   tickTimer: ReturnType<typeof setTimeout> | null
   tickIntervalMs: number
   intentionalClose: boolean
   connected: boolean
-  pending: Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; expectFinal?: boolean }>
+  pending: Map<string, PendingRequest>
 }
 
 type MessageCallback = (locationId: string, message: ChatMessage) => void
@@ -40,7 +80,7 @@ class OpenClawClient {
   private messageCallbacks = new Set<MessageCallback>()
   private agentCallbacks = new Set<AgentsCallback>()
 
-  async connect(locationId: string, wsUrl: string, token?: string): Promise<void> {
+  async connect(locationId: string, wsUrl: string, token?: string, reconnectAttempts = 0): Promise<void> {
     // Disconnect existing connection if any
     this.disconnect(locationId)
 
@@ -51,8 +91,11 @@ class OpenClawClient {
         ws,
         wsUrl,
         token,
-        reconnectAttempts: 0,
+        // Preserve the backoff counter across reconnect attempts so an offline
+        // host backs off exponentially instead of retrying every second.
+        reconnectAttempts,
         reconnectTimer: null,
+        handshakeTimer: null,
         tickTimer: null,
         tickIntervalMs: 30000,
         intentionalClose: false,
@@ -62,12 +105,37 @@ class OpenClawClient {
 
       this.connections.set(locationId, entry)
 
+      let settled = false
+      const settle = (err?: Error): void => {
+        if (settled) return
+        settled = true
+        if (entry.handshakeTimer) {
+          clearTimeout(entry.handshakeTimer)
+          entry.handshakeTimer = null
+        }
+        if (err) reject(err)
+        else resolve()
+      }
+
+      // Reject the connect promise if the challenge/handshake never completes,
+      // so an awaiting agent:connect IPC call cannot hang forever.
+      entry.handshakeTimer = setTimeout(() => {
+        if (!entry.connected) {
+          try {
+            ws.terminate()
+          } catch {
+            // ignore
+          }
+          settle(new Error('handshake timeout'))
+        }
+      }, HANDSHAKE_TIMEOUT_MS)
+
       ws.on('open', () => {
         // Wait for connect.challenge event — don't resolve yet
       })
 
       ws.on('message', (data) => {
-        this.handleMessage(locationId, entry, data, resolve)
+        this.handleMessage(locationId, entry, data, () => settle())
       })
 
       ws.on('close', () => {
@@ -75,9 +143,11 @@ class OpenClawClient {
         entry.connected = false
         // Reject all pending requests
         for (const [, p] of entry.pending) {
+          clearTimeout(p.timer)
           p.reject(new Error('connection closed'))
         }
         entry.pending.clear()
+        settle(new Error('connection closed'))
 
         if (!entry.intentionalClose) {
           this.scheduleReconnect(locationId, entry)
@@ -87,7 +157,7 @@ class OpenClawClient {
       ws.on('error', (err) => {
         if (ws.readyState === WebSocket.CONNECTING) {
           this.connections.delete(locationId)
-          reject(err)
+          settle(err)
         }
       })
     })
@@ -104,6 +174,16 @@ class OpenClawClient {
       clearTimeout(entry.reconnectTimer)
       entry.reconnectTimer = null
     }
+
+    if (entry.handshakeTimer) {
+      clearTimeout(entry.handshakeTimer)
+      entry.handshakeTimer = null
+    }
+
+    for (const [, p] of entry.pending) {
+      clearTimeout(p.timer)
+    }
+    entry.pending.clear()
 
     if (entry.ws.readyState === WebSocket.OPEN || entry.ws.readyState === WebSocket.CONNECTING) {
       entry.ws.close()
@@ -196,17 +276,16 @@ class OpenClawClient {
     const frame = { type: 'req', id, method, params }
 
     return new Promise((resolve, reject) => {
-      entry.pending.set(id, { resolve, reject, expectFinal: opts?.expectFinal })
-      entry.ws.send(JSON.stringify(frame))
-
       // Timeout: 30s for normal requests, 120s for agent requests that wait for completion
       const timeoutMs = opts?.expectFinal ? 120000 : 30000
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (entry.pending.has(id)) {
           entry.pending.delete(id)
           reject(new Error(`request timeout: ${method}`))
         }
       }, timeoutMs)
+      entry.pending.set(id, { resolve, reject, expectFinal: opts?.expectFinal, timer })
+      entry.ws.send(JSON.stringify(frame))
     })
   }
 
@@ -336,6 +415,7 @@ class OpenClawClient {
       }
 
       entry.pending.delete(id)
+      clearTimeout(pending.timer)
 
       if (parsed.ok) {
         pending.resolve(parsed.payload)
@@ -369,16 +449,22 @@ class OpenClawClient {
   }
 
   private scheduleReconnect(locationId: string, entry: ConnectionEntry): void {
-    const delay = Math.min(
-      RECONNECT_BASE_MS * Math.pow(2, entry.reconnectAttempts),
-      RECONNECT_MAX_MS
-    )
-    entry.reconnectAttempts++
+    // Circuit breaker: stop retrying an unreachable host after a bounded number
+    // of attempts instead of opening a new socket every second indefinitely.
+    if (entry.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
+      console.warn(`[openclaw] giving up reconnecting to ${locationId} after ${entry.reconnectAttempts} attempts`)
+      return
+    }
+
+    const nextAttempt = entry.reconnectAttempts + 1
+    const base = Math.min(RECONNECT_BASE_MS * Math.pow(2, entry.reconnectAttempts), RECONNECT_MAX_MS)
+    const delay = base / 2 + Math.random() * (base / 2) // full jitter on the upper half
 
     entry.reconnectTimer = setTimeout(async () => {
       entry.reconnectTimer = null
       try {
-        await this.connect(locationId, entry.wsUrl, entry.token)
+        // Carry the attempt counter forward so backoff actually grows.
+        await this.connect(locationId, entry.wsUrl, entry.token, nextAttempt)
       } catch {
         // connect failed — the close handler will schedule another reconnect
       }

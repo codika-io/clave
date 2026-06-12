@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
@@ -107,7 +108,7 @@ interface SessionItemProps {
   onDelete?: () => void
 }
 
-export function SessionItem({
+function SessionItemImpl({
   session,
   isSelected,
   onClick,
@@ -153,3 +154,20 @@ export function SessionItem({
     />
   )
 }
+
+// The Sidebar passes fresh inline callbacks on every render, but they are thin
+// wrappers over stable, live-state-reading handlers, so comparing only the data
+// object and scalar props (and ignoring the functions) is safe. This stops a row
+// from re-rendering when an unrelated session's status flips.
+export const SessionItem = memo(SessionItemImpl, (prev, next) => {
+  return (
+    prev.session === next.session &&
+    prev.isSelected === next.isSelected &&
+    prev.grouped === next.grouped &&
+    prev.groupSelected === next.groupSelected &&
+    prev.groupColorHex === next.groupColorHex &&
+    prev.dimmed === next.dimmed &&
+    prev.forceEditing === next.forceEditing &&
+    prev.isDragging === next.isDragging
+  )
+})

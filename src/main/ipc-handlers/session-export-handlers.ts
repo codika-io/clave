@@ -12,6 +12,16 @@ function encodeProjectDir(cwd: string): string {
   return cwd.replace(/[/.]/g, '-')
 }
 
+/** POSIX single-quote a value for safe embedding in a remote shell command. */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
+/** Session ids are UUIDs; reject anything that could traverse paths or inject shell syntax. */
+function isValidSessionId(id: string): boolean {
+  return /^[A-Za-z0-9_-]{1,128}$/.test(id)
+}
+
 function firstLineSessionId(filePath: string): string | null {
   try {
     // Read just enough to parse the first line — JSONL header lines are small.
@@ -63,6 +73,8 @@ function newestByMtime(paths: string[]): string | null {
  *      session the user just interacted with.
  */
 function findLocalJsonl(cwd: string, claudeSessionId: string): string | null {
+  // Guard against a poisoned id traversing out of the projects dir via `../`.
+  if (!isValidSessionId(claudeSessionId)) return null
   const projectDir = join(CLAUDE_PROJECTS_ROOT, encodeProjectDir(cwd))
 
   const direct = join(projectDir, `${claudeSessionId}.jsonl`)
@@ -94,7 +106,13 @@ async function readRemoteJsonl(
   claudeSessionId: string
 ): Promise<string | null> {
   if (!sshManager.isConnected(locationId)) return null
-  const remoteDir = `~/.claude/projects/${encodeProjectDir(cwd)}`
+  // The session id and cwd flow into remote shell commands below; reject any id
+  // that could inject shell syntax before it reaches the remote host.
+  if (!isValidSessionId(claudeSessionId)) return null
+  const encDir = encodeProjectDir(cwd)
+  const remoteDir = `~/.claude/projects/${encDir}` // SFTP path (no shell expansion)
+  // Shell-safe expression for exec: $HOME expands, the encoded dir is quoted.
+  const remoteDirExpr = `"$HOME/.claude/projects/"${shellQuote(encDir)}`
 
   const tryRead = async (path: string): Promise<string | null> => {
     const sftp = await sshManager.getSftp(locationId)
@@ -116,7 +134,7 @@ async function readRemoteJsonl(
   // 2. Scan all project dirs for the filename
   const located = await sshManager.exec(
     locationId,
-    `find "$HOME/.claude/projects" -maxdepth 2 -name "${claudeSessionId}.jsonl" -print -quit 2>/dev/null`
+    `find "$HOME/.claude/projects" -maxdepth 2 -name ${shellQuote(`${claudeSessionId}.jsonl`)} -print -quit 2>/dev/null`
   )
   const hit = located.stdout.trim().split('\n')[0]
   if (located.code === 0 && hit) {
@@ -127,7 +145,7 @@ async function readRemoteJsonl(
   // 3. In the cwd's project dir, match by internal sessionId or fall back to newest.
   const listed = await sshManager.exec(
     locationId,
-    `ls -t "${remoteDir}"/*.jsonl 2>/dev/null`
+    `ls -t ${remoteDirExpr}/*.jsonl 2>/dev/null`
   )
   const candidates = listed.stdout
     .split('\n')
@@ -136,7 +154,7 @@ async function readRemoteJsonl(
   if (candidates.length === 0) return null
 
   for (const p of candidates) {
-    const head = await sshManager.exec(locationId, `head -c 4096 "${p}" 2>/dev/null`)
+    const head = await sshManager.exec(locationId, `head -c 4096 ${shellQuote(p)} 2>/dev/null`)
     const firstLine = head.stdout.split('\n').find((l) => l.trim().length > 0) || ''
     try {
       const parsed = JSON.parse(firstLine) as { sessionId?: unknown }

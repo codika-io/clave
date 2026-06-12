@@ -1,6 +1,7 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+import { createHash } from 'crypto'
 
 function readImageAsDataUrl(absolutePath: string): string | null {
   try {
@@ -25,6 +26,82 @@ const claveWatchers = new Map<string, { watcher: fs.FSWatcher; cleanup: () => vo
 
 /** Suppress file-changed events briefly after we write (to avoid echo) */
 const recentWrites = new Set<string>()
+
+// ── .clave trust gate ───────────────────────────────────────────────────────
+// A .clave file can auto-run shell commands (commandMode: 'auto') and launch
+// agents with permission prompts disabled (dangerousMode). These files are made
+// to be shared/checked-in, so opening one authored by someone else must not
+// silently execute code. We track trusted file *content* (hash) and only honor
+// auto-run / dangerousMode for content the user explicitly trusted or authored.
+
+let trustedHashes: Set<string> | null = null
+
+function trustStorePath(): string {
+  return path.join(app.getPath('userData'), 'clave-trusted.json')
+}
+
+function loadTrustedHashes(): Set<string> {
+  if (trustedHashes) return trustedHashes
+  try {
+    const raw = fs.readFileSync(trustStorePath(), 'utf-8')
+    trustedHashes = new Set(JSON.parse(raw) as string[])
+  } catch {
+    trustedHashes = new Set()
+  }
+  return trustedHashes
+}
+
+function persistTrustedHashes(): void {
+  if (!trustedHashes) return
+  try {
+    fs.writeFileSync(trustStorePath(), JSON.stringify([...trustedHashes]), 'utf-8')
+  } catch {
+    // best effort
+  }
+}
+
+function hashContent(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+function trustContent(content: string): void {
+  const set = loadTrustedHashes()
+  set.add(hashContent(content))
+  persistTrustedHashes()
+}
+
+function isTrusted(content: string): boolean {
+  return loadTrustedHashes().has(hashContent(content))
+}
+
+/** Auto-run commands or dangerousMode sessions present in a parsed result. */
+function describeElevated(result: ClaveFileReadResult): { autoCommands: string[]; dangerous: boolean } {
+  const groups = result.type === 'multi' ? result.groups : [result]
+  const autoCommands: string[] = []
+  let dangerous = false
+  for (const g of groups) {
+    for (const t of g.terminals) {
+      if (t.commandMode === 'auto' && t.command.trim()) autoCommands.push(t.command)
+    }
+    for (const s of g.sessions) {
+      if (s.dangerousMode) dangerous = true
+    }
+  }
+  return { autoCommands, dangerous }
+}
+
+/** Strip elevated behavior: downgrade auto→prefill and disable dangerousMode. */
+function sanitizeElevated(result: ClaveFileReadResult): ClaveFileReadResult {
+  const sanitizeGroup = (g: ClaveGroupData): ClaveGroupData => ({
+    ...g,
+    sessions: g.sessions.map((s) => ({ ...s, dangerousMode: false })),
+    terminals: g.terminals.map((t) => (t.commandMode === 'auto' ? { ...t, commandMode: 'prefill' } : t))
+  })
+  if (result.type === 'multi') {
+    return { type: 'multi', groups: result.groups.map(sanitizeGroup) }
+  }
+  return { type: 'single', ...sanitizeGroup(result) }
+}
 
 interface ClaveGroupData {
   name: string
@@ -125,18 +202,44 @@ export function registerClaveFileHandlers(): void {
         const fallbackName = path.basename(absolutePath, '.clave')
 
         // Multi-group format
-        if (Array.isArray(data.groups)) {
-          return {
-            type: 'multi',
-            groups: data.groups.map((g, i) => resolveGroup(g, dir, `Group ${i + 1}`))
+        const result: ClaveFileReadResult = Array.isArray(data.groups)
+          ? { type: 'multi', groups: data.groups.map((g, i) => resolveGroup(g, dir, `Group ${i + 1}`)) }
+          : { type: 'single', ...resolveGroup(data, dir, fallbackName) }
+
+        // Trust gate: a file requesting auto-run or dangerousMode that the user
+        // has neither authored nor trusted must be confirmed before its commands
+        // can execute. Default to the safe (no-elevation) outcome.
+        const { autoCommands, dangerous } = describeElevated(result)
+        if ((autoCommands.length > 0 || dangerous) && !isTrusted(raw)) {
+          const win = BrowserWindow.fromWebContents(_event.sender)
+          const detailLines: string[] = []
+          if (autoCommands.length > 0) {
+            detailLines.push('Commands that would run automatically:')
+            detailLines.push(...autoCommands.map((c) => `  • ${c}`))
           }
+          if (dangerous) {
+            detailLines.push('')
+            detailLines.push('One or more agents would start with permission prompts disabled (--dangerously-skip-permissions).')
+          }
+          const { response } = await dialog.showMessageBox(win!, {
+            type: 'warning',
+            buttons: ['Open safely', 'Trust and run', 'Cancel'],
+            defaultId: 0,
+            cancelId: 2,
+            noLink: true,
+            title: 'Review workspace file',
+            message: `“${path.basename(absolutePath)}” wants to run commands automatically.`,
+            detail: detailLines.join('\n') + '\n\nOnly trust this file if you recognise and understand these commands.'
+          })
+          if (response === 2) return null // Cancel
+          if (response === 1) {
+            trustContent(raw) // Trust and run as configured
+            return result
+          }
+          return sanitizeElevated(result) // Open safely — no auto-run, no dangerous mode
         }
 
-        // Single-group format
-        return {
-          type: 'single',
-          ...resolveGroup(data, dir, fallbackName)
-        }
+        return result
       } catch (err) {
         console.error('[clave] Failed to read .clave file:', absolutePath, err)
         return null
@@ -211,7 +314,11 @@ export function registerClaveFileHandlers(): void {
         recentWrites.add(absolutePath)
         setTimeout(() => recentWrites.delete(absolutePath), 1000)
 
-        fs.writeFileSync(absolutePath, JSON.stringify(output, null, 2) + '\n', 'utf-8')
+        const serialized = JSON.stringify(output, null, 2) + '\n'
+        fs.writeFileSync(absolutePath, serialized, 'utf-8')
+        // The user authored this content, so trust it — they won't be re-prompted
+        // when reopening their own workspace file.
+        trustContent(serialized)
       } catch (err) {
         console.error('[clave] Failed to write .clave file:', absolutePath, err)
       }
