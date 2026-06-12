@@ -369,7 +369,6 @@ function SessionsSection() {
 
 function PrivacySection(): ReactNode {
   const [enabled, setEnabled] = useState(true)
-  const [resetDone, setResetDone] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -386,12 +385,6 @@ function PrivacySection(): ReactNode {
     window.electronAPI?.telemetrySetEnabled(value)
   }
 
-  const handleReset = async (): Promise<void> => {
-    await window.electronAPI?.telemetryResetId()
-    setResetDone(true)
-    setTimeout(() => setResetDone(false), 2000)
-  }
-
   return (
     <SettingsSection title="Privacy">
       <SettingsCard>
@@ -401,17 +394,6 @@ function PrivacySection(): ReactNode {
           checked={enabled}
           onChange={handleToggle}
         />
-        <SettingsRow
-          label="Reset anonymous ID"
-          description="Drop the current random ID. A fresh one is generated for the next ping."
-        >
-          <button
-            onClick={handleReset}
-            className="btn-secondary btn-compact border border-border-subtle"
-          >
-            {resetDone ? 'ID reset' : 'Reset ID'}
-          </button>
-        </SettingsRow>
       </SettingsCard>
     </SettingsSection>
   )

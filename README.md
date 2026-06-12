@@ -85,7 +85,7 @@ POST https://ping.clave.work/api/ping
 { "id": "<random uuid>", "appVersion": "1.52.0", "platform": "darwin-arm64" }
 ```
 
-That is the entire payload — three fields, nothing else, ever. The `id` is a random UUID generated on your machine; it carries no email, no username, and no hardware fingerprint, and the server stores only a keyed hash of it, never the raw ID. You can turn the ping off in **Settings → General → Privacy** (the first launch shows a notice with a one-click "Turn off"), and a **Reset anonymous ID** button there discards the current ID so the next ping uses a fresh one. The whole client is ~100 lines you can read at [`src/main/telemetry.ts`](src/main/telemetry.ts) — it fails silently, never retries within a check, and can never affect app behavior.
+That is the entire payload — three fields, nothing else, ever. The `id` is a random UUID generated on your machine; it carries no email, no username, and no hardware fingerprint, and the server stores only a keyed hash of it, never the raw ID. You can turn the ping off in **Settings → General → Privacy** (the first launch shows a notice with a one-click "Turn off"). The whole client is ~100 lines you can read at [`src/main/telemetry.ts`](src/main/telemetry.ts) — it fails silently, never retries within a check, and can never affect app behavior.
 
 The only other network requests Clave makes are:
 

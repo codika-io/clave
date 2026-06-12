@@ -320,7 +320,6 @@ const electronAPI = {
       noticeShown: boolean
     }>,
   telemetrySetEnabled: (enabled: boolean) => ipcRenderer.invoke('telemetry:set-enabled', enabled),
-  telemetryResetId: () => ipcRenderer.invoke('telemetry:reset-id'),
   telemetrySetNoticeShown: () => ipcRenderer.invoke('telemetry:set-notice-shown')
 }
 
