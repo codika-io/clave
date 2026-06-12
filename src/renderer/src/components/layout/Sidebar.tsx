@@ -1376,12 +1376,10 @@ export function Sidebar() {
         <UpdateBanner />
       </div>
 
-      {/* Bottom section: divider + work tracker + user */}
-      <div className="flex-shrink-0 border-t border-border-subtle">
-        <div className="px-2 py-1.5 space-y-0.5">
-          <WorkTracker />
-          <SidebarFooter />
-        </div>
+      {/* Bottom section: work tracker + user */}
+      <div className="flex-shrink-0 px-2 py-1.5 space-y-0.5">
+        <WorkTracker />
+        <SidebarFooter />
       </div>
 
       {/* Context menu */}
