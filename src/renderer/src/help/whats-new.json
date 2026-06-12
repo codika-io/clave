@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.52.0",
+    "title": "Agents can now drive Clave",
+    "description": "A Claude session can open new agent tabs with an initial prompt and launch your pinned workspace groups through a built-in MCP server — so a coordinating agent can set up and hand off work across tabs. Agents can also request a secret without it ever showing in the chat: you review the action in the toolbar and paste the value into a masked field, scoped to that one action.",
+    "action": { "type": "navigate", "target": "side:help" }
+  },
+  {
     "version": "1.51.1",
     "title": "Git panel stays current in large folders",
     "description": "When a folder has many repositories, the Git panel pauses live polling — but it no longer goes stale silently. It now refreshes automatically when an agent finishes a turn or the window regains focus, shows the last update time with a refresh spinner, and a new Git section in Settings lets you change the pause threshold or turn pausing off entirely.",

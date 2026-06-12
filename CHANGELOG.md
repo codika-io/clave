@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.52.0] — 2026-06-12
+
+### Added
+- **Agents can now drive Clave through an in-app MCP server.** A Claude session can open new agent tabs (with an initial prompt) and launch your pinned workspace groups directly, so a coordinating agent can set up and hand off work across tabs without you wiring it up by hand.
+- **Private secret injection** — an agent can ask for a secret (an API key, a token) without it ever appearing in the chat. The request shows up in the toolbar, you review the exact action and paste the value into a masked field, and Clave injects it scoped to that one action. The agent never sees the secret.
+
+### Security
+- Hardened remote connections: OpenClaw connections can now use encrypted transport, the OpenClaw access token is stored encrypted on disk instead of in plain text, and SSH connections now verify the server's identity (pinned on first connect) to guard against machine-in-the-middle attacks.
+- Workspace (`.clave`) files that try to run commands automatically or start an agent with permission prompts disabled now ask for your confirmation before doing so — unless you created or already trusted that file — so opening a workspace shared by someone else can't silently run code.
+- Links opened from terminal output and previews are now restricted to web and email addresses, closing a trick where a link could be made to display one destination but open another.
+
+### Changed
+- Smoother, snappier session list and agent chat: the sidebar and streaming responses do far less redundant work, so they stay responsive with many sessions open and during long agent replies.
+- The toolbar's open-URL tags no longer show a scrollbar when scrolled horizontally on a trackpad.
+
 ## [1.51.3] — 2026-06-09
 
 ### Fixed
