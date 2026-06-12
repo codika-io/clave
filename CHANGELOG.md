@@ -9,6 +9,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 ### Added
 - **Anonymous daily usage ping** — Clave now sends one anonymous ping a day (a random ID, the app version, and your platform — nothing else) so we know how many people use it. A first-run notice explains it with a one-click "Turn off", and a new **Privacy** section in Settings → General lets you toggle the ping or reset the anonymous ID at any time. The README's "Privacy & network" section documents the exact payload.
 
+## [1.53.0] — 2026-06-12
+
+### Changed
+- **Settings is now a full page with its own sidebar.** Opening Settings swaps the session list for a dedicated navigation — General, Appearance, and Usage — with a back button to return to your sessions. Usage moved inside Settings, and options are presented in grouped cards with slim, compact controls for a cleaner, denser look.
+- The sidebar footer is a slimmer single row: clicking it (or its gear icon) opens Settings directly instead of showing a popup menu, and the separator line above it is gone.
+>>>>>>> origin/main
+
 ## [1.52.0] — 2026-06-12
 
 ### Added
