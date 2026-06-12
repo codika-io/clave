@@ -8,6 +8,9 @@ import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import { TrashIcon, PlusIcon, PencilIcon, FolderIcon } from '@heroicons/react/24/outline'
 import { LocationsTab } from './LocationsTab'
+import { UsagePanel } from '../usage/UsagePanel'
+import { SettingsSection, SettingsCard, SettingsRow, ToggleRow } from './primitives'
+import { cn } from '../../lib/utils'
 
 const themes: { id: Theme; label: string; colors: { bg: string; surface: string; text: string; border: string } }[] = [
   {
@@ -50,161 +53,179 @@ function ProfileSection() {
   }
 
   return (
-    <section>
-      <h3 className="settings-section-title mb-3">
-        Profile
-      </h3>
-      <div className="flex items-start gap-4">
-        {/* Avatar preview */}
-        <UserIconDisplay icon={avatarIcon} color={avatarColor} size="lg" />
-
-        {/* Name + pickers */}
-        <div className="flex-1 min-w-0 space-y-3">
-          {editing ? (
-            <input
-              ref={inputRef}
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={handleSave}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSave()
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="input-field"
-            />
-          ) : (
-            <button
-              onClick={handleStartEdit}
-              className="text-sm font-semibold text-text-primary hover:text-accent transition-colors flex items-center gap-1.5"
-            >
-              {name}
-              <PencilIcon className="w-3 h-3 text-text-tertiary" />
-            </button>
-          )}
-
-          {/* Icon picker */}
-          <div>
-            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Icon</span>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {USER_ICONS.map((iconName) => {
-                const Icon = ICON_MAP[iconName]
-                const isSelected = avatarIcon === iconName
-                return (
-                  <button
-                    key={iconName}
-                    onClick={() => setAvatarIcon(iconName)}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-                      isSelected
-                        ? 'bg-accent/15 ring-1 ring-accent'
-                        : 'bg-surface-200 hover:bg-surface-300'
-                    }`}
-                    title={iconName}
-                  >
-                    <Icon className="w-3.5 h-3.5" style={{ color: isSelected ? avatarColor : 'var(--text-secondary)' }} />
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Color picker */}
-          <div>
-            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Color</span>
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {USER_ICON_COLORS.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => setAvatarColor(color)}
-                  className="relative w-5 h-5 rounded-full hover:scale-110 transition-transform flex items-center justify-center"
-                  style={{ backgroundColor: color }}
-                  title={color}
-                >
-                  {avatarColor === color && <CheckIcon className="w-3 h-3 text-white" />}
-                </button>
-              ))}
-            </div>
+    <SettingsSection title="Profile">
+      <SettingsCard>
+        {/* Identity row: avatar + editable name */}
+        <div className="settings-row">
+          <div className="flex items-center gap-3 min-w-0">
+            <UserIconDisplay icon={avatarIcon} color={avatarColor} size="md" />
+            {editing ? (
+              <input
+                ref={inputRef}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={handleSave}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSave()
+                  if (e.key === 'Escape') setEditing(false)
+                }}
+                className="input-compact max-w-[220px]"
+              />
+            ) : (
+              <button
+                onClick={handleStartEdit}
+                className="text-sm font-semibold text-text-primary hover:text-accent transition-colors flex items-center gap-1.5"
+              >
+                {name}
+                <PencilIcon className="w-3 h-3 text-text-tertiary" />
+              </button>
+            )}
           </div>
         </div>
-      </div>
-    </section>
+
+        <SettingsRow label="Icon">
+          <div className="flex flex-wrap justify-end gap-1 max-w-[280px]">
+            {USER_ICONS.map((iconName) => {
+              const Icon = ICON_MAP[iconName]
+              const isSelected = avatarIcon === iconName
+              return (
+                <button
+                  key={iconName}
+                  onClick={() => setAvatarIcon(iconName)}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                    isSelected
+                      ? 'bg-accent/15 ring-1 ring-accent'
+                      : 'bg-surface-200 hover:bg-surface-300'
+                  }`}
+                  title={iconName}
+                >
+                  <Icon className="w-3.5 h-3.5" style={{ color: isSelected ? avatarColor : 'var(--text-secondary)' }} />
+                </button>
+              )
+            })}
+          </div>
+        </SettingsRow>
+
+        <SettingsRow label="Color">
+          <div className="flex flex-wrap justify-end gap-1.5 max-w-[280px]">
+            {USER_ICON_COLORS.map((color) => (
+              <button
+                key={color}
+                onClick={() => setAvatarColor(color)}
+                className="relative w-5 h-5 rounded-full hover:scale-110 transition-transform flex items-center justify-center"
+                style={{ backgroundColor: color }}
+                title={color}
+              >
+                {avatarColor === color && <CheckIcon className="w-3 h-3 text-white" />}
+              </button>
+            ))}
+          </div>
+        </SettingsRow>
+      </SettingsCard>
+    </SettingsSection>
   )
 }
 
 export function SettingsPanel() {
-  const theme = useSessionStore((s) => s.theme)
-  const setTheme = useSessionStore((s) => s.setTheme)
+  const settingsSection = useSessionStore((s) => s.settingsSection)
 
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="max-w-xl mx-auto w-full">
-        <h2 className="text-lg font-semibold text-text-primary mb-6">Settings</h2>
-
-        <ProfileSection />
-
-        <section className="mt-8">
-          <h3 className="settings-section-title mb-3">
-            Appearance
-          </h3>
-          <div className="flex gap-3">
-            {themes.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTheme(t.id)}
-                className="flex-1 rounded-xl p-1 transition-all duration-200"
-                style={{
-                  boxShadow: theme === t.id
-                    ? '0 0 0 2px var(--color-accent)'
-                    : '0 0 0 1px var(--border-color)',
-                  background: 'var(--surface-100)'
-                }}
-              >
-                {/* Mini preview */}
-                <div
-                  className="rounded-lg p-3 mb-2"
-                  style={{ background: t.colors.bg, border: `1px solid ${t.colors.border}` }}
-                >
-                  <div
-                    className="h-1.5 w-10 rounded-full mb-2"
-                    style={{ background: t.colors.text, opacity: 0.7 }}
-                  />
-                  <div className="flex gap-1.5">
-                    <div
-                      className="h-6 flex-1 rounded"
-                      style={{ background: t.colors.surface }}
-                    />
-                    <div
-                      className="h-6 flex-1 rounded"
-                      style={{ background: t.colors.surface }}
-                    />
-                  </div>
-                  <div
-                    className="h-1.5 w-14 rounded-full mt-2"
-                    style={{ background: t.colors.text, opacity: 0.4 }}
-                  />
-                </div>
-                <div className="text-xs font-medium text-text-primary text-center pb-1">
-                  {t.label}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <WorkspacesSection />
-
-        <section className="mt-8">
-          <LocationsTab />
-        </section>
-
-        <SidebarWidgetsSection />
-
-        <GitSection />
-
-        <SessionsSection />
-
-        <ClaudeProfilesSection />
+        {settingsSection === 'general' && <GeneralSettings />}
+        {settingsSection === 'appearance' && <AppearanceSettings />}
+        {settingsSection === 'usage' && <UsageSettings />}
       </div>
     </div>
+  )
+}
+
+function GeneralSettings() {
+  return (
+    <>
+      <h2 className="text-lg font-semibold text-text-primary mb-6">General</h2>
+      <div className="space-y-7">
+        <ProfileSection />
+        <WorkspacesSection />
+        <LocationsTab />
+        <GitSection />
+        <SessionsSection />
+        <ClaudeProfilesSection />
+      </div>
+    </>
+  )
+}
+
+function AppearanceSettings() {
+  const theme = useSessionStore((s) => s.theme)
+  const setTheme = useSessionStore((s) => s.setTheme)
+
+  return (
+    <>
+      <h2 className="text-lg font-semibold text-text-primary mb-6">Appearance</h2>
+      <div className="space-y-7">
+        <SettingsSection title="Theme">
+          <SettingsCard>
+            <div className="settings-row">
+              <div className="flex gap-3 flex-1">
+                {themes.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTheme(t.id)}
+                    className="flex-1 rounded-xl p-1 transition-all duration-200"
+                    style={{
+                      boxShadow: theme === t.id
+                        ? '0 0 0 2px var(--color-accent)'
+                        : '0 0 0 1px var(--border-color)',
+                      background: 'var(--surface-100)'
+                    }}
+                  >
+                    {/* Mini preview */}
+                    <div
+                      className="rounded-lg p-3 mb-2"
+                      style={{ background: t.colors.bg, border: `1px solid ${t.colors.border}` }}
+                    >
+                      <div
+                        className="h-1.5 w-10 rounded-full mb-2"
+                        style={{ background: t.colors.text, opacity: 0.7 }}
+                      />
+                      <div className="flex gap-1.5">
+                        <div
+                          className="h-6 flex-1 rounded"
+                          style={{ background: t.colors.surface }}
+                        />
+                        <div
+                          className="h-6 flex-1 rounded"
+                          style={{ background: t.colors.surface }}
+                        />
+                      </div>
+                      <div
+                        className="h-1.5 w-14 rounded-full mt-2"
+                        style={{ background: t.colors.text, opacity: 0.4 }}
+                      />
+                    </div>
+                    <div className="text-xs font-medium text-text-primary text-center pb-1">
+                      {t.label}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </SettingsCard>
+        </SettingsSection>
+
+        <SidebarWidgetsSection />
+      </div>
+    </>
+  )
+}
+
+function UsageSettings() {
+  return (
+    <>
+      <h2 className="text-lg font-semibold text-text-primary mb-6">Usage</h2>
+      <UsagePanel />
+    </>
   )
 }
 
@@ -230,53 +251,54 @@ function ClaudeProfilesSection() {
   }
 
   return (
-    <section className="mt-8">
-      <h3 className="settings-section-title mb-3">Claude Code accounts</h3>
-      <p className="text-xs text-text-tertiary mb-3">
-        Run sessions under different Claude accounts by pointing each at its own
-        config directory (<code>CLAUDE_CONFIG_DIR</code>). With more than one
-        account, a picker appears when you start a Claude session, and the
-        selected default is used by the keyboard shortcuts. New accounts start
-        signed out — the first session on one runs Claude’s normal login.
-      </p>
-
-      <div className="space-y-2">
+    <SettingsSection
+      title="Claude Code accounts"
+      description={
+        <>
+          Run sessions under different Claude accounts by pointing each at its own
+          config directory (<code>CLAUDE_CONFIG_DIR</code>). With more than one
+          account, a picker appears when you start a Claude session, and the
+          selected default is used by the keyboard shortcuts. New accounts start
+          signed out — the first session on one runs Claude’s normal login.
+        </>
+      }
+    >
+      <SettingsCard>
         {profiles.map((p) => {
           const isDefault = p.id === DEFAULT_CLAUDE_PROFILE_ID
           const isSelected = p.id === selectedProfileId
           return (
-            <div
-              key={p.id}
-              className="flex items-center gap-3 rounded-lg border border-border-subtle bg-surface-100 px-3 py-2"
-            >
-              <button
-                onClick={() => setSelectedProfile(p.id)}
-                title={isSelected ? 'Default account for new sessions' : 'Make default'}
-                className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center ${
-                  isSelected ? 'border-accent' : 'border-border hover:border-text-tertiary'
-                }`}
-              >
-                {isSelected && <span className="w-2 h-2 rounded-full bg-accent" />}
-              </button>
+            <div key={p.id} className="settings-row">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <button
+                  onClick={() => setSelectedProfile(p.id)}
+                  title={isSelected ? 'Default account for new sessions' : 'Make default'}
+                  className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center ${
+                    isSelected ? 'border-accent' : 'border-border hover:border-text-tertiary'
+                  }`}
+                >
+                  {isSelected && <span className="w-2 h-2 rounded-full bg-accent" />}
+                </button>
 
-              <div className="flex-1 min-w-0">
-                {isDefault ? (
-                  <p className="text-sm text-text-secondary">{p.label}</p>
-                ) : (
-                  <input
-                    className="input-compact w-full"
-                    value={p.label}
-                    onChange={(e) => updateProfile(p.id, { label: e.target.value })}
-                    placeholder="Account name"
-                  />
-                )}
-                <p className="text-xs text-text-tertiary truncate mt-0.5">
-                  {isDefault ? '~/.claude (default)' : p.configDir || 'No directory set'}
-                </p>
+                <div className="flex-1 min-w-0">
+                  {isDefault ? (
+                    <p className="settings-row-title">{p.label}</p>
+                  ) : (
+                    <input
+                      className="input-compact w-full"
+                      value={p.label}
+                      onChange={(e) => updateProfile(p.id, { label: e.target.value })}
+                      placeholder="Account name"
+                    />
+                  )}
+                  <p className="settings-row-description truncate">
+                    {isDefault ? '~/.claude (default)' : p.configDir || 'No directory set'}
+                  </p>
+                </div>
               </div>
 
               {!isDefault && (
-                <>
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     onClick={() => handlePickDir(p.id)}
                     className="btn-icon btn-icon-xs"
@@ -293,18 +315,18 @@ function ClaudeProfilesSection() {
                   >
                     <TrashIcon className="w-4 h-4" />
                   </button>
-                </>
+                </div>
               )}
             </div>
           )
         })}
-      </div>
 
-      <button onClick={handleAdd} className="btn-secondary mt-3 flex items-center gap-1.5">
-        <PlusIcon className="w-4 h-4" />
-        Add account
-      </button>
-    </section>
+        <button onClick={handleAdd} className="settings-row-action">
+          <PlusIcon className="w-4 h-4" />
+          Add account
+        </button>
+      </SettingsCard>
+    </SettingsSection>
   )
 }
 
@@ -326,9 +348,8 @@ function SessionsSection() {
   const unavailable = tmuxAvailable === false
 
   return (
-    <section className="mt-8">
-      <h3 className="settings-section-title mb-3">Sessions</h3>
-      <div className="space-y-4">
+    <SettingsSection title="Sessions">
+      <SettingsCard>
         <ToggleRow
           label="Persistent sessions (tmux)"
           description={
@@ -340,46 +361,8 @@ function SessionsSection() {
           onChange={setTmuxMode}
           disabled={unavailable}
         />
-      </div>
-    </section>
-  )
-}
-
-function ToggleRow({
-  label,
-  description,
-  checked,
-  onChange,
-  disabled = false
-}: {
-  label: string
-  description: string
-  checked: boolean
-  onChange: (value: boolean) => void
-  disabled?: boolean
-}) {
-  return (
-    <div className={`flex items-center justify-between gap-4 ${disabled ? 'opacity-50' : ''}`}>
-      <div className="min-w-0">
-        <p className="text-sm text-text-secondary">{label}</p>
-        <p className="text-xs text-text-tertiary mt-0.5">{description}</p>
-      </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`relative flex-shrink-0 w-9 h-5 rounded-full transition-colors ${
-          disabled ? 'cursor-not-allowed ' : ''
-        }${checked ? 'bg-accent' : 'bg-surface-300'}`}
-      >
-        <div
-          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-            checked ? 'translate-x-[18px]' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
-    </div>
+      </SettingsCard>
+    </SettingsSection>
   )
 }
 
@@ -402,42 +385,35 @@ function GitSection() {
   }
 
   return (
-    <section className="mt-8">
-      <h3 className="settings-section-title mb-3">Git</h3>
-      <div className="space-y-4">
+    <SettingsSection title="Git">
+      <SettingsCard>
         <ToggleRow
           label="Always keep live updates on"
           description="Never pause auto-refresh, regardless of how many repositories a folder contains. May be heavy on very large folders (e.g. opening '/')."
           checked={livePollAlways}
           onChange={setLivePollAlways}
         />
-        <div className={`flex items-center justify-between gap-4 ${livePollAlways ? 'opacity-50' : ''}`}>
-          <div className="min-w-0">
-            <p className="text-sm text-text-secondary">Pause live updates above</p>
-            <p className="text-xs text-text-tertiary mt-0.5">
-              When a folder has more repositories than this, the git panel stops
-              auto-polling and refreshes on demand (and when an agent finishes or
-              the window regains focus).
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <input
-              type="number"
-              min={1}
-              value={draft}
-              disabled={livePollAlways}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitLimit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-              }}
-              className="input-compact w-20 text-right"
-            />
-            <span className="text-xs text-text-tertiary">repos</span>
-          </div>
-        </div>
-      </div>
-    </section>
+        <SettingsRow
+          label="Pause live updates above"
+          description="When a folder has more repositories than this, the git panel stops auto-polling and refreshes on demand (and when an agent finishes or the window regains focus)."
+          disabled={livePollAlways}
+        >
+          <input
+            type="number"
+            min={1}
+            value={draft}
+            disabled={livePollAlways}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitLimit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            }}
+            className="input-compact w-20 text-right"
+          />
+          <span className="text-xs text-text-tertiary">repos</span>
+        </SettingsRow>
+      </SettingsCard>
+    </SettingsSection>
   )
 }
 
@@ -446,19 +422,16 @@ function SidebarWidgetsSection() {
   const setWorkTrackerEnabled = useWorkTrackerStore((s) => s.setEnabled)
 
   return (
-    <section className="mt-8">
-      <h3 className="settings-section-title mb-3">
-        Sidebar Widgets
-      </h3>
-      <div className="space-y-4">
+    <SettingsSection title="Sidebar Widgets">
+      <SettingsCard>
         <ToggleRow
           label="Work Tracker"
           description="Track daily work time, break reminders, and weekly trends"
           checked={workTrackerEnabled}
           onChange={setWorkTrackerEnabled}
         />
-      </div>
-    </section>
+      </SettingsCard>
+    </SettingsSection>
   )
 }
 
@@ -537,48 +510,57 @@ function WorkspacesSection() {
   }
 
   return (
-    <section className="mt-8">
-      <h3 className="settings-section-title mb-3">
-        Workspaces
-      </h3>
-      <p className="text-xs text-text-tertiary mb-4">
-        Select a folder to discover <code className="text-text-secondary">.clave</code> workspace files.
-        The active workspace auto-loads its groups as pins.
-      </p>
-      <div className="space-y-2 mb-4">
+    <SettingsSection
+      title="Workspaces"
+      description={
+        <>
+          Select a folder to discover <code className="text-text-secondary">.clave</code> workspace files.
+          The active workspace auto-loads its groups as pins.
+        </>
+      }
+    >
+      <SettingsCard>
         {workspaces.map((ws) => {
           const isActive = ws.id === activeWorkspaceId
           return (
             <div
               key={ws.id}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-accent/10 border-accent/30 text-text-primary'
-                  : 'bg-surface-100/50 border-border-subtle text-text-secondary hover:bg-surface-200'
-              }`}
+              className={cn(
+                'settings-row cursor-pointer transition-colors',
+                isActive ? 'bg-accent/5' : 'hover:bg-surface-100/60'
+              )}
               onClick={() => setActiveWorkspace(isActive ? null : ws.id)}
             >
-              <FolderIcon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{ws.name}</div>
-                <div className="text-xs text-text-tertiary truncate" title={ws.claveFilePath}>{ws.claveFilePath}</div>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <FolderIcon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
+                <div className="flex-1 min-w-0">
+                  <p className="settings-row-title truncate">{ws.name}</p>
+                  <p className="settings-row-description truncate" title={ws.claveFilePath}>{ws.claveFilePath}</p>
+                </div>
               </div>
-              {isActive && (
-                <div className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
-              )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  removeWorkspace(ws.id)
-                }}
-                className="btn-icon btn-icon-sm hover:text-red-400 flex-shrink-0"
-              >
-                <TrashIcon className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {isActive && <div className="w-2 h-2 rounded-full bg-accent" />}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeWorkspace(ws.id)
+                  }}
+                  className="btn-icon btn-icon-xs hover:text-red-400"
+                  title="Remove workspace"
+                  aria-label="Remove workspace"
+                >
+                  <TrashIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           )
         })}
-      </div>
+
+        <button onClick={handleAddWorkspace} className="settings-row-action">
+          <PlusIcon className="w-4 h-4" />
+          Add Workspace
+        </button>
+      </SettingsCard>
 
       {/* Discovery picker */}
       {discoveredFiles && (
@@ -638,11 +620,6 @@ function WorkspacesSection() {
       {discoveryError && (
         <p className="mt-2 text-xs text-red-400 px-1">{discoveryError}</p>
       )}
-
-      <button onClick={handleAddWorkspace} className="btn-add">
-        <PlusIcon className="w-4 h-4" />
-        Add Workspace
-      </button>
-    </section>
+    </SettingsSection>
   )
 }

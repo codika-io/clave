@@ -1378,7 +1378,7 @@ export function Sidebar() {
 
       {/* Bottom section: divider + work tracker + user */}
       <div className="flex-shrink-0 border-t border-border-subtle">
-        <div className="px-2 pt-1.5 pb-2 space-y-0.5">
+        <div className="px-2 py-1 space-y-0.5">
           <WorkTracker />
           <SidebarFooter />
         </div>

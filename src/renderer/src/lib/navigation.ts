@@ -5,7 +5,6 @@ const VIEW_TARGETS: Set<string> = new Set([
   'terminals',
   'board',
   'settings',
-  'usage',
   'agents'
 ])
 
@@ -17,6 +16,12 @@ const SIDE_PANEL_TABS: Record<string, 'files' | 'git' | 'help'> = {
 
 export function navigateTo(target: string): boolean {
   const store = useSessionStore.getState()
+
+  // Usage lives inside settings now — keep the old deep-link target working.
+  if (target === 'usage') {
+    store.openSettings('usage')
+    return true
+  }
 
   if (VIEW_TARGETS.has(target)) {
     store.setActiveView(target as ActiveView)

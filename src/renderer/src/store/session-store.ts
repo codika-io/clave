@@ -10,12 +10,13 @@ import type {
   SessionGroup,
   FileTab,
   ActiveView,
+  SettingsSection,
   SessionType
 } from './session-types'
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
 
 // Re-export types and constants so existing imports continue to work
-export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, Session, SessionGroup, FileTab, ActiveView, SessionType }
+export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, Session, SessionGroup, FileTab, ActiveView, SettingsSection, SessionType }
 export { GROUP_TERMINAL_COLORS, GROUP_TERMINAL_ICONS, TERMINAL_COLOR_VALUES, resolveColorHex } from './session-types'
 
 interface SessionState {
@@ -50,6 +51,7 @@ interface SessionState {
   gitRefreshTrigger: number
   collapseAllTrigger: number
   activeView: ActiveView
+  settingsSection: SettingsSection
   sidePanelTab: 'files' | 'git' | 'help'
   gitViewMode: 'list' | 'tree'
   gitPanelMode: 'changes' | 'log'
@@ -122,6 +124,9 @@ interface SessionState {
   setFileTreeWidth: (width: number) => void
   setFileTreeWidthOverride: (width: number | null) => void
   setActiveView: (view: ActiveView) => void
+  setSettingsSection: (section: SettingsSection) => void
+  /** Switch to the settings view, optionally jumping to a specific section. */
+  openSettings: (section?: SettingsSection) => void
   setSidePanelTab: (tab: 'files' | 'git' | 'help') => void
   setGitViewMode: (mode: 'list' | 'tree') => void
   setGitPanelMode: (mode: 'changes' | 'log') => void
@@ -290,6 +295,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   gitRefreshTrigger: 0,
   collapseAllTrigger: 0,
   activeView: 'terminals' as ActiveView,
+  settingsSection: 'general' as SettingsSection,
   sidePanelTab: 'files' as const,
   gitViewMode: (localStorage.getItem('clave-git-view-mode') === 'tree' ? 'tree' : 'list') as 'list' | 'tree',
   gitPanelMode: 'changes' as const,
@@ -908,6 +914,14 @@ export const useSessionStore = create<SessionState>((set) => ({
   setFileTreeWidthOverride: (width) => set({ fileTreeWidthOverride: width }),
 
   setActiveView: (view) => set({ activeView: view }),
+
+  setSettingsSection: (section) => set({ settingsSection: section }),
+
+  openSettings: (section) =>
+    set((state) => ({
+      activeView: 'settings',
+      settingsSection: section ?? state.settingsSection
+    })),
 
   setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
 

@@ -582,13 +582,61 @@ body,
 
 /* ── Settings ── */
 
-/* Section heading used across the Settings panel */
+/* Section label above each settings card (small, regular case) */
 .settings-section-title {
+  display: block;
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+}
+
+/* Grouped card holding settings rows — slightly recessed against the page,
+   rows separated by hairline dividers. */
+.settings-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle-color);
+  background-color: color-mix(in oklab, var(--surface-100) 55%, transparent);
+  overflow: hidden;
+}
+.settings-card > * + * {
+  border-top: 1px solid var(--border-subtle-color);
+}
+
+/* Single row inside a settings card: text block left, control right */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.625rem 0.875rem;  /* py-2.5 px-3.5 */
+}
+.settings-row-title {
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+.settings-row-description {
   font-size: 0.75rem;          /* text-xs */
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;       /* tracking-widest */
   color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+/* Full-width action row at the bottom of a card (e.g. "Add Workspace") */
+.settings-row-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;               /* gap-1.5 */
+  padding: 0.5rem 0.875rem;    /* py-2 px-3.5 */
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+  transition: color 150ms, background-color 150ms;
+}
+.settings-row-action:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-100);
 }
 
 /* ── Pills ── */

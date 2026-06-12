@@ -167,17 +167,19 @@ function ComingSoon({ label }: { label: string }) {
   )
 }
 
+/** Usage limits content — embedded in the settings page's Usage section. */
 export function UsagePanel() {
   const [tool, setTool] = useState<Tool>('claude')
 
   return (
-    <div className="flex-1 overflow-y-auto bg-surface-50">
-      <div className="mx-auto max-w-md space-y-6 p-6">
-        <h2 className="text-sm font-semibold text-text-primary">Usage</h2>
-        <ToolToggle tool={tool} onChange={setTool} />
-        {tool === 'claude' && <ClaudeUsage />}
-        {tool === 'codex' && <ComingSoon label="Codex" />}
-        {tool === 'gemini' && <ComingSoon label="Gemini" />}
+    <div className="space-y-4">
+      <ToolToggle tool={tool} onChange={setTool} />
+      <div className="settings-card">
+        <div className="px-3.5 py-3">
+          {tool === 'claude' && <ClaudeUsage />}
+          {tool === 'codex' && <ComingSoon label="Codex" />}
+          {tool === 'gemini' && <ComingSoon label="Gemini" />}
+        </div>
       </div>
     </div>
   )

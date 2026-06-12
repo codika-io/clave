@@ -7,8 +7,8 @@ import { getSelectedClaudeProfile, claudeProfileSpawnFields } from '../../store/
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
 import { TaskQueue } from '../board/TaskQueue'
-import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsPanel } from '../settings/SettingsPanel'
+import { SettingsSidebar } from '../settings/SettingsSidebar'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
 import { AgentChatPanel } from '../agents/AgentChatPanel'
 import { useWorkTracker } from '../../store/work-tracker-store'
@@ -565,7 +565,8 @@ export function AppShell() {
             transition={skipTransition.current ? { duration: 0 } : sidebarTransition}
             className="flex-shrink-0 overflow-hidden relative z-10"
           >
-            <Sidebar />
+            {/* Settings mode swaps in its own navigation sidebar */}
+            {activeView === 'settings' ? <SettingsSidebar /> : <Sidebar />}
             {/* Resize handle — wide invisible hit area, thin visible line */}
             <div
               onMouseDown={handleResizeStart}
@@ -653,11 +654,6 @@ export function AppShell() {
           <div className={activeView === 'board' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <TaskQueue />
           </div>
-          {activeView === 'usage' && (
-            <div className="flex-1 flex min-h-0">
-              <UsagePanel />
-            </div>
-          )}
           <div className={activeView === 'settings' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <SettingsPanel />
           </div>

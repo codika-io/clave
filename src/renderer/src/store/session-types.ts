@@ -170,7 +170,9 @@ export interface FileTab {
   diff?: FileTabDiffInfo
 }
 
-export type ActiveView = 'terminals' | 'board' | 'usage' | 'settings' | 'agents'
+export type ActiveView = 'terminals' | 'board' | 'settings' | 'agents'
+
+export type SettingsSection = 'general' | 'appearance' | 'usage'
 
 export interface PinnedGroupSession {
   cwd: string

@@ -36,15 +36,17 @@ export function UserIconDisplay({
 }: {
   icon: UserIcon
   color: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
 }) {
   const Icon = ICON_MAP[icon] ?? UserHero
   const sizeClasses = {
+    xs: 'w-6 h-6 rounded-md',
     sm: 'w-8 h-8 rounded-lg',
     md: 'w-10 h-10 rounded-xl',
     lg: 'w-16 h-16 rounded-2xl'
   }
   const iconSizes = {
+    xs: 'w-3.5 h-3.5',
     sm: 'w-4 h-4',
     md: 'w-5 h-5',
     lg: 'w-7 h-7'

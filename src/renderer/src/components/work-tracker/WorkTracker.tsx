@@ -9,7 +9,7 @@ export function WorkTracker() {
   const todayTotalMinutes = useWorkTrackerStore((s) => s.todayTotalMinutes)
   const todaySessionCount = useWorkTrackerStore((s) => s.todaySessionCount)
   const breakSuggestion = useWorkTrackerStore((s) => s.breakSuggestion)
-  const setActiveView = useSessionStore((s) => s.setActiveView)
+  const openSettings = useSessionStore((s) => s.openSettings)
 
   if (!enabled) return null
 
@@ -26,7 +26,7 @@ export function WorkTracker() {
 
   return (
     <button
-      onClick={() => setActiveView('usage')}
+      onClick={() => openSettings('usage')}
       className={cn(
         'w-full flex items-center gap-2 px-2.5 h-[var(--control-h-md)] rounded-xl transition-colors text-left',
         hasBreak
