@@ -6,6 +6,7 @@ import { applyPersistedIcon } from './ipc-handlers/app-handlers'
 import { cleanupDroppedFiles } from './ipc-handlers/dropped-file-handlers'
 import { ptyManager, preloadLoginShellEnv } from './pty-manager'
 import { initAutoUpdater, cleanupAutoUpdater } from './auto-updater'
+import { initTelemetry, cleanupTelemetry } from './telemetry'
 import { initNotificationManager } from './notification-manager'
 import { sshManager } from './ssh-manager'
 import { locationManager } from './location-manager'
@@ -107,6 +108,7 @@ app.whenReady().then(() => {
   applyPersistedIcon()
   createWindow()
   initAutoUpdater()
+  initTelemetry()
 
   // Auto-connect locations with autoConnect enabled
   const locations = locationManager.getLocations()
@@ -136,6 +138,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   cleanupClaveWatchers()
   cleanupAutoUpdater()
+  cleanupTelemetry()
   stopMcpServer()
 })
 
