@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.53.0",
+    "title": "A redesigned Settings page",
+    "description": "Settings is now a full page with its own sidebar — General, Appearance, and Usage — replacing the footer popup. Options are grouped into clean cards with slim controls, and the sidebar footer is a compact row whose gear takes you straight to Settings.",
+    "action": { "type": "navigate", "target": "settings" }
+  },
+  {
     "version": "1.52.0",
     "title": "Agents can now drive Clave",
     "description": "A Claude session can open new agent tabs with an initial prompt and launch your pinned workspace groups through a built-in MCP server — so a coordinating agent can set up and hand off work across tabs. Agents can also request a secret without it ever showing in the chat: you review the action in the toolbar and paste the value into a masked field, scoped to that one action.",
