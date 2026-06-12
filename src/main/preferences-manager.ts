@@ -6,10 +6,18 @@ export type AppIcon = 'dark' | 'light' | 'claude'
 
 interface Preferences {
   appIcon: AppIcon
+  telemetryEnabled: boolean
+  telemetryInstallId: string | null
+  telemetryLastPingAt: string | null
+  telemetryNoticeShown: boolean
 }
 
 const DEFAULTS: Preferences = {
-  appIcon: 'dark'
+  appIcon: 'dark',
+  telemetryEnabled: true,
+  telemetryInstallId: null,
+  telemetryLastPingAt: null,
+  telemetryNoticeShown: false
 }
 
 class PreferencesManager {

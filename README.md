@@ -78,21 +78,25 @@ npx plugins add codika-io/clave-plugin   # re-run to pull latest
 
 ## Privacy & network
 
-Clave is local-first. It has no account or sign-in, and sends **no telemetry, analytics, or tracking** of any kind. Your sessions, history, and settings stay on your machine.
+Clave is local-first. It has no account or sign-in. Your sessions, history, and settings stay on your machine. The only thing it sends home is **one anonymous ping a day**, so we can count how many people actually use Clave:
 
-The only network requests Clave makes are:
+```json
+POST https://ping.clave.work/api/ping
+{ "id": "<random uuid>", "appVersion": "1.52.0", "platform": "darwin-arm64" }
+```
+
+That is the entire payload — three fields, nothing else, ever. The `id` is a random UUID generated on your machine; it carries no email, no username, and no hardware fingerprint, and the server stores only a keyed hash of it, never the raw ID. You can turn the ping off in **Settings → General → Privacy** (the first launch shows a notice with a one-click "Turn off"), and a **Reset anonymous ID** button there discards the current ID so the next ping uses a fresh one. The whole client is ~100 lines you can read at [`src/main/telemetry.ts`](src/main/telemetry.ts) — it fails silently, never retries within a check, and can never affect app behavior.
+
+The only other network requests Clave makes are:
 
 - **Claude Code** reaches the Anthropic API through your own local Claude Code install — Clave never proxies or sees that traffic.
 - **Auto-updates** — [electron-updater](https://www.electron.build/auto-update) checks [GitHub Releases](https://github.com/codika-io/clave/releases) for new versions and installs the signed, notarized build on quit. Auto-download is off by default.
+- **Usage ping** — the once-a-day anonymous `POST` to `ping.clave.work` described above (optional, toggle in Settings).
 - **Git operations** — standard fetch/pull/push to whatever remotes your own repositories use.
 - **SSH / SFTP** — only to remote hosts you explicitly add.
 - **OpenClaw agent chat** — an optional WebSocket connection, established only when you connect an SSH location that has OpenClaw running.
 
 > A "Dangerous Mode" session (Cmd+D) launches Claude Code with `--dangerously-skip-permissions`. It is never the default and is clearly labelled in the UI.
-
-### How we measure adoption
-
-Since Clave sends nothing home, the only adoption numbers we look at are the aggregate statistics GitHub computes on its side: release download counts, repository stars, and repository traffic. A scheduled job snapshots those public-API numbers once a day. They contain no user identifiers, no IPs, and no device information — GitHub never exposes any of that to us, and nothing is ever collected from your machine. You can verify in this codebase that no analytics code exists.
 
 ## Build from source
 

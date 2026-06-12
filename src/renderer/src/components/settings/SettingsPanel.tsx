@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { type Theme, useSessionStore } from '../../store/session-store'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { useUserStore, USER_ICONS, USER_ICON_COLORS } from '../../store/user-store'
@@ -151,6 +151,7 @@ function GeneralSettings() {
         <GitSection />
         <SessionsSection />
         <ClaudeProfilesSection />
+        <PrivacySection />
       </div>
     </>
   )
@@ -361,6 +362,56 @@ function SessionsSection() {
           onChange={setTmuxMode}
           disabled={unavailable}
         />
+      </SettingsCard>
+    </SettingsSection>
+  )
+}
+
+function PrivacySection(): ReactNode {
+  const [enabled, setEnabled] = useState(true)
+  const [resetDone, setResetDone] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    window.electronAPI?.telemetryGetState().then((state) => {
+      if (!cancelled) setEnabled(state.enabled)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleToggle = (value: boolean): void => {
+    setEnabled(value)
+    window.electronAPI?.telemetrySetEnabled(value)
+  }
+
+  const handleReset = async (): Promise<void> => {
+    await window.electronAPI?.telemetryResetId()
+    setResetDone(true)
+    setTimeout(() => setResetDone(false), 2000)
+  }
+
+  return (
+    <SettingsSection title="Privacy">
+      <SettingsCard>
+        <ToggleRow
+          label="Share anonymous usage ping"
+          description="One ping a day: random ID, app version, platform. Nothing else."
+          checked={enabled}
+          onChange={handleToggle}
+        />
+        <SettingsRow
+          label="Reset anonymous ID"
+          description="Drop the current random ID. A fresh one is generated for the next ping."
+        >
+          <button
+            onClick={handleReset}
+            className="btn-secondary btn-compact border border-border-subtle"
+          >
+            {resetDone ? 'ID reset' : 'Reset ID'}
+          </button>
+        </SettingsRow>
       </SettingsCard>
     </SettingsSection>
   )

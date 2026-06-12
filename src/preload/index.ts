@@ -308,7 +308,20 @@ const electronAPI = {
   readImageAsDataUrl: (absolutePath: string) =>
     ipcRenderer.invoke('clave:read-image', absolutePath) as Promise<string | null>,
   preferencesGet: (key: string) => ipcRenderer.invoke('preferences:get', key),
-  preferencesSet: (key: string, value: unknown) => ipcRenderer.invoke('preferences:set', key, value)
+  preferencesSet: (key: string, value: unknown) =>
+    ipcRenderer.invoke('preferences:set', key, value),
+
+  // ── Telemetry ──
+  telemetryGetState: () =>
+    ipcRenderer.invoke('telemetry:get-state') as Promise<{
+      enabled: boolean
+      installId: string | null
+      lastPingAt: string | null
+      noticeShown: boolean
+    }>,
+  telemetrySetEnabled: (enabled: boolean) => ipcRenderer.invoke('telemetry:set-enabled', enabled),
+  telemetryResetId: () => ipcRenderer.invoke('telemetry:reset-id'),
+  telemetrySetNoticeShown: () => ipcRenderer.invoke('telemetry:set-notice-shown')
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

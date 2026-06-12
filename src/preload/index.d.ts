@@ -472,6 +472,15 @@ export interface ElectronAPI {
   readImageAsDataUrl: (absolutePath: string) => Promise<string | null>
   preferencesGet: (key: string) => Promise<unknown>
   preferencesSet: (key: string, value: unknown) => Promise<void>
+  telemetryGetState: () => Promise<{
+    enabled: boolean
+    installId: string | null
+    lastPingAt: string | null
+    noticeShown: boolean
+  }>
+  telemetrySetEnabled: (enabled: boolean) => Promise<void>
+  telemetryResetId: () => Promise<void>
+  telemetrySetNoticeShown: () => Promise<void>
 }
 
 declare global {

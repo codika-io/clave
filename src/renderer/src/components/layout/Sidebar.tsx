@@ -16,6 +16,7 @@ import { ExportClaveDialog } from '../ui/ExportClaveDialog'
 import { cn } from '../../lib/utils'
 import { SectionHeading, TaskQueueSection } from './SidebarSections'
 import { WhatsNewBanner } from '../help/WhatsNewBanner'
+import { TelemetryNoticeBanner } from '../help/TelemetryNoticeBanner'
 import { NewSessionDropdown } from './NewSessionDropdown'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
@@ -1372,6 +1373,7 @@ export function Sidebar() {
 
       {/* Announcements — above the bottom bar */}
       <div className="flex-shrink-0 px-2 has-[>div]:pb-2 space-y-1">
+        <TelemetryNoticeBanner />
         <WhatsNewBanner />
         <UpdateBanner />
       </div>
