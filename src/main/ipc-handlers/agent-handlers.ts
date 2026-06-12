@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { openclawClient } from '../openclaw-client'
+import { openclawClient, buildOpenclawWsUrl } from '../openclaw-client'
 import { locationManager } from '../location-manager'
 import { getMainWindow } from '../window-utils'
 import { randomUUID } from 'crypto'
@@ -26,8 +26,9 @@ export function registerAgentHandlers(): void {
   ipcMain.handle('agent:connect', async (_event, locationId: string) => {
     const loc = locationManager.getLocations().find((l) => l.id === locationId)
     if (!loc?.host || !loc.openclawPort) throw new Error('Location not configured for agents')
-    const wsUrl = `ws://${loc.host}:${loc.openclawPort}`
-    await openclawClient.connect(locationId, wsUrl, loc.openclawToken)
+    const wsUrl = buildOpenclawWsUrl(loc)
+    const token = locationManager.getOpenclawToken(locationId)
+    await openclawClient.connect(locationId, wsUrl, token)
   })
 
   ipcMain.handle('agent:disconnect', (_event, locationId: string) => {

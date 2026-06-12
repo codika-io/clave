@@ -514,6 +514,12 @@ export function Sidebar() {
     return order
   }, [filteredSessions, displayItems, sessions, groups])
 
+  // Live ref so row-facing handlers can read the current order without listing it
+  // as a dependency. Keeping those handlers' identity stable lets the memoized row
+  // components skip re-rendering when an unrelated session's status changes.
+  const flatSessionOrderRef = useRef(flatSessionOrder)
+  flatSessionOrderRef.current = flatSessionOrder
+
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
       try {
@@ -528,7 +534,7 @@ export function Sidebar() {
 
   const handleDeleteGroup = useCallback(
     async (groupId: string) => {
-      const group = groups.find((g) => g.id === groupId)
+      const group = useSessionStore.getState().groups.find((g) => g.id === groupId)
       if (!group) return
       await Promise.all(
         group.sessionIds.map(async (sid) => {
@@ -541,7 +547,7 @@ export function Sidebar() {
       )
       deleteGroup(groupId)
     },
-    [groups, deleteGroup]
+    [deleteGroup]
   )
 
   // Spawn a group terminal and auto-focus it
@@ -620,7 +626,7 @@ export function Sidebar() {
   // Right-click a terminal icon: show edit/delete context menu
   const handleTerminalIconContextMenu = useCallback(
     (groupId: string, terminalId: string, e: React.MouseEvent) => {
-      const group = groups.find((g) => g.id === groupId)
+      const group = useSessionStore.getState().groups.find((g) => g.id === groupId)
       const config = group?.terminals.find((t) => t.id === terminalId)
       if (!config) return
 
@@ -647,7 +653,7 @@ export function Sidebar() {
         ]
       })
     },
-    [groups, removeGroupTerminal]
+    [removeGroupTerminal]
   )
 
   const hideAgentSession = useSessionStore((s) => s.hideAgentSession)
@@ -785,7 +791,7 @@ export function Sidebar() {
   const handleSessionContextMenu = useCallback(
     (e: React.MouseEvent, sessionId: string) => {
       e.preventDefault()
-      const session = sessions.find((s) => s.id === sessionId)
+      const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
 
       // Agent-specific context menu
       if (session?.sessionType === 'agent') {
@@ -855,13 +861,13 @@ export function Sidebar() {
       })
       setContextMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [sessions, createGroup, handleDeleteSession, handleDuplicateSession, handleResumeSession, hideAgentSession]
+    [createGroup, handleDeleteSession, handleDuplicateSession, handleResumeSession, hideAgentSession]
   )
 
   const handleGroupContextMenu = useCallback(
     (e: React.MouseEvent, groupId: string) => {
       e.preventDefault()
-      const group = groups.find((g) => g.id === groupId)
+      const group = useSessionStore.getState().groups.find((g) => g.id === groupId)
       const currentColor = group?.color ?? null
       const existingPin = findPinnedByGroupId(groupId)
       setContextMenu({
@@ -911,13 +917,13 @@ export function Sidebar() {
         ].filter((item): item is NonNullable<typeof item> => item !== null)
       })
     },
-    [groups, ungroupSessions, handleDeleteGroup, setGroupColor]
+    [ungroupSessions, handleDeleteGroup, setGroupColor]
   )
 
   const handleFileTabContextMenu = useCallback(
     (e: React.MouseEvent, fileTabId: string) => {
       e.preventDefault()
-      const fileTab = fileTabs.find((f) => f.id === fileTabId)
+      const fileTab = useSessionStore.getState().fileTabs.find((f) => f.id === fileTabId)
       if (!fileTab) return
       setContextMenu({
         x: e.clientX,
@@ -947,14 +953,14 @@ export function Sidebar() {
         ]
       })
     },
-    [fileTabs, removeFileTab]
+    [removeFileTab]
   )
 
   // Finder-style session click: Click=single, Cmd=toggle, Shift=range, Cmd+Shift=range-add
   const handleSessionClick = useCallback(
     (sessionId: string, modifiers: { metaKey: boolean; shiftKey: boolean }) => {
       // Agent sessions → switch to chat panel
-      const session = sessions.find((s) => s.id === sessionId)
+      const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
       if (session?.sessionType === 'agent' && session.agentId) {
         useAgentStore.getState().setActiveAgent(session.agentId)
         selectSession(sessionId, false) // selectSession sets activeView to 'agents' for agent sessions
@@ -970,8 +976,8 @@ export function Sidebar() {
           selectionAnchorRef.current = sessionId
           return
         }
-        const anchorIdx = flatSessionOrder.indexOf(anchorId)
-        const targetIdx = flatSessionOrder.indexOf(sessionId)
+        const anchorIdx = flatSessionOrderRef.current.indexOf(anchorId)
+        const targetIdx = flatSessionOrderRef.current.indexOf(sessionId)
         if (anchorIdx === -1 || targetIdx === -1) {
           selectSession(sessionId, false)
           selectionAnchorRef.current = sessionId
@@ -979,7 +985,7 @@ export function Sidebar() {
         }
         const start = Math.min(anchorIdx, targetIdx)
         const end = Math.max(anchorIdx, targetIdx)
-        const rangeIds = flatSessionOrder.slice(start, end + 1)
+        const rangeIds = flatSessionOrderRef.current.slice(start, end + 1)
         if (modifiers.metaKey) {
           // Cmd+Shift: add range to existing selection
           const state = useSessionStore.getState()
@@ -1000,14 +1006,14 @@ export function Sidebar() {
         selectionAnchorRef.current = sessionId
       }
     },
-    [sessions, flatSessionOrder, selectSession, selectSessions]
+    [selectSession, selectSessions]
   )
 
   const handleGroupClick = useCallback(
     (groupId: string, modifiers: { metaKey: boolean; shiftKey: boolean }) => {
-      const group = groups.find((g) => g.id === groupId)
-      if (!group) return
       const state = useSessionStore.getState()
+      const group = state.groups.find((g) => g.id === groupId)
+      if (!group) return
       if (modifiers.metaKey) {
         // Cmd+Click: toggle all sessions in group
         const allSelected = group.sessionIds.every((id) => state.selectedSessionIds.includes(id))
@@ -1042,7 +1048,7 @@ export function Sidebar() {
         }
       }
     },
-    [groups, selectSessions, toggleGroupCollapsed]
+    [selectSessions, toggleGroupCollapsed]
   )
 
   const clearRenaming = useCallback(() => setRenamingId(null), [])

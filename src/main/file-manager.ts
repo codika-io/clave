@@ -30,7 +30,10 @@ export interface FileReadResult {
 
 function validatePath(rootCwd: string, requestedPath: string): string {
   const resolved = path.resolve(rootCwd, requestedPath)
-  if (!resolved.startsWith(rootCwd)) {
+  // Separator-aware containment check: a bare startsWith would let a sibling
+  // directory sharing a name prefix (e.g. `<root>-secret`) escape the root.
+  const base = rootCwd.endsWith(path.sep) ? rootCwd : rootCwd + path.sep
+  if (resolved !== rootCwd && !resolved.startsWith(base)) {
     throw new Error('Path traversal detected')
   }
   return resolved

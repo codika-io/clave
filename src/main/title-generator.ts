@@ -16,6 +16,10 @@ interface SessionEntry {
   planDetected: boolean
   pendingClear: boolean
   dirWatcher: ReturnType<typeof watch> | null
+  /** Byte offset already scanned — only the appended region is read each tick. */
+  scanOffset: number
+  /** Carry-over for a trailing partial (unterminated) line between reads. */
+  scanPartial: string
 }
 
 const sessions = new Map<string, SessionEntry>()
@@ -64,7 +68,8 @@ export function scheduleTitleGeneration(
   const jsonlPath = getJsonlPath(cwd, claudeSessionId)
   const entry: SessionEntry = {
     cwd, claudeSessionId, win, jsonlPath,
-    titleDone: false, planDetected: false, pendingClear: false, dirWatcher: null
+    titleDone: false, planDetected: false, pendingClear: false, dirWatcher: null,
+    scanOffset: 0, scanPartial: ''
   }
   sessions.set(sessionId, entry)
 
@@ -97,6 +102,8 @@ export function scheduleTitleGeneration(
         entry.jsonlPath = newFile
         entry.titleDone = false
         entry.planDetected = false
+        entry.scanOffset = 0
+        entry.scanPartial = ''
 
         // Start watching the new JSONL for title generation
         watchJsonl(sessionId, entry)
@@ -114,13 +121,19 @@ export function scheduleTitleGeneration(
 function watchJsonl(sessionId: string, entry: SessionEntry): void {
   let lastSize = 0
   watchFile(entry.jsonlPath, { persistent: false, interval: 2000 }, (curr: Stats) => {
-    if (curr.size === 0 || curr.size === lastSize) return
+    if (curr.size === 0) return
+    // File shrank (rotated/truncated) — rescan from the beginning.
+    if (curr.size < lastSize) {
+      entry.scanOffset = 0
+      entry.scanPartial = ''
+    }
+    if (curr.size === lastSize) return
     lastSize = curr.size
-    processJsonl(sessionId, entry)
+    void processJsonl(sessionId, entry)
   })
 
   if (existsSync(entry.jsonlPath)) {
-    processJsonl(sessionId, entry)
+    void processJsonl(sessionId, entry)
   }
 }
 
@@ -150,73 +163,84 @@ export function notifyClear(sessionId: string): void {
 
 // --- JSONL processing ---
 
-function processJsonl(sessionId: string, entry: SessionEntry): void {
-  // Title: grep for all user messages, find the first valid one
-  if (!entry.titleDone) {
-    grepFile(entry.jsonlPath, '"type":"user"', false).then((output) => {
-      if (!output) return
-      for (const line of output.split('\n')) {
-        if (!line.trim()) continue
-        const userMessage = parseUserMessage(line)
-        if (!userMessage || !isValidMessage(userMessage)) continue
-
-        entry.titleDone = true
-        console.log(`[title-gen] Session ${sessionId} message: "${userMessage.slice(0, 80)}"`)
-
-        generateTitle(sessionId, userMessage)
-          .then((title) => {
-            if (entry.win && !entry.win.isDestroyed()) {
-              entry.win.webContents.send(`session:auto-title:${sessionId}`, title)
-            }
-          })
-          .catch(() => {})
-        return
-      }
-    })
+async function processJsonl(sessionId: string, entry: SessionEntry): Promise<void> {
+  // Nothing left to detect — stop polling this transcript entirely. Without this
+  // the watcher re-read the whole (multi-MB, ever-growing) JSONL every 2s for the
+  // session's entire life just to look for a plan that most sessions never emit.
+  if (entry.titleDone && entry.planDetected) {
+    try { unwatchFile(entry.jsonlPath) } catch { /* ignore */ }
+    return
   }
 
-  // Plan: grep for planFilePath, parse matching lines
-  if (!entry.planDetected) {
-    grepFile(entry.jsonlPath, 'planFilePath', false).then((output) => {
-      if (!output) return
-      // Check each matching line (there may be multiple)
-      for (const line of output.split('\n')) {
-        if (!line.trim()) continue
-        try {
-          const parsed = JSON.parse(line)
-          const planPath = extractPlanPath(parsed)
-          if (planPath && existsSync(planPath)) {
-            entry.planDetected = true
-            if (entry.win && !entry.win.isDestroyed()) {
-              entry.win.webContents.send(`session:plan-detected:${sessionId}`, planPath)
-            }
-            console.log(`[title-gen] Session ${sessionId}: plan detected at ${planPath}`)
-            return
-          }
-        } catch {
-          // skip malformed line
-        }
-      }
-    })
-  }
-
-}
-
-/** Search the file for lines containing a pattern — pure JS, no external CLI needed */
-async function grepFile(filePath: string, pattern: string, firstMatchOnly: boolean): Promise<string | null> {
+  // Read only the appended region since the last scan.
+  let chunk: string
   try {
-    const content = await fsPromises.readFile(filePath, { encoding: 'utf-8' })
-    const lines = content.split('\n')
-    const matches: string[] = []
+    const fh = await fsPromises.open(entry.jsonlPath, 'r')
+    try {
+      const stat = await fh.stat()
+      if (stat.size <= entry.scanOffset) return
+      const length = stat.size - entry.scanOffset
+      const buf = Buffer.alloc(length)
+      await fh.read(buf, 0, length, entry.scanOffset)
+      entry.scanOffset = stat.size
+      chunk = buf.toString('utf-8')
+    } finally {
+      await fh.close()
+    }
+  } catch {
+    return
+  }
+
+  // Keep any trailing partial line for the next read; only process complete lines.
+  const text = entry.scanPartial + chunk
+  const lastNl = text.lastIndexOf('\n')
+  if (lastNl === -1) {
+    entry.scanPartial = text
+    return
+  }
+  entry.scanPartial = text.slice(lastNl + 1)
+  const lines = text.slice(0, lastNl).split('\n')
+
+  // Title: first valid user message (lines are scanned in order across reads).
+  if (!entry.titleDone) {
     for (const line of lines) {
-      if (line.includes(pattern)) {
-        matches.push(line)
-        if (firstMatchOnly) break
+      if (!line.includes('"type":"user"')) continue
+      const userMessage = parseUserMessage(line)
+      if (!userMessage || !isValidMessage(userMessage)) continue
+
+      entry.titleDone = true
+      console.log(`[title-gen] Session ${sessionId} message: "${userMessage.slice(0, 80)}"`)
+
+      generateTitle(sessionId, userMessage)
+        .then((title) => {
+          if (entry.win && !entry.win.isDestroyed()) {
+            entry.win.webContents.send(`session:auto-title:${sessionId}`, title)
+          }
+        })
+        .catch(() => {})
+      break
+    }
+  }
+
+  // Plan: any line carrying a planFilePath.
+  if (!entry.planDetected) {
+    for (const line of lines) {
+      if (!line.includes('planFilePath')) continue
+      try {
+        const parsed = JSON.parse(line)
+        const planPath = extractPlanPath(parsed)
+        if (planPath && existsSync(planPath)) {
+          entry.planDetected = true
+          if (entry.win && !entry.win.isDestroyed()) {
+            entry.win.webContents.send(`session:plan-detected:${sessionId}`, planPath)
+          }
+          console.log(`[title-gen] Session ${sessionId}: plan detected at ${planPath}`)
+          break
+        }
+      } catch {
+        // skip malformed line
       }
     }
-    return matches.length > 0 ? matches.join('\n') : null
-  } catch {
-    return null
   }
 }
 

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { MarkdownRenderer } from '../files/MarkdownRenderer'
 import type { ChatMessage as ChatMessageType } from '../../../../shared/remote-types'
 
@@ -5,7 +6,7 @@ interface ChatMessageProps {
   message: ChatMessageType
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+function ChatMessageImpl({ message }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const isSystem = message.role === 'system'
 
@@ -33,12 +34,21 @@ export function ChatMessage({ message }: ChatMessageProps) {
     )
   }
 
+  const isStreaming = message.status === 'streaming'
+
   return (
     <div className="text-sm text-text-primary">
       <div className="prose-sm">
-        <MarkdownRenderer content={message.content} />
+        {/* While streaming, render plain text — re-parsing the full markdown and
+            re-running syntax highlighting on every delta is O(n²) and janks long
+            answers. The markdown/shiki pipeline runs once when the turn completes. */}
+        {isStreaming ? (
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        ) : (
+          <MarkdownRenderer content={message.content} />
+        )}
       </div>
-      {message.status === 'streaming' && (
+      {isStreaming && (
         <span className="inline-block w-1.5 h-4 bg-current opacity-60 animate-pulse ml-0.5 align-text-bottom" />
       )}
       {message.status === 'error' && (
@@ -47,3 +57,13 @@ export function ChatMessage({ message }: ChatMessageProps) {
     </div>
   )
 }
+
+// Only re-render when this message's own content/status changes, so streaming
+// deltas to the in-flight message don't re-render every other message.
+export const ChatMessage = memo(ChatMessageImpl, (prev, next) => {
+  return (
+    prev.message.content === next.message.content &&
+    prev.message.status === next.message.status &&
+    prev.message.role === next.message.role
+  )
+})

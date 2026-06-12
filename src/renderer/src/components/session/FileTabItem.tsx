@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useSessionStore, type FileTab } from '../../store/session-store'
 import { DocumentTextIcon } from '@heroicons/react/24/outline'
 import { CodeBracketSquareIcon } from '@heroicons/react/24/outline'
@@ -17,7 +18,7 @@ interface FileTabItemProps {
   isDragging?: boolean
 }
 
-export function FileTabItem({
+function FileTabItemImpl({
   fileTab,
   isSelected,
   onClick,
@@ -71,3 +72,17 @@ export function FileTabItem({
     />
   )
 }
+
+// See SessionItem: inline callbacks are thin wrappers over stable handlers, so
+// only the data object and scalar props are compared.
+export const FileTabItem = memo(FileTabItemImpl, (prev, next) => {
+  return (
+    prev.fileTab === next.fileTab &&
+    prev.isSelected === next.isSelected &&
+    prev.grouped === next.grouped &&
+    prev.groupSelected === next.groupSelected &&
+    prev.dimmed === next.dimmed &&
+    prev.forceEditing === next.forceEditing &&
+    prev.isDragging === next.isDragging
+  )
+})
