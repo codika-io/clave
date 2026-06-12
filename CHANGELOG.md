@@ -14,7 +14,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 ### Changed
 - **Settings is now a full page with its own sidebar.** Opening Settings swaps the session list for a dedicated navigation — General, Appearance, and Usage — with a back button to return to your sessions. Usage moved inside Settings, and options are presented in grouped cards with slim, compact controls for a cleaner, denser look.
 - The sidebar footer is a slimmer single row: clicking it (or its gear icon) opens Settings directly instead of showing a popup menu, and the separator line above it is gone.
->>>>>>> origin/main
 
 ## [1.52.0] — 2026-06-12
 
