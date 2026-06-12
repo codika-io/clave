@@ -64,15 +64,15 @@ export function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative flex-shrink-0 w-9 h-5 rounded-full transition-colors',
+        'relative flex-shrink-0 w-7 h-4 rounded-full transition-colors',
         disabled && 'cursor-not-allowed',
         checked ? 'bg-accent' : 'bg-surface-300'
       )}
     >
       <div
         className={cn(
-          'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
-          checked ? 'translate-x-[18px]' : 'translate-x-0.5'
+          'absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform',
+          checked ? 'translate-x-[14px]' : 'translate-x-0.5'
         )}
       />
     </button>

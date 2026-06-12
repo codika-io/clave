@@ -462,6 +462,14 @@ body,
   cursor: not-allowed;
 }
 
+/* Compact modifier for .btn-primary / .btn-secondary in dense contexts
+   (settings cards, inline pickers): thinner height, smaller type. */
+.btn-compact {
+  height: var(--control-h-sm);
+  padding: 0 0.625rem;     /* px-2.5 */
+  font-size: 11px;
+}
+
 /* Dialog footer buttons (Cancel / Confirm pattern) */
 .btn-dialog {
   flex: 1;
@@ -558,6 +566,26 @@ body,
   color: var(--text-tertiary);
 }
 .input-compact:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+/* Extra-thin input for dense settings rows */
+.input-xs {
+  height: var(--control-h-sm);
+  padding: 0 0.5rem;
+  border-radius: var(--radius-md);
+  background-color: var(--surface-100);
+  border: 1px solid var(--border-subtle-color);
+  font-size: 11px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.input-xs::placeholder {
+  color: var(--text-tertiary);
+}
+.input-xs:focus {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 1px var(--color-accent);
 }

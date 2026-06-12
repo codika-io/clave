@@ -63,7 +63,7 @@ function ToolToggle({ tool, onChange }: { tool: Tool; onChange: (t: Tool) => voi
           <button
             key={key}
             onClick={() => onChange(key)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
               active
                 ? 'bg-surface-200 text-text-primary'
                 : 'text-text-tertiary hover:text-text-primary'
@@ -113,7 +113,7 @@ function ClaudeUsage() {
         <button
           onClick={fetchData}
           disabled={loading}
-          className="btn-icon btn-icon-md disabled:opacity-50"
+          className="btn-icon btn-icon-xs disabled:opacity-50"
           title="Refresh"
         >
           <ArrowPathIcon className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />

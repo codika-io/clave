@@ -82,7 +82,7 @@ export function SidebarFooter() {
   return (
     <button
       onClick={() => openSettings()}
-      className="group w-full flex items-center gap-2 px-2 py-1 rounded-lg text-text-primary"
+      className="group w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-text-primary"
       title="Settings (⌘,)"
     >
       <div className="relative">
@@ -103,8 +103,8 @@ export function SidebarFooter() {
       <div className="flex-1 text-left min-w-0">
         <span className="text-[13px] font-semibold truncate block">{name}</span>
       </div>
-      {/* Hover affordance lives on the gear only — it lifts with a subtle shadow */}
-      <span className="flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 text-text-tertiary transition-all duration-150 group-hover:text-text-primary group-hover:bg-surface-0 group-hover:shadow-[0_1px_3px_rgba(0,0,0,0.12),0_0_0.5px_rgba(0,0,0,0.2)]">
+      {/* Hover affordance lives on the gear only — darker grey fill */}
+      <span className="flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 text-text-tertiary transition-colors duration-150 group-hover:text-text-primary group-hover:bg-surface-200">
         <Cog6ToothIcon className="w-4 h-4" />
       </span>
     </button>

@@ -69,7 +69,7 @@ function ProfileSection() {
                   if (e.key === 'Enter') handleSave()
                   if (e.key === 'Escape') setEditing(false)
                 }}
-                className="input-compact max-w-[220px]"
+                className="input-xs max-w-[220px]"
               />
             ) : (
               <button
@@ -92,14 +92,14 @@ function ProfileSection() {
                 <button
                   key={iconName}
                   onClick={() => setAvatarIcon(iconName)}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                  className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
                     isSelected
                       ? 'bg-accent/15 ring-1 ring-accent'
                       : 'bg-surface-200 hover:bg-surface-300'
                   }`}
                   title={iconName}
                 >
-                  <Icon className="w-3.5 h-3.5" style={{ color: isSelected ? avatarColor : 'var(--text-secondary)' }} />
+                  <Icon className="w-3 h-3" style={{ color: isSelected ? avatarColor : 'var(--text-secondary)' }} />
                 </button>
               )
             })}
@@ -112,11 +112,11 @@ function ProfileSection() {
               <button
                 key={color}
                 onClick={() => setAvatarColor(color)}
-                className="relative w-5 h-5 rounded-full hover:scale-110 transition-transform flex items-center justify-center"
+                className="relative w-4 h-4 rounded-full hover:scale-110 transition-transform flex items-center justify-center"
                 style={{ backgroundColor: color }}
                 title={color}
               >
-                {avatarColor === color && <CheckIcon className="w-3 h-3 text-white" />}
+                {avatarColor === color && <CheckIcon className="w-2.5 h-2.5 text-white" />}
               </button>
             ))}
           </div>
@@ -273,11 +273,11 @@ function ClaudeProfilesSection() {
                 <button
                   onClick={() => setSelectedProfile(p.id)}
                   title={isSelected ? 'Default account for new sessions' : 'Make default'}
-                  className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center ${
+                  className={`flex-shrink-0 w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
                     isSelected ? 'border-accent' : 'border-border hover:border-text-tertiary'
                   }`}
                 >
-                  {isSelected && <span className="w-2 h-2 rounded-full bg-accent" />}
+                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
                 </button>
 
                 <div className="flex-1 min-w-0">
@@ -285,7 +285,7 @@ function ClaudeProfilesSection() {
                     <p className="settings-row-title">{p.label}</p>
                   ) : (
                     <input
-                      className="input-compact w-full"
+                      className="input-xs w-full"
                       value={p.label}
                       onChange={(e) => updateProfile(p.id, { label: e.target.value })}
                       placeholder="Account name"
@@ -408,7 +408,7 @@ function GitSection() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
             }}
-            className="input-compact w-20 text-right"
+            className="input-xs w-16 text-right"
           />
           <span className="text-xs text-text-tertiary">repos</span>
         </SettingsRow>
@@ -602,13 +602,13 @@ function WorkspacesSection() {
             <button
               onClick={handleConfirmSelection}
               disabled={selectedFiles.size === 0}
-              className="btn-primary flex-1"
+              className="btn-primary btn-compact flex-1"
             >
               Add Selected
             </button>
             <button
               onClick={handleCancelDiscovery}
-              className="btn-secondary border border-border-subtle"
+              className="btn-secondary btn-compact border border-border-subtle"
             >
               Cancel
             </button>
