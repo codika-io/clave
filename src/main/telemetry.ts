@@ -103,15 +103,6 @@ export function setTelemetryEnabled(enabled: boolean): void {
   }
 }
 
-/** Drop the anonymous install id — a fresh one is generated on the next ping. */
-export function resetInstallId(): void {
-  try {
-    preferencesManager.set('telemetryInstallId', null)
-  } catch (err) {
-    console.log('[telemetry] Failed to reset id:', err instanceof Error ? err.message : err)
-  }
-}
-
 export function setTelemetryNoticeShown(): void {
   try {
     preferencesManager.set('telemetryNoticeShown', true)

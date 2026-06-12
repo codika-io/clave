@@ -479,7 +479,6 @@ export interface ElectronAPI {
     noticeShown: boolean
   }>
   telemetrySetEnabled: (enabled: boolean) => Promise<void>
-  telemetryResetId: () => Promise<void>
   telemetrySetNoticeShown: () => Promise<void>
 }
 
