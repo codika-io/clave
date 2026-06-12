@@ -318,6 +318,16 @@ body,
   background: var(--scrollbar-thumb-hover);
 }
 
+/* Toolbar URL tags — horizontal scroll, scrollbar hidden (trackpad scroll) */
+.toolbar-url-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.toolbar-url-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* xterm.js overrides */
 .xterm {
   padding: 8px 12px;
