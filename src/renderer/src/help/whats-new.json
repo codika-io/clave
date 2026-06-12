@@ -1,152 +1,236 @@
 [
   {
+    "version": "1.54.0",
+    "title": "Anonymous usage ping",
+    "description": "Clave now sends one anonymous ping a day — a random ID, the app version, and your platform, nothing else — so we know how many people use it. The exact payload is documented in the README, and a new Privacy section in Settings → General lets you turn it off with one click.",
+    "action": {
+      "type": "navigate",
+      "target": "settings"
+    }
+  },
+  {
     "version": "1.53.0",
     "title": "A redesigned Settings page",
     "description": "Settings is now a full page with its own sidebar — General, Appearance, and Usage — replacing the footer popup. Options are grouped into clean cards with slim controls, and the sidebar footer is a compact row whose gear takes you straight to Settings.",
-    "action": { "type": "navigate", "target": "settings" }
+    "action": {
+      "type": "navigate",
+      "target": "settings"
+    }
   },
   {
     "version": "1.52.0",
     "title": "Agents can now drive Clave",
     "description": "A Claude session can open new agent tabs with an initial prompt and launch your pinned workspace groups through a built-in MCP server — so a coordinating agent can set up and hand off work across tabs. Agents can also request a secret without it ever showing in the chat: you review the action in the toolbar and paste the value into a masked field, scoped to that one action.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.51.1",
     "title": "Git panel stays current in large folders",
     "description": "When a folder has many repositories, the Git panel pauses live polling — but it no longer goes stale silently. It now refreshes automatically when an agent finishes a turn or the window regains focus, shows the last update time with a refresh spinner, and a new Git section in Settings lets you change the pause threshold or turn pausing off entirely.",
-    "action": { "type": "navigate", "target": "side:git" }
+    "action": {
+      "type": "navigate",
+      "target": "side:git"
+    }
   },
   {
     "version": "1.50.0",
     "title": "Run multiple Claude accounts side by side",
     "description": "Define Claude Code accounts in Settings, each pointing at its own config directory. With more than one, a picker appears when you start a Claude session and each session's header shows which account it's running under — so a work and a personal account can run in parallel without touching environment variables.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.49.0",
     "title": "Sessions that survive quitting",
     "description": "Sessions now run inside tmux, so your agents keep going after you quit Clave, survive crashes, and reattach automatically next launch — reachable from any terminal via `tmux -L clave attach`. On by default when tmux is installed; toggle it in Settings → Sessions.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.48.0",
     "title": "Live status on session tabs",
     "description": "Claude Code tabs now show their status at a glance: the icon pulses blue while working, an amber dot means Claude is waiting on your input, and a green dot flags a session that finished while you were away. Driven by Claude Code's own lifecycle signals, so it's accurate, not guessed.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.47.0",
     "title": "Claude Agents sessions",
     "description": "Launch a `claude agents` session from the New session menu or with ⌘⇧A. A faint trailing glyph in the sidebar tells Claude Agents and skip-permissions sessions apart from plain Claude Code.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.46.0",
     "title": "Redesigned agent conversations",
     "description": "The remote agent chat has a fresh look — your messages in clean rounded bubbles, agent replies as easy-to-read flowing text, and a refined composer with a circular send button.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.45.0",
     "title": "Provider logos in the sidebar",
     "description": "Sessions now show their provider's real logo — Claude Code, Gemini, and Codex each display their brand mark in the sidebar, so you can tell them apart at a glance.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.43.0",
     "title": "Edit files right in Clave",
     "description": "Files now open syntax-highlighted and instantly editable — just click into the code, type, and press ⌘S to save. Highlighting follows your theme, and markdown opens rendered with a Source toggle.",
-    "action": { "type": "navigate", "target": "side:files" }
+    "action": {
+      "type": "navigate",
+      "target": "side:files"
+    }
   },
   {
     "version": "1.42.0",
     "title": "Templates launcher",
     "description": "Your .clave session templates now open from a folder-plus icon next to the Sessions header, in a searchable popover — so a long list of templates no longer crowds your sessions.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.41.0",
     "title": "Codex CLI sessions",
     "description": "Launch OpenAI's Codex CLI from the New session menu or with Cmd+U, just like Claude Code and Gemini CLI.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.40.0",
     "title": "Sidebar selection focus",
     "description": "Selecting a session, group, or file tab now fades the unselected rows so your active selection stands out at a glance.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.39.0",
     "title": "Redesigned sidebar",
     "description": "A cleaner sidebar: New session and Queue as top tabs, your sessions under one Sessions header with pinned groups inline, consistent spacing and alignment from shared design tokens, and slightly less round corners across the app.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.38.0",
     "title": "Publish Branch from the Git panel",
     "description": "Committing on a brand-new local branch now surfaces a Publish Branch button in the Git panel — it pushes the branch to origin with upstream tracking so your commits don't sit there invisibly.",
-    "action": { "type": "navigate", "target": "side:git" }
+    "action": {
+      "type": "navigate",
+      "target": "side:git"
+    }
   },
   {
     "version": "1.37.1",
     "title": "Undo in the sidebar",
     "description": "Press Cmd+Z to undo the last sidebar action — disbanding a group, dragging a session, renaming, or recoloring. Up to 50 steps are remembered.",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.37.0",
     "title": "Windows Support",
     "description": "Clave now ships a Windows installer alongside every macOS release — Windows users can download a `.exe` setup directly from GitHub Releases",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.36.0",
     "title": "Model Pill",
     "description": "See the active Claude model at a glance in the terminal header — click for a popover with reasoning effort, thinking, fast mode, context window, and live session cost. Everything stays up to date via Claude Code's statusLine hook",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.34.0",
     "title": "Context Inventory",
     "description": "See what Claude Code loads into context per session — CLAUDE.md, skills, plugins, MCP, hooks — with a live percentage badge, category breakdown, and estimated token cost",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.32.6",
     "title": "Open Git Diffs as Tabs",
     "description": "Double-click any changed file to preview, then open the diff as a persistent document tab — with live stage/unstage and right-click access from the git tree",
-    "action": { "type": "navigate", "target": "side:git" }
+    "action": {
+      "type": "navigate",
+      "target": "side:git"
+    }
   },
   {
     "version": "1.32.4",
     "title": "Daily Cost Tracking",
     "description": "See exactly how much you spend per day, week, or month with the new cost bar chart on the Usage page",
-    "action": { "type": "navigate", "target": "usage" }
+    "action": {
+      "type": "navigate",
+      "target": "usage"
+    }
   },
   {
     "version": "1.32.2",
     "title": "Activity Heatmap",
     "description": "Your Usage page now shows a full year of activity as a GitHub-style contribution heatmap",
-    "action": { "type": "navigate", "target": "usage" }
+    "action": {
+      "type": "navigate",
+      "target": "usage"
+    }
   },
   {
     "version": "1.32.0",
     "title": "Smarter Work Tracker",
     "description": "Accurate wall-clock time tracking with concurrent session support, now integrated into the sidebar footer",
-    "action": { "type": "navigate", "target": "usage" }
+    "action": {
+      "type": "navigate",
+      "target": "usage"
+    }
   },
   {
     "version": "1.31.0",
     "title": "Design System & Chat History",
     "description": "Unified design tokens across the app, and a new chat bubble layout for browsing conversation history",
-    "action": { "type": "navigate", "target": "side:help" }
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
   },
   {
     "version": "1.29.0",
     "title": "Work Tracker",
     "description": "Track your daily coding sessions, build streaks, and visualize weekly trends right from the sidebar",
-    "action": { "type": "navigate", "target": "terminals" }
+    "action": {
+      "type": "navigate",
+      "target": "terminals"
+    }
   }
 ]
