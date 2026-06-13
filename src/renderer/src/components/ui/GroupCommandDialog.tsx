@@ -97,7 +97,9 @@ export function GroupCommandDialog({
   }
 
   const handlePickFolder = async () => {
-    const folder = await window.electronAPI.openFolderDialog()
+    // Open the native picker at the group root (or the terminal's current cwd
+    // when editing) instead of the OS default location.
+    const folder = await window.electronAPI.openFolderDialog(cwd ?? undefined)
     if (folder) {
       setCwd(folder)
     }

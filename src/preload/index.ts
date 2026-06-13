@@ -106,7 +106,7 @@ const electronAPI = {
 
   openPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 
-  openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
+  openFolderDialog: (defaultPath?: string) => ipcRenderer.invoke('dialog:openFolder', defaultPath),
 
   onUpdateAvailable: (callback: (version: string) => void) =>
     createIpcListener<[string]>('updater:update-available', callback),

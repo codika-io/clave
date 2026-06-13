@@ -300,7 +300,7 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>
   checkPort: (port: number) => Promise<boolean>
   openPath: (filePath: string) => Promise<string>
-  openFolderDialog: () => Promise<string | null>
+  openFolderDialog: (defaultPath?: string) => Promise<string | null>
   onUpdateAvailable: (callback: (version: string) => void) => () => void
   onUpdateDownloaded: (callback: (version: string) => void) => () => void
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void

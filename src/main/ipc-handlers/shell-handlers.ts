@@ -46,10 +46,11 @@ export function registerShellHandlers(): void {
     return shell.openPath(filePath)
   })
 
-  ipcMain.handle('dialog:openFolder', async (_event) => {
+  ipcMain.handle('dialog:openFolder', async (_event, defaultPath?: string) => {
     const win = BrowserWindow.fromWebContents(_event.sender)
     const result = await dialog.showOpenDialog(win!, {
-      properties: ['openDirectory']
+      properties: ['openDirectory'],
+      ...(defaultPath ? { defaultPath } : {})
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null
