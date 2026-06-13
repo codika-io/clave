@@ -111,7 +111,7 @@ interface ClaveGroupData {
   category?: string
   logo?: string
   sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]
-  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean }[]
+  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean }[]
 }
 
 interface ClaveFileRaw {
@@ -184,7 +184,8 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
       color: t.color || 'blue',
       icon: t.icon,
       cwd: t.cwd ? path.resolve(dir, t.cwd) : undefined,
-      autoLaunchLocalhost: t.autoLaunchLocalhost ?? undefined
+      autoLaunchLocalhost: t.autoLaunchLocalhost ?? undefined,
+      persistent: t.persistent ?? undefined
     }))
   }
 }
@@ -283,7 +284,8 @@ export function registerClaveFileHandlers(): void {
             color: t.color,
             ...(t.icon ? { icon: t.icon } : {}),
             ...(t.cwd ? { cwd: toRelative(t.cwd) } : {}),
-            ...(t.autoLaunchLocalhost ? { autoLaunchLocalhost: true } : {})
+            ...(t.autoLaunchLocalhost ? { autoLaunchLocalhost: true } : {}),
+            ...(t.persistent ? { persistent: true } : {})
           }))
         })
 

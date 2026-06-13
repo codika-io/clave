@@ -152,7 +152,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
         ...(p.toolbar ? { toolbar: true } : {}),
         ...(p.logo ? { logo: p.logo } : {}),
         sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, geminiMode: s.geminiMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode })),
-        terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost })),
+        terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent })),
         ...(p.category ? { category: p.category } : {})
       })
 
@@ -199,14 +199,15 @@ function createPinnedFromGroup(
   }
 }
 
-function groupDataToPinnedTerminals(terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean }[]): PinnedGroupTerminal[] {
+function groupDataToPinnedTerminals(terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean }[]): PinnedGroupTerminal[] {
   return terminals.map((t) => ({
     command: t.command,
     commandMode: t.commandMode,
     color: t.color as GroupTerminalColor,
     icon: t.icon as PinnedGroupTerminal['icon'],
     cwd: t.cwd,
-    autoLaunchLocalhost: t.autoLaunchLocalhost
+    autoLaunchLocalhost: t.autoLaunchLocalhost,
+    persistent: t.persistent
   }))
 }
 
@@ -309,7 +310,8 @@ export async function exportClaveFile(pinnedId: string, folder: string, fileName
       commandMode: t.commandMode,
       color: t.color,
       icon: t.icon,
-      cwd: t.cwd
+      cwd: t.cwd,
+      persistent: t.persistent
     })),
     ...(pg.category ? { category: pg.category } : {})
   })
