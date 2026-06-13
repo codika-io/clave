@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.55.0] — 2026-06-13
+
+### Added
+- **Extensions** — a new view (under New Session in the sidebar) that shows everything installed for a Claude Code profile. Browse your **Marketplaces** as cards, drill into one to see its **Plugins**, then open a plugin to see its **Skills, Agents, Commands, and MCP servers**. A separate **MCP Servers** tab lists every server across all sources, and a **Standalone** card surfaces skills and commands that don't belong to any plugin. With multiple Claude accounts, a profile dropdown scopes the whole view to that account.
+
 ### Removed
 - **Task Queue** — the Queue view for staging prompts and running them later as Claude sessions has been removed.
 

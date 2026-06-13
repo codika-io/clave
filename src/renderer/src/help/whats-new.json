@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.55.0",
+    "title": "Browse your installed Extensions",
+    "description": "A new Extensions view (under New Session in the sidebar) shows everything installed for a Claude Code profile. Browse your marketplaces as cards, drill into one to see its plugins, then open a plugin to see its skills, agents, commands, and MCP servers. A dedicated MCP Servers tab lists every server across all sources, and when you run multiple Claude accounts a profile dropdown scopes the whole view.",
+    "action": {
+      "type": "navigate",
+      "target": "extensions"
+    }
+  },
+  {
     "version": "1.54.0",
     "title": "Anonymous usage ping",
     "description": "Clave now sends one anonymous ping a day — a random ID, the app version, and your platform, nothing else — so we know how many people use it. The exact payload is documented in the README, and a new Privacy section in Settings → General lets you turn it off with one click.",

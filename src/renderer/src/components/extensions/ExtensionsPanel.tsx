@@ -220,9 +220,9 @@ function CapabilitySection({
   if (rows.length === 0) return null
   return (
     <section className="mb-5">
-      <h3 className="flex items-center gap-1.5 settings-section-title mb-1.5">
+      <h3 className="flex items-center gap-1.5 mb-1.5 text-[12px] font-medium text-text-secondary">
         <Icon className="w-3.5 h-3.5 opacity-60" />
-        {title}
+        <span>{title}</span>
         <span className="text-text-tertiary font-normal">({rows.length})</span>
       </h3>
       <div className="settings-card">

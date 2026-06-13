@@ -4,7 +4,8 @@ import type { ActiveView } from '../store/session-types'
 const VIEW_TARGETS: Set<string> = new Set([
   'terminals',
   'settings',
-  'agents'
+  'agents',
+  'extensions'
 ])
 
 const SIDE_PANEL_TABS: Record<string, 'files' | 'git' | 'help'> = {
