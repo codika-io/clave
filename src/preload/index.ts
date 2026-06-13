@@ -307,6 +307,10 @@ const electronAPI = {
   preferencesSet: (key: string, value: unknown) =>
     ipcRenderer.invoke('preferences:set', key, value),
 
+  // ── Extensions (read-only inventory of installed plugins/skills/MCP) ──
+  extensionsGetInventory: (configDir?: string) =>
+    ipcRenderer.invoke('extensions:get-inventory', configDir),
+
   // ── Telemetry ──
   telemetryGetState: () =>
     ipcRenderer.invoke('telemetry:get-state') as Promise<{

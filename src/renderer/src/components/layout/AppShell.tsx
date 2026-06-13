@@ -8,6 +8,8 @@ import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { SettingsSidebar } from '../settings/SettingsSidebar'
+import { ExtensionsPanel } from '../extensions/ExtensionsPanel'
+import { ExtensionsSidebar } from '../extensions/ExtensionsSidebar'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
 import { AgentChatPanel } from '../agents/AgentChatPanel'
 import { useWorkTracker } from '../../store/work-tracker-store'
@@ -565,7 +567,13 @@ export function AppShell() {
             className="flex-shrink-0 overflow-hidden relative z-10"
           >
             {/* Settings mode swaps in its own navigation sidebar */}
-            {activeView === 'settings' ? <SettingsSidebar /> : <Sidebar />}
+            {activeView === 'settings' ? (
+              <SettingsSidebar />
+            ) : activeView === 'extensions' ? (
+              <ExtensionsSidebar />
+            ) : (
+              <Sidebar />
+            )}
             {/* Resize handle — wide invisible hit area, thin visible line */}
             <div
               onMouseDown={handleResizeStart}
@@ -655,6 +663,9 @@ export function AppShell() {
           </div>
           <div className={activeView === 'agents' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <AgentChatPanel />
+          </div>
+          <div className={activeView === 'extensions' ? 'flex-1 flex min-h-0' : 'hidden'}>
+            <ExtensionsPanel />
           </div>
         </div>
 

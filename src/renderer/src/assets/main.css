@@ -667,6 +667,39 @@ body,
   background-color: var(--surface-100);
 }
 
+/* ── Extension cards ── */
+/* Grid of clickable cards used in the Extensions browser (marketplaces, plugins,
+   MCP servers). Cards share the recessed look of .settings-card but stand as
+   independent tiles with a hover affordance when interactive. */
+.extension-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.625rem; /* gap-2.5 */
+}
+.extension-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  text-align: left;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle-color);
+  background-color: color-mix(in oklab, var(--surface-100) 55%, transparent);
+  padding: 0.875rem; /* p-3.5 */
+  transition:
+    border-color 150ms,
+    background-color 150ms;
+}
+button.extension-card {
+  cursor: pointer;
+}
+button.extension-card:hover {
+  border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  background-color: var(--surface-100);
+}
+.extension-card-muted {
+  opacity: 0.55;
+}
+
 /* ── Pills ── */
 /* Small non-interactive chips used in session headers to surface live config
    (model, reasoning effort, context window). Share shape with .badge but with

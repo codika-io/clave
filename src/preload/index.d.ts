@@ -1,3 +1,5 @@
+import type { ExtensionsInventory } from '../shared/extensions-types'
+
 export interface SecretRequestView {
   id: string
   callerSessionId?: string
@@ -456,6 +458,7 @@ export interface ElectronAPI {
   readImageAsDataUrl: (absolutePath: string) => Promise<string | null>
   preferencesGet: (key: string) => Promise<unknown>
   preferencesSet: (key: string, value: unknown) => Promise<void>
+  extensionsGetInventory: (configDir?: string) => Promise<ExtensionsInventory>
   telemetryGetState: () => Promise<{
     enabled: boolean
     installId: string | null

@@ -14,6 +14,7 @@ import { registerSessionExportHandlers } from './session-export-handlers'
 import { registerDroppedFileHandlers } from './dropped-file-handlers'
 import { registerSidebarLayoutHandlers } from './sidebar-layout-handlers'
 import { registerSecretHandlers } from './secret-handlers'
+import { registerExtensionsHandlers } from './extensions-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -32,4 +33,5 @@ export function registerIpcHandlers(): void {
   registerDroppedFileHandlers()
   registerSidebarLayoutHandlers()
   registerSecretHandlers()
+  registerExtensionsHandlers()
 }
