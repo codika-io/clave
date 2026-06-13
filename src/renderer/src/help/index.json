@@ -12,12 +12,6 @@
     "keywords": ["claude", "terminal", "dangerous", "gemini", "create", "close", "kill", "remote", "agent"]
   },
   {
-    "id": "board",
-    "title": "Task Queue",
-    "subtitle": "Queue prompts and run them as Claude sessions",
-    "keywords": ["task", "queue", "prompt", "run", "batch"]
-  },
-  {
     "id": "git",
     "title": "Git Panel",
     "subtitle": "Staging, committing, MagicSync, diffs, and Git Journey",

@@ -6,7 +6,6 @@ import { useAgentStore } from '../../store/agent-store'
 import { getSelectedClaudeProfile, claudeProfileSpawnFields } from '../../store/claude-profile-store'
 import { Sidebar } from './Sidebar'
 import { TerminalGrid } from './TerminalGrid'
-import { TaskQueue } from '../board/TaskQueue'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { SettingsSidebar } from '../settings/SettingsSidebar'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
@@ -651,9 +650,6 @@ export function AppShell() {
           'flex-1 min-h-0 floating-card',
           activeView === 'terminals' ? 'hidden' : 'flex'
         )}>
-          <div className={activeView === 'board' ? 'flex-1 flex min-h-0' : 'hidden'}>
-            <TaskQueue />
-          </div>
           <div className={activeView === 'settings' ? 'flex-1 flex min-h-0' : 'hidden'}>
             <SettingsPanel />
           </div>

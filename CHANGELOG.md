@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Removed
+- **Task Queue** — the Queue view for staging prompts and running them later as Claude sessions has been removed.
+
 ## [1.54.0] — 2026-06-12
 
 ### Added

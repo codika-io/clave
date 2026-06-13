@@ -134,20 +134,6 @@ export interface FileReadResult {
   binary: boolean
 }
 
-export interface BoardTask {
-  id: string
-  title: string
-  prompt: string
-  cwd: string
-  dangerousMode: boolean
-  createdAt: number
-  updatedAt: number
-}
-
-export interface BoardData {
-  tasks: BoardTask[]
-}
-
 export interface UsageWindow {
   key: string
   label: string
@@ -338,8 +324,6 @@ export interface ElectronAPI {
   watchDir: (cwd: string, dirs?: string[]) => Promise<void>
   unwatchDir: () => Promise<void>
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => () => void
-  boardLoad: () => Promise<BoardData>
-  boardSave: (data: BoardData) => Promise<void>
   sidebarLayoutLoad: () => Promise<{ groups: unknown[]; displayOrder: string[] }>
   sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) => Promise<void>
   getUsageLimits: () => Promise<UsageLimits | UsageError>

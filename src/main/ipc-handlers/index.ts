@@ -1,5 +1,4 @@
 import { registerAppHandlers } from './app-handlers'
-import { registerBoardHandlers } from './board-handlers'
 import { registerUsageHandlers } from './usage-handlers'
 import { registerGitHandlers } from './git-handlers'
 import { registerUpdaterHandlers } from './updater-handlers'
@@ -18,7 +17,6 @@ import { registerSecretHandlers } from './secret-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
-  registerBoardHandlers()
   registerUsageHandlers()
   registerGitHandlers()
   registerUpdaterHandlers()

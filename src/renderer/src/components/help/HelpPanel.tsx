@@ -5,7 +5,6 @@ import helpIndex from '../../help/index.json'
 
 import gettingStarted from '../../help/getting-started.md?raw'
 import sessions from '../../help/sessions.md?raw'
-import board from '../../help/board.md?raw'
 import git from '../../help/git.md?raw'
 import groups from '../../help/groups.md?raw'
 import files from '../../help/files.md?raw'
@@ -18,7 +17,6 @@ import settings from '../../help/settings.md?raw'
 const helpDocsMap: Record<string, string> = {
   'getting-started': gettingStarted,
   sessions,
-  board,
   git,
   groups,
   files,

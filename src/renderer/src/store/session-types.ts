@@ -170,7 +170,7 @@ export interface FileTab {
   diff?: FileTabDiffInfo
 }
 
-export type ActiveView = 'terminals' | 'board' | 'settings' | 'agents'
+export type ActiveView = 'terminals' | 'settings' | 'agents'
 
 export type SettingsSection = 'general' | 'appearance' | 'usage'
 

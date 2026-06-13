@@ -14,7 +14,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { GroupCommandDialog } from '../ui/GroupCommandDialog'
 import { ExportClaveDialog } from '../ui/ExportClaveDialog'
 import { cn } from '../../lib/utils'
-import { SectionHeading, TaskQueueSection } from './SidebarSections'
+import { SectionHeading } from './SidebarSections'
 import { WhatsNewBanner } from '../help/WhatsNewBanner'
 import { TelemetryNoticeBanner } from '../help/TelemetryNoticeBanner'
 import { NewSessionDropdown } from './NewSessionDropdown'
@@ -1125,7 +1125,6 @@ export function Sidebar() {
             }}
             loading={loading}
           />
-          <TaskQueueSection />
         </div>
 
         {!isSearchMode && (
