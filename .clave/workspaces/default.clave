@@ -1,14 +1,17 @@
 {
   "$schema": "clave/1.0",
   "name": "Clave",
-  "cwd": ".",
-  "category": "Tools",
+  "cwd": "..",
+  "category": "Products",
   "color": "blue",
+  "logo": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+CiAgPHBhdGggZD0iTTQwMSw4NiBMMTkxLDg2IEE1MCw1MCAwIDAgMCAxNDEsMTM2IEwxNDEsMzM2IEE1MCw1MCAwIDAgMCAxOTEsMzg2IEw0MDEsMzg2IEw0MDEsMzEwIEwyNDIsMzEwIEEyNSwyNSAwIDAgMSAyMTcsMjg1IEwyMTcsMTg3IEEyNSwyNSAwIDAgMSAyNDIsMTYyIEw0MDEsMTYyIFoiIGZpbGw9IiMyRDJEMkQiLz4KICA8cGF0aCBkPSJNMTU4LDExOSBMMzc0LDExOSBMNDAxLDg2IEwxOTEsODYgWiIgZmlsbD0iIzNBM0EzQSIvPgogIDxwYXRoIGQ9Ik0yMDksMzQzIEwzNzQsMzQzIEw0MDEsMzEwIEwyNDIsMzEwIFoiIGZpbGw9IiMzQTNBM0EiLz4KICA8cGF0aCBkPSJNMzY4LDM0MyBMNDAxLDMxMCBMNDAxLDM4NiBMMzY4LDQxOSBaIiBmaWxsPSIjMjIyIi8+CiAgPHBhdGggZD0iTTE4NCwyMjAgTDIxNywxODcgTDIxNywyODUgTDE4NCwzMTggWiIgZmlsbD0iIzIyMiIvPgogIDxwYXRoIGQ9Ik0zNjgsMTE5IEw0MDEsODYgTDQwMSwxNjIgTDM2OCwxOTUgWiIgZmlsbD0iIzIyMiIvPgogIDxwYXRoIGQ9Ik0zNzEsMTE2IEwxNjEsMTE2IEE1MCw1MCAwIDAgMCAxMTEsMTY2IEwxMTEsMzY2IEE1MCw1MCAwIDAgMCAxNjEsNDE2IEwzNzEsNDE2IEwzNzEsMzQwIEwyMTIsMzQwIEEyNSwyNSAwIDAgMSAxODcsMzE1IEwxODcsMjE3IEEyNSwyNSAwIDAgMSAyMTIsMTkyIEwzNzEsMTkyIFoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPg==",
   "sessions": [
     {
-      "cwd": ".",
+      "cwd": "..",
       "name": "Clave",
       "claudeMode": true,
+      "geminiMode": false,
+      "codexMode": false,
       "dangerousMode": true
     }
   ],
@@ -16,8 +19,10 @@
     {
       "command": "npm run dev",
       "commandMode": "auto",
+      "cwd": ".",
       "color": "green",
-      "icon": "bolt"
+      "icon": "bolt",
+      "autoLaunchLocalhost": true
     }
   ]
 }
