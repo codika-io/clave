@@ -458,6 +458,9 @@ export interface ElectronAPI {
   readImageAsDataUrl: (absolutePath: string) => Promise<string | null>
   preferencesGet: (key: string) => Promise<unknown>
   preferencesSet: (key: string, value: unknown) => Promise<void>
+  trustWorkspaceRoot: (root: string) => Promise<void>
+  untrustWorkspaceRoot: (root: string) => Promise<void>
+  listTrustedRoots: () => Promise<string[]>
   extensionsGetInventory: (configDir?: string) => Promise<ExtensionsInventory>
   telemetryGetState: () => Promise<{
     enabled: boolean

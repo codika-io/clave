@@ -237,6 +237,27 @@ function migrateWorkspaces(workspaces: unknown[]): ClaveWorkspace[] {
   })
 }
 
+/** Folder containing a file path (string-only dirname for renderer use). */
+function dirOf(filePath: string): string {
+  return filePath.replace(/[\\/][^\\/]*$/, '') || filePath
+}
+
+/** One-time: trust the folders of already-registered workspaces (outside userData). */
+async function backfillTrustedRoots(workspaces: ClaveWorkspace[]): Promise<void> {
+  try {
+    if (await window.electronAPI?.preferencesGet('trustRootsBackfilled')) return
+    const userDataPath = await window.electronAPI?.getUserDataPath()
+    for (const ws of workspaces) {
+      const root = ws.rootDir ?? dirOf(ws.claveFilePath)
+      if (userDataPath && root.startsWith(userDataPath)) continue // skip Init/app dir
+      await window.electronAPI?.trustWorkspaceRoot(root)
+    }
+    await window.electronAPI?.preferencesSet('trustRootsBackfilled', true)
+  } catch (err) {
+    console.error('[workspace] Failed to backfill trusted roots:', err)
+  }
+}
+
 /** Load workspace config from preferences (call once on app start) */
 export async function loadWorkspaces(): Promise<void> {
   const raw = (await window.electronAPI?.preferencesGet('workspaces')) as unknown[] | null
@@ -254,6 +275,12 @@ export async function loadWorkspaces(): Promise<void> {
     activeWorkspaceId: activeId || null,
     loaded: true
   })
+
+  // One-time backfill: existing users added these workspace folders before
+  // folder-level trust existed, so retroactively trust them — otherwise the
+  // content-hash gate keeps re-prompting for files they already rely on.
+  // Exclude the app's own data dir (the generated "Init" workspace lives there).
+  await backfillTrustedRoots(workspaces)
 
   // Auto-load active workspace pins (idle, no auto-launch)
   if (activeId && workspaces.length > 0) {
