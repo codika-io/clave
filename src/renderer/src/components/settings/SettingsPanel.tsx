@@ -6,7 +6,7 @@ import { useWorkspaceStore } from '../../store/workspace-store'
 import { useClaudeProfileStore, DEFAULT_CLAUDE_PROFILE_ID } from '../../store/claude-profile-store'
 import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
 import { CheckIcon } from '@heroicons/react/24/solid'
-import { TrashIcon, PlusIcon, PencilIcon, FolderIcon } from '@heroicons/react/24/outline'
+import { TrashIcon, PlusIcon, PencilIcon, FolderIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
 import { LocationsTab } from './LocationsTab'
 import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsSection, SettingsCard, SettingsRow, ToggleRow } from './primitives'
@@ -479,6 +479,14 @@ function WorkspacesSection() {
   const [discoveredFiles, setDiscoveredFiles] = useState<{ name: string; path: string; rootDir: string | null }[] | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
+  const [trustedRoots, setTrustedRoots] = useState<string[]>([])
+
+  const refreshTrustedRoots = () => {
+    window.electronAPI?.listTrustedRoots().then((r) => setTrustedRoots(r ?? []))
+  }
+  useEffect(() => {
+    refreshTrustedRoots()
+  }, [])
 
   const handleAddWorkspace = async () => {
     setDiscoveryError(null)
@@ -486,6 +494,11 @@ function WorkspacesSection() {
 
     const folder = await window.electronAPI?.openFolderDialog()
     if (!folder) return
+
+    // Explicitly picking a folder is the trust grant: every .clave discovered
+    // under it runs its auto commands without re-prompting.
+    await window.electronAPI?.trustWorkspaceRoot(folder)
+    refreshTrustedRoots()
 
     // Try discovery first
     const files = await window.electronAPI?.discoverClaveFiles(folder)
@@ -652,6 +665,40 @@ function WorkspacesSection() {
       {/* Error message */}
       {discoveryError && (
         <p className="mt-2 text-xs text-red-400 px-1">{discoveryError}</p>
+      )}
+
+      {/* Trusted workspace folders */}
+      {trustedRoots.length > 0 && (
+        <>
+          <div className="settings-row-title px-1 pt-4 pb-1 flex items-center gap-2">
+            <ShieldCheckIcon className="w-4 h-4 text-text-tertiary" />
+            Trusted workspace folders
+          </div>
+          <p className="settings-row-description px-1 pb-2">
+            Workspace files inside these folders run their auto commands without prompting.
+          </p>
+          <SettingsCard>
+            {trustedRoots.map((root) => (
+              <div key={root} className="settings-row">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <FolderIcon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
+                  <p className="settings-row-description truncate" title={root}>{root}</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    await window.electronAPI?.untrustWorkspaceRoot(root)
+                    setTrustedRoots((r) => r.filter((x) => x !== root))
+                  }}
+                  className="btn-icon btn-icon-xs hover:text-red-400 flex-shrink-0"
+                  title="Revoke trust"
+                  aria-label="Revoke trust"
+                >
+                  <TrashIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </SettingsCard>
+        </>
       )}
     </SettingsSection>
   )

@@ -74,6 +74,78 @@ function isTrusted(content: string): boolean {
   return loadTrustedHashes().has(hashContent(content))
 }
 
+// ── Trusted workspace roots (VS Code Workspace Trust style) ──────────────────
+// Content-hash trust above is fragile: every distinct .clave file prompts, and
+// any edit (incl. the app's own rewrites) re-prompts. Instead, when the user
+// explicitly *adds a workspace folder* we trust that folder as a root, and every
+// .clave discovered under it skips the prompt. Files opened from outside any
+// trusted root still fall back to the content-hash gate.
+
+let trustedRoots: string[] | null = null
+
+function trustedRootsPath(): string {
+  return path.join(app.getPath('userData'), 'clave-trusted-roots.json')
+}
+
+/** Resolve symlinks + normalize so trust checks can't be defeated by path tricks. */
+function normalizeRoot(p: string): string {
+  try {
+    return fs.realpathSync(path.resolve(p))
+  } catch {
+    return path.resolve(p)
+  }
+}
+
+function loadTrustedRoots(): string[] {
+  if (trustedRoots) return trustedRoots
+  try {
+    const raw = fs.readFileSync(trustedRootsPath(), 'utf-8')
+    trustedRoots = (JSON.parse(raw) as string[]).map(normalizeRoot)
+  } catch {
+    trustedRoots = []
+  }
+  return trustedRoots
+}
+
+function persistTrustedRoots(): void {
+  if (!trustedRoots) return
+  try {
+    fs.writeFileSync(trustedRootsPath(), JSON.stringify(trustedRoots), 'utf-8')
+  } catch {
+    // best effort
+  }
+}
+
+function addTrustedRoot(root: string): void {
+  const set = loadTrustedRoots()
+  const norm = normalizeRoot(root)
+  if (!set.includes(norm)) {
+    set.push(norm)
+    persistTrustedRoots()
+  }
+}
+
+function removeTrustedRoot(root: string): void {
+  const norm = normalizeRoot(root)
+  trustedRoots = loadTrustedRoots().filter((r) => r !== norm)
+  persistTrustedRoots()
+}
+
+/** True if absolutePath lives at or under any trusted root (after realpath). */
+function isUnderTrustedRoot(absolutePath: string): boolean {
+  let real: string
+  try {
+    real = fs.realpathSync(absolutePath)
+  } catch {
+    real = path.resolve(absolutePath)
+  }
+  for (const root of loadTrustedRoots()) {
+    const rel = path.relative(root, real)
+    if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) return true
+  }
+  return false
+}
+
 /** Auto-run commands or dangerousMode sessions present in a parsed result. */
 function describeElevated(result: ClaveFileReadResult): { autoCommands: string[]; dangerous: boolean } {
   const groups = result.type === 'multi' ? result.groups : [result]
@@ -209,9 +281,17 @@ export function registerClaveFileHandlers(): void {
 
         // Trust gate: a file requesting auto-run or dangerousMode that the user
         // has neither authored nor trusted must be confirmed before its commands
-        // can execute. Default to the safe (no-elevation) outcome.
+        // can execute. Trust is resolved in order: (1) the file lives under a
+        // trusted workspace root, (2) the supplied rootDir is itself a trusted
+        // root, (3) the exact content hash was previously trusted/authored
+        // (back-compat). Default to the safe (no-elevation) outcome.
         const { autoCommands, dangerous } = describeElevated(result)
-        if ((autoCommands.length > 0 || dangerous) && !isTrusted(raw)) {
+        const elevated = autoCommands.length > 0 || dangerous
+        const trusted =
+          isUnderTrustedRoot(absolutePath) ||
+          (rootDir != null && isUnderTrustedRoot(rootDir)) ||
+          isTrusted(raw)
+        if (elevated && !trusted) {
           const win = BrowserWindow.fromWebContents(_event.sender)
           const detailLines: string[] = []
           if (autoCommands.length > 0) {
@@ -222,22 +302,27 @@ export function registerClaveFileHandlers(): void {
             detailLines.push('')
             detailLines.push('One or more agents would start with permission prompts disabled (--dangerously-skip-permissions).')
           }
-          const { response } = await dialog.showMessageBox(win!, {
+          const folderForTrust = rootDir || path.dirname(absolutePath)
+          const { response, checkboxChecked } = await dialog.showMessageBox(win!, {
             type: 'warning',
             buttons: ['Open safely', 'Trust and run', 'Cancel'],
             defaultId: 0,
             cancelId: 2,
             noLink: true,
+            checkboxLabel: `Trust all workspace files in “${path.basename(folderForTrust)}”`,
+            checkboxChecked: false,
             title: 'Review workspace file',
             message: `“${path.basename(absolutePath)}” wants to run commands automatically.`,
             detail: detailLines.join('\n') + '\n\nOnly trust this file if you recognise and understand these commands.'
           })
           if (response === 2) return null // Cancel
+          if (checkboxChecked) addTrustedRoot(folderForTrust)
           if (response === 1) {
-            trustContent(raw) // Trust and run as configured
+            if (!checkboxChecked) trustContent(raw) // Trust and run this exact file
             return result
           }
-          return sanitizeElevated(result) // Open safely — no auto-run, no dangerous mode
+          // Open safely — but folder trust (if ticked) supersedes sanitization
+          return checkboxChecked ? result : sanitizeElevated(result)
         }
 
         return result
@@ -516,6 +601,17 @@ export function registerClaveFileHandlers(): void {
   // Read an image file and return as data URL
   ipcMain.handle('clave:read-image', (_event, absolutePath: string): string | null => {
     return readImageAsDataUrl(absolutePath)
+  })
+
+  // Trusted workspace roots (folder-level trust for .clave files)
+  ipcMain.handle('clave:trust-root', (_event, root: string) => {
+    addTrustedRoot(root)
+  })
+  ipcMain.handle('clave:untrust-root', (_event, root: string) => {
+    removeTrustedRoot(root)
+  })
+  ipcMain.handle('clave:list-trusted-roots', (): string[] => {
+    return loadTrustedRoots()
   })
 
   // Preferences get/set

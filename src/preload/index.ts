@@ -306,6 +306,12 @@ const electronAPI = {
   preferencesGet: (key: string) => ipcRenderer.invoke('preferences:get', key),
   preferencesSet: (key: string, value: unknown) =>
     ipcRenderer.invoke('preferences:set', key, value),
+  trustWorkspaceRoot: (root: string) =>
+    ipcRenderer.invoke('clave:trust-root', root) as Promise<void>,
+  untrustWorkspaceRoot: (root: string) =>
+    ipcRenderer.invoke('clave:untrust-root', root) as Promise<void>,
+  listTrustedRoots: () =>
+    ipcRenderer.invoke('clave:list-trusted-roots') as Promise<string[]>,
 
   // ── Extensions (read-only inventory of installed plugins/skills/MCP) ──
   extensionsGetInventory: (configDir?: string) =>
