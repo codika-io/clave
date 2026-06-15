@@ -11,11 +11,17 @@ const MONO_FONT = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, mon
  * zero reconfiguration.
  */
 const claveTheme = EditorView.theme({
+  // Fill the (flex-column) container as a flex child rather than via height:100%.
+  // The file panel is max-height-capped with no definite height, so height:100%
+  // would not resolve and the editor would grow to its full content height —
+  // overflowing the clipped container and killing vertical scrolling. Flex
+  // sizing bounds the editor so .cm-scroller can scroll. See CodeEditor.tsx.
   '&': {
     color: 'var(--text-primary)',
     backgroundColor: 'transparent',
     fontSize: '12px',
-    height: '100%'
+    flex: '1 1 0%',
+    minHeight: '0'
   },
   '.cm-content': {
     fontFamily: MONO_FONT,
