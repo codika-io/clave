@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.56.0",
+    "title": "Trusted workspace folders",
+    "description": "Adding a workspace folder now trusts it as a root, so every .clave file inside it opens without re-prompting — no more repeated warning dialogs when you run many workspaces or when a file gets rewritten. A new Trusted workspace folders card in Settings lists your trusted roots and lets you revoke any of them. Files opened from outside a trusted folder still ask for confirmation.",
+    "action": {
+      "type": "navigate",
+      "target": "settings"
+    }
+  },
+  {
     "version": "1.55.0",
     "title": "Browse your installed Extensions",
     "description": "A new Extensions view (under New Session in the sidebar) shows everything installed for a Claude Code profile. Browse your marketplaces as cards, drill into one to see its plugins, then open a plugin to see its skills, agents, commands, and MCP servers. A dedicated MCP Servers tab lists every server across all sources, and when you run multiple Claude accounts a profile dropdown scopes the whole view.",

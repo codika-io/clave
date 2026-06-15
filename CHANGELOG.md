@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.56.0] — 2026-06-15
+
+### Added
+- **Trusted workspace folders** — adding a workspace folder now trusts it as a root, so every `.clave` file discovered inside it opens without re-prompting. No more repeated warning dialogs when you run many workspaces or when Clave (or a `git pull`) rewrites a `.clave` file. A new **Trusted workspace folders** card in Settings lists your trusted roots and lets you revoke any of them, and existing workspaces are trusted automatically on upgrade. Files opened from outside any trusted folder still ask for confirmation as before.
+
+### Changed
+- The group terminal folder picker now opens at the group's root folder instead of your home directory.
+
 ## [1.55.0] — 2026-06-13
 
 ### Added
