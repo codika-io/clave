@@ -161,7 +161,7 @@ function handleCreateGroup(payload: { name: string }): unknown {
   return { groupId: created.id, name: created.name }
 }
 
-async function handleOpenSession(payload: {
+export async function openSessionProgrammatically(payload: {
   cwd: string
   mode?: 'claude' | 'gemini' | 'codex' | 'terminal'
   groupId?: string
@@ -373,7 +373,9 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
     case 'createGroup':
       return handleCreateGroup(payload as Parameters<typeof handleCreateGroup>[0])
     case 'openSession':
-      return handleOpenSession(payload as Parameters<typeof handleOpenSession>[0])
+      return openSessionProgrammatically(
+        payload as Parameters<typeof openSessionProgrammatically>[0]
+      )
     case 'moveSession':
       return handleMoveSession(payload as Parameters<typeof handleMoveSession>[0])
     case 'launchGroup':

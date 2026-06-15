@@ -317,6 +317,7 @@ export interface ElectronAPI {
   onNotificationClicked: (callback: (sessionId: string) => void) => () => void
   listFiles: (cwd: string) => Promise<{ files: string[]; truncated: boolean }>
   readDir: (rootCwd: string, dirPath: string) => Promise<DirEntry[]>
+  existsSync: (rootCwd: string, relPath: string) => boolean
   readFile: (rootCwd: string, filePath: string) => Promise<FileReadResult>
   statFile: (rootCwd: string, filePath: string) => Promise<FileStat>
   writeFile: (rootCwd: string, filePath: string, content: string) => Promise<void>

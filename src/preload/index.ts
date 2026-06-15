@@ -147,6 +147,8 @@ const electronAPI = {
   listFiles: (cwd: string) => ipcRenderer.invoke('fs:list-files', cwd),
   readDir: (rootCwd: string, dirPath: string) =>
     ipcRenderer.invoke('fs:read-dir', rootCwd, dirPath),
+  existsSync: (rootCwd: string, relPath: string): boolean =>
+    ipcRenderer.sendSync('fs:exists-sync', rootCwd, relPath),
   readFile: (rootCwd: string, filePath: string) =>
     ipcRenderer.invoke('fs:read-file', rootCwd, filePath),
   statFile: (rootCwd: string, filePath: string) => ipcRenderer.invoke('fs:stat', rootCwd, filePath),

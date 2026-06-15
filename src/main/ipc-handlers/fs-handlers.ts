@@ -40,6 +40,11 @@ export function registerFsHandlers(): void {
   ipcMain.handle('fs:read-dir', (_event, rootCwd: string, dirPath: string) =>
     fileManager.readDir(rootCwd, dirPath)
   )
+  // Synchronous: lets the renderer's synchronous right-click handler check for a
+  // file (e.g. slideless.json) without async flicker. Single boolean payload.
+  ipcMain.on('fs:exists-sync', (event, rootCwd: string, relPath: string) => {
+    event.returnValue = fileManager.existsSync(rootCwd, relPath)
+  })
   ipcMain.handle('fs:read-file', (_event, rootCwd: string, filePath: string) =>
     fileManager.readFile(rootCwd, filePath)
   )

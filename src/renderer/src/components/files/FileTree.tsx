@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useSessionStore } from '../../store/session-store'
+import { openSessionProgrammatically } from '../../lib/mcp-dispatcher'
 import { useFileTree, type FlatTreeNode } from '../../hooks/use-file-tree'
 import { FileTreeItem } from './FileTreeItem'
 import { ContextMenu } from '../ui/ContextMenu'
@@ -15,7 +16,8 @@ import {
   FolderPlusIcon,
   DocumentDuplicateIcon,
   ClipboardDocumentIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  PlayIcon
 } from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
@@ -284,6 +286,24 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
           icon: <FolderOpenIcon className="w-3.5 h-3.5" />,
           onClick: () => onNavigateToFolder(absPath)
         })
+        // A Slideless deck directly contains slideless.json. Synchronous check so
+        // the menu opens instantly with the right item (no async flicker).
+        if (window.electronAPI?.existsSync(cwd, `${node.path}/slideless.json`)) {
+          items.push({
+            label: 'Run Slideless',
+            icon: <PlayIcon className="w-3.5 h-3.5" />,
+            onClick: () => {
+              const folderName = node.path.split('/').pop() ?? node.path
+              openSessionProgrammatically({
+                cwd: absPath,
+                mode: 'terminal',
+                command: 'slideless dev .',
+                autoRun: true,
+                name: `slideless · ${folderName}`
+              })
+            }
+          })
+        }
         items.push({
           label: 'Journey',
           icon: <MapIcon className="w-3.5 h-3.5" />,

@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises'
+import { existsSync } from 'fs'
 import * as path from 'path'
 import fg from 'fast-glob'
 import {
@@ -53,6 +54,19 @@ class FileManager {
     return {
       files: files.slice(0, MAX_FILES).sort(),
       truncated
+    }
+  }
+
+  /**
+   * Synchronous existence check, sandboxed to the root. Used by the Files-tab
+   * context menu to decide (instantly, within the synchronous right-click
+   * handler) whether a folder is a Slideless deck.
+   */
+  existsSync(rootCwd: string, relPath: string): boolean {
+    try {
+      return existsSync(validatePath(rootCwd, relPath))
+    } catch {
+      return false
     }
   }
 
