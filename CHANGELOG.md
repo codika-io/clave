@@ -6,8 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.56.1] — 2026-06-15
+
 ### Fixed
 - File previews no longer get stuck — opening a longer file (`.json`, `.sh`, `.clave`, and other code files) from the file panel is scrollable again instead of clipping the content below the fold.
+- Opening a template from the template picker now always spawns a fresh group. Previously, deleting a template-spawned session from the sidebar could leave the template stuck — clicking it again only flashed its colour dot and never reopened it.
 
 ## [1.56.0] — 2026-06-15
 
