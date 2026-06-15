@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { usePinnedStore, getPinnedState, togglePinnedGroup, importClaveFile, type PinnedGroup } from '../../store/pinned-store'
+import { usePinnedStore, spawnTemplate, importClaveFile, type PinnedGroup } from '../../store/pinned-store'
 import { resolveColorHex } from '../../store/session-types'
 import { useSessionStore } from '../../store/session-store'
 import { cn } from '../../lib/utils'
@@ -91,7 +91,9 @@ export function TemplatePickerPopover({ anchorRef, onClose, onContextMenu }: Tem
     if (!file) return
     const filePath = window.electronAPI?.getPathForFile(file)
     if (!filePath || !filePath.endsWith('.clave')) return
-    const result = await importClaveFile(filePath)
+    // Dropping a .clave only adds it to the template list — it doesn't launch.
+    // Templates are stamps: the user clicks one to spawn it when ready.
+    const result = await importClaveFile(filePath, { autoLaunch: false })
     if (result?.alreadyExists) {
       setFlashPinnedId(result.pinnedId)
       setTimeout(() => setFlashPinnedId(null), 1500)
@@ -177,18 +179,19 @@ function TemplateRow({
   flashing: boolean
   onContextMenu: (e: React.MouseEvent, pinnedId: string) => void
 }) {
-  const state = getPinnedState(template)
   const colorHex = resolveColorHex(template.color)
   const dotColor = colorHex || 'var(--accent)'
 
+  // A template is a stamp: clicking it spawns a fresh group and is done. It
+  // never links to a live group, so there's no active/hidden state to show —
+  // the dot is just the template's own color.
   return (
     <button
-      onClick={() => togglePinnedGroup(template.id)}
+      onClick={() => spawnTemplate(template.id)}
       onContextMenu={(e) => {
         e.preventDefault()
         onContextMenu(e, template.id)
       }}
-      data-selected={state === 'active-visible' ? 'true' : undefined}
       className={cn('sidebar-item sidebar-item--elevated group', flashing && 'ring-2 ring-accent animate-pulse')}
     >
       {template.logo ? (
@@ -196,16 +199,10 @@ function TemplateRow({
       ) : (
         <span
           className="w-2 h-2 rounded-full flex-shrink-0"
-          style={{ backgroundColor: state === 'idle' ? 'var(--border)' : dotColor }}
-        />
-      )}
-      <span className="flex-1 truncate">{template.name}</span>
-      {state === 'active-hidden' && (
-        <span
-          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
           style={{ backgroundColor: dotColor }}
         />
       )}
+      <span className="flex-1 truncate">{template.name}</span>
     </button>
   )
 }
