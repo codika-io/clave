@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Fixed
+- File previews no longer get stuck — opening a longer file (`.json`, `.sh`, `.clave`, and other code files) from the file panel is scrollable again instead of clipping the content below the fold.
+
 ## [1.56.0] — 2026-06-15
 
 ### Added

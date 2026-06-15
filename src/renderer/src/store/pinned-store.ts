@@ -448,6 +448,15 @@ export function pinGroupFromCurrent(groupId: string): void {
   usePinnedStore.getState().addPinnedGroup(pinned)
 }
 
+/** Spawn a fresh group from a template, every time, without linking the pin to
+ *  the live group. A template is a stamp: clicking it produces a group and is
+ *  done. Use this (not togglePinnedGroup) for the template picker popup. */
+export async function spawnTemplate(pinnedId: string): Promise<void> {
+  const pg = usePinnedStore.getState().pinnedGroups.find((p) => p.id === pinnedId)
+  if (!pg) return
+  await spawnPinnedGroup(pinnedId, pg, { link: false })
+}
+
 /** Toggle a pinned group: idle → spawn, active+visible → hide, active+hidden → show */
 export async function togglePinnedGroup(pinnedId: string): Promise<void> {
   const pg = usePinnedStore.getState().pinnedGroups.find((p) => p.id === pinnedId)
@@ -482,8 +491,13 @@ export async function togglePinnedGroup(pinnedId: string): Promise<void> {
   await spawnPinnedGroup(pinnedId, pg)
 }
 
-async function spawnPinnedGroup(pinnedId: string, pg: PinnedGroup): Promise<void> {
+async function spawnPinnedGroup(
+  pinnedId: string,
+  pg: PinnedGroup,
+  options?: { link?: boolean }
+): Promise<void> {
   if (!window.electronAPI?.spawnSession) return
+  const link = options?.link ?? true
 
   const spawnedIds: string[] = []
 
@@ -562,9 +576,13 @@ async function spawnPinnedGroup(pinnedId: string, pg: PinnedGroup): Promise<void
     )
   }))
 
-  // Link pinned group to the live group
-  usePinnedStore.getState().setActiveGroupId(pinnedId, newGroup.id)
-  usePinnedStore.getState().setVisible(pinnedId, true)
+  // Link pinned group to the live group — skipped for pure-stamp spawns
+  // (template popup), so the pin never holds a reference to a live group and
+  // can't be stranded when that group's sessions are later deleted.
+  if (link) {
+    usePinnedStore.getState().setActiveGroupId(pinnedId, newGroup.id)
+    usePinnedStore.getState().setVisible(pinnedId, true)
+  }
 
   // Focus the first session
   if (spawnedIds.length > 0) {

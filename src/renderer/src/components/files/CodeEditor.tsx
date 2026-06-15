@@ -121,5 +121,7 @@ export function CodeEditor({
     })
   }, [readOnly])
 
-  return <div ref={containerRef} className={`overflow-hidden ${className ?? ''}`} />
+  // flex-col so the CM editor (.cm-editor) can size itself as a flex child —
+  // see the `&` rule in code-editor-theme.ts for why height:100% doesn't work.
+  return <div ref={containerRef} className={`flex flex-col overflow-hidden ${className ?? ''}`} />
 }
