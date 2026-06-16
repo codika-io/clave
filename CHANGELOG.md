@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.57.0] — 2026-06-16
+
+### Added
+- **Manage plugins from Extensions** — the Extensions view can now install and uninstall plugins, enable or disable them, and add or remove marketplaces directly, instead of being read-only. Open a marketplace to **Install** any plugin it offers (or **Remove** the marketplace), open an installed plugin to **Enable / Disable** or **Uninstall** it, and use **Add marketplace** to register a new one from a GitHub repo, git URL, or local path. Disabled plugins are flagged so you can tell them apart at a glance. Changes apply the next time you start a Claude session.
+
 ## [1.56.1] — 2026-06-15
 
 ### Fixed

@@ -69,6 +69,9 @@ export interface PluginInfo {
   author?: string
   keywords?: string[]
   scope: 'user' | 'local'
+  /** Whether the plugin is enabled (loaded into sessions). Disabled plugins
+   *  stay installed but are skipped at session start. Default true. */
+  enabled: boolean
   installPath: string
   installedAt?: string
   lastUpdated?: string
@@ -108,4 +111,18 @@ export interface ExtensionsInventory {
   mcpServers: McpServerInfo[]
   /** Non-fatal read errors worth surfacing in the UI. */
   warnings: string[]
+}
+
+/** Install scope accepted by `claude plugin` mutating commands. */
+export type MutationScope = 'user' | 'project' | 'local'
+
+/**
+ * Result of a mutating extensions operation (install/uninstall/enable/disable,
+ * marketplace add/remove). Mutators never throw across IPC — failures come back
+ * as `{ ok: false, message }` so the renderer can surface CLI stderr inline.
+ */
+export interface MutationResult {
+  ok: boolean
+  /** Human-readable outcome: a short success note, or the CLI's error output. */
+  message: string
 }

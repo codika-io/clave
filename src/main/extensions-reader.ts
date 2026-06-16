@@ -296,6 +296,13 @@ export function readClaudeInventory(configDir?: string): ExtensionsInventory {
       path.join(pluginsRoot, 'installed_plugins.json')
     )?.plugins ?? {}
 
+  // Enabled/disabled state lives in <base>/settings.json under `enabledPlugins`
+  // (a map of "<plugin>@<marketplace>" → boolean). A plugin absent from the map
+  // is enabled by default; only an explicit `false` disables it.
+  const enabledPlugins =
+    readJson<{ enabledPlugins?: Record<string, boolean> }>(path.join(base, 'settings.json'))
+      ?.enabledPlugins ?? {}
+
   const plugins: PluginInfo[] = []
   const allMcp: McpServerInfo[] = []
 
@@ -325,6 +332,7 @@ export function readClaudeInventory(configDir?: string): ExtensionsInventory {
       author: typeof manifest.author === 'string' ? manifest.author : manifest.author?.name,
       keywords: manifest.keywords,
       scope: record.scope || 'user',
+      enabled: enabledPlugins[id] !== false,
       installPath,
       installedAt: record.installedAt,
       lastUpdated: record.lastUpdated,

@@ -1,4 +1,8 @@
-import type { ExtensionsInventory } from '../shared/extensions-types'
+import type {
+  ExtensionsInventory,
+  MutationResult,
+  MutationScope
+} from '../shared/extensions-types'
 
 export interface SecretRequestView {
   id: string
@@ -463,6 +467,24 @@ export interface ElectronAPI {
   untrustWorkspaceRoot: (root: string) => Promise<void>
   listTrustedRoots: () => Promise<string[]>
   extensionsGetInventory: (configDir?: string) => Promise<ExtensionsInventory>
+  extensionsInstallPlugin: (
+    pluginId: string,
+    scope: MutationScope,
+    configDir?: string
+  ) => Promise<MutationResult>
+  extensionsUninstallPlugin: (
+    pluginId: string,
+    scope: MutationScope,
+    configDir?: string
+  ) => Promise<MutationResult>
+  extensionsSetPluginEnabled: (
+    pluginId: string,
+    enabled: boolean,
+    scope: MutationScope,
+    configDir?: string
+  ) => Promise<MutationResult>
+  extensionsAddMarketplace: (source: string, configDir?: string) => Promise<MutationResult>
+  extensionsRemoveMarketplace: (name: string, configDir?: string) => Promise<MutationResult>
   telemetryGetState: () => Promise<{
     enabled: boolean
     installId: string | null

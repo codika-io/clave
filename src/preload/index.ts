@@ -315,9 +315,23 @@ const electronAPI = {
   listTrustedRoots: () =>
     ipcRenderer.invoke('clave:list-trusted-roots') as Promise<string[]>,
 
-  // ── Extensions (read-only inventory of installed plugins/skills/MCP) ──
+  // ── Extensions (inventory of installed plugins/skills/MCP + management) ──
   extensionsGetInventory: (configDir?: string) =>
     ipcRenderer.invoke('extensions:get-inventory', configDir),
+  extensionsInstallPlugin: (pluginId: string, scope: string, configDir?: string) =>
+    ipcRenderer.invoke('extensions:install-plugin', pluginId, scope, configDir),
+  extensionsUninstallPlugin: (pluginId: string, scope: string, configDir?: string) =>
+    ipcRenderer.invoke('extensions:uninstall-plugin', pluginId, scope, configDir),
+  extensionsSetPluginEnabled: (
+    pluginId: string,
+    enabled: boolean,
+    scope: string,
+    configDir?: string
+  ) => ipcRenderer.invoke('extensions:set-plugin-enabled', pluginId, enabled, scope, configDir),
+  extensionsAddMarketplace: (source: string, configDir?: string) =>
+    ipcRenderer.invoke('extensions:add-marketplace', source, configDir),
+  extensionsRemoveMarketplace: (name: string, configDir?: string) =>
+    ipcRenderer.invoke('extensions:remove-marketplace', name, configDir),
 
   // ── Telemetry ──
   telemetryGetState: () =>

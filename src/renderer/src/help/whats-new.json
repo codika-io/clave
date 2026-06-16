@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.57.0",
+    "title": "Install plugins from Extensions",
+    "description": "The Extensions view is no longer read-only — you can now manage plugins right inside Clave. Open a marketplace to install any plugin it offers or remove the marketplace, open an installed plugin to enable, disable, or uninstall it, and use Add marketplace to register a new one from a GitHub repo, git URL, or local path. Disabled plugins are flagged so you can tell them apart. Changes apply the next time you start a Claude session.",
+    "action": {
+      "type": "navigate",
+      "target": "extensions"
+    }
+  },
+  {
     "version": "1.56.0",
     "title": "Trusted workspace folders",
     "description": "Adding a workspace folder now trusts it as a root, so every .clave file inside it opens without re-prompting — no more repeated warning dialogs when you run many workspaces or when a file gets rewritten. A new Trusted workspace folders card in Settings lists your trusted roots and lets you revoke any of them. Files opened from outside a trusted folder still ask for confirmation.",
