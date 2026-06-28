@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.58.0] — 2026-06-28
+
+### Changed
+- **Antigravity CLI replaces Gemini CLI** — Google retired the standalone Gemini CLI on June 18, 2026 and folded it into the new **Antigravity CLI**. Clave's **Cmd+I** shortcut, the **New session** menu, and the **Usage** panel now launch and show **Antigravity CLI** (the `agy` binary) with its brand mark instead of Gemini. Your existing Gemini sessions, pinned groups, and `.clave` files keep working and reopen as Antigravity automatically.
+
 ## [1.57.0] — 2026-06-16
 
 ### Added

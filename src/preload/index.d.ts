@@ -35,7 +35,7 @@ export interface ClaveFileGroupData {
     cwd: string
     name: string
     claudeMode: boolean
-    geminiMode: boolean
+    antigravityMode: boolean
     codexMode: boolean
     claudeAgentsMode?: boolean
     dangerousMode: boolean
@@ -61,7 +61,7 @@ export interface ClaveFileWriteData {
     cwd: string
     name: string
     claudeMode: boolean
-    geminiMode: boolean
+    antigravityMode: boolean
     codexMode: boolean
     claudeAgentsMode?: boolean
     dangerousMode: boolean
@@ -78,7 +78,7 @@ export interface ClaveFileWriteData {
       cwd: string
       name: string
       claudeMode: boolean
-      geminiMode: boolean
+      antigravityMode: boolean
       codexMode: boolean
       claudeAgentsMode?: boolean
       dangerousMode: boolean
@@ -108,7 +108,7 @@ export interface AdoptableTmuxSession {
   cwd: string
   folderName: string
   claudeMode: boolean
-  geminiMode: boolean
+  antigravityMode: boolean
   codexMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
@@ -246,7 +246,7 @@ export interface ElectronAPI {
     options?: {
       dangerousMode?: boolean
       claudeMode?: boolean
-      geminiMode?: boolean
+      antigravityMode?: boolean
       codexMode?: boolean
       claudeAgentsMode?: boolean
       resumeSessionId?: string

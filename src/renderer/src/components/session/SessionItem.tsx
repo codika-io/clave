@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
 import { CommandLineIcon, BoltIcon } from '@heroicons/react/24/outline'
-import { ClaudeLogo, GeminiLogo, CodexLogo, ClaudeVariantGlyph } from '../icons/cli-logos'
+import { ClaudeLogo, AntigravityLogo, CodexLogo, ClaudeVariantGlyph } from '../icons/cli-logos'
 import { SidebarTabItem } from './SidebarTabItem'
 
 function LocationBadge({ locationId }: { locationId: string }) {
@@ -36,8 +36,8 @@ function SessionIcon({ session }: { session: Session }) {
   // the location badge already signals "remote".
   const Icon = session.sessionType === 'agent'
     ? BoltIcon
-    : session.geminiMode
-      ? GeminiLogo
+    : session.antigravityMode
+      ? AntigravityLogo
       : session.codexMode
         ? CodexLogo
         : (session.claudeMode || session.claudeAgentsMode)
@@ -51,12 +51,12 @@ function SessionIcon({ session }: { session: Session }) {
   //   done & unseen → neutral icon, green dot (finished while you were away; clears on view)
   //   idle / done-seen / empty → neutral icon, no dot
   //   ended → dimmed icon, no dot
-  // Gemini/Codex/terminals/agents have no deterministic state signal, so they stay
+  // Antigravity/Codex/terminals/agents have no deterministic state signal, so they stay
   // fully neutral — no color, no dot (see ROADMAP.md).
   const isClaudeCode =
     session.claudeMode === true &&
     !session.claudeAgentsMode &&
-    !session.geminiMode &&
+    !session.antigravityMode &&
     !session.codexMode &&
     session.sessionType === 'local'
 

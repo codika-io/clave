@@ -120,7 +120,7 @@ export interface Session {
   agentState?: AgentRunState
   promptWaiting: string | null
   claudeMode: boolean
-  geminiMode: boolean
+  antigravityMode: boolean
   codexMode: boolean
   /** Claude session launched via the `claude agents` subcommand. */
   claudeAgentsMode?: boolean
@@ -180,7 +180,7 @@ export interface PinnedGroupSession {
   cwd: string
   name: string
   claudeMode: boolean
-  geminiMode: boolean
+  antigravityMode: boolean
   codexMode: boolean
   claudeAgentsMode?: boolean
   dangerousMode: boolean

@@ -2,11 +2,11 @@
 // plugins, marketplaces, skills, agents, commands, and MCP servers.
 //
 // v1 reads Claude Code only. The shapes are deliberately provider-neutral so
-// Codex and Gemini readers can populate the same inventory later (they would
+// Codex and Antigravity readers can populate the same inventory later (they would
 // mostly contribute `mcpServers`, plus Codex `skills`). Everything is read-only.
 
 /** Which CLI a snapshot belongs to. v1 only ever produces 'claude'. */
-export type ExtensionsProvider = 'claude' | 'codex' | 'gemini'
+export type ExtensionsProvider = 'claude' | 'codex' | 'antigravity'
 
 export type McpTransport = 'stdio' | 'http' | 'sse' | 'unknown'
 

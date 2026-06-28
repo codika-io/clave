@@ -234,7 +234,7 @@ function getTmuxConfigPath(): string {
 }
 
 function agentModeTag(options?: PtySpawnOptions): string {
-  if (options?.geminiMode) return 'gemini'
+  if (options?.antigravityMode) return 'antigravity'
   if (options?.codexMode) return 'codex'
   if (options?.claudeAgentsMode) return 'agents'
   if (options?.claudeMode === false) return 'shell'
@@ -280,7 +280,7 @@ export interface AdoptableTmuxSession {
   cwd: string
   folderName: string
   claudeMode: boolean
-  geminiMode: boolean
+  antigravityMode: boolean
   codexMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
@@ -372,7 +372,7 @@ function liveTmuxSessions(tmuxPath: string): Set<string> {
 export interface PtySpawnOptions {
   dangerousMode?: boolean
   claudeMode?: boolean
-  geminiMode?: boolean
+  antigravityMode?: boolean
   codexMode?: boolean
   claudeAgentsMode?: boolean
   resumeSessionId?: string
@@ -380,7 +380,7 @@ export interface PtySpawnOptions {
   initialCommand?: string
   autoExecute?: boolean
   /** Initial prompt handed to the agent CLI's interactive mode (claude/codex
-   *  positional arg, gemini -i). One-shot: not persisted to the tmux sidecar,
+   *  positional arg, agy -i). One-shot: not persisted to the tmux sidecar,
    *  so adoption re-spawns never re-submit it. */
   initialPrompt?: string
   /** Opt-in: run this session inside a persistent tmux session. */
@@ -429,7 +429,7 @@ class PtyManager {
   /**
    * Plan a PTY spawn but defer the actual `pty.spawn()` until the renderer
    * has fit its xterm and reported real cols/rows. This avoids the TUI
-   * (claude/gemini) being born at the default 80×24 and then being mangled
+   * (claude/agy) being born at the default 80×24 and then being mangled
    * by xterm's reflow when the renderer resizes to the real width.
    *
    * `start(id, cols, rows)` finalises the spawn at the correct size.
@@ -441,16 +441,16 @@ class PtyManager {
       options?.adoptSessionId && options?.adoptTmuxName ? options.adoptSessionId : randomUUID()
     const folderName = (isWindows ? cwd.split('\\') : cwd.split('/')).pop() || cwd
     const useAgentsMode = options?.claudeAgentsMode === true
-    const useGeminiMode = options?.geminiMode === true
+    const useAntigravityMode = options?.antigravityMode === true
     const useCodexMode = options?.codexMode === true
-    const useClaudeMode = options?.claudeMode !== false && !useGeminiMode && !useCodexMode && !useAgentsMode
+    const useClaudeMode = options?.claudeMode !== false && !useAntigravityMode && !useCodexMode && !useAgentsMode
 
     let claudeSessionId: string | undefined
     let shellArgs: string[]
     if (isWindows) {
       // Windows: cmd.exe with /c to exec the command directly (no echoed prompt).
-      if (useGeminiMode) {
-        shellArgs = ['/c', 'gemini']
+      if (useAntigravityMode) {
+        shellArgs = ['/c', 'agy']
       } else if (useCodexMode) {
         shellArgs = ['/c', 'codex']
       } else if (useAgentsMode) {
@@ -478,13 +478,13 @@ class PtyManager {
     } else {
       // POSIX: -l -c '<cmd>' runs the command non-interactively (no echo, no
       // prompt, no rc-file chatter like the macOS bash→zsh notice).
-      if (useGeminiMode) {
+      if (useAntigravityMode) {
         shellArgs = [
           '-l',
           '-c',
           options?.initialPrompt
-            ? `gemini -i ${shellSingleQuote(options.initialPrompt)}`
-            : 'gemini'
+            ? `agy -i ${shellSingleQuote(options.initialPrompt)}`
+            : 'agy'
         ]
       } else if (useCodexMode) {
         shellArgs = [
@@ -559,7 +559,7 @@ class PtyManager {
         cwd,
         folderName,
         claudeMode: useClaudeMode,
-        geminiMode: useGeminiMode,
+        antigravityMode: useAntigravityMode,
         codexMode: useCodexMode,
         claudeAgentsMode: useAgentsMode,
         dangerousMode: options?.dangerousMode === true,
@@ -697,7 +697,7 @@ class PtyManager {
       session.onExit?.(exitCode)
     })
 
-    // For plain-shell mode (no claude/gemini), honour an explicit initialCommand.
+    // For plain-shell mode (no claude/agy), honour an explicit initialCommand.
     if (initialCommand) {
       setTimeout(() => {
         if (session.alive && session.ptyProcess) {
@@ -802,6 +802,12 @@ class PtyManager {
         meta = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'))
       } catch {
         meta = null
+      }
+      if (meta && meta.antigravityMode === undefined) {
+        // Legacy sidecars (written before the Antigravity switch) carry the old
+        // `antigravityMode`'s predecessor key. Map it forward so a survivor of the
+        // retired Gemini CLI re-spawns as Antigravity (`agy`) on adoption.
+        meta.antigravityMode = (meta as { geminiMode?: boolean }).geminiMode ?? false
       }
       if (!meta?.tmuxName || !isValidTmuxName(meta.tmuxName)) {
         try {

@@ -13,7 +13,7 @@ Clave is a desktop app for managing multiple Claude Code terminal sessions side 
 - **Claude Code** (Cmd+N): A full Claude Code session with AI assistance
 - **Terminal** (Cmd+T): A plain shell, no Claude
 - **Dangerous Mode** (Cmd+D): Claude Code with `--dangerously-skip-permissions` (skips approval prompts)
-- **Gemini CLI** (Cmd+I): A Gemini CLI coding session
+- **Antigravity CLI** (Cmd+I): An Antigravity CLI coding session
 
 ## What Else Can Clave Do?
 

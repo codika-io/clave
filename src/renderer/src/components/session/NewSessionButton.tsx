@@ -12,10 +12,10 @@ export function NewSessionButton() {
       if (!folderPath) return
 
       const state = useSessionStore.getState()
-      const otherProvider = state.geminiMode || state.codexMode || state.claudeAgentsMode
+      const otherProvider = state.antigravityMode || state.codexMode || state.claudeAgentsMode
       const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
         claudeMode: otherProvider ? false : state.claudeMode,
-        geminiMode: state.geminiMode,
+        antigravityMode: state.antigravityMode,
         codexMode: state.codexMode,
         claudeAgentsMode: state.claudeAgentsMode,
         dangerousMode: state.dangerousMode
@@ -29,7 +29,7 @@ export function NewSessionButton() {
         activityStatus: 'idle',
         promptWaiting: null,
         claudeMode: otherProvider ? false : state.claudeMode,
-        geminiMode: state.geminiMode,
+        antigravityMode: state.antigravityMode,
         codexMode: state.codexMode,
         claudeAgentsMode: state.claudeAgentsMode,
         dangerousMode: state.dangerousMode,

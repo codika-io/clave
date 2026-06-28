@@ -138,20 +138,20 @@ export function Sidebar() {
     locationId: string
     locationName: string
     claudeMode: boolean
-    geminiMode: boolean
+    antigravityMode: boolean
     codexMode: boolean
   } | null>(null)
 
   const spawnRemoteSession = useCallback(async (
-    locationId: string, cwd: string, claudeMode: boolean, geminiMode?: boolean, codexMode?: boolean
+    locationId: string, cwd: string, claudeMode: boolean, antigravityMode?: boolean, codexMode?: boolean
   ) => {
     setLoading(true)
     try {
       const shellId = await window.electronAPI.sshOpenShell(locationId, cwd)
 
-      if (geminiMode) {
+      if (antigravityMode) {
         setTimeout(() => {
-          window.electronAPI.sshShellWrite(shellId, 'gemini\r')
+          window.electronAPI.sshShellWrite(shellId, 'agy\r')
         }, 500)
       } else if (codexMode) {
         setTimeout(() => {
@@ -174,8 +174,8 @@ export function Sidebar() {
         alive: true,
         activityStatus: 'idle',
         promptWaiting: null,
-        claudeMode: (geminiMode || codexMode) ? false : claudeMode,
-        geminiMode: geminiMode ?? false,
+        claudeMode: (antigravityMode || codexMode) ? false : claudeMode,
+        antigravityMode: antigravityMode ?? false,
         codexMode: codexMode ?? false,
         dangerousMode: false,
         claudeSessionId: null,
@@ -235,10 +235,10 @@ export function Sidebar() {
       if (!folderPath) return
 
       const state = useSessionStore.getState()
-      const otherProvider = state.geminiMode || state.codexMode || state.claudeAgentsMode
+      const otherProvider = state.antigravityMode || state.codexMode || state.claudeAgentsMode
       const effectiveClaudeMode = otherProvider ? false : state.claudeMode
       // Claude account/profile: applies only to Claude Code + Claude Agents
-      // sessions — never plain terminals, Gemini, or Codex. Default profile
+      // sessions — never plain terminals, Antigravity, or Codex. Default profile
       // contributes no configDir (passthrough).
       const isClaudeSession = effectiveClaudeMode || state.claudeAgentsMode
       const profile = isClaudeSession
@@ -248,7 +248,7 @@ export function Sidebar() {
       const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
         dangerousMode: state.dangerousMode,
         claudeMode: otherProvider ? false : state.claudeMode,
-        geminiMode: state.geminiMode,
+        antigravityMode: state.antigravityMode,
         codexMode: state.codexMode,
         claudeAgentsMode: state.claudeAgentsMode,
         ...profileFields
@@ -262,7 +262,7 @@ export function Sidebar() {
         activityStatus: 'idle',
         promptWaiting: null,
         claudeMode: otherProvider ? false : state.claudeMode,
-        geminiMode: state.geminiMode,
+        antigravityMode: state.antigravityMode,
         codexMode: state.codexMode,
         claudeAgentsMode: state.claudeAgentsMode,
         dangerousMode: state.dangerousMode,
@@ -675,9 +675,9 @@ export function Sidebar() {
         if (session.locationId) {
           // spawnRemoteSession calls addSession internally, so we need to track the new ID
           const shellId = await window.electronAPI.sshOpenShell(session.locationId, session.cwd)
-          if (session.geminiMode) {
+          if (session.antigravityMode) {
             setTimeout(() => {
-              window.electronAPI.sshShellWrite(shellId, 'gemini\r')
+              window.electronAPI.sshShellWrite(shellId, 'agy\r')
             }, 500)
           } else if (session.codexMode) {
             setTimeout(() => {
@@ -698,7 +698,7 @@ export function Sidebar() {
             activityStatus: 'idle',
             promptWaiting: null,
             claudeMode: session.claudeMode,
-            geminiMode: session.geminiMode,
+            antigravityMode: session.antigravityMode,
             codexMode: session.codexMode,
             dangerousMode: false,
             claudeSessionId: null,
@@ -712,10 +712,10 @@ export function Sidebar() {
       } else {
         // Local session
         try {
-          const dupOtherProvider = session.geminiMode || session.codexMode || session.claudeAgentsMode
+          const dupOtherProvider = session.antigravityMode || session.codexMode || session.claudeAgentsMode
           const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
             claudeMode: dupOtherProvider ? false : session.claudeMode,
-            geminiMode: session.geminiMode,
+            antigravityMode: session.antigravityMode,
             codexMode: session.codexMode,
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode
@@ -729,7 +729,7 @@ export function Sidebar() {
             activityStatus: 'idle',
             promptWaiting: null,
             claudeMode: dupOtherProvider ? false : session.claudeMode,
-            geminiMode: session.geminiMode,
+            antigravityMode: session.antigravityMode,
             codexMode: session.codexMode,
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
@@ -1079,11 +1079,11 @@ export function Sidebar() {
         {/* Permanent tabs — share the same row gap as the session tabs below */}
         <div className="px-2 space-y-0.5">
           <NewSessionDropdown
-            onNewSession={({ claudeMode, geminiMode, codexMode, claudeAgentsMode, dangerousMode, locationId, claudeProfileId }) => {
+            onNewSession={({ claudeMode, antigravityMode, codexMode, claudeAgentsMode, dangerousMode, locationId, claudeProfileId }) => {
               if (locationId) {
                 // Remote: open directory picker (profiles are a local concept)
                 const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
-                setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, geminiMode, codexMode })
+                setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, antigravityMode, codexMode })
               } else if (claudeAgentsMode) {
                 // Claude Agents: spawn `claude agents` via temporary mode override
                 const store = useSessionStore.getState()
@@ -1093,14 +1093,14 @@ export function Sidebar() {
                 handleNewSession(claudeProfileId).finally(() => {
                   useSessionStore.setState({ claudeAgentsMode: prevAgents, claudeMode: prevClaude })
                 })
-              } else if (geminiMode) {
-                // Gemini: spawn directly without mode override
+              } else if (antigravityMode) {
+                // Antigravity: spawn directly without mode override
                 const store = useSessionStore.getState()
-                const prevGemini = store.geminiMode
+                const prevAntigravity = store.antigravityMode
                 const prevClaude = store.claudeMode
-                useSessionStore.setState({ geminiMode: true, claudeMode: false })
+                useSessionStore.setState({ antigravityMode: true, claudeMode: false })
                 handleNewSession().finally(() => {
-                  useSessionStore.setState({ geminiMode: prevGemini, claudeMode: prevClaude })
+                  useSessionStore.setState({ antigravityMode: prevAntigravity, claudeMode: prevClaude })
                 })
               } else if (codexMode) {
                 // Codex: spawn directly without mode override
@@ -1508,7 +1508,7 @@ export function Sidebar() {
           locationId={remotePickerState.locationId}
           locationName={remotePickerState.locationName}
           onSelect={(path) => {
-            spawnRemoteSession(remotePickerState.locationId, path, remotePickerState.claudeMode, remotePickerState.geminiMode, remotePickerState.codexMode)
+            spawnRemoteSession(remotePickerState.locationId, path, remotePickerState.claudeMode, remotePickerState.antigravityMode, remotePickerState.codexMode)
             setRemotePickerState(null)
           }}
           onCancel={() => setRemotePickerState(null)}

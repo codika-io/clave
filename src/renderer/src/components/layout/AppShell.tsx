@@ -64,22 +64,22 @@ export function AppShell() {
   useWorkTracker()
 
   const spawnSessionWithOptions = useCallback(
-    async (claudeMode: boolean, dangerousMode: boolean, geminiMode?: boolean, codexMode?: boolean, claudeAgentsMode?: boolean) => {
+    async (claudeMode: boolean, dangerousMode: boolean, antigravityMode?: boolean, codexMode?: boolean, claudeAgentsMode?: boolean) => {
       try {
         const folderPath = await window.electronAPI.openFolderDialog()
         if (!folderPath) return
 
-        const otherProvider = geminiMode || codexMode || claudeAgentsMode
+        const otherProvider = antigravityMode || codexMode || claudeAgentsMode
         const effectiveClaudeMode = otherProvider ? false : claudeMode
         // Keybinding/toolbar launches use the selected default Claude account.
         // Profiles apply only to Claude Code + Claude Agents — never plain
-        // terminals (Cmd+T), Gemini, or Codex.
+        // terminals (Cmd+T), Antigravity, or Codex.
         const isClaudeSession = effectiveClaudeMode || claudeAgentsMode
         const profile = isClaudeSession ? getSelectedClaudeProfile() : null
         const profileFields = profile ? claudeProfileSpawnFields(profile) : {}
         const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
           claudeMode: otherProvider ? false : claudeMode,
-          geminiMode,
+          antigravityMode,
           codexMode,
           claudeAgentsMode,
           dangerousMode,
@@ -94,7 +94,7 @@ export function AppShell() {
           activityStatus: 'idle',
           promptWaiting: null,
           claudeMode: otherProvider ? false : claudeMode,
-          geminiMode: geminiMode ?? false,
+          antigravityMode: antigravityMode ?? false,
           codexMode: codexMode ?? false,
           claudeAgentsMode: claudeAgentsMode ?? false,
           dangerousMode,
@@ -143,7 +143,7 @@ export function AppShell() {
           try {
             const info = await window.electronAPI.spawnSession(s.cwd, {
               claudeMode: s.claudeMode,
-              geminiMode: s.geminiMode,
+              antigravityMode: s.antigravityMode,
               codexMode: s.codexMode,
               claudeAgentsMode: s.claudeAgentsMode,
               dangerousMode: s.dangerousMode,
@@ -176,7 +176,7 @@ export function AppShell() {
               activityStatus: 'idle',
               promptWaiting: null,
               claudeMode: s.claudeMode,
-              geminiMode: s.geminiMode,
+              antigravityMode: s.antigravityMode,
               codexMode: s.codexMode,
               claudeAgentsMode: s.claudeAgentsMode,
               dangerousMode: s.dangerousMode,
@@ -335,7 +335,7 @@ export function AppShell() {
         e.preventDefault()
         spawnSessionWithOptions(true, true)
       }
-      // Cmd+I: New Gemini CLI session
+      // Cmd+I: New Antigravity CLI session
       if (e.metaKey && !e.shiftKey && !e.altKey && e.key === 'i') {
         e.preventDefault()
         spawnSessionWithOptions(false, false, true)

@@ -18,7 +18,7 @@ const electronAPI = {
     options?: {
       dangerousMode?: boolean
       claudeMode?: boolean
-      geminiMode?: boolean
+      antigravityMode?: boolean
       codexMode?: boolean
       claudeAgentsMode?: boolean
       resumeSessionId?: string

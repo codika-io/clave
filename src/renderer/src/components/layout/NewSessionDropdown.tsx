@@ -9,7 +9,7 @@ import {
   CheckIcon
 } from '@heroicons/react/24/outline'
 import { AgentPickerPopover } from '../agents/AgentPickerPopover'
-import { ClaudeLogo, GeminiLogo, CodexLogo } from '../icons/cli-logos'
+import { ClaudeLogo, AntigravityLogo, CodexLogo } from '../icons/cli-logos'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -25,7 +25,7 @@ import {
 
 export interface NewSessionLaunchOptions {
   claudeMode: boolean
-  geminiMode: boolean
+  antigravityMode: boolean
   codexMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
@@ -56,9 +56,9 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
   const multiProfile = profiles.length > 1
 
   const handleOption = useCallback(
-    (claudeMode: boolean, dangerousMode: boolean, locationId?: string, geminiMode?: boolean, codexMode?: boolean, claudeAgentsMode?: boolean, claudeProfileId?: string) => {
+    (claudeMode: boolean, dangerousMode: boolean, locationId?: string, antigravityMode?: boolean, codexMode?: boolean, claudeAgentsMode?: boolean, claudeProfileId?: string) => {
       setOpen(false)
-      onNewSession({ claudeMode, geminiMode: geminiMode ?? false, codexMode: codexMode ?? false, claudeAgentsMode: claudeAgentsMode ?? false, dangerousMode, locationId, claudeProfileId })
+      onNewSession({ claudeMode, antigravityMode: antigravityMode ?? false, codexMode: codexMode ?? false, claudeAgentsMode: claudeAgentsMode ?? false, dangerousMode, locationId, claudeProfileId })
     },
     [onNewSession]
   )
@@ -139,8 +139,8 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
             handleOption(false, false, undefined, false, false, true, profileId)
           )}
           <DropdownMenuItem onSelect={() => handleOption(false, false, undefined, true)}>
-            <GeminiLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-            <span className="flex-1">Gemini CLI</span>
+            <AntigravityLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+            <span className="flex-1">Antigravity CLI</span>
             <DropdownMenuShortcut>{'\u2318I'}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => handleOption(false, false, undefined, false, true)}>
@@ -170,8 +170,8 @@ export function NewSessionDropdown({ onNewSession, loading }: NewSessionDropdown
                 <span className="flex-1">Claude Code</span>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => handleOption(false, false, loc.id, true)}>
-                <GeminiLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                <span className="flex-1">Gemini CLI</span>
+                <AntigravityLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                <span className="flex-1">Antigravity CLI</span>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => handleOption(false, false, loc.id, false, true)}>
                 <CodexLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />

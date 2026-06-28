@@ -36,7 +36,7 @@ interface SessionState {
   tmuxMode: boolean
   searchQuery: string
   claudeMode: boolean
-  geminiMode: boolean
+  antigravityMode: boolean
   codexMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
@@ -116,7 +116,7 @@ interface SessionState {
   setSessionPlanFile: (id: string, path: string) => void
   setSearchQuery: (query: string) => void
   toggleClaudeMode: () => void
-  toggleGeminiMode: () => void
+  toggleAntigravityMode: () => void
   toggleCodexMode: () => void
   toggleClaudeAgentsMode: () => void
   toggleDangerousMode: () => void
@@ -284,7 +284,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   tmuxMode: localStorage.getItem('clave-tmux-mode') !== 'false',
   searchQuery: '',
   claudeMode: true,
-  geminiMode: false,
+  antigravityMode: false,
   codexMode: false,
   claudeAgentsMode: false,
   dangerousMode: false,
@@ -319,7 +319,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidebarUndoStack: [] as SidebarSnapshot[],
   addSession: (session) =>
     set((state) => {
-      const newSession = { ...session, geminiMode: session.geminiMode ?? false, codexMode: session.codexMode ?? false, claudeAgentsMode: session.claudeAgentsMode ?? false, detectedUrl: session.detectedUrl ?? null, serverStatus: session.serverStatus ?? null, serverCommand: session.serverCommand ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false, userRenamed: session.userRenamed ?? false, planFilePath: session.planFilePath ?? null }
+      const newSession = { ...session, antigravityMode: session.antigravityMode ?? false, codexMode: session.codexMode ?? false, claudeAgentsMode: session.claudeAgentsMode ?? false, detectedUrl: session.detectedUrl ?? null, serverStatus: session.serverStatus ?? null, serverCommand: session.serverCommand ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false, userRenamed: session.userRenamed ?? false, planFilePath: session.planFilePath ?? null }
 
       // Check if selected sessions all belong to a single group
       const selectedIds = state.selectedSessionIds
@@ -901,7 +901,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   toggleClaudeMode: () => set((state) => ({ claudeMode: !state.claudeMode })),
 
-  toggleGeminiMode: () => set((state) => ({ geminiMode: !state.geminiMode })),
+  toggleAntigravityMode: () => set((state) => ({ antigravityMode: !state.antigravityMode })),
 
   toggleCodexMode: () => set((state) => ({ codexMode: !state.codexMode })),
 
@@ -1071,7 +1071,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         activityStatus: agent.status === 'busy' ? 'active' : agent.status === 'offline' ? 'ended' : 'idle',
         promptWaiting: null,
         claudeMode: false,
-        geminiMode: false,
+        antigravityMode: false,
         codexMode: false,
         claudeAgentsMode: false,
         dangerousMode: false,

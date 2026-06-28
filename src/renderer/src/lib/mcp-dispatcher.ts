@@ -15,10 +15,10 @@ interface McpCommandMessage {
   payload: unknown
 }
 
-type SessionMode = 'claude' | 'gemini' | 'codex' | 'claude-agents' | 'terminal'
+type SessionMode = 'claude' | 'antigravity' | 'codex' | 'claude-agents' | 'terminal'
 
 function sessionMode(s: Session): SessionMode {
-  if (s.geminiMode) return 'gemini'
+  if (s.antigravityMode) return 'antigravity'
   if (s.codexMode) return 'codex'
   if (s.claudeAgentsMode) return 'claude-agents'
   if (s.claudeMode) return 'claude'
@@ -77,7 +77,7 @@ function handleList(payload: { callerSessionId?: string }): unknown {
     }))
   }))
   const pinnedSessionMode = (s: PinnedGroupSession): SessionMode => {
-    if (s.geminiMode) return 'gemini'
+    if (s.antigravityMode) return 'antigravity'
     if (s.codexMode) return 'codex'
     if (s.claudeAgentsMode) return 'claude-agents'
     if (s.claudeMode) return 'claude'
@@ -163,7 +163,7 @@ function handleCreateGroup(payload: { name: string }): unknown {
 
 export async function openSessionProgrammatically(payload: {
   cwd: string
-  mode?: 'claude' | 'gemini' | 'codex' | 'terminal'
+  mode?: 'claude' | 'antigravity' | 'gemini' | 'codex' | 'terminal'
   groupId?: string
   name?: string
   dangerous?: boolean
@@ -180,13 +180,14 @@ export async function openSessionProgrammatically(payload: {
 
   const mode = payload.mode ?? 'claude'
   const claudeMode = mode === 'claude'
-  const geminiMode = mode === 'gemini'
+  // 'gemini' is accepted as a deprecated alias for the retired Gemini CLI.
+  const antigravityMode = mode === 'antigravity' || mode === 'gemini'
   const codexMode = mode === 'codex'
   // --dangerously-skip-permissions is a claude flag; other providers ignore it.
   const dangerousMode = claudeMode && payload.dangerous === true
   const info = await window.electronAPI.spawnSession(payload.cwd, {
     claudeMode,
-    geminiMode,
+    antigravityMode,
     codexMode,
     dangerousMode,
     initialCommand: mode === 'terminal' ? payload.command || undefined : undefined,
@@ -203,7 +204,7 @@ export async function openSessionProgrammatically(payload: {
     activityStatus: 'idle',
     promptWaiting: null,
     claudeMode,
-    geminiMode,
+    antigravityMode,
     codexMode,
     claudeAgentsMode: false,
     dangerousMode,
@@ -312,7 +313,7 @@ async function handleAddGroupTerminal(payload: {
         activityStatus: 'idle' as const,
         promptWaiting: null,
         claudeMode: false,
-        geminiMode: false,
+        antigravityMode: false,
         codexMode: false,
         dangerousMode: false,
         claudeSessionId: info.claudeSessionId ?? null,

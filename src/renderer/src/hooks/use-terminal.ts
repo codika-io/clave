@@ -328,7 +328,7 @@ export function useTerminal(sessionId: string) {
     resizeObserver.observe(container)
 
     // Start the PTY at the real, post-fit cols/rows. We deliberately defer
-    // pty.spawn() in main until this point so claude/gemini are born at the
+    // pty.spawn() in main until this point so claude/agy are born at the
     // correct size — otherwise their welcome banner is laid out for 80×24
     // and then garbled when xterm reflows to the real width. If fit hasn't
     // run yet (container size 0), the ResizeObserver path will trigger

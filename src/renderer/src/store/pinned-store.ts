@@ -34,6 +34,13 @@ function loadPersistedGroups(): PinnedGroup[] {
     const blueprints: PinnedGroupBlueprint[] = JSON.parse(raw)
     return blueprints.map((bp) => ({
       ...bp,
+      // Back-compat: blueprints persisted before the Antigravity switch key their
+      // sessions by the retired `geminiMode`. Map it forward so the pin still
+      // launches the right provider (now agy) after an upgrade.
+      sessions: bp.sessions.map((s) => ({
+        ...s,
+        antigravityMode: s.antigravityMode ?? (s as { geminiMode?: boolean }).geminiMode ?? false
+      })),
       activeGroupId: null,
       visible: false
     }))
@@ -151,7 +158,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
         color: p.color,
         ...(p.toolbar ? { toolbar: true } : {}),
         ...(p.logo ? { logo: p.logo } : {}),
-        sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, geminiMode: s.geminiMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode })),
+        sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, antigravityMode: s.antigravityMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode })),
         terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent })),
         ...(p.category ? { category: p.category } : {})
       })
@@ -173,7 +180,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
 // ── Import / Export ──
 
 function createPinnedFromGroup(
-  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[] },
+  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[] },
   filePath: string,
   groupIndex?: number,
   rootDir?: string | null,
@@ -300,7 +307,7 @@ export async function exportClaveFile(pinnedId: string, folder: string, fileName
       cwd: s.cwd,
       name: s.name,
       claudeMode: s.claudeMode,
-      geminiMode: s.geminiMode,
+      antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
       claudeAgentsMode: s.claudeAgentsMode,
       dangerousMode: s.dangerousMode
@@ -419,7 +426,7 @@ export function pinGroupFromCurrent(groupId: string): void {
       cwd: s.cwd,
       name: s.name,
       claudeMode: s.claudeMode,
-      geminiMode: s.geminiMode,
+      antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
       claudeAgentsMode: s.claudeAgentsMode,
       dangerousMode: s.dangerousMode
@@ -503,10 +510,10 @@ async function spawnPinnedGroup(
 
   for (const session of pg.sessions) {
     try {
-      const pinOtherProvider = session.geminiMode || session.codexMode || session.claudeAgentsMode
+      const pinOtherProvider = session.antigravityMode || session.codexMode || session.claudeAgentsMode
       const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
         claudeMode: pinOtherProvider ? false : session.claudeMode,
-        geminiMode: session.geminiMode,
+        antigravityMode: session.antigravityMode,
         codexMode: session.codexMode,
         claudeAgentsMode: session.claudeAgentsMode,
         dangerousMode: session.dangerousMode
@@ -521,7 +528,7 @@ async function spawnPinnedGroup(
         activityStatus: 'idle',
         promptWaiting: null,
         claudeMode: pinOtherProvider ? false : session.claudeMode,
-        geminiMode: session.geminiMode,
+        antigravityMode: session.antigravityMode,
         codexMode: session.codexMode,
         claudeAgentsMode: session.claudeAgentsMode,
         dangerousMode: session.dangerousMode,
@@ -645,7 +652,7 @@ export function resyncPinnedGroup(groupId: string): void {
       cwd: s.cwd,
       name: s.name,
       claudeMode: s.claudeMode,
-      geminiMode: s.geminiMode,
+      antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
       claudeAgentsMode: s.claudeAgentsMode,
       dangerousMode: s.dangerousMode
@@ -705,7 +712,7 @@ export function isPinnedOutOfSync(groupId: string): boolean {
     const s = sessions.find((sess) => sess.id === liveSessions[i])
     const ps = pg.sessions[i]
     if (!s || !ps) return true
-    if (s.cwd !== ps.cwd || s.claudeMode !== ps.claudeMode || s.geminiMode !== ps.geminiMode || s.codexMode !== ps.codexMode || (!!s.claudeAgentsMode) !== (!!ps.claudeAgentsMode) || s.dangerousMode !== ps.dangerousMode) return true
+    if (s.cwd !== ps.cwd || s.claudeMode !== ps.claudeMode || s.antigravityMode !== ps.antigravityMode || s.codexMode !== ps.codexMode || (!!s.claudeAgentsMode) !== (!!ps.claudeAgentsMode) || s.dangerousMode !== ps.dangerousMode) return true
   }
 
   // Compare terminal count and configs

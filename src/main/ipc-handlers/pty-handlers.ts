@@ -22,7 +22,7 @@ export function registerPtyHandlers(): void {
     const tmuxMode = options?.tmuxMode ?? getPreference('tmuxMode') !== false
     const session = ptyManager.spawn(cwd, { ...options, tmuxMode })
     const win = BrowserWindow.fromWebContents(_event.sender)
-    const isClaudeMode = options?.claudeMode !== false && !options?.geminiMode && !options?.codexMode && !options?.claudeAgentsMode
+    const isClaudeMode = options?.claudeMode !== false && !options?.antigravityMode && !options?.codexMode && !options?.claudeAgentsMode
     const isResumed = !!options?.resumeSessionId
 
     // Schedule title generation for new Claude-mode sessions
@@ -64,7 +64,7 @@ export function registerPtyHandlers(): void {
     }
   })
 
-  // Renderer calls this once xterm has been fit, so claude/gemini are spawned
+  // Renderer calls this once xterm has been fit, so claude/agy are spawned
   // at the real cols/rows instead of the default 80×24.
   ipcMain.on('pty:start', (_event, id: string, cols: number, rows: number) => {
     ptyManager.start(id, cols, rows)

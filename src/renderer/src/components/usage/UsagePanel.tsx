@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import type { UsageLimits, UsageWindow } from '../../../../preload/index.d'
-import { ClaudeLogo, CodexLogo, GeminiLogo } from '../icons/cli-logos'
+import { ClaudeLogo, CodexLogo, AntigravityLogo } from '../icons/cli-logos'
 
-type Tool = 'claude' | 'codex' | 'gemini'
+type Tool = 'claude' | 'codex' | 'antigravity'
 
 const TOOLS: { key: Tool; label: string; Logo: (p: { className?: string }) => ReactElement }[] = [
   { key: 'claude', label: 'Claude Code', Logo: ClaudeLogo },
   { key: 'codex', label: 'Codex', Logo: CodexLogo },
-  { key: 'gemini', label: 'Gemini', Logo: GeminiLogo }
+  { key: 'antigravity', label: 'Antigravity', Logo: AntigravityLogo }
 ]
 
 type FetchState =
@@ -178,7 +178,7 @@ export function UsagePanel() {
         <div className="px-3.5 py-3">
           {tool === 'claude' && <ClaudeUsage />}
           {tool === 'codex' && <ComingSoon label="Codex" />}
-          {tool === 'gemini' && <ComingSoon label="Gemini" />}
+          {tool === 'antigravity' && <ComingSoon label="Antigravity" />}
         </div>
       </div>
     </div>

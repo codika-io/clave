@@ -191,7 +191,7 @@ async function saveInitWorkspace(): Promise<void> {
         cwd: s.cwd,
         name: s.name,
         claudeMode: s.claudeMode,
-        geminiMode: s.geminiMode,
+        antigravityMode: s.antigravityMode,
         codexMode: s.codexMode,
         claudeAgentsMode: s.claudeAgentsMode,
         dangerousMode: s.dangerousMode

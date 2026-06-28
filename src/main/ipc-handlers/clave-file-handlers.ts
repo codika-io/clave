@@ -182,7 +182,7 @@ interface ClaveGroupData {
   toolbar?: boolean
   category?: string
   logo?: string
-  sessions: { cwd: string; name: string; claudeMode: boolean; geminiMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]
+  sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
   terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean }[]
 }
 
@@ -245,7 +245,8 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
       cwd: path.resolve(dir, s.cwd || '.'),
       name: s.name,
       claudeMode: s.claudeMode ?? false,
-      geminiMode: s.geminiMode ?? false,
+      // Accept the retired `geminiMode` key from older .clave files.
+      antigravityMode: s.antigravityMode ?? s.geminiMode ?? false,
       codexMode: s.codexMode ?? false,
       claudeAgentsMode: s.claudeAgentsMode ?? false,
       dangerousMode: s.dangerousMode ?? false
@@ -358,7 +359,7 @@ export function registerClaveFileHandlers(): void {
             cwd: toRelative(s.cwd),
             name: s.name,
             claudeMode: s.claudeMode,
-            geminiMode: s.geminiMode,
+            antigravityMode: s.antigravityMode,
             codexMode: s.codexMode,
             claudeAgentsMode: s.claudeAgentsMode,
             dangerousMode: s.dangerousMode

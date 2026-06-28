@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.58.0",
+    "title": "Antigravity CLI replaces Gemini CLI",
+    "description": "Google retired the standalone Gemini CLI and folded it into the new Antigravity CLI. Cmd+I and the New session menu now launch the Antigravity CLI (the agy binary) with its brand mark. Your existing Gemini sessions, pinned groups, and .clave files keep working and reopen as Antigravity automatically.",
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
+  },
+  {
     "version": "1.57.0",
     "title": "Install plugins from Extensions",
     "description": "The Extensions view is no longer read-only — you can now manage plugins right inside Clave. Open a marketplace to install any plugin it offers or remove the marketplace, open an installed plugin to enable, disable, or uninstall it, and use Add marketplace to register a new one from a GitHub repo, git URL, or local path. Disabled plugins are flagged so you can tell them apart. Changes apply the next time you start a Claude session.",

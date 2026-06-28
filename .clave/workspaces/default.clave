@@ -10,7 +10,7 @@
       "cwd": "..",
       "name": "Clave",
       "claudeMode": true,
-      "geminiMode": false,
+      "antigravityMode": false,
       "codexMode": false,
       "dangerousMode": true
     }

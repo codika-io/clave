@@ -10,7 +10,7 @@ import { join } from 'path'
  * to `<userData>/agent-state/<claveSessionId>.state`. This manager owns that
  * directory and watches it, forwarding transitions to the renderer.
  *
- * This is Claude-only: Gemini/Codex CLIs expose no equivalent signal, so their
+ * This is Claude-only: Antigravity/Codex CLIs expose no equivalent signal, so their
  * tabs stay neutral (see ROADMAP.md).
  */
 export type AgentState = 'idle' | 'working' | 'blocked' | 'done' | 'ended'
