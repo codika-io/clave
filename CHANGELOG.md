@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.59.0] — 2026-07-03
+
+### Added
+- **Mission Control overlay** — when you open macOS Mission Control or App Exposé, Clave now covers its window with a blurred overlay bearing a large Clave mark, so you can spot it instantly among all the thumbnails. It needs no Accessibility or Screen Recording permission, and you can turn it off under Settings → Appearance.
+- **Primed sessions in `.clave` workspaces** — a session in a `.clave` file can now carry a `prompt` that Clave types and submits to the agent automatically the moment the session launches, plus a `rootSession` flag that starts the session at the workspace root while still targeting the project folder. Prompts understand `@root_path`, `@project_path`, and `@project_abs` tokens that expand to the right paths at launch, and duplicating a primed session replays it as-is.
+
 ## [1.58.0] — 2026-06-28
 
 ### Changed
