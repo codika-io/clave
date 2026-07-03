@@ -40,3 +40,6 @@ assets/*.mp4
 
 # ── Entire ───────────────────────────────────────────────────
 .entire/
+
+# Native helper build artifact (built by scripts/build-native.sh)
+resources/native/mission-control-helper

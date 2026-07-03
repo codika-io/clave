@@ -315,6 +315,10 @@ export interface ElectronAPI {
   onUpdateDownloaded: (callback: (version: string) => void) => () => void
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
   onDownloadError: (callback: (message: string) => void) => () => void
+  onMissionControlEntered: (callback: () => void) => () => void
+  onMissionControlExited: (callback: () => void) => () => void
+  missionControlGetEnabled: () => Promise<boolean>
+  missionControlSetEnabled: (enabled: boolean) => Promise<void>
   setAppIcon: (icon: string) => Promise<void>
   getUsername: () => Promise<string | null>
   getAppVersion: () => Promise<string>

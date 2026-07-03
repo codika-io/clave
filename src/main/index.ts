@@ -12,6 +12,11 @@ import { sshManager } from './ssh-manager'
 import { locationManager } from './location-manager'
 import { openclawClient, buildOpenclawWsUrl } from './openclaw-client'
 import { preferencesManager } from './preferences-manager'
+import {
+  initMissionControl,
+  cleanupMissionControl,
+  attachMissionControlWindow
+} from './mission-control-manager'
 import { cleanupClaveWatchers } from './ipc-handlers/clave-file-handlers'
 import { startMcpServer, stopMcpServer } from './mcp/mcp-server'
 import { sweepSessionMcpConfigs } from './mcp/mcp-runtime'
@@ -50,6 +55,8 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
+
+  attachMissionControlWindow(mainWindow)
 
   mainWindow.on('closed', () => {
     ptyManager.killAll()
@@ -109,6 +116,7 @@ app.whenReady().then(() => {
   createWindow()
   initAutoUpdater()
   initTelemetry()
+  initMissionControl()
 
   // Auto-connect locations with autoConnect enabled
   const locations = locationManager.getLocations()
@@ -139,6 +147,7 @@ app.on('before-quit', () => {
   cleanupClaveWatchers()
   cleanupAutoUpdater()
   cleanupTelemetry()
+  cleanupMissionControl()
   stopMcpServer()
 })
 

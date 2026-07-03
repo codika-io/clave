@@ -216,6 +216,7 @@ function AppearanceSettings() {
         </SettingsSection>
 
         <SidebarWidgetsSection />
+        <MissionControlSection />
       </div>
     </>
   )
@@ -391,6 +392,40 @@ function PrivacySection(): ReactNode {
         <ToggleRow
           label="Share anonymous usage ping"
           description="One ping a day: random ID, app version, platform. Nothing else."
+          checked={enabled}
+          onChange={handleToggle}
+        />
+      </SettingsCard>
+    </SettingsSection>
+  )
+}
+
+function MissionControlSection(): ReactNode {
+  const [enabled, setEnabled] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    window.electronAPI?.missionControlGetEnabled().then((value) => {
+      if (!cancelled) setEnabled(value)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleToggle = (value: boolean): void => {
+    setEnabled(value)
+    window.electronAPI?.missionControlSetEnabled(value)
+  }
+
+  if (!navigator.platform.toUpperCase().includes('MAC')) return null
+
+  return (
+    <SettingsSection title="Mission Control">
+      <SettingsCard>
+        <ToggleRow
+          label="Show overlay in Mission Control"
+          description="Displays a 'Clave is here' badge over the window while Mission Control is open, so Clave is easy to spot among the thumbnails."
           checked={enabled}
           onChange={handleToggle}
         />

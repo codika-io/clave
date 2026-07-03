@@ -129,6 +129,15 @@ const electronAPI = {
   onDownloadError: (callback: (message: string) => void) =>
     createIpcListener<[string]>('updater:download-error', callback),
 
+  onMissionControlEntered: (callback: () => void) =>
+    createIpcListener<[]>('mission-control:entered', callback),
+  onMissionControlExited: (callback: () => void) =>
+    createIpcListener<[]>('mission-control:exited', callback),
+  missionControlGetEnabled: () =>
+    ipcRenderer.invoke('mission-control:get-enabled') as Promise<boolean>,
+  missionControlSetEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('mission-control:set-enabled', enabled),
+
   setAppIcon: (icon: string) => ipcRenderer.invoke('app:set-icon', icon),
   getUsername: () => ipcRenderer.invoke('app:get-username') as Promise<string | null>,
   saveAvatar: (sourcePath: string) =>

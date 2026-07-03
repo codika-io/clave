@@ -11,6 +11,7 @@ import { SettingsSidebar } from '../settings/SettingsSidebar'
 import { ExtensionsPanel } from '../extensions/ExtensionsPanel'
 import { ExtensionsSidebar } from '../extensions/ExtensionsSidebar'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
+import { MissionControlOverlay } from '../ui/MissionControlOverlay'
 import { AgentChatPanel } from '../agents/AgentChatPanel'
 import { useWorkTracker } from '../../store/work-tracker-store'
 import { FilePalette } from '../files/FilePalette'
@@ -707,6 +708,7 @@ export function AppShell() {
       <GitDiffPreview />
       <GitJourneyPanel />
       <UpdateOverlay />
+      <MissionControlOverlay />
     </div>
   )
 }

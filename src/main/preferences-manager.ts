@@ -10,6 +10,7 @@ interface Preferences {
   telemetryInstallId: string | null
   telemetryLastPingAt: string | null
   telemetryNoticeShown: boolean
+  missionControlOverlayEnabled: boolean
 }
 
 const DEFAULTS: Preferences = {
@@ -17,7 +18,8 @@ const DEFAULTS: Preferences = {
   telemetryEnabled: true,
   telemetryInstallId: null,
   telemetryLastPingAt: null,
-  telemetryNoticeShown: false
+  telemetryNoticeShown: false,
+  missionControlOverlayEnabled: true
 }
 
 class PreferencesManager {
