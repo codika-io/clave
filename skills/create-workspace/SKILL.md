@@ -83,11 +83,23 @@ Each session spawns a terminal process in a specific directory. Sessions can run
 | `name` | string | Display name in the sidebar |
 | `claudeMode` | boolean | `true` = starts Claude Code AI assistant, `false` = plain terminal |
 | `dangerousMode` | boolean | `true` = Claude runs with `--dangerously-skip-permissions` |
+| `prompt` | string | Optional. A one-shot message auto-submitted to the agent the moment the session launches, so it starts already primed. Agent modes only (claude / antigravity / codex) — ignored for plain terminals and `claude agents`. Free text; supports the path tokens below. |
+| `rootSession` | boolean | Optional. `true` = spawn the session at the **workspace root** (the folder whose `.clave/workspaces/` the umbrella auto-discovered), instead of at `cwd`. `cwd` still names the project dir that feeds the prompt tokens. No effect when the file is opened standalone (no umbrella root known). |
+
+**Prompt path tokens** (substituted at launch, only useful with `rootSession: true`):
+
+| Token | Expands to |
+|---|---|
+| `@root_path` | Absolute workspace root, e.g. `/Users/you/.codika` |
+| `@project_path` | Project dir **relative to root**, e.g. `clients/acme` (derived from the file's location + its `cwd`) |
+| `@project_abs` | Project dir absolute path |
 
 **Tips:**
 - For development groups, create two sessions: one `claudeMode: true` for AI work, one `claudeMode: false` for running dev servers
 - Session names should be short and descriptive
 - An empty `sessions` array is valid (useful for toolbar-only groups)
+- The DRY way to open a deep project's session at the umbrella root: set `rootSession: true`, leave `cwd` as the tiny relative path to the project (`.` or `..`), and reference the project in the prompt with `@project_path` — no `../../..` climbs, no hardcoded paths. See "Priming a session" below.
+- A `prompt` on an untrusted `.clave` file is treated as elevated: Clave shows the review dialog (like auto-run commands) before it will auto-submit. Files under a trusted workspace root, or that you authored in Clave, skip the dialog. (`rootSession` alone is not elevated.)
 
 ## Terminals
 
@@ -252,6 +264,34 @@ When a single group contains apps in different subdirectories (e.g. a monorepo),
 ```
 
 The `cwd` priority when spawning a terminal is: **terminal `cwd`** → **group `cwd`** → **first session's `cwd`**.
+
+## Priming a session with an initial prompt
+
+Use a session `prompt` to launch an agent already focused on a specific project. Combine it with `rootSession: true` to open the session at the **workspace root** (full workspace access) while the prompt points at the project via `@project_path` — no `../../..` climbs, no hardcoded paths.
+
+This is a per-project `.clave` living at `clients/acme/acme-app/.clave/workspaces/default.clave`. Its `cwd: ".."` names the project dir (one level up from the file), which becomes `@project_path` → `clients/acme`. The session itself spawns at the umbrella root:
+
+```json
+{
+  "name": "Acme",
+  "cwd": "..",
+  "category": "Clients",
+  "color": "blue",
+  "sessions": [
+    {
+      "cwd": "..",
+      "name": "Acme",
+      "claudeMode": true,
+      "dangerousMode": true,
+      "rootSession": true,
+      "prompt": "We're working on Acme. The project lives at @project_path and spans acme-app, acme-cli, acme-os, acme-website. When we start, read @project_path/acme-app/CLAUDE.md first. You're at the workspace root (@root_path), so you have full access. Don't explore yet, just reply that you're ready and wait for my request."
+    }
+  ],
+  "terminals": []
+}
+```
+
+The prompt is a one-shot: it fires once on launch (and again when you Duplicate the tab), but a session re-adopted after quitting and reopening Clave is not re-primed — the resumed conversation already contains it.
 
 ## File placement
 
