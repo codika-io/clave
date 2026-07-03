@@ -673,7 +673,9 @@ export function Sidebar() {
 
       if (session.sessionType === 'remote-terminal' || session.sessionType === 'remote-claude') {
         if (session.locationId) {
-          // spawnRemoteSession calls addSession internally, so we need to track the new ID
+          // spawnRemoteSession calls addSession internally, so we need to track the new ID.
+          // Remote duplicates write `claude\r` bare and stay un-primed — carrying a prompt
+          // would mean timing a write after the CLI boots; out of scope for v1.
           const shellId = await window.electronAPI.sshOpenShell(session.locationId, session.cwd)
           if (session.antigravityMode) {
             setTimeout(() => {
@@ -713,12 +715,17 @@ export function Sidebar() {
         // Local session
         try {
           const dupOtherProvider = session.antigravityMode || session.codexMode || session.claudeAgentsMode
+          // Re-prime the clone with the same one-shot prompt (agent modes only;
+          // `claude agents` rejects a positional prompt). Undefined for a normal
+          // (un-primed) session → same as today.
+          const initialPrompt = session.claudeAgentsMode ? undefined : session.initialPrompt || undefined
           const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
             claudeMode: dupOtherProvider ? false : session.claudeMode,
             antigravityMode: session.antigravityMode,
             codexMode: session.codexMode,
             claudeAgentsMode: session.claudeAgentsMode,
-            dangerousMode: session.dangerousMode
+            dangerousMode: session.dangerousMode,
+            initialPrompt
           })
           addSession({
             id: sessionInfo.id,
@@ -734,6 +741,8 @@ export function Sidebar() {
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
             claudeSessionId: sessionInfo.claudeSessionId,
+            // Persist so re-duplicating the clone also re-primes.
+            initialPrompt,
             sessionType: 'local',
             detectedUrl: null
           })

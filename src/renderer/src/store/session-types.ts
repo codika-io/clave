@@ -131,6 +131,11 @@ export interface Session {
   claudeProfileId?: string
   claudeProfileLabel?: string
   claudeConfigDir?: string
+  /** One-shot prompt this session was launched with (agent modes only), so
+   *  Duplicate can re-prime the clone. Not persisted to the tmux sidecar, so a
+   *  session re-adopted after an app restart loses it (the resumed conversation
+   *  already contains the prompt + response) — an accepted, documented edge. */
+  initialPrompt?: string
   locationId?: string
   shellId?: string
   sessionType: SessionType
@@ -184,6 +189,15 @@ export interface PinnedGroupSession {
   codexMode: boolean
   claudeAgentsMode?: boolean
   dangerousMode: boolean
+  /** One-shot initial prompt auto-submitted to the agent on launch. Agent modes
+   *  only (claude/antigravity/codex) — ignored for plain terminals and the
+   *  `claude agents` subcommand. May contain @root_path / @project_path /
+   *  @project_abs tokens (substituted at spawn when the pin knows its workspace root). */
+  prompt?: string
+  /** Spawn the session at the workspace root (the dir the discovering workspace
+   *  was rooted at) instead of at `cwd`. `cwd` still defines the project dir that
+   *  feeds the prompt path tokens. No-op if the pin has no workspaceRoot. */
+  rootSession?: boolean
 }
 
 export interface PinnedGroupTerminal {
@@ -206,6 +220,7 @@ export interface PinnedGroup {
   createdAt: number
   filePath?: string | null
   rootDir?: string | null  // Root dir for resolving paths (null = file's parent dir)
+  workspaceRoot?: string | null  // Absolute root of the workspace that discovered this pin; feeds rootSession spawn + prompt path tokens. null = standalone import.
   groupIndex?: number  // Position in multi-group .clave file (0-based)
   toolbar?: boolean    // Show this group's terminals as toolbar quick-actions
   logo?: string | null // Absolute path to logo image

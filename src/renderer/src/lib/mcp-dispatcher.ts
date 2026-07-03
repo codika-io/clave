@@ -209,6 +209,8 @@ export async function openSessionProgrammatically(payload: {
     claudeAgentsMode: false,
     dangerousMode,
     claudeSessionId: info.claudeSessionId ?? null,
+    // Persist so Duplicate re-primes the clone with the same prompt.
+    initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined,
     sessionType: 'local',
     detectedUrl: null,
     serverStatus: null,

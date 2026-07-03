@@ -155,7 +155,8 @@ async function discoverAndLoadRepoFiles(workspace: ClaveWorkspace): Promise<void
     await importClaveFile(file.path, {
       autoLaunch: false,
       rootDir: file.rootDir,
-      discoveredBy: workspace.claveFilePath
+      discoveredBy: workspace.claveFilePath,
+      workspaceRoot: rootDir
     })
   }
 }
@@ -288,7 +289,8 @@ export async function loadWorkspaces(): Promise<void> {
     if (workspace) {
       await importClaveFile(workspace.claveFilePath, {
         autoLaunch: false,
-        rootDir: workspace.rootDir ?? undefined
+        rootDir: workspace.rootDir ?? undefined,
+        workspaceRoot: workspace.rootDir ?? dirOf(workspace.claveFilePath)
       })
       // Auto-discover repo .clave files if enabled
       await discoverAndLoadRepoFiles(workspace)

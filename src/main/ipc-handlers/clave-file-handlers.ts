@@ -146,10 +146,12 @@ function isUnderTrustedRoot(absolutePath: string): boolean {
   return false
 }
 
-/** Auto-run commands or dangerousMode sessions present in a parsed result. */
-function describeElevated(result: ClaveFileReadResult): { autoCommands: string[]; dangerous: boolean } {
+/** Auto-run commands, auto-submitted agent prompts, or dangerousMode sessions
+ *  present in a parsed result — anything that acts on launch without user input. */
+function describeElevated(result: ClaveFileReadResult): { autoCommands: string[]; prompts: string[]; dangerous: boolean } {
   const groups = result.type === 'multi' ? result.groups : [result]
   const autoCommands: string[] = []
+  const prompts: string[] = []
   let dangerous = false
   for (const g of groups) {
     for (const t of g.terminals) {
@@ -157,16 +159,18 @@ function describeElevated(result: ClaveFileReadResult): { autoCommands: string[]
     }
     for (const s of g.sessions) {
       if (s.dangerousMode) dangerous = true
+      if (s.prompt && s.prompt.trim()) prompts.push(s.prompt)
     }
   }
-  return { autoCommands, dangerous }
+  return { autoCommands, prompts, dangerous }
 }
 
-/** Strip elevated behavior: downgrade auto→prefill and disable dangerousMode. */
+/** Strip elevated behavior: downgrade auto→prefill, disable dangerousMode, and
+ *  drop auto-submitted prompts (an untrusted file must not drive the agent). */
 function sanitizeElevated(result: ClaveFileReadResult): ClaveFileReadResult {
   const sanitizeGroup = (g: ClaveGroupData): ClaveGroupData => ({
     ...g,
-    sessions: g.sessions.map((s) => ({ ...s, dangerousMode: false })),
+    sessions: g.sessions.map((s) => ({ ...s, dangerousMode: false, prompt: undefined })),
     terminals: g.terminals.map((t) => (t.commandMode === 'auto' ? { ...t, commandMode: 'prefill' } : t))
   })
   if (result.type === 'multi') {
@@ -182,7 +186,7 @@ interface ClaveGroupData {
   toolbar?: boolean
   category?: string
   logo?: string
-  sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
+  sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
   terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean }[]
 }
 
@@ -249,7 +253,12 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
       antigravityMode: s.antigravityMode ?? s.geminiMode ?? false,
       codexMode: s.codexMode ?? false,
       claudeAgentsMode: s.claudeAgentsMode ?? false,
-      dangerousMode: s.dangerousMode ?? false
+      dangerousMode: s.dangerousMode ?? false,
+      // Free text — no path resolution. Auto-submitted to the agent on launch.
+      // Kept as the raw template; @-tokens are substituted at spawn, not here.
+      ...(s.prompt ? { prompt: s.prompt } : {}),
+      // cwd stays the project dir; the spawn-at-root override happens at spawn.
+      ...(s.rootSession ? { rootSession: true } : {})
     })),
     terminals: (raw.terminals || []).map((t) => ({
       command: t.command || '',
@@ -286,8 +295,8 @@ export function registerClaveFileHandlers(): void {
         // trusted workspace root, (2) the supplied rootDir is itself a trusted
         // root, (3) the exact content hash was previously trusted/authored
         // (back-compat). Default to the safe (no-elevation) outcome.
-        const { autoCommands, dangerous } = describeElevated(result)
-        const elevated = autoCommands.length > 0 || dangerous
+        const { autoCommands, prompts, dangerous } = describeElevated(result)
+        const elevated = autoCommands.length > 0 || prompts.length > 0 || dangerous
         const trusted =
           isUnderTrustedRoot(absolutePath) ||
           (rootDir != null && isUnderTrustedRoot(rootDir)) ||
@@ -298,6 +307,14 @@ export function registerClaveFileHandlers(): void {
           if (autoCommands.length > 0) {
             detailLines.push('Commands that would run automatically:')
             detailLines.push(...autoCommands.map((c) => `  • ${c}`))
+          }
+          if (prompts.length > 0) {
+            if (detailLines.length > 0) detailLines.push('')
+            detailLines.push('Instructions that would be auto-submitted to an agent:')
+            detailLines.push(...prompts.map((p) => {
+              const flat = p.replace(/\s+/g, ' ').trim()
+              return `  • ${flat.length > 120 ? flat.slice(0, 117) + '…' : flat}`
+            }))
           }
           if (dangerous) {
             detailLines.push('')
@@ -313,8 +330,8 @@ export function registerClaveFileHandlers(): void {
             checkboxLabel: `Trust all workspace files in “${path.basename(folderForTrust)}”`,
             checkboxChecked: false,
             title: 'Review workspace file',
-            message: `“${path.basename(absolutePath)}” wants to run commands automatically.`,
-            detail: detailLines.join('\n') + '\n\nOnly trust this file if you recognise and understand these commands.'
+            message: `“${path.basename(absolutePath)}” wants to run content automatically.`,
+            detail: detailLines.join('\n') + '\n\nOnly trust this file if you recognise and understand what it would run.'
           })
           if (response === 2) return null // Cancel
           if (checkboxChecked) addTrustedRoot(folderForTrust)
@@ -362,7 +379,9 @@ export function registerClaveFileHandlers(): void {
             antigravityMode: s.antigravityMode,
             codexMode: s.codexMode,
             claudeAgentsMode: s.claudeAgentsMode,
-            dangerousMode: s.dangerousMode
+            dangerousMode: s.dangerousMode,
+            ...(s.prompt ? { prompt: s.prompt } : {}),
+            ...(s.rootSession ? { rootSession: true } : {})
           })),
           terminals: g.terminals.map((t) => ({
             command: t.command,

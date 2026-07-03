@@ -39,6 +39,8 @@ export interface ClaveFileGroupData {
     codexMode: boolean
     claudeAgentsMode?: boolean
     dangerousMode: boolean
+    prompt?: string
+    rootSession?: boolean
   }[]
   terminals: {
     command: string
@@ -65,6 +67,8 @@ export interface ClaveFileWriteData {
     codexMode: boolean
     claudeAgentsMode?: boolean
     dangerousMode: boolean
+    prompt?: string
+    rootSession?: boolean
   }[]
   terminals?: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[]
   groups?: Array<{
@@ -82,6 +86,8 @@ export interface ClaveFileWriteData {
       codexMode: boolean
       claudeAgentsMode?: boolean
       dangerousMode: boolean
+      prompt?: string
+      rootSession?: boolean
     }[]
     terminals: {
       command: string

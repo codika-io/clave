@@ -11,6 +11,21 @@ export function getPinnedState(pg: PinnedGroup): PinnedState {
   return pg.visible ? 'active-visible' : 'active-hidden'
 }
 
+/** Substitute prompt path tokens at spawn time. macOS-only app → absolute paths
+ *  use `/`, so this is pure string work (the renderer has no Node `path`).
+ *  @root_path → workspace root, @project_path → project dir relative to root
+ *  (`.` if equal, absolute if outside root), @project_abs → project dir absolute.
+ *  No-op when the prompt contains no tokens. */
+export function substituteTokens(prompt: string, workspaceRoot: string | null, projectAbs: string): string {
+  const root = (workspaceRoot ?? projectAbs).replace(/\/+$/, '')
+  const rel =
+    projectAbs === root ? '.' : projectAbs.startsWith(root + '/') ? projectAbs.slice(root.length + 1) : projectAbs
+  return prompt
+    .replaceAll('@project_abs', projectAbs)
+    .replaceAll('@project_path', rel)
+    .replaceAll('@root_path', root)
+}
+
 interface PinnedGroupBlueprint {
   id: string
   name: string
@@ -20,6 +35,8 @@ interface PinnedGroupBlueprint {
   terminals: PinnedGroupTerminal[]
   createdAt: number
   filePath?: string | null
+  rootDir?: string | null
+  workspaceRoot?: string | null
   groupIndex?: number
   toolbar?: boolean
   logo?: string | null
@@ -50,8 +67,8 @@ function loadPersistedGroups(): PinnedGroup[] {
 }
 
 function persistGroups(groups: PinnedGroup[]): void {
-  const blueprints: PinnedGroupBlueprint[] = groups.map(({ id, name, cwd, color, sessions, terminals, createdAt, filePath, groupIndex, toolbar, logo, category, discoveredBy }) => ({
-    id, name, cwd, color, sessions, terminals, createdAt, filePath, groupIndex, toolbar, logo, category, discoveredBy
+  const blueprints: PinnedGroupBlueprint[] = groups.map(({ id, name, cwd, color, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy }) => ({
+    id, name, cwd, color, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy
   }))
   localStorage.setItem('clave-pinned-groups', JSON.stringify(blueprints))
 }
@@ -158,7 +175,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
         color: p.color,
         ...(p.toolbar ? { toolbar: true } : {}),
         ...(p.logo ? { logo: p.logo } : {}),
-        sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, antigravityMode: s.antigravityMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode })),
+        sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, antigravityMode: s.antigravityMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode, ...(s.prompt ? { prompt: s.prompt } : {}), ...(s.rootSession ? { rootSession: true } : {}) })),
         terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent })),
         ...(p.category ? { category: p.category } : {})
       })
@@ -180,11 +197,12 @@ function syncToClaveFile(pg: PinnedGroup): void {
 // ── Import / Export ──
 
 function createPinnedFromGroup(
-  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[] },
+  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[] },
   filePath: string,
   groupIndex?: number,
   rootDir?: string | null,
-  discoveredBy?: string | null
+  discoveredBy?: string | null,
+  workspaceRoot?: string | null
 ): PinnedGroup {
   return {
     id: crypto.randomUUID(),
@@ -196,6 +214,7 @@ function createPinnedFromGroup(
     createdAt: Date.now(),
     filePath,
     rootDir: rootDir ?? null,
+    workspaceRoot: workspaceRoot ?? null,
     groupIndex,
     toolbar: g.toolbar,
     logo: g.logo,
@@ -220,9 +239,10 @@ function groupDataToPinnedTerminals(terminals: { command: string; commandMode: '
 
 /** Import a .clave file as pinned group(s) and optionally auto-launch.
  *  Returns info about the first pin, and whether it already existed. */
-export async function importClaveFile(filePath: string, options?: { autoLaunch?: boolean; rootDir?: string; discoveredBy?: string }): Promise<{ pinnedId: string; alreadyExists: boolean } | null> {
+export async function importClaveFile(filePath: string, options?: { autoLaunch?: boolean; rootDir?: string; discoveredBy?: string; workspaceRoot?: string }): Promise<{ pinnedId: string; alreadyExists: boolean } | null> {
   const rootDir = options?.rootDir
   const discoveredBy = options?.discoveredBy
+  const workspaceRoot = options?.workspaceRoot
   const result = await window.electronAPI?.readClaveFile(filePath, rootDir)
   if (!result) return null
 
@@ -250,7 +270,11 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
           groupIndex: result.type === 'multi' ? i : undefined,
           toolbar: g.toolbar,
           logo: g.logo,
-          category: g.category ?? null
+          category: g.category ?? null,
+          // Re-stamp resolution context on boot re-import (repairs pins persisted
+          // before these fields existed, so sync-back re-relativizes correctly).
+          ...(rootDir !== undefined ? { rootDir } : {}),
+          ...(workspaceRoot !== undefined ? { workspaceRoot } : {})
         })
         if (autoLaunch) {
           const state = getPinnedState(existing)
@@ -263,7 +287,7 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
     // Add any new groups that weren't in existing pins
     for (let i = existingPins.length; i < groups.length; i++) {
       const g = groups[i]
-      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir, discoveredBy)
+      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir, discoveredBy, workspaceRoot)
       usePinnedStore.getState().addPinnedGroup(pinned)
       if (autoLaunch) await togglePinnedGroup(pinned.id)
     }
@@ -276,7 +300,7 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
   let firstId: string | null = null
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i]
-    const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir, discoveredBy)
+    const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir, discoveredBy, workspaceRoot)
     usePinnedStore.getState().addPinnedGroup(pinned)
     if (!firstId) firstId = pinned.id
     if (autoLaunch) await togglePinnedGroup(pinned.id)
@@ -511,12 +535,25 @@ async function spawnPinnedGroup(
   for (const session of pg.sessions) {
     try {
       const pinOtherProvider = session.antigravityMode || session.codexMode || session.claudeAgentsMode
-      const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
+      // rootSession: spawn at the workspace root instead of the session's cwd
+      // (which stays the project dir). No-op if the pin has no workspaceRoot.
+      const atRoot = session.rootSession === true && !!pg.workspaceRoot
+      const spawnCwd = atRoot ? pg.workspaceRoot! : session.cwd
+      // `claude agents` is spawned bare and rejects a positional prompt, so never
+      // hand it one — matches pty-manager's agents branch. Path tokens in the
+      // prompt are substituted here (project dir = session.cwd, root = workspaceRoot).
+      const initialPrompt = session.claudeAgentsMode
+        ? undefined
+        : session.prompt
+          ? substituteTokens(session.prompt, pg.workspaceRoot ?? pg.rootDir ?? null, session.cwd)
+          : undefined
+      const sessionInfo = await window.electronAPI.spawnSession(spawnCwd, {
         claudeMode: pinOtherProvider ? false : session.claudeMode,
         antigravityMode: session.antigravityMode,
         codexMode: session.codexMode,
         claudeAgentsMode: session.claudeAgentsMode,
-        dangerousMode: session.dangerousMode
+        dangerousMode: session.dangerousMode,
+        initialPrompt
       })
 
       useSessionStore.getState().addSession({
@@ -533,6 +570,8 @@ async function spawnPinnedGroup(
         claudeAgentsMode: session.claudeAgentsMode,
         dangerousMode: session.dangerousMode,
         claudeSessionId: sessionInfo.claudeSessionId,
+        // Persist so Duplicate can re-prime the clone (see Sidebar duplicate).
+        initialPrompt,
         sessionType: 'local',
         detectedUrl: null,
         hasUnseenActivity: false

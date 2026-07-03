@@ -12,7 +12,9 @@
       "claudeMode": true,
       "antigravityMode": false,
       "codexMode": false,
-      "dangerousMode": true
+      "dangerousMode": true,
+      "rootSession": true,
+      "prompt": "We're working on Clave, an Electron (React + TypeScript) macOS desktop app for running multiple coding-agent CLI sessions in parallel as tabbed, grouped sessions (you are running inside it). The project lives at @project_path and spans: clave-app (the desktop app), clave-plugin (the companion /clave:create-workspace plugin), clave-website, clave-metrics (Vercel + Neon telemetry). When we start, read @project_path/clave-app/CLAUDE.md first. manifest.yaml at the root lists every repo. You're at the workspace root (@root_path) with full access to this project and the rest of the workspace. Don't read or explore anything yet. Just reply that you're ready, and wait for my request before exploring anything."
     }
   ],
   "terminals": [
