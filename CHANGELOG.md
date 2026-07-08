@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.60.1] — 2026-07-08
+
+### Fixed
+- **The "Give us feedback" line no longer floats above your profile** — once the feedback prompt is collapsed, the remaining one-line link now sits flush against the sidebar footer instead of leaving an odd gap below it.
+
 ## [1.60.0] — 2026-07-08
 
 ### Added
