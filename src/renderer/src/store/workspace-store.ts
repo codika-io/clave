@@ -92,28 +92,35 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   setActiveWorkspace: async (id: string | null) => {
-    const state = get()
-    const previousId = state.activeWorkspaceId
+    const previousId = get().activeWorkspaceId
 
-    // First workspace activation — snapshot current pins as "Init" workspace
-    if (id && !previousId && state.workspaces.length <= 1) {
-      await saveInitWorkspace()
+    // First workspace activation — snapshot the ad-hoc pins into an "Init"
+    // workspace so they stay recoverable, then unload them. Activating a
+    // workspace must show that workspace's pins, not these on top of them —
+    // and `previousId` is null here, so the deactivation branch below can't
+    // do it for us.
+    if (id && !previousId && get().workspaces.length <= 1) {
+      const initFilePath = await saveInitWorkspace()
+      if (initFilePath) removeWorkspacePins(initFilePath)
     }
 
     // Deactivate previous workspace — remove its pins
     if (previousId && previousId !== id) {
-      const prev = state.workspaces.find((w) => w.id === previousId)
+      const prev = get().workspaces.find((w) => w.id === previousId)
       if (prev) {
         removeWorkspacePins(prev.claveFilePath)
       }
     }
 
     set({ activeWorkspaceId: id })
-    persistWorkspaces(state.workspaces, id)
+    // Re-read rather than reusing a pre-await snapshot: saveInitWorkspace may
+    // have prepended the Init workspace, and persisting a stale array would
+    // write it straight back out of existence.
+    persistWorkspaces(get().workspaces, id)
 
     // Activate new workspace — import its .clave file (pins only, no auto-launch)
     if (id) {
-      const workspace = state.workspaces.find((w) => w.id === id)
+      const workspace = get().workspaces.find((w) => w.id === id)
       if (workspace) {
         await importClaveFile(workspace.claveFilePath, {
           autoLaunch: false,
@@ -166,20 +173,21 @@ function persistWorkspaces(workspaces: ClaveWorkspace[], activeId: string | null
   window.electronAPI?.preferencesSet('activeWorkspaceId', activeId).catch(() => {})
 }
 
-/** Save current pinned groups as an "Init" workspace in the app's data folder */
-async function saveInitWorkspace(): Promise<void> {
+/** Save current pinned groups as an "Init" workspace in the app's data folder.
+ *  Returns the file the snapshot was written to, or null if nothing was saved. */
+async function saveInitWorkspace(): Promise<string | null> {
   const pins = usePinnedStore.getState().pinnedGroups.filter((pg) => !pg.filePath)
-  if (pins.length === 0) return
+  if (pins.length === 0) return null
 
   try {
     const userDataPath = await window.electronAPI?.getUserDataPath()
-    if (!userDataPath) return
+    if (!userDataPath) return null
 
     const initFilePath = `${userDataPath}/workspace.clave`
 
     // Check if Init workspace already exists
     const store = useWorkspaceStore.getState()
-    if (store.workspaces.some((w) => w.claveFilePath === initFilePath)) return
+    if (store.workspaces.some((w) => w.claveFilePath === initFilePath)) return null
 
     // Write current pins as a multi-group .clave file
     const groups = pins.map((pg) => ({
@@ -208,6 +216,16 @@ async function saveInitWorkspace(): Promise<void> {
 
     await window.electronAPI?.writeClaveFile(initFilePath, { groups })
 
+    // Bind the snapshotted pins to the file we just wrote. Without this they
+    // keep `filePath: null`, so removeWorkspacePins() can never match them and
+    // the Init pins outlive every workspace switch, piling up alongside the pins
+    // of whatever workspace is activated next. `groupIndex` mirrors the
+    // multi-group layout written above so watch/sync-back address the right group.
+    const pinnedStore = usePinnedStore.getState()
+    pins.forEach((pg, i) => {
+      pinnedStore.updatePinnedGroup(pg.id, { filePath: initFilePath, groupIndex: i })
+    })
+
     // Register as the "Init" workspace
     const initWorkspace: ClaveWorkspace = {
       id: crypto.randomUUID(),
@@ -220,8 +238,11 @@ async function saveInitWorkspace(): Promise<void> {
       persistWorkspaces(next, s.activeWorkspaceId)
       return { workspaces: next }
     })
+
+    return initFilePath
   } catch (err) {
     console.error('[workspace] Failed to save Init workspace:', err)
+    return null
   }
 }
 

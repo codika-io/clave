@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Fixed
+- **Activating your first workspace no longer leaves stale pins behind** — if you already had pinned groups before adding a workspace, Clave snapshots them into an "Init" workspace. That snapshot is now correctly unloaded when you activate another workspace, instead of leaving the old pins on top of the new ones with no way to unload them. The Init workspace also stops disappearing from Settings → Workspaces right after it is created.
+
 ## [1.59.0] — 2026-07-03
 
 ### Added
