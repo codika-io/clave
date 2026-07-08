@@ -503,6 +503,12 @@ export interface ElectronAPI {
   }>
   telemetrySetEnabled: (enabled: boolean) => Promise<void>
   telemetrySetNoticeShown: () => Promise<void>
+  feedbackGetState: () => Promise<{ collapsed: boolean }>
+  feedbackSetCollapsed: () => Promise<void>
+  feedbackSubmit: (submission: {
+    email: string
+    message?: string
+  }) => Promise<{ ok: true } | { ok: false; error: string }>
 }
 
 declare global {

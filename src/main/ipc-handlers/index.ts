@@ -3,6 +3,7 @@ import { registerUsageHandlers } from './usage-handlers'
 import { registerGitHandlers } from './git-handlers'
 import { registerUpdaterHandlers } from './updater-handlers'
 import { registerTelemetryHandlers } from './telemetry-handlers'
+import { registerFeedbackHandlers } from './feedback-handlers'
 import { registerFsHandlers } from './fs-handlers'
 import { registerPtyHandlers } from './pty-handlers'
 import { registerShellHandlers } from './shell-handlers'
@@ -23,6 +24,7 @@ export function registerIpcHandlers(): void {
   registerGitHandlers()
   registerUpdaterHandlers()
   registerTelemetryHandlers()
+  registerFeedbackHandlers()
   registerFsHandlers()
   registerPtyHandlers()
   registerShellHandlers()

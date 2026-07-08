@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.60.0] — 2026-07-08
+
+### Added
+- **Talk to us** — Clave has no accounts, so we have no idea who uses it or how. A prompt in the sidebar now invites you to book a 30 minute call or leave your email, so we can learn what to build next. It collapses to a single "Give us feedback" line that stays available whenever you want to reach us, and never expands again. Nothing you send is linked to the anonymous usage ping: we still cannot tell which install is yours.
+
 ### Fixed
 - **Activating your first workspace no longer leaves stale pins behind** — if you already had pinned groups before adding a workspace, Clave snapshots them into an "Init" workspace. That snapshot is now correctly unloaded when you activate another workspace, instead of leaving the old pins on top of the new ones with no way to unload them. The Init workspace also stops disappearing from Settings → Workspaces right after it is created.
 

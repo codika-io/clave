@@ -17,6 +17,7 @@ import { cn } from '../../lib/utils'
 import { SectionHeading } from './SidebarSections'
 import { WhatsNewBanner } from '../help/WhatsNewBanner'
 import { TelemetryNoticeBanner } from '../help/TelemetryNoticeBanner'
+import { FeedbackBanner } from '../help/FeedbackBanner'
 import { NewSessionDropdown } from './NewSessionDropdown'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
@@ -1391,6 +1392,7 @@ export function Sidebar() {
       {/* Announcements — above the bottom bar */}
       <div className="flex-shrink-0 px-2 has-[>div]:pb-2 space-y-1">
         <TelemetryNoticeBanner />
+        <FeedbackBanner />
         <WhatsNewBanner />
         <UpdateBanner />
       </div>

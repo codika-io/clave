@@ -351,7 +351,16 @@ const electronAPI = {
       noticeShown: boolean
     }>,
   telemetrySetEnabled: (enabled: boolean) => ipcRenderer.invoke('telemetry:set-enabled', enabled),
-  telemetrySetNoticeShown: () => ipcRenderer.invoke('telemetry:set-notice-shown')
+  telemetrySetNoticeShown: () => ipcRenderer.invoke('telemetry:set-notice-shown'),
+
+  // ── Feedback ──
+  feedbackGetState: () =>
+    ipcRenderer.invoke('feedback:get-state') as Promise<{ collapsed: boolean }>,
+  feedbackSetCollapsed: () => ipcRenderer.invoke('feedback:set-collapsed'),
+  feedbackSubmit: (submission: { email: string; message?: string }) =>
+    ipcRenderer.invoke('feedback:submit', submission) as Promise<
+      { ok: true } | { ok: false; error: string }
+    >
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

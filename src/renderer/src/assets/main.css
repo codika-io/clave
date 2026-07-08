@@ -549,6 +549,27 @@ body,
   border-color: var(--color-accent);
 }
 
+/* Multi-line variant of .input-field — height follows the `rows` attribute */
+.textarea-field {
+  width: 100%;
+  padding: 0.5rem 0.75rem;  /* py-2 px-3 */
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-100);
+  border: 1px solid var(--border-subtle-color);
+  font-size: 0.875rem;      /* text-sm */
+  line-height: 1.625;
+  color: var(--text-primary);
+  outline: none;
+  resize: none;
+  transition: border-color 150ms;
+}
+.textarea-field::placeholder {
+  color: var(--text-tertiary);
+}
+.textarea-field:focus {
+  border-color: var(--color-accent);
+}
+
 /* Compact input (inline rename, search) */
 .input-compact {
   width: 100%;
