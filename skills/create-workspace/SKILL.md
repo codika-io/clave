@@ -9,7 +9,15 @@ This skill helps you create and configure `.clave` workspace files for the Clave
 
 ## What is a `.clave` file?
 
-A `.clave` file is a JSON file that defines one or more **groups**. Each group contains **sessions** (terminal instances) and **terminals** (quick-action buttons with pre-configured commands). When dropped into Clave or loaded via the Workspaces settings, these groups appear as pinned items that the user can launch with a click.
+A `.clave` file is a JSON file that defines one or more **groups**. Each group contains **sessions** (terminal instances) and **terminals** (quick-action buttons with pre-configured commands). When dropped into Clave or loaded via the Workspaces settings, these groups become **launchable templates**.
+
+Templates live in the **template picker** — the popover behind the icon in the Sessions header of the sidebar. Clicking a template stamps out a fresh group every time; it never links back to the running group. The picker:
+
+- Groups templates under their `category` as section headers. Uncategorized templates render first, then categories **alphabetically**. There is no manual ordering — if you need a specific order, name the categories so they sort that way.
+- Hides groups marked `"toolbar": true` (those render as icon buttons in the top toolbar instead).
+- Shows a search box once there are more than 5 templates.
+
+(The old inline pinned-groups grid in the sidebar is now only a drop target for dragging groups and `.clave` files.)
 
 ### Single-group vs multi-group
 
@@ -42,11 +50,19 @@ The format is auto-detected: if the top level has a `groups` array, it's multi-g
 
 ## Path resolution
 
-All `cwd` paths in a `.clave` file are **relative to the directory containing the file**. This makes workspace files portable — they work on any machine where the project structure matches.
+All `cwd` and `logo` paths in a `.clave` file are relative to a **root directory**, which is *not always the file's own folder*:
+
+| How the file was loaded | Root for relative paths |
+|---|---|
+| Dropped onto Clave / `workspace.clave` in a folder | The file's parent directory |
+| Discovered under a workspace (`.clave/workspaces/*.clave`) | **The repo directory that contains the `.clave/` folder** |
+| Registered via Settings → Workspaces | The folder you selected |
+
+This distinction matters. In `my-repo/.clave/workspaces/default.clave`, `cwd: "."` means `my-repo/`, **not** `my-repo/.clave/workspaces/`. A file written for auto-discovery will therefore resolve paths incorrectly if someone drag-drops it standalone. Write repo files for discovery and load them that way.
 
 | Relative path | Meaning |
 |---|---|
-| `.` | Same directory as the .clave file |
+| `.` | The root directory (see table above) |
 | `src/backend` | Subdirectory |
 | `../other-repo` | Sibling directory |
 
@@ -56,17 +72,18 @@ Each group has these fields:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | Yes | Display name shown in the sidebar pin |
+| `name` | string | Yes | Display name shown on the template row |
 | `cwd` | string | Yes | Working directory for the group (relative path) |
 | `color` | string | No | Group accent color (see Colors below) |
-| `category` | string | No | Category label for organizing pins in the sidebar (e.g. `"Platform"`, `"Products"`) |
-| `toolbar` | boolean | No | If `true`, this group's terminals appear as quick-action buttons in the top toolbar instead of the sidebar |
+| `category` | string | No | Section header in the template picker (e.g. `"Platform"`, `"Clients"`). Sections sort alphabetically; uncategorized groups come first. Has no effect anywhere else in the UI |
+| `logo` | string | No | Small icon shown on the template row. Either a path relative to the root dir (`.png`, `.svg`, `.jpg`, `.gif`, `.webp`, `.ico`) or an inline `data:` URI. Path form is read and inlined as a data URI at load |
+| `toolbar` | boolean | No | If `true`, this group's terminals appear as quick-action buttons in the top toolbar and the group is **hidden from the template picker** |
 | `sessions` | array | Yes | Terminal sessions to spawn (see Sessions below) |
 | `terminals` | array | Yes | Command buttons shown on the group (see Terminals below) |
 
 ## Sessions
 
-Each session spawns a terminal process in a specific directory. Sessions can run in Claude Code mode (AI assistant) or plain terminal mode.
+Each session spawns a terminal process in a specific directory. A session runs one agent CLI, or a plain shell if no agent mode is set.
 
 ```json
 {
@@ -79,10 +96,17 @@ Each session spawns a terminal process in a specific directory. Sessions can run
 
 | Field | Type | Description |
 |---|---|---|
-| `cwd` | string | Working directory (relative to .clave file) |
-| `name` | string | Display name in the sidebar |
-| `claudeMode` | boolean | `true` = starts Claude Code AI assistant, `false` = plain terminal |
+| `cwd` | string | Working directory (relative to the root dir) |
+| `name` | string | Display name of the tab |
+| `claudeMode` | boolean | `true` = starts Claude Code, `false` = plain terminal |
+| `antigravityMode` | boolean | `true` = starts the Antigravity CLI (`agy`) |
+| `codexMode` | boolean | `true` = starts the Codex CLI |
+| `claudeAgentsMode` | boolean | `true` = starts Claude via the `claude agents` subcommand. Never receives a `prompt` — the subcommand rejects a positional prompt |
 | `dangerousMode` | boolean | `true` = Claude runs with `--dangerously-skip-permissions` |
+
+Set at most one agent mode. If `antigravityMode`, `codexMode`, or `claudeAgentsMode` is `true`, `claudeMode` is forced to `false` at spawn.
+
+> **Deprecated:** `geminiMode` is the retired name for `antigravityMode`. Files using it still load (it is read as an alias), but Clave writes `antigravityMode` whenever it saves the file back. Don't emit `geminiMode` in new files.
 | `prompt` | string | Optional. A one-shot message auto-submitted to the agent the moment the session launches, so it starts already primed. Agent modes only (claude / antigravity / codex) — ignored for plain terminals and `claude agents`. Free text; supports the path tokens below. |
 | `rootSession` | boolean | Optional. `true` = spawn the session at the **workspace root** (the folder whose `.clave/workspaces/` the umbrella auto-discovered), instead of at `cwd`. `cwd` still names the project dir that feeds the prompt tokens. No effect when the file is opened standalone (no umbrella root known). |
 
@@ -121,6 +145,8 @@ Terminals are command buttons that appear as colored icons on the group. Clickin
 | `color` | string | Button color (see Colors below) |
 | `icon` | string | Button icon (see Icons below) |
 | `cwd` | string | Optional. Working directory for this terminal (relative path). If omitted, uses the group's `cwd` |
+| `autoLaunchLocalhost` | boolean | Optional. Open the detected `localhost` URL in the browser once the command serves one. Use for dev servers |
+| `persistent` | boolean | Optional, **toolbar groups only**. Keep the spawned session alive when the toolbar popover closes, and reattach to it next time instead of respawning |
 
 **Tips:**
 - Use `"auto"` for dev servers (`npm run dev`) that should start immediately
@@ -152,6 +178,28 @@ When a group has `"toolbar": true`, its terminals appear as quick-action buttons
 }
 ```
 
+## Trust: elevated files
+
+A `.clave` file can run shell commands and drive an agent on your behalf, so Clave gates that behavior. A file is **elevated** if any of these is true:
+
+- a terminal has `"commandMode": "auto"` with a non-empty `command`
+- a session has a non-empty `prompt`
+- a session has `"dangerousMode": true`
+
+Opening an elevated file that the user has not trusted shows a review dialog listing what would run, with three outcomes:
+
+| Choice | Result |
+|---|---|
+| **Trust and run** | Loads as authored. Trusts this exact file content (by SHA-256 hash) |
+| **Open safely** | Loads **sanitized**: `auto` → `prefill`, `dangerousMode` → `false`, and every `prompt` is **dropped** |
+| **Cancel** | Nothing loads |
+
+A checkbox additionally trusts the whole containing folder as a **workspace root**, so every `.clave` under it skips the dialog from then on. Files Clave itself writes are trusted automatically.
+
+Trust is resolved as: file lives under a trusted root → its supplied root dir is trusted → its exact content hash was trusted before. Note that trusting by content hash is per-content: **any edit to the file re-triggers the dialog.** Folder trust is the durable option.
+
+Practical consequence: if a user reports that their prompts never fire or their dev servers only prefill, they opened the file with "Open safely". `rootSession` alone is not elevated.
+
 ## Colors
 
 Available named colors for groups and terminals:
@@ -167,7 +215,9 @@ Available named colors for groups and terminals:
 | `pink` | `#FF6482` | Secondary products |
 | `red` | `#FF3B30` | Deploy / danger / critical |
 
-Custom hex colors (e.g. `"#FF9500"`) are also supported.
+Custom hex colors (e.g. `"#FF9500"`) are also supported — the string must start with `#`.
+
+> ⚠️ **These eight names are the only valid names.** A color is resolved as: known name → its hex; string starting with `#` → itself; **anything else → no color at all**. So `"orange"`, `"cyan"`, or `"lightblue"` do not fail loudly — the group or button just renders colorless. If you want a shade outside the palette, write it as hex.
 
 ## Icons
 
@@ -195,6 +245,8 @@ Available icons for terminal buttons (18 options):
 | `cloud` | CloudIcon | Cloud services, hosting |
 
 If no icon is specified, `terminal` (CommandLineIcon) is used as the default.
+
+> ⚠️ **This list is exhaustive.** Any other string — including plausible Heroicon names like `device-phone-mobile` or `computer-desktop` — is not recognised and silently falls back to the default icon. To distinguish terminals, pick two names from the table above (e.g. `bolt` and `globe`).
 
 ## Complete workspace example
 
@@ -257,8 +309,8 @@ When a single group contains apps in different subdirectories (e.g. a monorepo),
     { "cwd": "products/acme", "name": "Acme", "claudeMode": true, "dangerousMode": true }
   ],
   "terminals": [
-    { "command": "npm run dev", "commandMode": "auto", "cwd": "products/acme/acme-app", "color": "#10b981", "icon": "device-phone-mobile" },
-    { "command": "npm run dev", "commandMode": "auto", "cwd": "products/acme/acme-dashboard", "color": "#3b82f6", "icon": "computer-desktop" }
+    { "command": "npm run dev", "commandMode": "auto", "cwd": "products/acme/acme-app", "color": "#10b981", "icon": "bolt" },
+    { "command": "npm run dev", "commandMode": "auto", "cwd": "products/acme/acme-dashboard", "color": "#3b82f6", "icon": "cube" }
   ]
 }
 ```
@@ -323,10 +375,13 @@ When the workspace is activated, Clave recursively scans the root directory for 
 
 **How it works:**
 - Scans up to 4 levels deep (configurable)
-- Skips `node_modules`, `.git`, `references`, `build`, `dist`, `.next`, `.turbo`
+- Skips `node_modules`, `.git`, `references`, `build`, `dist`, `.next`, `.turbo` — **and every directory whose name starts with `.`**, so nested `.claude/worktrees/…` copies are never picked up
+- **At most one `.clave` per directory** is ever used. The candidates are tried in order and the first hit wins — a repo's files do not merge
 - Each discovered file is independently tracked and watched for changes
-- Groups from the workspace file load first, discovered groups load after (sorted alphabetically)
+- Groups from the workspace file load first, discovered groups load after (sorted alphabetically by directory name)
 - On workspace deactivation, all discovered pins are cleaned up
+
+Anything deeper than `maxDepth` is simply invisible — no warning. Count from the workspace root, and raise `maxDepth` if your repos nest deeper.
 
 **Advanced configuration:**
 ```json
@@ -389,6 +444,12 @@ Alex's Clave app picks `alex.clave`. Another team member using `default.clave` a
 
 This allows personal customization (extra debug sessions, different colors, additional terminals) without affecting the team's default configuration.
 
+**It shadows, it does not merge.** `alex.clave` *replaces* that repo's `default.clave` entirely, so it must be a complete definition, not a delta. And because Clave only writes back to the file a template was loaded from, one person's edits can never touch a teammate's file.
+
+Two gotchas:
+- A workspace file literally named `default.clave` yields **no** workspace ID, so it always resolves to each repo's `default.clave`. To get per-user overrides, your umbrella file must be named after you.
+- Fully personal setups are often simpler as a **single multi-group umbrella file with `autoDiscover: false`**, defining every group and `category` inline. You lose automatic pickup of new repos and per-repo `logo` locality, but you gain complete control over the sections and touch nobody else's files.
+
 ## How to use
 
 1. **Create the file** — Save as `.clave/workspaces/default.clave` in your project (or `workspace.clave` in the root)
@@ -396,8 +457,12 @@ This allows personal customization (extra debug sessions, different colors, addi
    - Drag-drop the file from Finder onto the Clave pin area
    - Or go to Settings → Workspaces → Add Workspace (select the folder containing the `.clave` file)
    - Or rely on **auto-discovery** if the parent workspace has `"autoDiscover": true`
-3. **Activate** — Click the workspace in Settings to load all groups as pins
-4. **Launch** — Click any pin to spawn its sessions and terminals
+3. **Activate** — Click the workspace in Settings to load its groups. **Adding a workspace does not activate it** — you must click it
+4. **Launch** — Open the template picker from the Sessions header and click a template to spawn its sessions and terminals
+
+Clave watches loaded `.clave` files and reloads on change, but only refreshes templates that already exist. **Adding or removing groups requires deactivating and reactivating the workspace** (or restarting Clave); editing an existing group applies live.
+
+Exporting a group back out to a `.clave` file (right-click → Export as .clave) is **lossy**: it drops `prompt`, `rootSession`, `logo`, and `autoLaunchLocalhost`. Hand-edit those back in, or keep the source file as the source of truth.
 
 ## Best practices
 
