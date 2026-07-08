@@ -42,9 +42,6 @@ export function FeedbackBanner(): ReactNode {
   return (
     <>
       {collapsed ? (
-        // Deliberately not wrapped in a <div>: the announcements container uses
-        // `has-[>div]:pb-2`, which is right for the expanded card but leaves the
-        // one-line pill floating above the footer.
         <button
           onClick={() => setDialogOpen(true)}
           className="sidebar-item w-full text-[11px] text-text-tertiary hover:text-text-secondary"
@@ -53,7 +50,8 @@ export function FeedbackBanner(): ReactNode {
           <span>Give us feedback</span>
         </button>
       ) : (
-        <div className="px-2.5 py-2 rounded-xl bg-accent/8 border border-accent/15">
+        // The card needs breathing room the footer's 2px row rhythm doesn't give it.
+        <div className="px-2.5 py-2 mb-1.5 rounded-xl bg-accent/8 border border-accent/15">
           <div className="flex items-start gap-2">
             <ChatBubbleLeftRightIcon className="w-3.5 h-3.5 text-accent flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">

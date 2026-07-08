@@ -1392,13 +1392,13 @@ export function Sidebar() {
       {/* Announcements — above the bottom bar */}
       <div className="flex-shrink-0 px-2 has-[>div]:pb-2 space-y-1">
         <TelemetryNoticeBanner />
-        <FeedbackBanner />
         <WhatsNewBanner />
         <UpdateBanner />
       </div>
 
-      {/* Bottom section: work tracker + user */}
+      {/* Bottom section: feedback + work tracker + user */}
       <div className="flex-shrink-0 px-2 py-1.5 space-y-0.5">
+        <FeedbackBanner />
         <WorkTracker />
         <SidebarFooter />
       </div>

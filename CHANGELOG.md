@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.60.2] — 2026-07-08
+
+### Fixed
+- **"Give us feedback" now sits directly above your profile** — the collapsed feedback link moved into the sidebar footer, so it follows the same spacing as every other row there instead of hovering above it.
+
 ## [1.60.1] — 2026-07-08
 
 ### Fixed
