@@ -42,15 +42,16 @@ export function FeedbackBanner(): ReactNode {
   return (
     <>
       {collapsed ? (
-        <div>
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="sidebar-item w-full text-[11px] text-text-tertiary hover:text-text-secondary"
-          >
-            <ChatBubbleLeftRightIcon className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Give us feedback</span>
-          </button>
-        </div>
+        // Deliberately not wrapped in a <div>: the announcements container uses
+        // `has-[>div]:pb-2`, which is right for the expanded card but leaves the
+        // one-line pill floating above the footer.
+        <button
+          onClick={() => setDialogOpen(true)}
+          className="sidebar-item w-full text-[11px] text-text-tertiary hover:text-text-secondary"
+        >
+          <ChatBubbleLeftRightIcon className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>Give us feedback</span>
+        </button>
       ) : (
         <div className="px-2.5 py-2 rounded-xl bg-accent/8 border border-accent/15">
           <div className="flex items-start gap-2">
