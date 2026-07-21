@@ -1,4 +1,4 @@
-import { useSessionStore } from '../store/session-store'
+import { useSessionStore, fileTabDedupKey } from '../store/session-store'
 import type { GroupTerminalConfig, Session, SessionGroup } from '../store/session-store'
 import { usePinnedStore, getPinnedState, togglePinnedGroup } from '../store/pinned-store'
 import type { PinnedGroupSession } from '../store/session-types'
@@ -142,9 +142,7 @@ async function handleLaunchGroup(payload: { group: string }): Promise<unknown> {
   await togglePinnedGroup(pg.id)
   const after = usePinnedStore.getState().pinnedGroups.find((p) => p.id === pg.id)
   if (!after?.activeGroupId) {
-    throw new Error(
-      `Launching "${pg.name}" spawned no sessions — check that its directories exist`
-    )
+    throw new Error(`Launching "${pg.name}" spawned no sessions — check that its directories exist`)
   }
   return {
     pinnedId: pg.id,
@@ -360,6 +358,80 @@ function handleRename(payload: { target: 'group' | 'session'; id: string; name: 
   return { renamed: payload.id, name: payload.name }
 }
 
+/** Collapse '.' and '..' segments of an absolute path (no node:path in the renderer). */
+function normalizePath(absPath: string): string {
+  const segments: string[] = []
+  for (const segment of absPath.split('/')) {
+    if (segment === '' || segment === '.') continue
+    if (segment === '..') segments.pop()
+    else segments.push(segment)
+  }
+  return '/' + segments.join('/')
+}
+
+async function handleOpenFile(payload: {
+  path: string
+  name?: string
+  callerSessionId?: string
+}): Promise<unknown> {
+  const state = useSessionStore.getState()
+  let abs = payload.path
+  if (!abs.startsWith('/')) {
+    const caller = state.sessions.find((s) => s.id === payload.callerSessionId)
+    if (!caller) {
+      throw new Error(
+        'A relative path requires the call to come from inside a Clave tab — pass an absolute path'
+      )
+    }
+    abs = `${caller.cwd}/${abs}`
+  }
+  abs = normalizePath(abs)
+  const slash = abs.lastIndexOf('/')
+  const parentDir = abs.substring(0, slash) || '/'
+  const fileName = abs.substring(slash + 1)
+
+  let stat: { type: 'file' | 'directory' }
+  try {
+    stat = await window.electronAPI.statFile(parentDir, fileName)
+  } catch {
+    throw new Error(`No file at "${abs}"`)
+  }
+  if (stat.type === 'directory') {
+    throw new Error(`"${abs}" is a directory — clave_open_file opens files only`)
+  }
+
+  // addFileTab dedups by path: an already-open file just gets focused.
+  state.addFileTab({
+    id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    filePath: abs,
+    name: payload.name ?? fileName
+  })
+  const tab = useSessionStore.getState().fileTabs.find((f) => fileTabDedupKey(f) === `file:${abs}`)
+  return { fileTabId: tab?.id ?? null, filePath: abs }
+}
+
+async function handleNotify(payload: {
+  title: string
+  body: string
+  sessionId?: string
+  callerSessionId?: string
+}): Promise<unknown> {
+  const state = useSessionStore.getState()
+  if (payload.sessionId && !state.sessions.some((s) => s.id === payload.sessionId)) {
+    throw new Error(`No session with id "${payload.sessionId}"`)
+  }
+  const sessionId = payload.sessionId ?? payload.callerSessionId
+  if (!sessionId) {
+    throw new Error('Pass sessionId — this call did not come from inside a Clave tab')
+  }
+  const status = await window.electronAPI.showNotification({
+    title: payload.title,
+    body: payload.body,
+    sessionId
+  })
+  return { status, sessionId }
+}
+
 function handleFocus(payload: { sessionId: string }): unknown {
   const state = useSessionStore.getState()
   if (!state.sessions.some((s) => s.id === payload.sessionId)) {
@@ -391,6 +463,10 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleRename(payload as Parameters<typeof handleRename>[0])
     case 'focus':
       return handleFocus(payload as Parameters<typeof handleFocus>[0])
+    case 'openFile':
+      return handleOpenFile(payload as Parameters<typeof handleOpenFile>[0])
+    case 'notify':
+      return handleNotify(payload as Parameters<typeof handleNotify>[0])
     default:
       throw new Error(`Unknown MCP command "${command}"`)
   }

@@ -327,7 +327,11 @@ export interface ElectronAPI {
   cancelDownload: () => Promise<void>
   getPathForFile: (file: File) => string
   persistDroppedFile: (sourcePath: string) => Promise<string | null>
-  showNotification: (options: { title: string; body: string; sessionId: string }) => Promise<void>
+  showNotification: (options: {
+    title: string
+    body: string
+    sessionId: string
+  }) => Promise<'shown' | 'skipped-focused' | 'unsupported'>
   onNotificationClicked: (callback: (sessionId: string) => void) => () => void
   listFiles: (cwd: string) => Promise<{ files: string[]; truncated: boolean }>
   readDir: (rootCwd: string, dirPath: string) => Promise<DirEntry[]>

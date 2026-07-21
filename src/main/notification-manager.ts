@@ -1,18 +1,20 @@
 import { ipcMain, Notification, BrowserWindow, app } from 'electron'
 
+export type NotificationStatus = 'shown' | 'skipped-focused' | 'unsupported'
+
 export function initNotificationManager(): void {
   ipcMain.handle(
     'notification:show',
-    (event, options: { title: string; body: string; sessionId: string }) => {
+    (event, options: { title: string; body: string; sessionId: string }): NotificationStatus => {
       if (!Notification.isSupported()) {
         console.log('[notification] Notifications not supported on this system')
-        return
+        return 'unsupported'
       }
 
       const win = BrowserWindow.fromWebContents(event.sender)
       if (win?.isFocused()) {
         console.log('[notification] Skipped (window is focused):', options.body)
-        return
+        return 'skipped-focused'
       }
 
       console.log('[notification] Showing:', options.title, '-', options.body)
@@ -35,6 +37,7 @@ export function initNotificationManager(): void {
       if (process.platform === 'darwin') {
         app.dock?.bounce('informational')
       }
+      return 'shown'
     }
   )
 }
