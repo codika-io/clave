@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.61.0",
+    "title": "Agents can show you files and notify you",
+    "description": "Agents in your tabs gained two new tools: clave_open_file opens a document they produced as a file tab for you to read or edit, and clave_notify sends a native notification when long-running work finishes in a tab you are not looking at — click it to jump straight there.",
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
+  },
+  {
     "version": "1.59.0",
     "title": "Spot Clave in Mission Control",
     "description": "When you open macOS Mission Control or App Exposé, Clave now covers its window with a blurred overlay and a large Clave mark, so you can pick it out instantly among the thumbnails. No extra permissions needed — toggle it under Settings → Appearance.",

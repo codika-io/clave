@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.61.0] — 2026-07-21
+
+### Added
+- **Agents can show you files and notify you** — two new MCP tools for the agents running in your tabs. `clave_open_file` lets an agent open a file (a plan, report, or document it produced) as a regular file tab so you can read or edit it right away; opening the same file twice just refocuses the existing tab. `clave_notify` lets an agent fire a native macOS notification when long-running work finishes in a tab you are not looking at — clicking the notification jumps you to that tab, and nothing is shown if you are already there.
+
 ## [1.60.2] — 2026-07-08
 
 ### Fixed
