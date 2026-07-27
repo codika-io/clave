@@ -1,6 +1,6 @@
 # Clave Plugin
 
-Single-plugin [Open Plugin v1](https://github.com/vercel-labs/open-plugin-spec) repo. Companion to the [Clave desktop app](https://github.com/codika-io/clave). Plugin name is `clave`; all skills surface as `/clave:<skill>` in any installed host. Ships `clave:create-workspace` — generates `.clave` workspace files via an AI agent.
+Single-plugin [Open Plugin v1](https://github.com/vercel-labs/open-plugin-spec) repo. Companion to the [Clave desktop app](https://github.com/codika-io/clave). Plugin name is `clave`; all skills surface as `/clave:<skill>` in any installed host. Ships two skills: `clave:create-workspace` (generates `.clave` workspace files) and `clave:recover-sessions` (rebuilds a lost workspace from local Claude Code transcripts).
 
 ## Repository Structure
 
@@ -11,8 +11,12 @@ The repo root IS the plugin root. No `plugins/` wrapper.
 ├── .plugin/plugin.json              # Vendor-neutral manifest (Open Plugin v1)
 ├── .claude-plugin/plugin.json       # Claude Code preferred manifest (kept in sync)
 ├── skills/
-│   └── create-workspace/
-│       └── SKILL.md                 # The skill itself — agent discovers it at runtime
+│   ├── create-workspace/
+│   │   └── SKILL.md                 # The skill itself — agent discovers it at runtime
+│   └── recover-sessions/
+│       ├── SKILL.md
+│       └── scripts/
+│           └── scan-transcripts.py  # Read-only transcript scanner (stdlib only)
 ├── README.md
 ├── CLAUDE.md
 ├── LICENSE
@@ -43,6 +47,7 @@ When editing manifest metadata (`version`, `description`, `keywords`, …), upda
 1. Create `skills/<skill-name>/SKILL.md` with YAML frontmatter (`name`, `description`).
 2. The plugin loader picks it up automatically from the default `skills/` discovery location (Open Plugin §7.1) — no manifest edits needed.
 3. Document it in `README.md`.
+4. Bundled helper scripts go in `skills/<skill-name>/scripts/`. Keep them stdlib-only (no install step) and read-only where the skill touches user data — the `SKILL.md` must still describe the underlying signals so the skill degrades to hand-work if a script is missing.
 
 ## Versioning
 

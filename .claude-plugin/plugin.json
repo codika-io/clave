@@ -1,7 +1,7 @@
 {
   "name": "clave",
-  "version": "1.2.0",
-  "description": "Create and configure `.clave` workspace files for the Clave desktop app — groups, sessions, terminals, icons, and toolbar actions.",
+  "version": "1.3.0",
+  "description": "Clave desktop app companion: build `.clave` workspace files (groups, sessions, terminals, toolbar actions) and recover lost sessions from local Claude Code transcripts.",
   "author": {
     "name": "Codika",
     "email": "team@codika.io",
@@ -17,6 +17,8 @@
     "terminals",
     "sessions",
     "toolbar",
-    "desktop"
+    "desktop",
+    "recovery",
+    "transcripts"
   ]
 }

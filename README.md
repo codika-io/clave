@@ -1,6 +1,6 @@
 # Clave Plugin (`clave`)
 
-Companion agent plugin for [Clave](https://github.com/codika-io/clave) — a multi-session Claude Code desktop app. Installs one skill, `create-workspace`, that lets your coding agent generate and configure `.clave` workspace files (groups, sessions, terminals, icons, toolbar actions) from a natural-language description.
+Companion agent plugin for [Clave](https://github.com/codika-io/clave) — a multi-session Claude Code desktop app. Installs two skills: `create-workspace`, which generates `.clave` workspace files from a natural-language description, and `recover-sessions`, which rebuilds a lost workspace from the Claude Code transcripts already on your disk.
 
 Conforms to the [Open Plugin Specification v1.0](https://github.com/vercel-labs/open-plugin-spec).
 
@@ -26,6 +26,7 @@ The `plugins` CLI auto-detects which agent tools are installed and installs into
 | Skill | What it does |
 |---|---|
 | `clave:create-workspace` | Scaffold a `.clave` workspace file from a description. Handles groups, session configs, terminal commands, icons, and toolbar actions. |
+| `clave:recover-sessions` | Rebuild a lost workspace after a crash. Finds your past sessions in `~/.claude/projects`, works out what each was about, and reopens them as grouped tabs with their full history. |
 
 ## Usage
 
@@ -36,6 +37,16 @@ Once installed, ask your agent things like:
 - *"Add a toolbar action to my existing workspace that runs `npm test`."*
 
 The agent invokes `clave:create-workspace`, writes a valid `.clave` file to your chosen path, and you open it in Clave.
+
+### Recovering after a crash
+
+- *"My computer crashed and I lost all my sessions — recover what I had."*
+- *"I had a group for the API rewrite and one for the mobile app. Bring them back."*
+- *"What was I working on yesterday?"*
+
+The agent invokes `clave:recover-sessions`, scans your local transcripts, maps each session to the project it worked on, and rebuilds your groups with the conversations resumed. Your history survives crashes because Claude Code stores every session on disk — only Clave's arrangement of tabs is lost, and that is what gets reconstructed.
+
+Retention is a local setting: `cleanupPeriodDays` in `~/.claude/settings.json` (default 30 days). Raise it if you want a longer recovery window.
 
 ## About Clave
 
