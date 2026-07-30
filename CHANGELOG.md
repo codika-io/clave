@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.61.1] — 2026-07-30
+
+### Fixed
+- **Renamed sessions keep their name after a crash or reboot** — a tab you renamed used to come back labelled with its folder name if Clave went down without quitting cleanly. Names (yours and the auto-generated ones) are now saved to disk the moment they change and restored with the session.
+
 ## [1.61.0] — 2026-07-21
 
 ### Added

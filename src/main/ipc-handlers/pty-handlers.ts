@@ -106,6 +106,16 @@ export function registerPtyHandlers(): void {
     return ptyManager.getAllSessions()
   })
 
+  // A rename only lives in the renderer store, which dies with the window.
+  // Mirror it into the tmux sidecar so the tab keeps its name across a
+  // restart, a crash, or a reboot instead of reverting to the folder name.
+  ipcMain.handle(
+    'session:set-display-name',
+    (_event, id: string, displayName: string | null, userRenamed: boolean) => {
+      ptyManager.setSessionDisplayName(id, displayName, userRenamed === true)
+    }
+  )
+
   // Lets the settings UI enable/disable the "persistent sessions" toggle.
   ipcMain.handle('tmux:available', () => {
     return isTmuxAvailable()

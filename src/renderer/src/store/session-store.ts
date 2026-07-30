@@ -183,6 +183,26 @@ function persistSidebarLayout(groups: SessionGroup[], displayOrder: string[]): v
   })
 }
 
+/** Mirror a session's tab name into its tmux sidecar (main process), so the
+ *  rename survives a restart, a crash, or a reboot. The store itself lives in
+ *  the renderer and dies with the window, which is why a renamed tab used to
+ *  come back as its folder name. A name equal to the folder name is stored as
+ *  "no name", so the tab tracks the folder if nothing was ever set. */
+function persistSessionName(
+  id: string,
+  name: string,
+  folderName: string,
+  userRenamed: boolean
+): void {
+  window.electronAPI?.setSessionDisplayName?.(
+    id,
+    name === folderName ? null : name,
+    userRenamed
+  ).catch(() => {
+    // Non-fatal: the name still applies for this run, it just won't survive.
+  })
+}
+
 /** Turn on sidebar-layout persistence. Call once on launch after the previous
  *  layout has been loaded (and groups restored), so re-adoption writes can't
  *  overwrite the saved file before we read it. */
@@ -869,26 +889,37 @@ export const useSessionStore = create<SessionState>((set) => ({
       }
     }),
 
-  renameSession: (id, name) =>
+  renameSession: (id, name) => {
+    const session = useSessionStore.getState().sessions.find((s) => s.id === id)
+    if (!session) return
+    const next = name.trim() || session.folderName
+    persistSessionName(id, next, session.folderName, true)
     set((state) => ({
       sessions: state.sessions.map((s) =>
-        s.id === id ? { ...s, name: name.trim() || s.folderName, userRenamed: true } : s
+        s.id === id ? { ...s, name: next, userRenamed: true } : s
       )
-    })),
+    }))
+  },
 
-  autoRenameSession: (id, name) =>
+  autoRenameSession: (id, name) => {
+    const session = useSessionStore.getState().sessions.find((s) => s.id === id)
+    if (!session || session.userRenamed) return
+    const next = name.trim() || session.name
+    persistSessionName(id, next, session.folderName, false)
     set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === id && !s.userRenamed ? { ...s, name: name.trim() || s.name } : s
-      )
-    })),
+      sessions: state.sessions.map((s) => (s.id === id ? { ...s, name: next } : s))
+    }))
+  },
 
-  resetSessionName: (id) =>
+  resetSessionName: (id) => {
+    const session = useSessionStore.getState().sessions.find((s) => s.id === id)
+    if (session) persistSessionName(id, session.folderName, session.folderName, false)
     set((state) => ({
       sessions: state.sessions.map((s) =>
         s.id === id ? { ...s, name: s.folderName, userRenamed: false } : s
       )
-    })),
+    }))
+  },
 
   setSessionPlanFile: (id, path) =>
     set((state) => ({

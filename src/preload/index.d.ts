@@ -113,6 +113,10 @@ export interface AdoptableTmuxSession {
   claudeSessionId?: string
   cwd: string
   folderName: string
+  /** Tab label the user last saw (rename or auto-title); absent → folderName. */
+  displayName?: string
+  /** True when displayName came from an explicit rename (blocks auto-titling). */
+  userRenamed?: boolean
   claudeMode: boolean
   antigravityMode: boolean
   codexMode: boolean
@@ -273,6 +277,11 @@ export interface ElectronAPI {
   resizeSession: (id: string, cols: number, rows: number) => void
   killSession: (id: string) => Promise<void>
   listSessions: () => Promise<SessionInfo[]>
+  setSessionDisplayName: (
+    id: string,
+    displayName: string | null,
+    userRenamed: boolean
+  ) => Promise<void>
   tmuxAvailable: () => Promise<boolean>
   tmuxListAdoptable: () => Promise<AdoptableTmuxSession[]>
   tmuxDiscard: (tmuxName: string) => Promise<void>

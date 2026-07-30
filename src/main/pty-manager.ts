@@ -279,6 +279,13 @@ export interface AdoptableTmuxSession {
   claudeSessionId?: string
   cwd: string
   folderName: string
+  /** The tab label as the user sees it — a manual rename or an auto-generated
+   *  title. Absent means the tab still shows `folderName`. Kept in the sidecar
+   *  (not just renderer memory) so a crash or reboot can't revert the name. */
+  displayName?: string
+  /** True when `displayName` came from an explicit rename, which protects it
+   *  from being overwritten by the auto-title generator after re-adoption. */
+  userRenamed?: boolean
   claudeMode: boolean
   antigravityMode: boolean
   codexMode: boolean
@@ -316,10 +323,27 @@ function writeTmuxSidecar(meta: AdoptableTmuxSession): boolean {
   try {
     const dir = tmuxSidecarDir()
     fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, `${meta.tmuxName}.json`), JSON.stringify(meta), 'utf-8')
+    // Write-then-rename: sidecars are rewritten on every rename, so a kill
+    // mid-write must never be able to leave a truncated file behind — that
+    // would lose the whole session, not just its name.
+    const target = path.join(dir, `${meta.tmuxName}.json`)
+    const tmp = `${target}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(meta), 'utf-8')
+    fs.renameSync(tmp, target)
     return true
   } catch {
     return false
+  }
+}
+
+function readTmuxSidecar(tmuxName: string): AdoptableTmuxSession | null {
+  if (!isValidTmuxName(tmuxName)) return null
+  try {
+    return JSON.parse(
+      fs.readFileSync(path.join(tmuxSidecarDir(), `${tmuxName}.json`), 'utf-8')
+    ) as AdoptableTmuxSession
+  } catch {
+    return null
   }
 }
 
@@ -550,10 +574,17 @@ class PtyManager {
       const candidateName =
         adopt && isValidTmuxName(adopt) ? adopt : this.uniqueTmuxName(cwd, agentModeTag(options))
 
+      // Adoption rewrites the sidecar from scratch, so carry the tab's name
+      // forward — otherwise re-adopting a session would erase the very name we
+      // persisted for it and the next crash would show the folder name again.
+      const previous = adopt ? readTmuxSidecar(candidateName) : null
+
       // Persist restore metadata first. If we can't track the session, fall back
       // to a plain shell spawn rather than create an untrackable tmux session.
       const sidecarOk = writeTmuxSidecar({
         tmuxName: candidateName,
+        displayName: previous?.displayName,
+        userRenamed: previous?.userRenamed,
         id,
         claudeSessionId,
         cwd,
@@ -754,6 +785,23 @@ class PtyManager {
       }
       this.sessions.delete(id)
     }
+  }
+
+  /**
+   * Record the tab's display name in the session's tmux sidecar so it survives
+   * an app restart, a crash, or a reboot. Renames live in the renderer store,
+   * which dies with the window — the sidecar is the only per-session record
+   * that outlives it. Called on every rename (manual, auto-title, or reset to
+   * the folder name); a no-op for sessions with no tmux sidecar to update.
+   */
+  setSessionDisplayName(id: string, displayName: string | null, userRenamed: boolean): void {
+    const tmuxName = this.sessions.get(id)?.tmuxName
+    if (!tmuxName) return
+    const meta = readTmuxSidecar(tmuxName)
+    if (!meta) return
+    const next = displayName?.trim() || undefined
+    if (meta.displayName === next && !!meta.userRenamed === userRenamed) return
+    writeTmuxSidecar({ ...meta, displayName: next, userRenamed })
   }
 
   /**

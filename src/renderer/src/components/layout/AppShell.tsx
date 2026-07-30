@@ -172,7 +172,10 @@ export function AppShell() {
               id: info.id,
               cwd: info.cwd,
               folderName: info.folderName,
-              name: s.folderName,
+              // Restore the label the user last saw. `userRenamed` comes back
+              // too, so an explicit rename keeps its immunity to auto-titling.
+              name: s.displayName || s.folderName,
+              userRenamed: s.userRenamed === true,
               alive: info.alive,
               activityStatus: 'idle',
               promptWaiting: null,
