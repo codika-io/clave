@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.61.2] — 2026-08-03
+
+### Fixed
+- **Edits to `.clave` workspace files are picked up reliably** — the file watcher went silent after the first change when an editor or agent saved the file by replacing it (the common case), so later edits never reached the app until a restart. Clave now watches the containing folder instead, which survives those saves.
+- **Adding or removing a group in a `.clave` file updates your pinned groups live** — a group added to the file now appears as a pin without restarting Clave, and pins whose group was removed from the file are dropped (running sessions are never touched). Previously only existing groups were refreshed.
+- **Unloading one group of a multi-group workspace file no longer stops updates for its siblings** — removing a single pin used to detach the file watcher shared by every group in that file.
+
 ## [1.61.1] — 2026-07-30
 
 ### Fixed

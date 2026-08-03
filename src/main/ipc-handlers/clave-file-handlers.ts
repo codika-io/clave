@@ -566,7 +566,14 @@ export function registerClaveFileHandlers(): void {
     try {
       let debounceTimer: NodeJS.Timeout | null = null
 
-      const watcher = fs.watch(absolutePath, (_eventType) => {
+      // Watch the parent directory, not the file itself: editors and agents
+      // replace files via atomic rename, which orphans a file-inode watcher
+      // after the first change. A directory watch survives inode swaps.
+      const dir = path.dirname(absolutePath)
+      const base = path.basename(absolutePath)
+      const watcher = fs.watch(dir, (_eventType, filename) => {
+        // filename can be null on some platforms — treat as a possible match
+        if (filename && filename !== base) return
         if (recentWrites.has(absolutePath)) return
 
         if (debounceTimer) clearTimeout(debounceTimer)

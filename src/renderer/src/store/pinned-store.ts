@@ -99,10 +99,11 @@ export const usePinnedStore = create<PinnedStoreState>((set) => ({
   removePinnedGroup: (id) =>
     set((s) => {
       const removed = s.pinnedGroups.find((pg) => pg.id === id)
-      if (removed?.filePath) {
+      const next = s.pinnedGroups.filter((pg) => pg.id !== id)
+      // Multi-group files share one watcher — only unwatch with the last pin
+      if (removed?.filePath && !next.some((pg) => pg.filePath === removed.filePath)) {
         window.electronAPI?.unwatchClaveFile(removed.filePath).catch(() => {})
       }
-      const next = s.pinnedGroups.filter((pg) => pg.id !== id)
       persistGroups(next)
       return { pinnedGroups: next }
     }),
@@ -367,11 +368,15 @@ export function initClaveFileWatchers(): () => void {
 
   // Listen for file change events
   const cleanup = window.electronAPI?.onClaveFileChanged(async (filePath: string) => {
-    const pinsForFile = usePinnedStore.getState().pinnedGroups.filter((p) => p.filePath === filePath)
+    const pinsForFile = usePinnedStore
+      .getState()
+      .pinnedGroups.filter((p) => p.filePath === filePath)
+      .sort((a, b) => (a.groupIndex ?? 0) - (b.groupIndex ?? 0))
     if (pinsForFile.length === 0) return
 
     // Use rootDir from the first pin for this file
-    const rootDirForFile = pinsForFile[0].rootDir ?? undefined
+    const firstPin = pinsForFile[0]
+    const rootDirForFile = firstPin.rootDir ?? undefined
     const result = await window.electronAPI?.readClaveFile(filePath, rootDirForFile)
     if (!result) return
 
@@ -386,6 +391,7 @@ export function initClaveFileWatchers(): () => void {
       if (!pg || !g) continue
 
       const state = getPinnedState(pg)
+      const groupIndex = result.type === 'multi' ? i : undefined
 
       if (state === 'idle') {
         usePinnedStore.getState().updatePinnedGroup(pg.id, {
@@ -396,7 +402,8 @@ export function initClaveFileWatchers(): () => void {
           logo: g.logo,
           category: g.category ?? null,
           sessions: g.sessions,
-          terminals: groupDataToPinnedTerminals(g.terminals)
+          terminals: groupDataToPinnedTerminals(g.terminals),
+          groupIndex
         })
       } else {
         // Active — only cosmetic updates, never touch running sessions
@@ -406,7 +413,8 @@ export function initClaveFileWatchers(): () => void {
           toolbar: g.toolbar,
           logo: g.logo,
           category: g.category ?? null,
-          terminals: groupDataToPinnedTerminals(g.terminals)
+          terminals: groupDataToPinnedTerminals(g.terminals),
+          groupIndex
         })
 
         if (pg.activeGroupId) {
@@ -423,6 +431,19 @@ export function initClaveFileWatchers(): () => void {
           }
         }
       }
+    }
+
+    // Groups added to the file → new pins (never auto-launched)
+    for (let i = pinsForFile.length; i < groups.length; i++) {
+      const g = groups[i]
+      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, firstPin.rootDir, firstPin.discoveredBy, firstPin.workspaceRoot)
+      usePinnedStore.getState().addPinnedGroup(pinned)
+    }
+
+    // Groups removed from the file → drop their pins (sessions are never killed)
+    for (let i = groups.length; i < pinsForFile.length; i++) {
+      const pg = pinsForFile.find((p) => p.groupIndex === i) ?? pinsForFile[i]
+      if (pg) usePinnedStore.getState().removePinnedGroup(pg.id)
     }
   })
 
