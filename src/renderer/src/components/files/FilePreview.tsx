@@ -2,7 +2,9 @@ import { useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useSessionStore } from '../../store/session-store'
 import { FileContent } from './FileContent'
+import { ViewModeToggle } from './ViewModeToggle'
 import { useFileEditor } from '../../hooks/use-file-editor'
+import { useFileViewMode } from '../../hooks/use-file-view-mode'
 import { canOpenExternally as canOpenExternallyExt, formatSize, countLines } from './file-types'
 import {
   DocumentDuplicateIcon,
@@ -32,6 +34,7 @@ export function FilePreview(): React.JSX.Element | null {
   const editor = useFileEditor({ cwd, filePath: previewFile, locationId: previewLocationId })
   const { fileData, filename, content, isDirty, canEdit, saving, saveError, loadError, save } =
     editor
+  const { isMarkdown, viewMode, setViewMode } = useFileViewMode(previewFile)
 
   const canOpenExternally = canOpenExternallyExt(filename)
 
@@ -134,6 +137,7 @@ export function FilePreview(): React.JSX.Element | null {
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+          {isMarkdown && <ViewModeToggle mode={viewMode} onChange={setViewMode} />}
           {canEdit && (
             <button
               onClick={save}
@@ -170,7 +174,7 @@ export function FilePreview(): React.JSX.Element | null {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
-        <FileContent editor={editor} cwd={cwd} filePath={previewFile} />
+        <FileContent editor={editor} cwd={cwd} filePath={previewFile} viewMode={viewMode} />
 
         {saveError && (
           <div className="px-4 py-1.5 text-xs text-red-400 bg-red-500/5 border-t border-border-subtle flex-shrink-0">

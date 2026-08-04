@@ -1,3 +1,6 @@
+/** Display modes for markdown files: document-style page (default), compact preview, raw source. */
+export type FileViewMode = 'page' | 'preview' | 'source'
+
 export const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'])
 export const MARKDOWN_EXTS = new Set(['md', 'mdx'])
 export const EXTERNAL_EXTS = new Set([

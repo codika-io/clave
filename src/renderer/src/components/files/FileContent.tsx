@@ -1,31 +1,29 @@
-import { useState } from 'react'
 import { CodeEditor } from './CodeEditor'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import { formatSize, isMarkdownFile } from './file-types'
+import { formatSize, isMarkdownFile, type FileViewMode } from './file-types'
 import type { useFileEditor } from '../../hooks/use-file-editor'
 
 interface FileContentProps {
   editor: ReturnType<typeof useFileEditor>
   cwd: string | null
   filePath: string | null
+  /** How markdown renders: page (document column), preview (compact), source (editor). Owned by the header's ViewModeToggle. */
+  viewMode?: FileViewMode
 }
 
 /**
  * Shared body for the file preview panel and the file tab. Branches by file
- * kind and renders the always-live CodeEditor for code. Markdown opens rendered
- * with a Source/Preview toggle (source shows the same editable buffer).
+ * kind and renders the always-live CodeEditor for code. Markdown renders per
+ * the controlled viewMode (source shows the same editable buffer).
  */
-export function FileContent({ editor, cwd, filePath }: FileContentProps): React.JSX.Element {
+export function FileContent({
+  editor,
+  cwd,
+  filePath,
+  viewMode = 'page'
+}: FileContentProps): React.JSX.Element {
   const { fileData, filename, content, setContent, canEdit, isImage, loadError, save } = editor
   const isMarkdown = filePath ? isMarkdownFile(filename) : false
-  const [showSource, setShowSource] = useState(false)
-
-  // Reset the markdown view to rendered whenever the file changes (derive, no effect)
-  const [prevFilePath, setPrevFilePath] = useState(filePath)
-  if (filePath !== prevFilePath) {
-    setPrevFilePath(filePath)
-    setShowSource(false)
-  }
 
   if (loadError) {
     return (
@@ -64,55 +62,28 @@ export function FileContent({ editor, cwd, filePath }: FileContentProps): React.
     )
   }
 
-  const renderMarkdownToggle = isMarkdown && (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-border-subtle flex-shrink-0">
-      <button
-        onClick={() => setShowSource(false)}
-        className={`px-2 py-0.5 rounded text-xs transition-colors ${
-          !showSource
-            ? 'bg-surface-200 text-text-primary'
-            : 'text-text-tertiary hover:text-text-secondary'
-        }`}
-      >
-        Preview
-      </button>
-      <button
-        onClick={() => setShowSource(true)}
-        className={`px-2 py-0.5 rounded text-xs transition-colors ${
-          showSource
-            ? 'bg-surface-200 text-text-primary'
-            : 'text-text-tertiary hover:text-text-secondary'
-        }`}
-      >
-        Source
-      </button>
-    </div>
-  )
-
-  // Markdown, rendered
-  if (isMarkdown && !showSource) {
+  // Markdown, rendered (page or compact preview)
+  if (isMarkdown && viewMode !== 'source') {
     return (
-      <div className="flex-1 min-h-0 flex flex-col">
-        {renderMarkdownToggle}
-        <div className="flex-1 overflow-auto min-h-0">
-          <MarkdownRenderer content={content} />
-        </div>
+      <div className="flex-1 overflow-auto min-h-0">
+        <MarkdownRenderer
+          content={content}
+          variant={viewMode === 'page' ? 'page' : 'compact'}
+          frontmatter
+        />
       </div>
     )
   }
 
   // Code (and markdown source) — always-live editor
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      {renderMarkdownToggle}
-      <CodeEditor
-        value={content}
-        onChange={setContent}
-        filename={filename}
-        readOnly={!canEdit}
-        onSave={save}
-        className="flex-1 min-h-0"
-      />
-    </div>
+    <CodeEditor
+      value={content}
+      onChange={setContent}
+      filename={filename}
+      readOnly={!canEdit}
+      onSave={save}
+      className="flex-1 min-h-0"
+    />
   )
 }

@@ -1,7 +1,9 @@
 import { useCallback } from 'react'
 import { useSessionStore, type FileTab } from '../../store/session-store'
 import { FileContentRenderer } from './FileContentRenderer'
+import { ViewModeToggle } from './ViewModeToggle'
 import { useFileEditor } from '../../hooks/use-file-editor'
+import { useFileViewMode } from '../../hooks/use-file-view-mode'
 import { DocumentTextIcon, CheckIcon } from '@heroicons/react/24/outline'
 import {
   CopyIcon,
@@ -30,6 +32,7 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
 
   const editor = useFileEditor({ cwd, filePath: relativePath })
   const { isDirty, saving, canEdit, save } = editor
+  const { isMarkdown, viewMode, setViewMode } = useFileViewMode(fileTab.filePath)
 
   const handleCopyPath = useCallback(() => {
     navigator.clipboard.writeText(fileTab.filePath)
@@ -45,16 +48,37 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
 
   return (
     <div className="flex flex-col h-full bg-surface-0">
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border-subtle flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
+      {/* Header bar: name + path, view mode, save state, actions — one row */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-border-subtle flex-shrink-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <DocumentTextIcon className="w-4 h-4 text-text-tertiary flex-shrink-0" />
-          <span className="text-sm font-medium text-text-primary truncate">{fileTab.name}</span>
-          {fileTab.name !== filename && (
-            <span className="text-xs text-text-tertiary truncate hidden sm:inline">{filename}</span>
-          )}
+          <span className="text-sm font-medium text-text-primary truncate flex-shrink-0 max-w-[40%]">
+            {fileTab.name}
+          </span>
+          <span className="text-[11px] text-text-tertiary truncate hidden sm:inline flex-1 min-w-0">
+            {fileTab.filePath.replace(/^\/Users\/[^/]+/, '~')}
+          </span>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+        {isMarkdown && <ViewModeToggle mode={viewMode} onChange={setViewMode} />}
+        {canEdit &&
+          (isDirty || saving ? (
+            <button
+              onClick={save}
+              disabled={saving}
+              title="Save changes (⌘S)"
+              className="flex items-center gap-1.5 flex-shrink-0 text-[11px] text-accent hover:opacity-80 transition-opacity disabled:opacity-60"
+            >
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent" />
+              {saving ? 'Saving…' : 'Save'}
+              {!saving && <span className="text-text-tertiary">⌘S</span>}
+            </button>
+          ) : (
+            <span className="flex items-center gap-1 flex-shrink-0 text-[11px] text-text-tertiary">
+              <CheckIcon className="w-3 h-3" />
+              Saved
+            </span>
+          ))}
+        <div className="flex items-center gap-1 flex-shrink-0">
           {canOpenExternally && (
             <button
               onClick={handleOpenExternally}
@@ -84,33 +108,14 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
         </div>
       </div>
 
-      {/* Full path breadcrumb + save status */}
-      <div className="px-4 py-1 border-b border-border-subtle flex-shrink-0 flex items-center gap-2">
-        <span className="text-[10px] text-text-tertiary truncate flex-1 min-w-0">
-          {fileTab.filePath.replace(/^\/Users\/[^/]+/, '~')}
-        </span>
-        {canEdit &&
-          (isDirty || saving ? (
-            <button
-              onClick={save}
-              disabled={saving}
-              title="Save changes (⌘S)"
-              className="flex items-center gap-1.5 flex-shrink-0 text-[10px] text-accent hover:opacity-80 transition-opacity disabled:opacity-60"
-            >
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent" />
-              {saving ? 'Saving…' : 'Save'}
-              {!saving && <span className="text-text-tertiary">⌘S</span>}
-            </button>
-          ) : (
-            <span className="flex items-center gap-1 flex-shrink-0 text-[10px] text-text-tertiary">
-              <CheckIcon className="w-3 h-3" />
-              Saved
-            </span>
-          ))}
-      </div>
-
       {/* File content */}
-      <FileContentRenderer editor={editor} filePath={relativePath} cwd={cwd} className="flex-1" />
+      <FileContentRenderer
+        editor={editor}
+        filePath={relativePath}
+        cwd={cwd}
+        viewMode={viewMode}
+        className="flex-1"
+      />
     </div>
   )
 }

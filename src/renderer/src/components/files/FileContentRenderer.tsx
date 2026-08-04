@@ -1,11 +1,12 @@
 import { FileContent } from './FileContent'
 import { useFileEditor } from '../../hooks/use-file-editor'
-import { formatSize, countLines } from './file-types'
+import { formatSize, countLines, type FileViewMode } from './file-types'
 
 interface FileContentRendererProps {
   editor: ReturnType<typeof useFileEditor>
   filePath: string | null
   cwd: string | null
+  viewMode?: FileViewMode
   className?: string
 }
 
@@ -13,6 +14,7 @@ export function FileContentRenderer({
   editor,
   filePath,
   cwd,
+  viewMode,
   className
 }: FileContentRendererProps): React.JSX.Element | null {
   const { fileData, content, saveError, loadError } = editor
@@ -23,7 +25,7 @@ export function FileContentRenderer({
     <div className={`flex flex-col min-h-0 ${className ?? ''}`}>
       {/* Content */}
       <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
-        <FileContent editor={editor} cwd={cwd} filePath={filePath} />
+        <FileContent editor={editor} cwd={cwd} filePath={filePath} viewMode={viewMode} />
 
         {saveError && (
           <div className="px-4 py-1.5 text-xs text-red-400 bg-red-500/5 border-t border-border-subtle flex-shrink-0">

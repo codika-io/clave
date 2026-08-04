@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.62.0",
+    "title": "Markdown opens as a page",
+    "description": "Markdown files now render as a document-style page by default — a centered reading column with real typography, frontmatter hidden and its title on top. The compact preview and the source editor stay one click away via the new Page / Preview / Source switcher.",
+    "action": {
+      "type": "navigate",
+      "target": "side:files"
+    }
+  },
+  {
     "version": "1.61.0",
     "title": "Agents can show you files and notify you",
     "description": "Agents in your tabs gained two new tools: clave_open_file opens a document they produced as a file tab for you to read or edit, and clave_notify sends a native notification when long-running work finishes in a tab you are not looking at — click it to jump straight there.",

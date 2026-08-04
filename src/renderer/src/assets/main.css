@@ -506,6 +506,35 @@ body,
   padding: 6px;            /* p-1.5 */
 }
 
+/* Segmented control: compact inline mode switcher (e.g. Page/Preview/Source
+   in file headers). Items mark their active state via data-active="true". */
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-100);
+}
+.segmented-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+  transition: color 150ms, background-color 150ms;
+}
+.segmented-item:hover {
+  color: var(--text-secondary);
+}
+.segmented-item[data-active="true"] {
+  background-color: var(--surface-200);
+  color: var(--text-primary);
+}
+
 /* Dashed "add" button — full-width row for adding workspaces, locations, etc. */
 .btn-add {
   width: 100%;

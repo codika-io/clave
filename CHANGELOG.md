@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.62.0] — 2026-08-04
+
+### Added
+- **Markdown opens as a page** — markdown files now render as a document-style page by default: a centered reading column with generous margins and a real typographic scale, with YAML frontmatter hidden and its title shown as the document title. The compact preview and the raw source editor remain one click away via a new Page / Preview / Source switcher, in both file tabs and the floating file preview.
+
+### Changed
+- **One header row for file tabs** — the file tab header now fits everything in a single row: file name, full path, the view switcher, save state, and actions. Previously these were spread across three stacked rows.
+
 ## [1.61.2] — 2026-08-03
 
 ### Fixed
