@@ -523,12 +523,15 @@ export function registerClaveFileHandlers(): void {
 
         const found = await findClaveFile(dir)
         if (found) {
+          results.push({ name: path.basename(dir), path: found, rootDir: dir })
           // A directory that defines a workspace is a leaf: one workspace per
           // project/repo, so its subtree cannot hold another. Stopping here is
           // what keeps a deeper maxDepth cheap — without it the walk descends
-          // into every source tree under every match.
-          results.push({ name: path.basename(dir), path: found, rootDir: dir })
-          return
+          // into every source tree under every match. The one exception is the
+          // scan root (depth 0): the root workspace file itself lives there,
+          // right above the projects being discovered, so the root must still
+          // be descended into.
+          if (depth > 0) return
         }
 
         let entries: fs.Dirent[]
