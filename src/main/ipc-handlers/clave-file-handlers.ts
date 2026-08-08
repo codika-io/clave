@@ -3,6 +3,16 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { createHash } from 'crypto'
 
+/** Async existence check — keeps directory walks off the main process's event loop. */
+async function exists(absolutePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(absolutePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function readImageAsDataUrl(absolutePath: string): string | null {
   try {
     if (!fs.existsSync(absolutePath)) return null
@@ -477,46 +487,55 @@ export function registerClaveFileHandlers(): void {
     async (_event, rootDir: string, config?: { patterns?: string[]; exclude?: string[]; maxDepth?: number; workspaceId?: string }): Promise<{ name: string; path: string; rootDir: string }[]> => {
       const patterns = config?.patterns ?? ['workspace.clave', '.clave/workspace.clave']
       const exclude = new Set(config?.exclude ?? ['node_modules', '.git', 'references', 'build', 'dist', '.next', '.turbo'])
-      const maxDepth = config?.maxDepth ?? 4
+      // Depth 6 covers a workspace like ~/.antasphere, where checkouts sit at
+      // labs/products/<family>/<tool>/<repo> and skills nest a level deeper
+      // still. Affordable because a directory holding a workspace file is not
+      // descended into (see scan()), so the walk stops at project level instead
+      // of crawling every source tree.
+      const maxDepth = config?.maxDepth ?? 6
       const workspaceId = config?.workspaceId // e.g. "romain" → prefer romain.clave over default.clave
       const results: { name: string; path: string; rootDir: string }[] = []
 
-      function findClaveFile(dir: string): string | null {
+      async function findClaveFile(dir: string): Promise<string | null> {
         // 1. Check fixed pattern files
         for (const pattern of patterns) {
           const filePath = path.join(dir, pattern)
-          if (fs.existsSync(filePath)) return filePath
+          if (await exists(filePath)) return filePath
         }
         // 2. Check .clave/workspaces/*.clave — priority: {workspaceId}.clave → default.clave → first found
         const wsDir = path.join(dir, '.clave', 'workspaces')
         try {
-          if (fs.existsSync(wsDir) && fs.statSync(wsDir).isDirectory()) {
-            const files = fs.readdirSync(wsDir).filter((f) => f.endsWith('.clave'))
-            if (files.length > 0) {
-              if (workspaceId) {
-                const personal = files.find((f) => f === `${workspaceId}.clave`)
-                if (personal) return path.join(wsDir, personal)
-              }
-              const defaultFile = files.find((f) => f === 'default.clave')
-              return path.join(wsDir, defaultFile ?? files[0])
+          const files = (await fs.promises.readdir(wsDir)).filter((f) => f.endsWith('.clave'))
+          if (files.length > 0) {
+            if (workspaceId) {
+              const personal = files.find((f) => f === `${workspaceId}.clave`)
+              if (personal) return path.join(wsDir, personal)
             }
+            const defaultFile = files.find((f) => f === 'default.clave')
+            return path.join(wsDir, defaultFile ?? files[0])
           }
-        } catch { /* ignore */ }
+        } catch { /* not a directory, or unreadable */ }
         return null
       }
 
       async function scan(dir: string, depth: number): Promise<void> {
         if (depth > maxDepth) return
-        let entries: fs.Dirent[]
-        try {
-          entries = fs.readdirSync(dir, { withFileTypes: true })
-        } catch {
+
+        const found = await findClaveFile(dir)
+        if (found) {
+          // A directory that defines a workspace is a leaf: one workspace per
+          // project/repo, so its subtree cannot hold another. Stopping here is
+          // what keeps a deeper maxDepth cheap — without it the walk descends
+          // into every source tree under every match.
+          results.push({ name: path.basename(dir), path: found, rootDir: dir })
           return
         }
 
-        const found = findClaveFile(dir)
-        if (found) {
-          results.push({ name: path.basename(dir), path: found, rootDir: dir })
+        let entries: fs.Dirent[]
+        try {
+          entries = await fs.promises.readdir(dir, { withFileTypes: true })
+        } catch {
+          return
         }
 
         // Recurse into subdirectories
