@@ -145,8 +145,9 @@ Terminals are command buttons that appear as colored icons on the group. Clickin
 | `color` | string | Button color (see Colors below) |
 | `icon` | string | Button icon (see Icons below) |
 | `cwd` | string | Optional. Working directory for this terminal (relative path). If omitted, uses the group's `cwd` |
-| `autoLaunchLocalhost` | boolean | Optional. Open the detected `localhost` URL in the browser once the command serves one. Use for dev servers |
+| `autoLaunchLocalhost` | boolean | Optional. Open the detected `localhost` URL in the browser once the command serves one. Use for dev servers **in sidebar groups** — for toolbar buttons use `serverUrl` instead |
 | `persistent` | boolean | Optional, **toolbar groups only**. Keep the spawned session alive when the toolbar popover closes, and reattach to it next time instead of respawning |
+| `serverUrl` | string | Optional, honored on **toolbar buttons**. Declared server URL (e.g. `"http://localhost:3000"`) — turns the button into a **server button**: click probes the URL and either opens it or starts the command first (see Server buttons below). Implies `persistent` |
 
 **Tips:**
 - Use `"auto"` for dev servers (`npm run dev`) that should start immediately
@@ -177,6 +178,57 @@ When a group has `"toolbar": true`, its terminals appear as quick-action buttons
   ]
 }
 ```
+
+## Server buttons: launch local apps from the toolbar
+
+Add `serverUrl` to a toolbar terminal and it stops being a "run this command" button and becomes an **app launcher**: one always-visible button per local web app (docs site, website, dashboard, admin UI) that means *"make this app exist and take me to it."* This is the most powerful toolbar pattern — a row of server buttons turns Clave's toolbar into a launcher for your whole local stack.
+
+```json
+{
+  "name": "Toolbar",
+  "cwd": ".",
+  "toolbar": true,
+  "sessions": [],
+  "terminals": [
+    {
+      "command": "mint dev --port 4711",
+      "commandMode": "auto",
+      "color": "teal",
+      "icon": "eye",
+      "cwd": "docs",
+      "serverUrl": "http://localhost:4711"
+    },
+    {
+      "command": "npm run dev --port 4712",
+      "commandMode": "auto",
+      "color": "green",
+      "icon": "globe",
+      "cwd": "apps/web",
+      "serverUrl": "http://localhost:4712"
+    }
+  ]
+}
+```
+
+**What a click does** (probe-first — the HTTP probe is the only source of truth, never session state):
+
+1. **Probe** `serverUrl` (~500ms HTTP request).
+2. **Reachable** → opens the URL in your browser. No terminal popover, no second server — this covers a server started by a previous click, one surviving a Clave restart, or one you started by hand.
+3. **Not reachable** → opens the terminal popover, runs `command` (reusing the persistent session if its shell is still alive), and opens the browser as soon as the server announces its URL — including when it lands on a *different* port (e.g. 3000 was taken and the dev server hopped to 3001: the detected URL wins).
+
+**Status dot.** The button carries a live dot so you can see the state before clicking: **green** = server up, **amber (pulsing)** = starting, **grey** = not running. Clave re-probes periodically and on window focus, so killing the server in some other terminal flips the dot without any interaction.
+
+**Terminal access.** A plain click never shows the terminal when the server is already up — **right-click** (or ⌥-click) the button to open the popover with the server's logs without touching the browser. The popover header also shows a port chip (`:3000`) colored by server state; click it to open the browser.
+
+**Rules of thumb:**
+
+- **Pin the port in the command, and give each app its own uncommon one.** Write `"mint dev --port 4711"` + `"serverUrl": "http://localhost:4711"`, not a bare command relying on a default. The declared URL should be a promise, not a guess. Default ports (3000, 5173, 8080) are the ones another project is most likely to already be sitting on — and the probe cannot tell someone else's server from yours, so a hijacked default sends you to the wrong app. An unusual port makes that practically impossible.
+- `serverUrl` implies `persistent` — you never need to write both.
+- Declare the URL the command actually serves, scheme included: `"http://localhost:4711"`, not `"localhost:4711"`.
+- Use `commandMode: "auto"` — a server button's whole point is that the click starts the server unattended.
+- `serverUrl` supersedes `autoLaunchLocalhost` for toolbar buttons (that flag is only honored in sidebar groups); don't combine them.
+- Session liveness is **not** server liveness: Ctrl-C'ing the server inside the popover leaves the shell alive. The probe is what decides — the next click sees the dead server and restarts it in the same shell, keeping the scrollback.
+- Known residual: if an unrelated process answers on the declared port, the probe can't tell — the button will open it.
 
 ## Trust: elevated files
 
@@ -462,7 +514,7 @@ Two gotchas:
 
 Clave watches loaded `.clave` files and reloads on change, but only refreshes templates that already exist. **Adding or removing groups requires deactivating and reactivating the workspace** (or restarting Clave); editing an existing group applies live.
 
-Exporting a group back out to a `.clave` file (right-click → Export as .clave) is **lossy**: it drops `prompt`, `rootSession`, `logo`, and `autoLaunchLocalhost`. Hand-edit those back in, or keep the source file as the source of truth.
+Exporting a group back out to a `.clave` file (right-click → Export as .clave) is **lossy**: it drops `prompt`, `rootSession`, `logo`, and `autoLaunchLocalhost` (it keeps `cwd`, `persistent`, and `serverUrl`). Hand-edit the dropped fields back in, or keep the source file as the source of truth.
 
 ## Best practices
 
@@ -471,6 +523,7 @@ Exporting a group back out to a `.clave` file (right-click → Export as .clave)
 - **Keep workspace-level groups minimal** — Only toolbar actions and cross-repo groups belong in the root workspace
 - **Use categories** — Group related pins under labels like `"Platform"`, `"Products"`, `"Tools"`
 - **Use toolbar for utilities** — Auth commands, CLI tools, and status checks work great as toolbar buttons
+- **Use server buttons for local apps** — Any command that serves a URL (docs, websites, dashboards) belongs in the toolbar with a `serverUrl`, so one click reaches the running app without ever spawning a duplicate
 - **Separate Claude and dev sessions** — Create one `claudeMode: true` session for AI work and one `claudeMode: false` for dev servers
 - **Use `prefill` for dangerous commands** — Deploy, publish, and destructive commands should require manual confirmation
 - **Use `auto` for dev servers** — `npm run dev` and watch commands should start immediately
