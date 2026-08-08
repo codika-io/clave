@@ -177,7 +177,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
         ...(p.toolbar ? { toolbar: true } : {}),
         ...(p.logo ? { logo: p.logo } : {}),
         sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, antigravityMode: s.antigravityMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode, ...(s.prompt ? { prompt: s.prompt } : {}), ...(s.rootSession ? { rootSession: true } : {}) })),
-        terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent })),
+        terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent, serverUrl: t.serverUrl })),
         ...(p.category ? { category: p.category } : {})
       })
 
@@ -198,7 +198,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
 // ── Import / Export ──
 
 function createPinnedFromGroup(
-  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[] },
+  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[] },
   filePath: string,
   groupIndex?: number,
   rootDir?: string | null,
@@ -226,7 +226,7 @@ function createPinnedFromGroup(
   }
 }
 
-function groupDataToPinnedTerminals(terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean }[]): PinnedGroupTerminal[] {
+function groupDataToPinnedTerminals(terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[]): PinnedGroupTerminal[] {
   return terminals.map((t) => ({
     command: t.command,
     commandMode: t.commandMode,
@@ -234,7 +234,8 @@ function groupDataToPinnedTerminals(terminals: { command: string; commandMode: '
     icon: t.icon as PinnedGroupTerminal['icon'],
     cwd: t.cwd,
     autoLaunchLocalhost: t.autoLaunchLocalhost,
-    persistent: t.persistent
+    persistent: t.persistent,
+    serverUrl: t.serverUrl
   }))
 }
 
@@ -343,7 +344,8 @@ export async function exportClaveFile(pinnedId: string, folder: string, fileName
       color: t.color,
       icon: t.icon,
       cwd: t.cwd,
-      persistent: t.persistent
+      persistent: t.persistent,
+      serverUrl: t.serverUrl
     })),
     ...(pg.category ? { category: pg.category } : {})
   })
@@ -481,7 +483,8 @@ export function pinGroupFromCurrent(groupId: string): void {
     command: t.command,
     commandMode: t.commandMode,
     color: t.color,
-    icon: t.icon
+    icon: t.icon,
+    serverUrl: t.serverUrl
   }))
 
   const pinned: PinnedGroup = {
@@ -636,6 +639,7 @@ async function spawnPinnedGroup(
               icon: t.icon,
               cwd: t.cwd,
               autoLaunchLocalhost: t.autoLaunchLocalhost,
+              serverUrl: t.serverUrl,
               sessionId: null
             }))
           }
@@ -718,11 +722,18 @@ export function resyncPinnedGroup(groupId: string): void {
       dangerousMode: s.dangerousMode
     }))
 
-  const updatedTerminals: PinnedGroupTerminal[] = group.terminals.map((t) => ({
+  // Carry every live-config field; `persistent` lives only on the pin (not on
+  // the live GroupTerminalConfig), so preserve it from the prior blueprint by
+  // index — dropping fields here would corrupt the backing .clave on sync.
+  const updatedTerminals: PinnedGroupTerminal[] = group.terminals.map((t, i) => ({
     command: t.command,
     commandMode: t.commandMode,
     color: t.color,
-    icon: t.icon
+    icon: t.icon,
+    cwd: t.cwd,
+    autoLaunchLocalhost: t.autoLaunchLocalhost,
+    serverUrl: t.serverUrl,
+    persistent: pg.terminals[i]?.persistent
   }))
 
   usePinnedStore.setState((s) => {

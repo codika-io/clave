@@ -751,18 +751,51 @@ function ToolbarQuickActions() {
                 key={key}
                 cwd={pg.cwd || '.'}
                 command={t.command}
-                persistent={t.persistent}
+                // A declared serverUrl implies persistent: closing the popover
+                // must never kill the server the click just asked to exist.
+                persistent={t.persistent || !!t.serverUrl}
+                serverUrl={t.serverUrl}
                 open={openId === key}
                 onOpenChange={(open) => setOpenId(open ? key : null)}
                 header={<IconComp className="w-3.5 h-3.5 shrink-0" style={{ color: colorHex }} />}
               >
-                <button
-                  className="p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
-                  style={{ color: colorHex }}
-                  title={t.command || 'Shell'}
-                >
-                  <IconComp className="w-4 h-4" />
-                </button>
+                {t.serverUrl
+                  ? (api) => (
+                      <button
+                        onClick={(e) => {
+                          if (e.altKey) api.openTerminalOnly()
+                          else api.handleClick()
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          api.openTerminalOnly()
+                        }}
+                        className="relative p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
+                        style={{ color: colorHex }}
+                        title={api.title}
+                      >
+                        <IconComp className="w-4 h-4" />
+                        {api.state !== 'unknown' && (
+                          <span
+                            className={cn(
+                              'absolute right-0.5 bottom-0.5 w-1.5 h-1.5 rounded-full',
+                              api.state === 'up' && 'bg-emerald-500',
+                              api.state === 'starting' && 'bg-amber-400 animate-pulse',
+                              api.state === 'down' && 'bg-text-tertiary'
+                            )}
+                          />
+                        )}
+                      </button>
+                    )
+                  : (
+                      <button
+                        className="p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
+                        style={{ color: colorHex }}
+                        title={t.command || 'Shell'}
+                      >
+                        <IconComp className="w-4 h-4" />
+                      </button>
+                    )}
               </ToolbarTerminalPopover>
             )
           })}

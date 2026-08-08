@@ -47,7 +47,10 @@ export interface ClaveFileGroupData {
     commandMode: 'prefill' | 'auto'
     color: string
     icon?: string
+    cwd?: string
     autoLaunchLocalhost?: boolean
+    persistent?: boolean
+    serverUrl?: string
   }[]
 }
 
@@ -70,7 +73,7 @@ export interface ClaveFileWriteData {
     prompt?: string
     rootSession?: boolean
   }[]
-  terminals?: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string }[]
+  terminals?: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string | null; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[]
   groups?: Array<{
     name: string
     cwd: string | null
@@ -94,7 +97,10 @@ export interface ClaveFileWriteData {
       commandMode: 'prefill' | 'auto'
       color: string
       icon?: string
+      cwd?: string | null
       autoLaunchLocalhost?: boolean
+      persistent?: boolean
+      serverUrl?: string
     }[]
   }>
 }
@@ -318,6 +324,9 @@ export interface ElectronAPI {
   ) => Promise<{ success: boolean; error?: string }>
   openExternal: (url: string) => Promise<void>
   checkPort: (port: number) => Promise<boolean>
+  /** HTTP liveness probe (any HTTP response = true). Stricter than checkPort:
+   *  proves a server answers, not just that something bound the port. */
+  probeServerUrl: (url: string, timeoutMs?: number) => Promise<boolean>
   openPath: (filePath: string) => Promise<string>
   openFolderDialog: (defaultPath?: string) => Promise<string | null>
   onUpdateAvailable: (callback: (version: string) => void) => () => void

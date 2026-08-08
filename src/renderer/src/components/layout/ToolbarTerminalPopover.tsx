@@ -1,15 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { Popover, PopoverTrigger, PopoverAnchor, PopoverContent } from '../ui/popover'
+import { XMarkIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { useToolbarTerminal, type ToolbarTerminalStatus } from '../../hooks/use-toolbar-terminal'
+import { useServerButton, type ServerButtonApi } from '../../hooks/use-server-button'
+import { cn, safePort } from '../../lib/utils'
 
 interface ToolbarTerminalPopoverProps {
   cwd: string
   command: string
   persistent?: boolean
+  /** Declared dev-server URL — turns this popover's button into a server button
+   *  (probe-first "ensure running, then open"; see use-server-button.ts). */
+  serverUrl?: string
   open: boolean
   onOpenChange: (open: boolean) => void
-  children: React.ReactNode
+  /** Plain trigger node, or (for server buttons) a render prop receiving the
+   *  server-button API so the toolbar button can carry the status dot. */
+  children: React.ReactNode | ((api: ServerButtonApi) => React.ReactNode)
   header: React.ReactNode
 }
 
@@ -35,6 +42,7 @@ export function ToolbarTerminalPopover({
   cwd,
   command,
   persistent,
+  serverUrl,
   open,
   onOpenChange,
   children,
@@ -42,14 +50,41 @@ export function ToolbarTerminalPopover({
 }: ToolbarTerminalPopoverProps): React.JSX.Element {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [status, setStatus] = useState<ToolbarTerminalStatus>('running')
+  const [respawnNonce, setRespawnNonce] = useState(0)
   const persistentSessionRef = useRef<string | null>(null)
+  const persistentExitCleanupRef = useRef<(() => void) | null>(null)
   const sessionIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     sessionIdRef.current = sessionId
   }, [sessionId])
 
-  // Spawn PTY when popover opens
+  // Track a persistent session's exit for the session's whole lifetime — NOT
+  // tied to the popover being open. Without this, a session dying while the
+  // popover is closed leaves a stale ref: the next open would "reattach" to a
+  // dead PTY, and a server-button restart would type into a corpse.
+  const adoptPersistentSession = useCallback((id: string) => {
+    persistentSessionRef.current = id
+    persistentExitCleanupRef.current?.()
+    persistentExitCleanupRef.current = window.electronAPI.onSessionExit(id, () => {
+      if (persistentSessionRef.current === id) {
+        persistentSessionRef.current = null
+      }
+      persistentExitCleanupRef.current?.()
+      persistentExitCleanupRef.current = null
+      setStatus('exited')
+    })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      persistentExitCleanupRef.current?.()
+      persistentExitCleanupRef.current = null
+    }
+  }, [])
+
+  // Spawn PTY when popover opens (or when a respawn is explicitly requested
+  // while already open — a server-button restart after the session died).
   useEffect(() => {
     if (!open) return
 
@@ -77,17 +112,16 @@ export function ToolbarTerminalPopover({
         spawnedId = info.id
 
         // Listen for exit immediately so we don't miss fast-exiting commands
-        exitCleanup = window.electronAPI.onSessionExit(info.id, () => {
-          setStatus('exited')
-          if (persistent) {
-            persistentSessionRef.current = null
-          }
-        })
-
-        setSessionId(info.id)
         if (persistent) {
-          persistentSessionRef.current = info.id
+          adoptPersistentSession(info.id)
+        } else {
+          exitCleanup = window.electronAPI.onSessionExit(info.id, () => {
+            setStatus('exited')
+          })
         }
+
+        setStatus('running')
+        setSessionId(info.id)
       })
       .catch((err) => {
         console.error('[toolbar-popover] spawn failed:', err)
@@ -100,7 +134,7 @@ export function ToolbarTerminalPopover({
         window.electronAPI.killSession(spawnedId)
       }
     }
-  }, [open, cwd, command, persistent])
+  }, [open, cwd, command, persistent, respawnNonce, adoptPersistentSession])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -123,11 +157,41 @@ export function ToolbarTerminalPopover({
     [persistent]
   )
 
+  // ── Server button wiring ──
+  const openTerminal = useCallback(() => {
+    // Already open with a dead session → the open-effect won't re-run on its
+    // own; bump the nonce to force a respawn.
+    if (open && !persistentSessionRef.current) {
+      setRespawnNonce((n) => n + 1)
+    }
+    onOpenChange(true)
+  }, [open, onOpenChange])
+
+  const serverButton = useServerButton({
+    serverUrl,
+    command,
+    sessionId,
+    getLiveSessionId: () => persistentSessionRef.current,
+    openTerminal
+  })
+
   const statusColor = status === 'running' ? 'bg-green-500' : 'bg-red-400'
+  const serverState = serverButton.state
+  const serverPort = serverButton.liveUrl ? safePort(serverButton.liveUrl) : null
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      {serverUrl ? (
+        // Server buttons drive open/close themselves (probe-first click), so
+        // they anchor the popover instead of using Radix's toggling trigger.
+        <PopoverAnchor asChild>
+          {typeof children === 'function' ? children(serverButton) : children}
+        </PopoverAnchor>
+      ) : (
+        <PopoverTrigger asChild>
+          {typeof children === 'function' ? children(serverButton) : children}
+        </PopoverTrigger>
+      )}
       <PopoverContent
         animated
         open={open}
@@ -144,11 +208,43 @@ export function ToolbarTerminalPopover({
             <span className="text-xs text-text-secondary truncate flex-1">{command}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {serverUrl && (
+              // Server-state chip: deliberately separate from the session dot —
+              // the session (shell) surviving its server is the whole reason
+              // server buttons probe instead of trusting session liveness.
+              <button
+                onClick={serverButton.openBrowser}
+                disabled={serverState !== 'up'}
+                className={cn(
+                  'flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-colors',
+                  serverState === 'up' &&
+                    'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20',
+                  serverState === 'starting' && 'bg-amber-400/10 text-amber-400 cursor-wait',
+                  (serverState === 'down' || serverState === 'unknown') &&
+                    'bg-surface-200 text-text-secondary'
+                )}
+                title={
+                  serverState === 'up'
+                    ? `Open ${serverButton.liveUrl}`
+                    : serverState === 'starting'
+                      ? 'Server starting…'
+                      : 'Server not running'
+                }
+              >
+                <span
+                  className={cn(
+                    'w-1 h-1 rounded-full',
+                    serverState === 'up' && 'bg-emerald-500',
+                    serverState === 'starting' && 'bg-amber-400 animate-pulse',
+                    (serverState === 'down' || serverState === 'unknown') && 'bg-text-tertiary'
+                  )}
+                />
+                <span>{serverPort !== null ? `:${serverPort}` : 'server'}</span>
+                {serverState === 'up' && <ArrowTopRightOnSquareIcon className="w-2.5 h-2.5" />}
+              </button>
+            )}
             <div className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
-            <button
-              onClick={() => handleOpenChange(false)}
-              className="btn-icon btn-icon-xs"
-            >
+            <button onClick={() => handleOpenChange(false)} className="btn-icon btn-icon-xs">
               <XMarkIcon className="w-3.5 h-3.5" />
             </button>
           </div>

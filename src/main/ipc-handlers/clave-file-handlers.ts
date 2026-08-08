@@ -197,7 +197,7 @@ interface ClaveGroupData {
   category?: string
   logo?: string
   sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
-  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean }[]
+  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[]
 }
 
 interface ClaveFileRaw {
@@ -277,7 +277,8 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
       icon: t.icon,
       cwd: t.cwd ? path.resolve(dir, t.cwd) : undefined,
       autoLaunchLocalhost: t.autoLaunchLocalhost ?? undefined,
-      persistent: t.persistent ?? undefined
+      persistent: t.persistent ?? undefined,
+      serverUrl: t.serverUrl ?? undefined
     }))
   }
 }
@@ -400,7 +401,8 @@ export function registerClaveFileHandlers(): void {
             ...(t.icon ? { icon: t.icon } : {}),
             ...(t.cwd ? { cwd: toRelative(t.cwd) } : {}),
             ...(t.autoLaunchLocalhost ? { autoLaunchLocalhost: true } : {}),
-            ...(t.persistent ? { persistent: true } : {})
+            ...(t.persistent ? { persistent: true } : {}),
+            ...(t.serverUrl ? { serverUrl: t.serverUrl } : {})
           }))
         })
 
