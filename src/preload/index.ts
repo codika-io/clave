@@ -106,6 +106,8 @@ const electronAPI = {
 
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   checkPort: (port: number) => ipcRenderer.invoke('net:check-port', port) as Promise<boolean>,
+  probeServerUrl: (url: string, timeoutMs?: number) =>
+    ipcRenderer.invoke('net:probe-url', url, timeoutMs) as Promise<boolean>,
 
   openPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 

@@ -199,6 +199,12 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .default('terminal')
           .describe('Icon shown on the group'),
         cwd: z.string().optional().describe("Working directory; defaults to the group's directory"),
+        serverUrl: z
+          .string()
+          .optional()
+          .describe(
+            'Declared dev-server URL (e.g. "http://localhost:3000") for commands that serve one. On toolbar server buttons this enables probe-first "ensure running, then open"; stored but inert for sidebar group terminals today.'
+          ),
         launch: z
           .boolean()
           .optional()

@@ -104,6 +104,10 @@ export interface GroupTerminalConfig {
   icon?: GroupTerminalIcon
   cwd?: string | null
   autoLaunchLocalhost?: boolean
+  /** Declared dev-server URL (e.g. "http://localhost:3000"). On toolbar buttons
+   *  this enables probe-first "ensure running, then open" (see use-server-button.ts).
+   *  Stored but inert for sidebar group terminals today. */
+  serverUrl?: string
   sessionId: string | null
 }
 
@@ -208,6 +212,10 @@ export interface PinnedGroupTerminal {
   cwd?: string | null
   autoLaunchLocalhost?: boolean
   persistent?: boolean
+  /** Declared dev-server URL. Turns a toolbar terminal into a server button:
+   *  click = probe the URL, open it if reachable, otherwise start the command
+   *  and open on URL detection. Implies `persistent` for toolbar buttons. */
+  serverUrl?: string
 }
 
 export interface PinnedGroup {

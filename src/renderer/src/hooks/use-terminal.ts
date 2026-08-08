@@ -5,28 +5,8 @@ import { useSessionStore } from '../store/session-store'
 import { shellEscape } from '../lib/shell'
 import { getXtermTheme } from '../lib/terminal-theme'
 import { safePort } from '../lib/utils'
+import { stripAnsi, detectLocalhostUrl } from '../lib/localhost-url'
 import '@xterm/xterm/css/xterm.css'
-
-// eslint-disable-next-line no-control-regex
-const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nq-uy=><~]/g
-
-function stripAnsi(str: string): string {
-  return str.replace(ANSI_RE, '')
-}
-
-// eslint-disable-next-line no-control-regex
-const LOCALHOST_URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d{1,5})(?:\/\S*)?/i
-
-function detectLocalhostUrl(buffer: string): string | null {
-  const match = buffer.match(LOCALHOST_URL_RE)
-  if (!match) return null
-  try {
-    new URL(match[0])
-    return match[0]
-  } catch {
-    return null
-  }
-}
 
 function detectPrompt(buffer: string): string | null {
   // Collapse whitespace for matching (ANSI stripping removes cursor positioning,

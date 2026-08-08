@@ -73,6 +73,7 @@ function handleList(payload: { callerSessionId?: string }): unknown {
       commandMode: t.commandMode,
       color: t.color,
       icon: t.icon ?? null,
+      serverUrl: t.serverUrl ?? null,
       sessionId: t.sessionId
     }))
   }))
@@ -266,6 +267,7 @@ async function handleAddGroupTerminal(payload: {
   color?: string
   icon?: string
   cwd?: string
+  serverUrl?: string
   launch?: boolean
   callerSessionId?: string
 }): Promise<unknown> {
@@ -288,7 +290,8 @@ async function handleAddGroupTerminal(payload: {
     color: (payload.color as GroupTerminalConfig['color']) ?? 'green',
     icon: (payload.icon as GroupTerminalConfig['icon']) ?? 'terminal',
     // Per-terminal cwd is stored only when it differs from the group default.
-    cwd: payload.cwd && payload.cwd !== groupCwd ? payload.cwd : null
+    cwd: payload.cwd && payload.cwd !== groupCwd ? payload.cwd : null,
+    serverUrl: payload.serverUrl
   })
 
   if (payload.launch === false) return { terminalId, groupId: group.id, sessionId: null }

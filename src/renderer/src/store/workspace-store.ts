@@ -210,7 +210,10 @@ async function saveInitWorkspace(): Promise<string | null> {
         commandMode: t.commandMode,
         color: t.color,
         icon: t.icon,
-        cwd: t.cwd
+        cwd: t.cwd,
+        autoLaunchLocalhost: t.autoLaunchLocalhost,
+        persistent: t.persistent,
+        serverUrl: t.serverUrl
       }))
     }))
 
