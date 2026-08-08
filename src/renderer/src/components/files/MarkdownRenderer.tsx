@@ -3,6 +3,7 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSyntaxHighlight } from '../../hooks/use-syntax-highlight'
 import { handleClaveLink } from '../../lib/navigation'
+import { splitFrontmatter } from './file-types'
 
 /** 'compact' is the dense preview used in panels and chat; 'page' renders a
  * document-style reading column with generous type and margins. */
@@ -80,16 +81,6 @@ const STYLES = {
   }
 } as const
 
-/** Leading YAML frontmatter renders as noise; on file surfaces strip it and
- * surface its title (if any) as the document title. */
-function parseFrontmatter(content: string): { body: string; title: string | null } {
-  const match = /^---\n([\s\S]*?)\n---\n?/.exec(content)
-  if (!match) return { body: content, title: null }
-  const titleMatch = /^title:\s*(.+)$/m.exec(match[1])
-  const title = titleMatch ? titleMatch[1].trim().replace(/^["']|["']$/g, '') : null
-  return { body: content.slice(match[0].length), title }
-}
-
 export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
   variant = 'compact',
@@ -103,7 +94,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   const s = STYLES[variant]
 
   const { body, title } = useMemo(
-    () => (frontmatter ? parseFrontmatter(content) : { body: content, title: null }),
+    () => (frontmatter ? splitFrontmatter(content) : { body: content, title: null }),
     [content, frontmatter]
   )
 

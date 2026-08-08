@@ -1,5 +1,6 @@
 import { CodeEditor } from './CodeEditor'
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { MarkdownPageEditor } from './MarkdownPageEditor'
 import { formatSize, isMarkdownFile, type FileViewMode } from './file-types'
 import type { useFileEditor } from '../../hooks/use-file-editor'
 
@@ -62,7 +63,21 @@ export function FileContent({
     )
   }
 
-  // Markdown, rendered (page or compact preview)
+  // Markdown page — directly editable (Notion-style) when the file is writable
+  if (isMarkdown && viewMode === 'page' && canEdit) {
+    return (
+      <div className="flex-1 overflow-auto min-h-0">
+        <MarkdownPageEditor
+          key={`${cwd}/${filePath}`}
+          content={content}
+          onChange={setContent}
+          onSave={save}
+        />
+      </div>
+    )
+  }
+
+  // Markdown, rendered read-only (compact preview, or page for non-writable files)
   if (isMarkdown && viewMode !== 'source') {
     return (
       <div className="flex-1 overflow-auto min-h-0">

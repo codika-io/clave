@@ -2,6 +2,9 @@
 @import "@fontsource/geist-sans/400.css";
 @import "@fontsource/geist-sans/500.css";
 @import "@fontsource/geist-sans/600.css";
+/* MDXEditor base styles (markdown page editor). Imported here, before the
+   design system, so .markdown-page-editor overrides below win the cascade. */
+@import "@mdxeditor/editor/style.css";
 
 @theme {
   --color-surface-0: var(--surface-0);
@@ -774,4 +777,157 @@ button.extension-card:hover {
 }
 .pill-muted {
   color: var(--text-tertiary);
+}
+
+/* Markdown page editor: the Notion-style editable document surface
+   (components/files/MarkdownPageEditor.tsx). Element styles mirror the `page`
+   variant in MarkdownRenderer so the editable page and the read-only page
+   render identically. The --base* vars remap MDXEditor's internal palette
+   (code-block chrome, popups) onto the app's theme tokens. */
+.markdown-page-editor {
+  font-size: 15px;
+  line-height: 1.75rem;
+  color: var(--text-primary);
+}
+.markdown-page-editor .mdxeditor,
+.mdxeditor-popup-container {
+  --basePageBg: transparent;
+  --baseBase: var(--surface-100);
+  --baseBgSubtle: var(--surface-100);
+  --baseBg: var(--surface-200);
+  --baseBgHover: var(--surface-300);
+  --baseBgActive: var(--surface-300);
+  --baseLine: var(--border-subtle-color);
+  --baseBorder: var(--border-color);
+  --baseBorderHover: var(--border-color);
+  --baseSolid: var(--text-tertiary);
+  --baseSolidHover: var(--text-secondary);
+  --baseText: var(--text-secondary);
+  --baseTextContrast: var(--text-primary);
+  --accentText: var(--color-accent);
+  font-family: inherit;
+  background: transparent;
+}
+.markdown-page-editor .markdown-page-content {
+  padding: 0;
+  outline: none;
+  font-family: inherit;
+}
+.markdown-page-editor h1 {
+  font-size: 1.9rem;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 2.5rem 0 1rem;
+}
+.markdown-page-editor h2 {
+  font-size: 1.35rem;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 2rem 0 0.75rem;
+}
+.markdown-page-editor h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 1.5rem 0 0.5rem;
+}
+.markdown-page-editor h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 1.25rem 0 0.5rem;
+}
+.markdown-page-editor h1:first-child,
+.markdown-page-editor h2:first-child,
+.markdown-page-editor h3:first-child,
+.markdown-page-editor h4:first-child {
+  margin-top: 0;
+}
+.markdown-page-editor p {
+  margin: 0 0 1rem;
+}
+.markdown-page-editor ul,
+.markdown-page-editor ol {
+  margin: 0 0 1rem;
+  padding-left: 1.5rem;
+}
+.markdown-page-editor ul {
+  list-style: disc;
+}
+.markdown-page-editor ol {
+  list-style: decimal;
+}
+/* MDXEditor gives every list item chunky vertical margins — reset to the
+   page rhythm (matches space-y-1.5 in the read-only page). */
+.markdown-page-editor .markdown-page-content li {
+  margin: 0;
+}
+.markdown-page-editor .markdown-page-content li + li {
+  margin-top: 0.375rem;
+}
+.markdown-page-editor li > ul,
+.markdown-page-editor li > ol {
+  margin-bottom: 0;
+  margin-top: 0.375rem;
+}
+.markdown-page-editor blockquote {
+  border-left: 3px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.markdown-page-editor a {
+  color: var(--color-accent);
+}
+.markdown-page-editor a:hover {
+  text-decoration: underline;
+}
+.markdown-page-editor code {
+  background: color-mix(in srgb, var(--surface-200) 60%, transparent);
+  padding: 2px 6px;
+  border-radius: var(--radius-md);
+  font-size: 0.85em;
+}
+.markdown-page-editor hr {
+  margin: 2rem 0;
+  border-color: var(--border-subtle-color);
+}
+.markdown-page-editor img {
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+  margin: 1rem 0;
+}
+.markdown-page-editor table {
+  width: 100%;
+  font-size: 0.875rem;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+.markdown-page-editor th {
+  text-align: left;
+  padding: 0.375rem 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+.markdown-page-editor td {
+  padding: 0.375rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle-color);
+}
+.markdown-page-editor strong {
+  font-weight: 600;
+}
+.markdown-page-editor del,
+.markdown-page-editor s {
+  color: var(--text-tertiary);
+}
+/* Code blocks: CodeMirror surface matching the read-only page's code cards */
+.markdown-page-editor .mdxeditor .cm-editor {
+  background: color-mix(in srgb, var(--surface-200) 50%, transparent);
+  border-radius: var(--radius-lg);
+  font-size: 13px;
 }

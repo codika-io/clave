@@ -41,6 +41,18 @@ export function useFileEditor({ cwd, filePath, locationId }: UseFileEditorParams
   const isImage = filePath ? isImageFile(filename) : false
   const isRemote = !!locationId
 
+  // Reset synchronously when the file identity changes (derive, no effect) so
+  // consumers never see the previous file's buffer while the new one loads —
+  // the page editor reads content once at mount and would keep stale text.
+  const fileKey = `${locationId ?? ''}:${cwd ?? ''}:${filePath ?? ''}`
+  const [prevFileKey, setPrevFileKey] = useState(fileKey)
+  if (fileKey !== prevFileKey) {
+    setPrevFileKey(fileKey)
+    setFileData(null)
+    setContent('')
+    setLoadError(false)
+  }
+
   // Load file content
   useEffect(() => {
     if (!filePath || (!cwd && !locationId)) {

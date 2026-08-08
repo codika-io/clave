@@ -41,3 +41,18 @@ export function countLines(text: string): number {
   if (!text) return 0
   return text.split('\n').length
 }
+
+/** Leading YAML frontmatter renders as noise; on file surfaces strip it and
+ * surface its title (if any) as the document title. The raw `prefix` is kept
+ * so editing surfaces can reattach it verbatim when writing back. */
+export function splitFrontmatter(content: string): {
+  prefix: string
+  body: string
+  title: string | null
+} {
+  const match = /^---\n([\s\S]*?)\n---\n?/.exec(content)
+  if (!match) return { prefix: '', body: content, title: null }
+  const titleMatch = /^title:\s*(.+)$/m.exec(match[1])
+  const title = titleMatch ? titleMatch[1].trim().replace(/^["']|["']$/g, '') : null
+  return { prefix: match[0], body: content.slice(match[0].length), title }
+}

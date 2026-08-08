@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.63.0] — 2026-08-08
+
+### Added
+- **Markdown pages are directly editable** — page mode is now a Notion-style writing surface: click anywhere and type. Typing `# `, `- `, `> ` or ` ``` ` converts blocks live, checkboxes toggle with a click, tables edit cell by cell, and code blocks edit inline with syntax highlighting. Edits save back as clean markdown (⌘S or the Save button, exactly like source mode), frontmatter is preserved untouched, and Preview keeps its read-only render. Files the editor can't represent fall back to the read-only page with a hint to use Source.
+
+### Fixed
+- **No stale content when switching files** — the file preview and file tabs now clear the previous file's content immediately when switching to another file, instead of briefly showing the old file while the new one loads.
+
 ## [1.62.0] — 2026-08-04
 
 ### Added
