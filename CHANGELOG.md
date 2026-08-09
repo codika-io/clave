@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.64.0] — 2026-08-09
+
+### Added
+- **Server buttons in the toolbar** — a quick-launch terminal that declares a `serverUrl` in its `.clave` file becomes a service button: one click means "make this server exist and take me to it". If the server is already up (even started by hand, or still running from before a Clave restart) the browser opens instantly with no respawn; if it is down, the command is rerun in its terminal and the browser opens the moment the URL appears — following the server if it comes up on a different port. The button shows a live status dot (up / starting / down), and right-click or ⌥-click opens just the terminal popover.
+
+### Changed
+- **Workspace auto-discovery is faster and looks deeper** — the scan now stops descending into a project once its workspace file is found (a workspace defines its whole repo), which makes the walk cheap enough to search six levels deep instead of four, and directory reads no longer block the app.
+
+### Fixed
+- **Discovery works when the workspace root has its own `.clave/workspaces/`** — a root-level workspace definition used to stop the entire scan at depth zero, so no projects were found.
+- **Toolbar terminals reattach and sync reliably** — a persistent terminal whose process died while its popover was closed no longer leaves a stale reattach reference, and editing a pinned group no longer silently drops `cwd`, `autoLaunchLocalhost`, or `persistent` from the backing `.clave` file.
+
 ## [1.63.0] — 2026-08-08
 
 ### Added

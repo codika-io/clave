@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.64.0",
+    "title": "Server buttons in the toolbar",
+    "description": "Give a quick-launch terminal a serverUrl and its button becomes a service switch: one click starts the server if needed and opens it in your browser, with a live status dot showing up, starting, or down.",
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
+  },
+  {
     "version": "1.63.0",
     "title": "Edit markdown right on the page",
     "description": "Page mode is now a Notion-style writing surface — click anywhere and type. Headings, lists and code blocks convert as you write, checkboxes toggle with a click, and ⌘S saves clean markdown back to the file.",
