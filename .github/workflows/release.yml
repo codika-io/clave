@@ -43,6 +43,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # prod is protected by the "prod is release-only" ruleset (repo admins +
+      # deploy key bypass). GITHUB_TOKEN cannot push there, so the version-bump
+      # commit goes over SSH with the release deploy key. Push-only: fetches
+      # keep using the checkout token.
+      - name: Configure push access (release deploy key)
+        env:
+          RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$RELEASE_DEPLOY_KEY" > ~/.ssh/release_key
+          chmod 600 ~/.ssh/release_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git config core.sshCommand "ssh -i ~/.ssh/release_key -o IdentitiesOnly=yes"
+          git remote set-url --push origin git@github.com:codika-io/clave.git
+
       - name: Determine bump level
         id: bump
         run: |
