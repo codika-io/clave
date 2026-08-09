@@ -10,6 +10,8 @@ info()  { echo -e "${GREEN}[release]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[release]${NC} $*"; }
 error() { echo -e "${RED}[release]${NC} $*" >&2; exit 1; }
 
+RELEASE_BRANCH="prod"
+
 # ── Usage ──────────────────────────────────────────────────────────
 usage() {
   cat <<EOF
@@ -23,10 +25,15 @@ Flags:
   --help           Show this help
 
 The script will:
-  1. Commit any uncommitted changes (with "chore: bump version to X.Y.Z")
-  2. Bump version in package.json
-  3. Build, sign, and notarize the macOS app
-  4. Tag, push, and create a GitHub Release
+  1. Bump version in package.json
+  2. Roll CHANGELOG.md [Unreleased] into the new version heading
+  3. Stamp "next" entries in whats-new.json with the new version
+  4. Commit (with "chore: bump version to X.Y.Z")
+  5. Build, sign, and notarize the macOS app
+  6. Tag, push, and create a GitHub Release (changelog section as notes)
+
+Runs locally (sources .env for signing credentials) and in CI (credentials
+from the environment; set CI=true, which GitHub Actions does automatically).
 EOF
   exit 0
 }
@@ -63,10 +70,22 @@ command -v node >/dev/null 2>&1 || error "node not found"
 command -v npm  >/dev/null 2>&1 || error "npm not found"
 
 BRANCH=$(git branch --show-current)
-[[ "$BRANCH" == "main" ]] || error "Must be on 'main' branch (currently on '$BRANCH')"
+if [[ "$BRANCH" != "$RELEASE_BRANCH" ]]; then
+  # CI checks out a detached SHA of the release branch; resolve it.
+  if [[ -n "${CI:-}" && -z "$BRANCH" ]]; then
+    git checkout "$RELEASE_BRANCH"
+  else
+    error "Must be on '$RELEASE_BRANCH' branch (currently on '${BRANCH:-detached}')"
+  fi
+fi
 
-git fetch origin main
-git merge --ff-only origin/main || error "Failed to fast-forward to origin/main"
+if [[ -n "${CI:-}" ]]; then
+  git config user.name "github-actions[bot]"
+  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+fi
+
+git fetch origin "$RELEASE_BRANCH"
+git merge --ff-only "origin/$RELEASE_BRANCH" || error "Failed to fast-forward to origin/$RELEASE_BRANCH"
 
 # ── Bump version ───────────────────────────────────────────────────
 CURRENT_VERSION=$(node -p "require('./package.json').version")
@@ -80,9 +99,37 @@ fi
 NEW_VERSION=$(node -p "require('./package.json').version")
 info "Version: $CURRENT_VERSION → $NEW_VERSION"
 
+# ── Roll CHANGELOG.md: [Unreleased] → [X.Y.Z] — date ──────────────
+# Extract the unreleased body (between "## [Unreleased]" and the next "## [").
+NOTES_FILE="$(mktemp)"
+awk '/^## \[Unreleased\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md \
+  | sed -e '/./,$!d' > "$NOTES_FILE"
+
+if [[ -s "$NOTES_FILE" ]]; then
+  TODAY=$(date +%Y-%m-%d)
+  perl -0pi -e "s/## \[Unreleased\]\n/## [Unreleased]\n\n## [${NEW_VERSION}] — ${TODAY}\n/" CHANGELOG.md
+  info "CHANGELOG.md: rolled [Unreleased] into [${NEW_VERSION}]"
+else
+  warn "CHANGELOG.md has no [Unreleased] entries — release notes will be auto-generated"
+fi
+
+# ── Stamp whats-new.json: "next" → new version ────────────────────
+WHATS_NEW="src/renderer/src/help/whats-new.json"
+if [[ -f "$WHATS_NEW" ]] && grep -q '"version": "next"' "$WHATS_NEW"; then
+  node -e "
+    const fs = require('fs');
+    const p = '$WHATS_NEW';
+    const entries = JSON.parse(fs.readFileSync(p, 'utf8'));
+    for (const e of entries) if (e.version === 'next') e.version = '$NEW_VERSION';
+    fs.writeFileSync(p, JSON.stringify(entries, null, 2) + '\n');
+  "
+  info "whats-new.json: stamped 'next' entries as ${NEW_VERSION}"
+fi
+
 # ── Commit all changes (version bump + any staged/unstaged work) ──
 git add -A
-git commit -m "chore: bump version to ${NEW_VERSION}"
+# [skip ci] guards against workflow recursion when CI pushes this commit back.
+git commit -m "chore: bump version to ${NEW_VERSION} [skip ci]"
 info "Committed version bump"
 
 # ── Build ──────────────────────────────────────────────────────────
@@ -91,6 +138,8 @@ info "Building macOS app (this takes a few minutes)..."
 if [[ -f .env ]]; then
   info "Sourcing .env for signing credentials"
   set -a; source .env; set +a
+elif [[ -z "${CSC_LINK:-}" ]]; then
+  error "No .env and no CSC_LINK in the environment — cannot sign"
 fi
 
 npm run build:mac
@@ -111,17 +160,25 @@ ls -lh "$DMG" "$ZIP" "$YML" ${BLOCKMAP:+"$BLOCKMAP"} ${ZIP_BLOCKMAP:+"$ZIP_BLOCK
 
 # ── Tag, push, release ────────────────────────────────────────────
 git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION}"
-git push origin main --follow-tags
+git push origin "$RELEASE_BRANCH" --follow-tags
 info "Pushed v${NEW_VERSION} to origin"
 
 ASSETS=("$DMG" "$ZIP" "$YML")
 [[ -n "$BLOCKMAP" ]] && ASSETS+=("$BLOCKMAP")
 [[ -n "$ZIP_BLOCKMAP" ]] && ASSETS+=("$ZIP_BLOCKMAP")
 
-gh release create "v${NEW_VERSION}" \
-  --title "v${NEW_VERSION}" \
-  --generate-notes \
-  "${ASSETS[@]}"
+if [[ -s "$NOTES_FILE" ]]; then
+  gh release create "v${NEW_VERSION}" \
+    --title "v${NEW_VERSION}" \
+    --notes-file "$NOTES_FILE" \
+    "${ASSETS[@]}"
+else
+  gh release create "v${NEW_VERSION}" \
+    --title "v${NEW_VERSION}" \
+    --generate-notes \
+    "${ASSETS[@]}"
+fi
+rm -f "$NOTES_FILE"
 
 info "Release v${NEW_VERSION} published!"
 info "https://github.com/codika-io/clave/releases/tag/v${NEW_VERSION}"

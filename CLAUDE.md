@@ -11,7 +11,7 @@ Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` for 
 - `npm run build:mac` — build + package macOS universal dmg + zip (signed + notarized)
 - `npm run typecheck` — typecheck only
 - `npm run lint` — eslint
-- `npm run release -- --patch|--minor|--major` — non-interactive release (see `.claude/rules/release.md`)
+- Releases ship via CI on push to `prod` (bump from a `[minor]`/`[major]` commit-message marker, else patch) — see `.claude/rules/release.md`. `npm run release -- --patch|--minor|--major` remains the local fallback.
 
 ## Architecture
 

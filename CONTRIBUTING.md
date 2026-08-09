@@ -43,7 +43,7 @@ This flow exists because Clave has a deliberately narrow scope. Features that se
 
 ## PR guidelines
 
-1. Fork the repo and create a branch from `main`
+1. Fork the repo and create a branch from `dev` (PRs target `dev`; `prod` is the release branch — every push to it ships a new version)
 2. One feature or fix per PR. Don't bundle unrelated changes
 3. Run `npm run typecheck` and `npm run lint` before opening
 4. Reference the related issue: `Closes #123`

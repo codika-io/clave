@@ -1,0 +1,70 @@
+name: Release macOS
+
+# Every push to prod cuts a release. The bump level comes from the head commit
+# message — "[major]" or "[minor]" anywhere in it, defaulting to patch — or
+# from the explicit input when triggered manually (Actions → Release macOS →
+# Run workflow). The version-bump commit CI pushes back carries [skip ci], and
+# GITHUB_TOKEN pushes never retrigger workflows, so there is no recursion.
+on:
+  push:
+    branches: [prod]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+        required: true
+
+permissions:
+  contents: write
+
+# Never run two releases at once; queue instead of cancelling a signing build.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: prod
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine bump level
+        id: bump
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            bump="${{ inputs.bump }}"
+          else
+            msg=$(git log -1 --pretty=%B)
+            case "$msg" in
+              *"[major]"*) bump=major ;;
+              *"[minor]"*) bump=minor ;;
+              *)           bump=patch ;;
+            esac
+          fi
+          echo "bump=$bump" >> "$GITHUB_OUTPUT"
+          echo "Bump level: $bump"
+
+      - name: Build, sign, notarize, and publish
+        run: bash scripts/release.sh --${{ steps.bump.outputs.bump }}
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
