@@ -66,11 +66,22 @@ function SessionIcon({ session }: { session: Session }) {
   const doneUnseen = isClaudeCode && state === 'done' && session.hasUnseenActivity
   const ended = isClaudeCode && state === 'ended'
 
-  const dotColor = blocked ? 'bg-status-waiting' : doneUnseen ? 'bg-status-ready' : null
+  // A pending cross-tab message (accent dot) is provider-agnostic and takes
+  // precedence over the Claude-only status dots — it's an explicit "another
+  // agent wrote here" signal the user hasn't seen yet.
+  const injectedFrom = session.injectedFrom
+  const dotColor = injectedFrom
+    ? 'bg-accent'
+    : blocked
+      ? 'bg-status-waiting'
+      : doneUnseen
+        ? 'bg-status-ready'
+        : null
 
   return (
     <span
       className="sidebar-tab-icon relative flex-shrink-0"
+      title={injectedFrom ? `Message from ${injectedFrom}` : undefined}
       style={working ? { animation: 'pulse-dot 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' } : undefined}
     >
       <Icon

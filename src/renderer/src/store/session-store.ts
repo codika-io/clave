@@ -110,6 +110,7 @@ interface SessionState {
   setSessionServerStatus: (id: string, status: import('./session-types').ServerStatus) => void
   setSessionServerCommand: (id: string, command: string | null) => void
   setSessionUnseenActivity: (id: string, unseen: boolean) => void
+  setSessionInjectedFrom: (id: string, from: string | null) => void
   renameSession: (id: string, name: string) => void
   autoRenameSession: (id: string, name: string) => void
   resetSessionName: (id: string) => void
@@ -493,9 +494,9 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => {
       const session = state.sessions.find((s) => s.id === id)
       const targetView: ActiveView = session?.sessionType === 'agent' ? 'agents' : 'terminals'
-      // Clear unseen activity when session is selected
-      const sessions = session?.hasUnseenActivity
-        ? state.sessions.map((s) => s.id === id ? { ...s, hasUnseenActivity: false } : s)
+      // Clear unseen activity + the cross-tab injected marker when viewed
+      const sessions = session?.hasUnseenActivity || session?.injectedFrom
+        ? state.sessions.map((s) => s.id === id ? { ...s, hasUnseenActivity: false, injectedFrom: null } : s)
         : state.sessions
       if (addToSelection) {
         const isSelected = state.selectedSessionIds.includes(id)
@@ -886,6 +887,15 @@ export const useSessionStore = create<SessionState>((set) => ({
         sessions: state.sessions.map((s) =>
           s.id === id ? { ...s, hasUnseenActivity: unseen } : s
         )
+      }
+    }),
+
+  setSessionInjectedFrom: (id, from) =>
+    set((state) => {
+      const session = state.sessions.find((s) => s.id === id)
+      if (!session || (session.injectedFrom ?? null) === from) return state
+      return {
+        sessions: state.sessions.map((s) => (s.id === id ? { ...s, injectedFrom: from } : s))
       }
     }),
 

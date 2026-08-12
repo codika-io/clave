@@ -469,6 +469,43 @@ function resolveTargetSession(ref: string, callerSessionId: string | undefined):
 }
 
 /**
+ * Cross-tab reach gate: a tab may send to / read only a target it has a real
+ * relationship with — one it opened, the one that opened it ("parent"), or one
+ * the user placed in the same group. This keeps a single poisoned tab from
+ * driving or reading tabs in unrelated projects; grouping is the explicit
+ * "these tabs may talk" gesture for anything outside the spawn lineage.
+ * Identity is the token-derived callerSessionId (unforgeable), so the gate is
+ * enforceable — a tab cannot claim to be the target's parent.
+ */
+function assertCanReach(
+  callerSessionId: string | undefined,
+  target: Session,
+  verb: 'message' | 'read'
+): void {
+  const state = useSessionStore.getState()
+  const caller = callerSessionId
+    ? state.sessions.find((s) => s.id === callerSessionId)
+    : undefined
+  if (!caller) {
+    throw new Error(
+      `clave_${verb === 'message' ? 'send_to' : 'read'}_session must be called from inside a Clave agent tab — this request has no tab identity.`
+    )
+  }
+  if (caller.id === target.id) return
+  const related =
+    target.id === caller.spawnedBy || // target opened me (my parent)
+    target.spawnedBy === caller.id || // I opened target (my child)
+    state.groups.some(
+      (g) => g.sessionIds.includes(caller.id) && g.sessionIds.includes(target.id)
+    )
+  if (!related) {
+    throw new Error(
+      `Refusing to ${verb} tab "${target.name}": it is not related to yours. You can only reach the tab that opened yours ("parent"), tabs you opened, or tabs in the same group. Put both tabs in one group to allow this.`
+    )
+  }
+}
+
+/**
  * Strip control bytes that would break the bracketed-paste envelope or be
  * interpreted as keystrokes/escape sequences by the receiving TUI. Newlines
  * and tabs are safe *inside* a paste and kept; everything else below 0x20
@@ -498,6 +535,7 @@ async function handleSendToSession(payload: {
   if (payload.callerSessionId && target.id === payload.callerSessionId) {
     throw new Error('Refusing to send a message to your own session')
   }
+  assertCanReach(payload.callerSessionId, target, 'message')
   if (!target.alive) throw new Error(`Session "${target.name}" has ended`)
   const mode = sessionMode(target)
   if (mode === 'terminal') {
@@ -541,6 +579,14 @@ async function handleSendToSession(payload: {
   // then a silent no-op, so report what actually happened rather than a blanket
   // delivered:true.
   const stillAlive = useSessionStore.getState().sessions.find((s) => s.id === targetId)?.alive === true
+  if (stillAlive) {
+    // Visible, non-spoofable signal that a sibling wrote here — the sidebar
+    // marks the tab and names the sender, so a cross-tab message is never
+    // silent even if the user isn't looking at the target tab.
+    const store = useSessionStore.getState()
+    store.setSessionInjectedFrom(targetId, sender?.name ?? 'another tab')
+    if (!store.selectedSessionIds.includes(targetId)) store.setSessionUnseenActivity(targetId, true)
+  }
   return {
     delivered: stillAlive,
     sessionId: targetId,
@@ -556,6 +602,7 @@ function handleReadSession(payload: {
   callerSessionId?: string
 }): unknown {
   const target = resolveTargetSession(payload.sessionId, payload.callerSessionId)
+  assertCanReach(payload.callerSessionId, target, 'read')
   const terminal = getRegisteredTerminal(target.id)
   if (!terminal) {
     throw new Error(`Session "${target.name}" has no terminal buffer (tab not mounted yet)`)

@@ -157,6 +157,10 @@ export interface Session {
   serverStatus: ServerStatus
   serverCommand: string | null
   hasUnseenActivity: boolean
+  /** Name of another tab whose agent injected a message into this one via
+   *  clave_send_to_session, set on delivery and cleared when the tab is viewed.
+   *  Drives a distinct sidebar marker so a cross-tab message is never silent. */
+  injectedFrom?: string | null
   userRenamed: boolean
   planFilePath: string | null
 }

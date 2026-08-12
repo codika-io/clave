@@ -19,6 +19,69 @@ export function getMcpRuntime(): McpRuntimeInfo | null {
   return runtime
 }
 
+/**
+ * Per-session bearer tokens: `token → claveSessionId`. Each spawned tab gets a
+ * UNIQUE token in its 0600 mcp-config, and the server derives the caller's
+ * identity from the presented token — NOT from a client-supplied header. That
+ * binds identity to a credential the tab can't forge, so one tab can't
+ * impersonate another (or claim to be the user) when calling the cross-tab
+ * tools. The shared `runtime.token` remains valid as an anonymous discovery
+ * credential (no tab identity), so it grants none of the identity-gated tools.
+ */
+const sessionTokens = new Map<string, string>()
+
+/** Resolve the calling tab's id from its per-session token, or undefined for
+ *  the anonymous shared token / an unknown token. */
+export function resolveSessionByToken(token: string): string | undefined {
+  return sessionTokens.get(token)
+}
+
+function registerSessionToken(token: string, claveSessionId: string): void {
+  // One token per session: drop any prior token for this id so a rewrite
+  // (re-adoption) doesn't leave a stale credential mapped.
+  for (const [t, sid] of sessionTokens) if (sid === claveSessionId) sessionTokens.delete(t)
+  sessionTokens.set(token, claveSessionId)
+}
+
+function unregisterSessionTokensFor(claveSessionId: string): void {
+  for (const [t, sid] of sessionTokens) if (sid === claveSessionId) sessionTokens.delete(t)
+}
+
+/** Extract the Bearer token from a session's on-disk config, if present. */
+function readConfigToken(claveSessionId: string): string | undefined {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(sessionConfigPath(claveSessionId), 'utf-8')) as {
+      mcpServers?: { clave?: { headers?: { Authorization?: string } } }
+    }
+    const auth = cfg.mcpServers?.clave?.headers?.Authorization
+    if (typeof auth === 'string' && auth.startsWith('Bearer ')) return auth.slice('Bearer '.length)
+  } catch {
+    /* missing / malformed */
+  }
+  return undefined
+}
+
+/**
+ * Rebuild the token→session map from the per-session config files on disk.
+ * Call once at startup: a tmux-surviving tab keeps running with the token in
+ * its existing config, so re-registering it keeps that tab's live MCP calls
+ * authenticating after an app restart. Skips any config still carrying the
+ * shared token (a pre-upgrade session) — that token must stay anonymous.
+ */
+export function rebuildSessionTokens(): void {
+  let files: string[]
+  try {
+    files = fs.readdirSync(sessionConfigDir()).filter((f) => f.endsWith('.json'))
+  } catch {
+    return
+  }
+  for (const file of files) {
+    const id = path.basename(file, '.json')
+    const token = readConfigToken(id)
+    if (token && token !== runtime?.token) registerSessionToken(token, id)
+  }
+}
+
 function serverStateFilePath(): string {
   return path.join(app.getPath('userData'), 'mcp-server.json')
 }
@@ -66,24 +129,32 @@ export function saveServerState(url: string, token: string): void {
 
 /**
  * Write the per-session `--mcp-config` file for a Claude session spawned by
- * Clave. The X-Clave-Session-Id header lets the server resolve "my group" for
- * the calling tab. A file (rather than inline JSON) keeps the bearer token off
- * `ps`/tmux-visible command lines. Returns the file path, or null on failure
- * (the spawn then simply omits the flag).
+ * Clave. The file carries a UNIQUE per-session bearer token; the server maps it
+ * back to this session id, which is how the caller's identity is established
+ * (the tab can't forge it). A file (rather than inline JSON) keeps the token
+ * off `ps`/tmux-visible command lines. Returns the file path, or null on
+ * failure (the spawn then simply omits the flag).
+ *
+ * The token is REUSED if a valid per-session config already exists for this id
+ * (re-adoption rewrites the config but must not rotate the token out from under
+ * a still-running tab that already loaded it). A fresh id — or a config still
+ * holding the anonymous shared token — mints a new one.
  */
 export function writeSessionMcpConfig(claveSessionId: string): string | null {
   if (!runtime) return null
   try {
     const dir = sessionConfigDir()
     fs.mkdirSync(dir, { recursive: true })
+    const existing = readConfigToken(claveSessionId)
+    const sessionToken =
+      existing && existing !== runtime.token ? existing : randomBytes(32).toString('hex')
     const config = {
       mcpServers: {
         clave: {
           type: 'http',
           url: runtime.url,
           headers: {
-            Authorization: `Bearer ${runtime.token}`,
-            'X-Clave-Session-Id': claveSessionId
+            Authorization: `Bearer ${sessionToken}`
           }
         }
       }
@@ -94,6 +165,7 @@ export function writeSessionMcpConfig(claveSessionId: string): string | null {
       mode: 0o600
     })
     fs.chmodSync(filePath, 0o600)
+    registerSessionToken(sessionToken, claveSessionId)
     return filePath
   } catch (err) {
     console.error('[mcp] failed to write session config', err)
@@ -102,6 +174,7 @@ export function writeSessionMcpConfig(claveSessionId: string): string | null {
 }
 
 export function deleteSessionMcpConfig(claveSessionId: string): void {
+  unregisterSessionTokensFor(claveSessionId)
   try {
     fs.unlinkSync(sessionConfigPath(claveSessionId))
   } catch {

@@ -6,7 +6,13 @@ import { z } from 'zod'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { callRenderer, registerMcpBridge } from './mcp-bridge'
-import { loadOrCreateServerState, saveServerState, setMcpRuntime } from './mcp-runtime'
+import {
+  loadOrCreateServerState,
+  saveServerState,
+  setMcpRuntime,
+  resolveSessionByToken,
+  rebuildSessionTokens
+} from './mcp-runtime'
 import {
   createRequest,
   getRequest,
@@ -22,12 +28,25 @@ const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages m
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
 
-function tokenMatches(authHeader: string | undefined): boolean {
-  if (!serverToken || !authHeader?.startsWith('Bearer ')) return false
-  // Hash both sides so timingSafeEqual gets equal-length buffers.
-  const presented = createHash('sha256').update(authHeader.slice('Bearer '.length)).digest()
-  const expected = createHash('sha256').update(serverToken).digest()
-  return timingSafeEqual(presented, expected)
+/**
+ * Authenticate a request and, crucially, DERIVE the caller's tab identity from
+ * the presented token — never from a client-supplied header. A per-session
+ * token maps to exactly one tab (that tab can't forge another's identity); the
+ * shared discovery token authenticates but stays anonymous (no tab identity,
+ * so the identity-gated tools refuse it).
+ */
+function authenticate(authHeader: string | undefined): { ok: boolean; callerSessionId?: string } {
+  if (!authHeader?.startsWith('Bearer ')) return { ok: false }
+  const presented = authHeader.slice('Bearer '.length)
+  const sessionId = resolveSessionByToken(presented)
+  if (sessionId) return { ok: true, callerSessionId: sessionId }
+  if (serverToken) {
+    // Hash both sides so timingSafeEqual gets equal-length buffers.
+    const a = createHash('sha256').update(presented).digest()
+    const b = createHash('sha256').update(serverToken).digest()
+    if (timingSafeEqual(a, b)) return { ok: true }
+  }
+  return { ok: false }
 }
 
 function readBody(req: http.IncomingMessage): Promise<unknown> {
@@ -61,8 +80,8 @@ async function runCommand(command: string, payload: unknown): Promise<ToolResult
 /**
  * Build a per-request McpServer. Stateless mode: a fresh server + transport
  * per POST keeps request ids isolated and needs no MCP-session bookkeeping.
- * `callerSessionId` (from the X-Clave-Session-Id header injected into each
- * spawned session's config) identifies which tab is calling.
+ * `callerSessionId` is derived server-side from the caller's per-session token
+ * (see authenticate) — it identifies which tab is calling and can't be forged.
  */
 function buildServer(callerSessionId: string | undefined): McpServer {
   const server = new McpServer(
@@ -450,7 +469,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     res.writeHead(404).end()
     return
   }
-  if (!tokenMatches(req.headers.authorization)) {
+  const auth = authenticate(req.headers.authorization)
+  if (!auth.ok) {
     res.writeHead(401, { 'Content-Type': 'application/json' }).end(
       JSON.stringify({
         jsonrpc: '2.0',
@@ -466,8 +486,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     return
   }
 
-  const headerValue = req.headers['x-clave-session-id']
-  const callerSessionId = Array.isArray(headerValue) ? headerValue[0] : headerValue
+  // Identity comes from the token (see authenticate), NOT from any request
+  // header — a tab cannot present another tab's id.
+  const callerSessionId = auth.callerSessionId
 
   let body: unknown
   try {
@@ -527,6 +548,9 @@ export async function startMcpServer(): Promise<void> {
   httpServer = server
   const mcpUrl = `http://127.0.0.1:${boundPort}${MCP_PATH}`
   setMcpRuntime({ url: mcpUrl, token })
+  // Re-map per-session tokens from surviving tabs' config files (post-restart),
+  // now that runtime.token is set so the anonymous shared token is skipped.
+  rebuildSessionTokens()
   saveServerState(mcpUrl, token)
   console.log(`[mcp] listening on ${mcpUrl}`)
 }
