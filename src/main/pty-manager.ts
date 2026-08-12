@@ -32,7 +32,13 @@ function isValidClaudeSessionId(id: string): boolean {
  * provider-prefixed ids with dots, slashes, or colons (Bedrock/Vertex).
  */
 function isValidModelName(model: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,199}$/.test(model)
+  // No `..` segment and no leading/trailing separator: keeps the value a
+  // model-ref shape and not a path-traversal-looking string, even though it is
+  // only ever handed to the CLI as a --model/-m value (and single-quoted on
+  // POSIX). Hygiene, not the injection guard — the alphabet + no-leading-dash
+  // rule is what blocks flag smuggling and shell metacharacters.
+  if (model.includes('..')) return false
+  return /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,198}[A-Za-z0-9]$|^[A-Za-z0-9]$/.test(model)
 }
 
 /**

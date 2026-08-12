@@ -468,6 +468,27 @@ function resolveTargetSession(ref: string, callerSessionId: string | undefined):
   return found
 }
 
+/**
+ * Strip control bytes that would break the bracketed-paste envelope or be
+ * interpreted as keystrokes/escape sequences by the receiving TUI. Newlines
+ * and tabs are safe *inside* a paste and kept; everything else below 0x20
+ * (plus DEL) is removed. This is the load-bearing guard against paste
+ * breakout: without removing ESC (0x1b), a literal `\x1b[201~` in the message
+ * would close the paste early and turn the remainder into live keystrokes —
+ * enough to clear the input and enter Claude's `!` bash mode (RCE across
+ * tabs). With ESC/CR/etc. gone, the whole message stays pasted text under the
+ * provenance header and our single trailing submit sends it as one turn.
+ */
+function sanitizeForPaste(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+}
+
+// Serialize writes per target so two concurrent sends can't interleave their
+// paste envelopes (envelope-A, envelope-B, submit-A, submit-B → one garbled
+// turn). Keyed by target session id; each send appends to the target's chain.
+const sendChains = new Map<string, Promise<unknown>>()
+
 async function handleSendToSession(payload: {
   sessionId: string
   message: string
@@ -495,16 +516,34 @@ async function handleSendToSession(payload: {
   const header = sender
     ? `[Message from Clave tab "${sender.name}" — reply with clave_send_to_session sessionId="${sender.id}"]`
     : '[Message from a Clave agent]'
-  const text = `${header}\n${payload.message}`
-  // Deliver as one bracketed paste so embedded newlines don't submit early,
-  // then submit. The TUI queues input that arrives mid-turn, so a busy agent
-  // sees the message as its next user turn.
-  window.electronAPI.writeSession(target.id, `\x1b[200~${text}\x1b[201~`)
-  await new Promise((r) => setTimeout(r, 150))
-  window.electronAPI.writeSession(target.id, '\r')
+  // Sanitize the WHOLE payload (header + message): a tab renamed to carry
+  // control bytes must not be able to smuggle them in via the header either.
+  const text = sanitizeForPaste(`${header}\n${payload.message}`)
+
+  const targetId = target.id
+  const prior = sendChains.get(targetId) ?? Promise.resolve()
+  const run = prior.catch(() => {}).then(async () => {
+    // Deliver as one bracketed paste so embedded newlines don't submit early,
+    // then submit. The TUI queues input that arrives mid-turn, so a busy agent
+    // sees the message as its next user turn.
+    window.electronAPI.writeSession(targetId, `\x1b[200~${text}\x1b[201~`)
+    await new Promise((r) => setTimeout(r, 150))
+    window.electronAPI.writeSession(targetId, '\r')
+  })
+  sendChains.set(targetId, run)
+  run.finally(() => {
+    // Drop the chain once it drains so the map doesn't grow unboundedly.
+    if (sendChains.get(targetId) === run) sendChains.delete(targetId)
+  })
+  await run
+
+  // The target can exit during the 150ms envelope→submit gap; the PTY write is
+  // then a silent no-op, so report what actually happened rather than a blanket
+  // delivered:true.
+  const stillAlive = useSessionStore.getState().sessions.find((s) => s.id === targetId)?.alive === true
   return {
-    delivered: true,
-    sessionId: target.id,
+    delivered: stillAlive,
+    sessionId: targetId,
     name: target.name,
     mode,
     agentState: target.agentState ?? null

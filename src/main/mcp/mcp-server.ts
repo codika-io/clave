@@ -277,7 +277,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_read_session',
     {
       description:
-        "Read the last N rendered lines of a tab's terminal (screen + scrollback) without interrupting it — check what a delegated agent is doing, read a dev server's logs, or inspect a sibling's state. Works for any tab, plain terminals included. Target by session id, exact tab name, or \"parent\".",
+        "Read the last N rendered lines of a tab's terminal without interrupting it — check what a delegated agent is doing, read a dev server's logs, or inspect a sibling's state. Works for any tab, plain terminals included. Returns scrollback for normal-buffer output (most CLIs, including claude/codex inline); for a full-screen/alternate-screen program (e.g. a pager or a TUI that took over the screen) it returns only the currently visible screen, so a large `lines` value may come back shorter. Target by session id, exact tab name, or \"parent\".",
       inputSchema: {
         sessionId: z
           .string()
