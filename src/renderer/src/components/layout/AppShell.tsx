@@ -148,6 +148,7 @@ export function AppShell() {
               codexMode: s.codexMode,
               claudeAgentsMode: s.claudeAgentsMode,
               dangerousMode: s.dangerousMode,
+              model: s.model,
               tmuxMode: true,
               adoptTmuxName: s.tmuxName,
               // Reuse the original id so lifecycle-hook status routing keeps
@@ -184,6 +185,7 @@ export function AppShell() {
               codexMode: s.codexMode,
               claudeAgentsMode: s.claudeAgentsMode,
               dangerousMode: s.dangerousMode,
+              model: s.model,
               claudeSessionId: info.claudeSessionId,
               claudeProfileId: s.claudeProfileId,
               claudeProfileLabel: s.claudeProfileLabel,

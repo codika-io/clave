@@ -26,6 +26,16 @@ function isValidClaudeSessionId(id: string): boolean {
 }
 
 /**
+ * Model names are interpolated into the same shell command string as session
+ * ids (same poisoned-sidecar risk), so restrict them to the alphabet real
+ * model refs use: aliases ("opus"), full ids ("claude-fable-5"), and
+ * provider-prefixed ids with dots, slashes, or colons (Bedrock/Vertex).
+ */
+function isValidModelName(model: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,199}$/.test(model)
+}
+
+/**
  * Build the `--settings` argument that wires Claude Code lifecycle hooks to a
  * per-session state file owned by agent-state-manager. Returns a fully
  * shell-quoted token ready to drop into the `zsh -lc '<cmd>'` command string,
@@ -291,6 +301,9 @@ export interface AdoptableTmuxSession {
   codexMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
+  /** Model the session was launched on (claude/codex), so a dead-sidecar
+   *  re-spawn after a reboot relaunches the CLI on the same model. */
+  model?: string
   /** Claude account/profile this session runs under, so the badge + config dir
    *  survive an app restart and re-adoption. */
   configDir?: string
@@ -395,6 +408,10 @@ function liveTmuxSessions(tmuxPath: string): Set<string> {
 
 export interface PtySpawnOptions {
   dangerousMode?: boolean
+  /** Model the agent CLI starts on (alias like "opus" or a full model id).
+   *  claude → `--model`, codex → `-m`; ignored for antigravity/terminal.
+   *  Undefined = the CLI's own default. */
+  model?: string
   claudeMode?: boolean
   antigravityMode?: boolean
   codexMode?: boolean
@@ -469,6 +486,14 @@ class PtyManager {
     const useCodexMode = options?.codexMode === true
     const useClaudeMode = options?.claudeMode !== false && !useAntigravityMode && !useCodexMode && !useAgentsMode
 
+    // Like resume ids, the model is interpolated into the shell command string
+    // (and round-trips through the tmux sidecar), so reject anything outside
+    // the model-ref alphabet loudly rather than spawn a mangled command.
+    const model = options?.model
+    if (model !== undefined && !isValidModelName(model)) {
+      throw new Error('Invalid model name')
+    }
+
     let claudeSessionId: string | undefined
     let shellArgs: string[]
     if (isWindows) {
@@ -476,7 +501,7 @@ class PtyManager {
       if (useAntigravityMode) {
         shellArgs = ['/c', 'agy']
       } else if (useCodexMode) {
-        shellArgs = ['/c', 'codex']
+        shellArgs = model ? ['/c', 'codex', '-m', model] : ['/c', 'codex']
       } else if (useAgentsMode) {
         // `claude agents` is an interactive subcommand and does not accept
         // --session-id / --resume / --dangerously-skip-permissions, so spawn it bare.
@@ -497,6 +522,7 @@ class PtyManager {
           parts.push('--session-id', claudeSessionId)
         }
         if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
+        if (model) parts.push('--model', model)
         shellArgs = ['/c', ...parts]
       }
     } else {
@@ -511,11 +537,10 @@ class PtyManager {
             : 'agy'
         ]
       } else if (useCodexMode) {
-        shellArgs = [
-          '-l',
-          '-c',
-          options?.initialPrompt ? `codex ${shellSingleQuote(options.initialPrompt)}` : 'codex'
-        ]
+        const codexParts = ['codex']
+        if (model) codexParts.push('-m', shellSingleQuote(model))
+        if (options?.initialPrompt) codexParts.push(shellSingleQuote(options.initialPrompt))
+        shellArgs = ['-l', '-c', codexParts.join(' ')]
       } else if (useAgentsMode) {
         // `claude agents` is an interactive subcommand and does not accept
         // --session-id / --resume / --dangerously-skip-permissions, so spawn it bare.
@@ -538,6 +563,7 @@ class PtyManager {
           parts.push('--session-id', claudeSessionId)
         }
         if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
+        if (model) parts.push('--model', shellSingleQuote(model))
         // Wire lifecycle hooks → per-session state file for deterministic tab status.
         const settingsArg = buildClaudeHookSettingsArg(id)
         if (settingsArg) parts.push('--settings', settingsArg)
@@ -594,6 +620,7 @@ class PtyManager {
         codexMode: useCodexMode,
         claudeAgentsMode: useAgentsMode,
         dangerousMode: options?.dangerousMode === true,
+        model,
         configDir: options?.configDir,
         claudeProfileId: options?.claudeProfileId,
         claudeProfileLabel: options?.claudeProfileLabel

@@ -166,6 +166,7 @@ export async function openSessionProgrammatically(payload: {
   groupId?: string
   name?: string
   dangerous?: boolean
+  model?: string
   command?: string
   autoRun?: boolean
   prompt?: string
@@ -184,11 +185,14 @@ export async function openSessionProgrammatically(payload: {
   const codexMode = mode === 'codex'
   // --dangerously-skip-permissions is a claude flag; other providers ignore it.
   const dangerousMode = claudeMode && payload.dangerous === true
+  // model maps to claude --model / codex -m; antigravity and terminals have no flag.
+  const model = (claudeMode || codexMode) && payload.model ? payload.model : undefined
   const info = await window.electronAPI.spawnSession(payload.cwd, {
     claudeMode,
     antigravityMode,
     codexMode,
     dangerousMode,
+    model,
     initialCommand: mode === 'terminal' ? payload.command || undefined : undefined,
     autoExecute: mode === 'terminal' && !!payload.command && payload.autoRun !== false,
     initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined
@@ -207,6 +211,7 @@ export async function openSessionProgrammatically(payload: {
     codexMode,
     claudeAgentsMode: false,
     dangerousMode,
+    model,
     claudeSessionId: info.claudeSessionId ?? null,
     // Persist so Duplicate re-primes the clone with the same prompt.
     initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined,

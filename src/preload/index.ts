@@ -17,6 +17,7 @@ const electronAPI = {
     cwd: string,
     options?: {
       dangerousMode?: boolean
+      model?: string
       claudeMode?: boolean
       antigravityMode?: boolean
       codexMode?: boolean

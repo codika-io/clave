@@ -17,7 +17,7 @@ import {
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -111,6 +111,13 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .boolean()
           .optional()
           .describe('Start claude with --dangerously-skip-permissions (claude mode only)'),
+        model: z
+          .string()
+          .regex(/^[A-Za-z0-9][A-Za-z0-9._/:-]{0,199}$/)
+          .optional()
+          .describe(
+            'Model the new agent starts on: an alias ("opus", "sonnet", "haiku") or a full model id ("claude-fable-5"). claude and codex modes only; omitted = the CLI\'s default. The user can still switch later with /model inside the tab.'
+          ),
         command: z
           .string()
           .optional()

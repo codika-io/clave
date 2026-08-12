@@ -726,6 +726,7 @@ export function Sidebar() {
             codexMode: session.codexMode,
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
+            model: session.model,
             initialPrompt
           })
           addSession({
@@ -741,6 +742,7 @@ export function Sidebar() {
             codexMode: session.codexMode,
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
+            model: session.model,
             claudeSessionId: sessionInfo.claudeSessionId,
             // Persist so re-duplicating the clone also re-primes.
             initialPrompt,
@@ -775,6 +777,7 @@ export function Sidebar() {
           claudeMode: !isAgents,
           claudeAgentsMode: isAgents,
           dangerousMode,
+          model: session.model,
           resumeSessionId: session.claudeSessionId
         })
         addSession({
@@ -788,6 +791,7 @@ export function Sidebar() {
           claudeMode: !isAgents,
           claudeAgentsMode: isAgents,
           dangerousMode,
+          model: session.model,
           claudeSessionId: sessionInfo.claudeSessionId,
           sessionType: 'local'
         })

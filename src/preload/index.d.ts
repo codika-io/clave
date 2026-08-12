@@ -128,6 +128,8 @@ export interface AdoptableTmuxSession {
   codexMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
+  /** Model the session was launched on (claude/codex); re-applied on re-spawn. */
+  model?: string
   configDir?: string
   claudeProfileId?: string
   claudeProfileLabel?: string
@@ -261,6 +263,7 @@ export interface ElectronAPI {
     cwd: string,
     options?: {
       dangerousMode?: boolean
+      model?: string
       claudeMode?: boolean
       antigravityMode?: boolean
       codexMode?: boolean

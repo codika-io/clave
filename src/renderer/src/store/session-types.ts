@@ -129,6 +129,10 @@ export interface Session {
   /** Claude session launched via the `claude agents` subcommand. */
   claudeAgentsMode?: boolean
   dangerousMode: boolean
+  /** Model this session was launched on (claude/codex modes), so Duplicate and
+   *  restore keep it. Undefined = the CLI's default; /model inside the session
+   *  can diverge from it afterwards without Clave knowing. */
+  model?: string
   claudeSessionId: string | null
   /** Claude account/profile this session runs under (issue #22). Undefined =
    *  the Default profile. `claudeProfileLabel` drives the session-header badge. */
