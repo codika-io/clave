@@ -6,6 +6,7 @@ import { shellEscape } from '../lib/shell'
 import { getXtermTheme } from '../lib/terminal-theme'
 import { safePort } from '../lib/utils'
 import { stripAnsi, detectLocalhostUrl } from '../lib/localhost-url'
+import { registerTerminal, unregisterTerminal } from '../lib/terminal-registry'
 import '@xterm/xterm/css/xterm.css'
 
 function detectPrompt(buffer: string): string | null {
@@ -66,6 +67,7 @@ export function useTerminal(sessionId: string) {
     }
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
+    registerTerminal(sessionId, terminal)
 
     // Custom key bindings — bypass xterm.js local processing, send directly to PTY
     terminal.attachCustomKeyEventHandler((e) => {
@@ -440,6 +442,7 @@ export function useTerminal(sessionId: string) {
       cleanupData()
       cleanupExit()
       resizeObserver.disconnect()
+      unregisterTerminal(sessionId, terminal)
       terminal.dispose()
       terminalRef.current = null
       fitAddonRef.current = null

@@ -2,6 +2,7 @@ import { useSessionStore, fileTabDedupKey } from '../store/session-store'
 import type { GroupTerminalConfig, Session, SessionGroup } from '../store/session-store'
 import { usePinnedStore, getPinnedState, togglePinnedGroup } from '../store/pinned-store'
 import type { PinnedGroupSession } from '../store/session-types'
+import { getRegisteredTerminal } from './terminal-registry'
 
 /**
  * Renderer-side executor for the in-app MCP server. The sidebar state (groups,
@@ -212,6 +213,9 @@ export async function openSessionProgrammatically(payload: {
     claudeAgentsMode: false,
     dangerousMode,
     model,
+    // Parent link for clave_send_to_session/"parent" — only set when the open
+    // came from inside another tab (agent delegation), not from the app UI.
+    spawnedBy: payload.callerSessionId || undefined,
     claudeSessionId: info.claudeSessionId ?? null,
     // Persist so Duplicate re-primes the clone with the same prompt.
     initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined,
@@ -440,6 +444,102 @@ async function handleNotify(payload: {
   return { status, sessionId }
 }
 
+/** Resolve a messaging/readback target: a session id, an exact tab name, or
+ *  "parent" (the tab whose agent opened the caller via clave_open_session). */
+function resolveTargetSession(ref: string, callerSessionId: string | undefined): Session {
+  const sessions = useSessionStore.getState().sessions.filter((s) => s.sessionType === 'local')
+  if (ref === 'parent') {
+    if (!callerSessionId) {
+      throw new Error('Target "parent" requires the call to come from inside a Clave session')
+    }
+    const caller = sessions.find((s) => s.id === callerSessionId)
+    const parent = caller?.spawnedBy
+      ? sessions.find((s) => s.id === caller.spawnedBy)
+      : undefined
+    if (!parent) {
+      throw new Error(
+        'This session has no live parent — only tabs opened via clave_open_session know their opener, and the link does not survive an app restart. Use clave_list and target a session id or name instead.'
+      )
+    }
+    return parent
+  }
+  const found = sessions.find((s) => s.id === ref) ?? sessions.find((s) => s.name === ref)
+  if (!found) throw new Error(`No session with id or name "${ref}"`)
+  return found
+}
+
+async function handleSendToSession(payload: {
+  sessionId: string
+  message: string
+  callerSessionId?: string
+}): Promise<unknown> {
+  const target = resolveTargetSession(payload.sessionId, payload.callerSessionId)
+  if (payload.callerSessionId && target.id === payload.callerSessionId) {
+    throw new Error('Refusing to send a message to your own session')
+  }
+  if (!target.alive) throw new Error(`Session "${target.name}" has ended`)
+  const mode = sessionMode(target)
+  if (mode === 'terminal') {
+    throw new Error(
+      'Refusing to send to a plain terminal — text typed there would run as a shell command. Target an agent tab (claude/antigravity/codex).'
+    )
+  }
+  if (mode === 'claude-agents') {
+    throw new Error('Refusing to send to a `claude agents` tab — it is a menu UI, not a chat input')
+  }
+  const sender = payload.callerSessionId
+    ? useSessionStore.getState().sessions.find((s) => s.id === payload.callerSessionId)
+    : undefined
+  // Provenance header: the receiving agent must be able to tell this text came
+  // from a sibling tab, not from the user — and know how to answer it.
+  const header = sender
+    ? `[Message from Clave tab "${sender.name}" — reply with clave_send_to_session sessionId="${sender.id}"]`
+    : '[Message from a Clave agent]'
+  const text = `${header}\n${payload.message}`
+  // Deliver as one bracketed paste so embedded newlines don't submit early,
+  // then submit. The TUI queues input that arrives mid-turn, so a busy agent
+  // sees the message as its next user turn.
+  window.electronAPI.writeSession(target.id, `\x1b[200~${text}\x1b[201~`)
+  await new Promise((r) => setTimeout(r, 150))
+  window.electronAPI.writeSession(target.id, '\r')
+  return {
+    delivered: true,
+    sessionId: target.id,
+    name: target.name,
+    mode,
+    agentState: target.agentState ?? null
+  }
+}
+
+function handleReadSession(payload: {
+  sessionId: string
+  lines?: number
+  callerSessionId?: string
+}): unknown {
+  const target = resolveTargetSession(payload.sessionId, payload.callerSessionId)
+  const terminal = getRegisteredTerminal(target.id)
+  if (!terminal) {
+    throw new Error(`Session "${target.name}" has no terminal buffer (tab not mounted yet)`)
+  }
+  const requested = Math.min(Math.max(payload.lines ?? 100, 1), 500)
+  const buffer = terminal.buffer.active
+  const lines: string[] = []
+  for (let i = Math.max(0, buffer.length - requested); i < buffer.length; i++) {
+    lines.push(buffer.getLine(i)?.translateToString(true) ?? '')
+  }
+  // The TUI viewport is mostly blank padding — drop trailing empty rows.
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop()
+  return {
+    sessionId: target.id,
+    name: target.name,
+    mode: sessionMode(target),
+    alive: target.alive,
+    agentState: target.agentState ?? null,
+    lines: lines.length,
+    text: lines.join('\n')
+  }
+}
+
 function handleFocus(payload: { sessionId: string }): unknown {
   const state = useSessionStore.getState()
   if (!state.sessions.some((s) => s.id === payload.sessionId)) {
@@ -471,6 +571,10 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleRename(payload as Parameters<typeof handleRename>[0])
     case 'focus':
       return handleFocus(payload as Parameters<typeof handleFocus>[0])
+    case 'sendToSession':
+      return handleSendToSession(payload as Parameters<typeof handleSendToSession>[0])
+    case 'readSession':
+      return handleReadSession(payload as Parameters<typeof handleReadSession>[0])
     case 'openFile':
       return handleOpenFile(payload as Parameters<typeof handleOpenFile>[0])
     case 'notify':

@@ -133,6 +133,11 @@ export interface Session {
    *  restore keep it. Undefined = the CLI's default; /model inside the session
    *  can diverge from it afterwards without Clave knowing. */
   model?: string
+  /** Session id of the tab whose agent opened this one via clave_open_session,
+   *  so the child can target "parent" in clave_send_to_session /
+   *  clave_read_session. Session-lifetime only: not persisted to the tmux
+   *  sidecar, so the link is gone after an app restart. */
+  spawnedBy?: string
   claudeSessionId: string | null
   /** Claude account/profile this session runs under (issue #22). Undefined =
    *  the Default profile. `claudeProfileLabel` drives the session-header badge. */

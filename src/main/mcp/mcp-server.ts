@@ -17,7 +17,7 @@ import {
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -250,6 +250,48 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       inputSchema: { sessionId: z.string().describe('Id of the session to focus') }
     },
     (args) => runCommand('focus', args)
+  )
+
+  server.registerTool(
+    'clave_send_to_session',
+    {
+      description:
+        'Send a message to another agent tab (claude, antigravity, or codex): the text is typed into that tab\'s input under a provenance header naming your tab, then submitted. If the target agent is mid-task, the message queues as its next turn. Use it to report results back to the tab that opened yours (target "parent"), or to coordinate with a sibling. Refused for plain terminals (typed text would run as a shell command) and for your own tab.',
+      inputSchema: {
+        sessionId: z
+          .string()
+          .describe(
+            'Target: a session id, an exact tab name, or "parent" (the tab whose agent opened yours via clave_open_session)'
+          ),
+        message: z
+          .string()
+          .min(1)
+          .max(8000)
+          .describe('The message, delivered verbatim under the provenance header')
+      }
+    },
+    (args) => runCommand('sendToSession', { ...args, callerSessionId })
+  )
+
+  server.registerTool(
+    'clave_read_session',
+    {
+      description:
+        "Read the last N rendered lines of a tab's terminal (screen + scrollback) without interrupting it — check what a delegated agent is doing, read a dev server's logs, or inspect a sibling's state. Works for any tab, plain terminals included. Target by session id, exact tab name, or \"parent\".",
+      inputSchema: {
+        sessionId: z
+          .string()
+          .describe('Target: a session id, an exact tab name, or "parent"'),
+        lines: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .default(100)
+          .describe('How many trailing lines to return (default 100)')
+      }
+    },
+    (args) => runCommand('readSession', { ...args, callerSessionId })
   )
 
   server.registerTool(
