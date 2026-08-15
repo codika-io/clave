@@ -1,7 +1,9 @@
-import { useSessionStore, fileTabDedupKey } from '../store/session-store'
+import { useSessionStore, fileTabDedupKey, inActiveWorkspace } from '../store/session-store'
 import type { GroupTerminalConfig, Session, SessionGroup } from '../store/session-store'
 import { usePinnedStore, getPinnedState, togglePinnedGroup } from '../store/pinned-store'
 import type { PinnedGroupSession } from '../store/session-types'
+import { useWorkspaceStore, type Workspace } from '../store/workspace-store'
+import { setActiveWorkspace } from './workspace-actions'
 import { getRegisteredTerminal } from './terminal-registry'
 
 /**
@@ -30,7 +32,47 @@ function groupOfSession(groups: SessionGroup[], sessionId: string): SessionGroup
   return groups.find((g) => g.sessionIds.includes(sessionId))
 }
 
-/** Resolve a tool's group reference: a group id, an exact group name, or "mine". */
+/** Resolve a workspace reference: id, exact name, or case-insensitive name. */
+function resolveWorkspace(ref: string): Workspace {
+  const { workspaces } = useWorkspaceStore.getState()
+  if (workspaces.length === 0) {
+    throw new Error('No workspaces configured — the workspace parameter cannot be used')
+  }
+  const ws =
+    workspaces.find((w) => w.id === ref) ??
+    workspaces.find((w) => w.name === ref) ??
+    workspaces.find((w) => w.name.toLowerCase() === ref.toLowerCase())
+  if (!ws) {
+    throw new Error(
+      `No workspace "${ref}". Available: ${workspaces.map((w) => w.name).join(', ')}`
+    )
+  }
+  return ws
+}
+
+function workspaceNameOf(id: string | null | undefined): string | null {
+  if (!id) return null
+  return useWorkspaceStore.getState().workspaces.find((w) => w.id === id)?.name ?? null
+}
+
+/** Workspace to stamp on something an agent creates: an explicit `workspace`
+ *  param wins, else the CALLER tab's workspace (agents stay in their own
+ *  workspace by default), else the active one. Undefined in no-workspace mode. */
+function workspaceForSpawn(
+  explicit: string | undefined,
+  callerSessionId: string | undefined
+): string | undefined {
+  if (explicit) return resolveWorkspace(explicit).id
+  const caller = callerSessionId
+    ? useSessionStore.getState().sessions.find((s) => s.id === callerSessionId)
+    : undefined
+  return caller?.workspaceId ?? useWorkspaceStore.getState().activeWorkspaceId ?? undefined
+}
+
+/** Resolve a tool's group reference: a group id, a group name, or "mine".
+ *  Name resolution is workspace-scoped — caller's workspace first, then the
+ *  active one, then a unique global match; a name that matches in several
+ *  workspaces errors with qualified candidates instead of picking one. */
 function resolveGroup(
   groups: SessionGroup[],
   ref: string,
@@ -44,15 +86,46 @@ function resolveGroup(
     if (!group) throw new Error('The calling session is not in any group')
     return group
   }
-  const group = groups.find((g) => g.id === ref) ?? groups.find((g) => g.name === ref)
-  if (!group) throw new Error(`No group with id or name "${ref}"`)
-  return group
+  const byId = groups.find((g) => g.id === ref)
+  if (byId) return byId
+
+  const named = groups.filter((g) => g.name === ref)
+  if (named.length === 0) throw new Error(`No group with id or name "${ref}"`)
+  if (named.length === 1) return named[0]
+
+  const callerWs = callerSessionId
+    ? useSessionStore.getState().sessions.find((s) => s.id === callerSessionId)?.workspaceId
+    : undefined
+  const inCallerWs = callerWs ? named.filter((g) => g.workspaceId === callerWs) : []
+  if (inCallerWs.length === 1) return inCallerWs[0]
+  const activeWs = useWorkspaceStore.getState().activeWorkspaceId
+  const inActiveWs = activeWs ? named.filter((g) => g.workspaceId === activeWs) : []
+  if (inActiveWs.length === 1) return inActiveWs[0]
+
+  const qualified = named
+    .map((g) => `${workspaceNameOf(g.workspaceId) ?? '?'}/${g.name} (${g.id})`)
+    .join(', ')
+  throw new Error(`Group name "${ref}" is ambiguous across workspaces — use an id. Candidates: ${qualified}`)
 }
 
-function handleList(payload: { callerSessionId?: string }): unknown {
+function handleList(payload: { callerSessionId?: string; workspace?: string }): unknown {
   const state = useSessionStore.getState()
+  const wsState = useWorkspaceStore.getState()
+
+  // Optional scoping: 'all' (default — agents may orchestrate across
+  // workspaces), 'active', or a workspace id/name.
+  const scope = payload.workspace ?? 'all'
+  const scopeId: string | null | 'all' =
+    scope === 'all'
+      ? 'all'
+      : scope === 'active'
+        ? wsState.activeWorkspaceId
+        : resolveWorkspace(scope).id
+  const inScope = (x: { workspaceId?: string | null }): boolean =>
+    scopeId === 'all' || inActiveWorkspace(x, scopeId)
+
   const sessions = state.sessions
-    .filter((s) => s.sessionType === 'local')
+    .filter((s) => s.sessionType === 'local' && inScope(s))
     .map((s) => ({
       id: s.id,
       name: s.name,
@@ -60,14 +133,18 @@ function handleList(payload: { callerSessionId?: string }): unknown {
       mode: sessionMode(s),
       alive: s.alive,
       agentState: s.agentState ?? null,
-      groupId: groupOfSession(state.groups, s.id)?.id ?? null
+      groupId: groupOfSession(state.groups, s.id)?.id ?? null,
+      workspaceId: s.workspaceId ?? null,
+      workspaceName: workspaceNameOf(s.workspaceId)
     }))
-  const groups = state.groups.map((g) => ({
+  const groups = state.groups.filter(inScope).map((g) => ({
     id: g.id,
     name: g.name,
     cwd: g.cwd,
     color: g.color ?? null,
     sessionIds: g.sessionIds,
+    workspaceId: g.workspaceId ?? null,
+    workspaceName: workspaceNameOf(g.workspaceId),
     terminals: g.terminals.map((t) => ({
       id: t.id,
       command: t.command,
@@ -87,19 +164,31 @@ function handleList(payload: { callerSessionId?: string }): unknown {
   }
   // Pinned groups = launchable templates from .clave files (auto-discovered or
   // imported). clave_launch_group spawns them by id or name.
-  const pinnedGroups = usePinnedStore.getState().pinnedGroups.map((pg) => ({
-    id: pg.id,
-    name: pg.name,
-    cwd: pg.cwd,
-    category: pg.category ?? null,
-    sourceFile: pg.filePath ?? pg.discoveredBy ?? null,
-    state: getPinnedState(pg),
-    activeGroupId: pg.activeGroupId,
-    sessions: pg.sessions.map((s) => ({ name: s.name, cwd: s.cwd, mode: pinnedSessionMode(s) })),
-    terminals: pg.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode }))
-  }))
+  const pinnedGroups = usePinnedStore
+    .getState()
+    .pinnedGroups.filter(inScope)
+    .map((pg) => ({
+      id: pg.id,
+      name: pg.name,
+      cwd: pg.cwd,
+      category: pg.category ?? null,
+      sourceFile: pg.filePath ?? pg.discoveredBy ?? null,
+      state: getPinnedState(pg),
+      activeGroupId: pg.activeGroupId,
+      workspaceId: pg.workspaceId ?? null,
+      workspaceName: workspaceNameOf(pg.workspaceId),
+      sessions: pg.sessions.map((s) => ({ name: s.name, cwd: s.cwd, mode: pinnedSessionMode(s) })),
+      terminals: pg.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode }))
+    }))
   const callerSessionId = payload.callerSessionId ?? null
   return {
+    workspaces: wsState.workspaces.map((w) => ({
+      id: w.id,
+      name: w.name,
+      rootDir: w.rootDir,
+      active: w.id === wsState.activeWorkspaceId
+    })),
+    activeWorkspaceId: wsState.activeWorkspaceId,
     groups,
     sessions,
     pinnedGroups,
@@ -111,14 +200,52 @@ function handleList(payload: { callerSessionId?: string }): unknown {
   }
 }
 
-async function handleLaunchGroup(payload: { group: string }): Promise<unknown> {
+async function handleLaunchGroup(payload: {
+  group: string
+  workspace?: string
+  callerSessionId?: string
+}): Promise<unknown> {
   const pinnedGroups = usePinnedStore.getState().pinnedGroups
-  const pg =
-    pinnedGroups.find((p) => p.id === payload.group) ??
-    pinnedGroups.find((p) => p.name === payload.group) ??
-    pinnedGroups.find((p) => p.name.toLowerCase() === payload.group.toLowerCase())
+  // Optional explicit workspace narrows the search; otherwise name resolution
+  // prefers the caller's workspace, then the active one, then a unique global
+  // match — "Syndicable" existing in two workspaces must not silently pick one.
+  const pool = payload.workspace
+    ? (() => {
+        const ws = resolveWorkspace(payload.workspace)
+        return pinnedGroups.filter((p) => p.workspaceId === ws.id)
+      })()
+    : pinnedGroups
+  const byId = pool.find((p) => p.id === payload.group)
+  const named = byId
+    ? [byId]
+    : (() => {
+        const exact = pool.filter((p) => p.name === payload.group)
+        if (exact.length > 0) return exact
+        return pool.filter((p) => p.name.toLowerCase() === payload.group.toLowerCase())
+      })()
+  let pg = named.length === 1 ? named[0] : undefined
+  if (!pg && named.length > 1) {
+    const callerWs = payload.callerSessionId
+      ? useSessionStore.getState().sessions.find((s) => s.id === payload.callerSessionId)?.workspaceId
+      : undefined
+    const inCallerWs = callerWs ? named.filter((p) => p.workspaceId === callerWs) : []
+    if (inCallerWs.length === 1) pg = inCallerWs[0]
+    if (!pg) {
+      const activeWs = useWorkspaceStore.getState().activeWorkspaceId
+      const inActiveWs = activeWs ? named.filter((p) => p.workspaceId === activeWs) : []
+      if (inActiveWs.length === 1) pg = inActiveWs[0]
+    }
+    if (!pg) {
+      const qualified = named
+        .map((p) => `${workspaceNameOf(p.workspaceId) ?? '?'}/${p.name} (${p.id})`)
+        .join(', ')
+      throw new Error(
+        `Pinned group "${payload.group}" is ambiguous across workspaces — pass the workspace parameter or an id. Candidates: ${qualified}`
+      )
+    }
+  }
   if (!pg) {
-    const available = pinnedGroups.map((p) => p.name).join(', ') || '(none)'
+    const available = pool.map((p) => p.name).join(', ') || '(none)'
     throw new Error(`No pinned group "${payload.group}". Available: ${available}`)
   }
 
@@ -153,12 +280,32 @@ async function handleLaunchGroup(payload: { group: string }): Promise<unknown> {
   }
 }
 
-function handleCreateGroup(payload: { name: string }): unknown {
+function handleCreateGroup(payload: {
+  name: string
+  workspace?: string
+  callerSessionId?: string
+}): unknown {
   const store = useSessionStore.getState()
-  store.createGroup([], payload.name)
+  store.createGroup([], payload.name, workspaceForSpawn(payload.workspace, payload.callerSessionId))
   const created = useSessionStore.getState().groups.at(-1)
   if (!created) throw new Error('Group creation failed')
-  return { groupId: created.id, name: created.name }
+  return { groupId: created.id, name: created.name, workspaceId: created.workspaceId ?? null }
+}
+
+/** A session moved into a group joins that group's workspace — a group must
+ *  never hold members it can't show. No-op when they already agree. */
+function alignSessionToGroupWorkspace(sessionId: string, group: SessionGroup): void {
+  const state = useSessionStore.getState()
+  const session = state.sessions.find((s) => s.id === sessionId)
+  if (!session || (session.workspaceId ?? null) === (group.workspaceId ?? null)) return
+  useSessionStore.setState({
+    sessions: state.sessions.map((s) =>
+      s.id === sessionId ? { ...s, workspaceId: group.workspaceId } : s
+    )
+  })
+  if (session.sessionType === 'local') {
+    void window.electronAPI?.setSessionWorkspace(sessionId, group.workspaceId ?? null)
+  }
 }
 
 export async function openSessionProgrammatically(payload: {
@@ -171,6 +318,7 @@ export async function openSessionProgrammatically(payload: {
   command?: string
   autoRun?: boolean
   prompt?: string
+  workspace?: string
   callerSessionId?: string
 }): Promise<unknown> {
   const state = useSessionStore.getState()
@@ -178,6 +326,12 @@ export async function openSessionProgrammatically(payload: {
   const targetGroup = payload.groupId
     ? resolveGroup(state.groups, payload.groupId, payload.callerSessionId)
     : null
+
+  // Workspace: explicit param > target group's > caller's > active. A session
+  // placed into a group must land in that group's workspace either way.
+  const workspaceId = payload.workspace
+    ? resolveWorkspace(payload.workspace).id
+    : (targetGroup?.workspaceId ?? workspaceForSpawn(undefined, payload.callerSessionId))
 
   const mode = payload.mode ?? 'claude'
   const claudeMode = mode === 'claude'
@@ -196,7 +350,8 @@ export async function openSessionProgrammatically(payload: {
     model,
     initialCommand: mode === 'terminal' ? payload.command || undefined : undefined,
     autoExecute: mode === 'terminal' && !!payload.command && payload.autoRun !== false,
-    initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined
+    initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined,
+    workspaceId
   })
 
   state.addSession({
@@ -225,7 +380,8 @@ export async function openSessionProgrammatically(payload: {
     serverCommand: null,
     hasUnseenActivity: false,
     userRenamed: false,
-    planFilePath: null
+    planFilePath: null,
+    workspaceId
   })
   // renameSession sets userRenamed, protecting the name from auto-title overwrite.
   if (payload.name) useSessionStore.getState().renameSession(info.id, payload.name)
@@ -261,6 +417,7 @@ function handleMoveSession(payload: {
   } else {
     const group = resolveGroup(state.groups, payload.groupId, payload.callerSessionId)
     state.moveItems([payload.sessionId], group.id, 'inside')
+    alignSessionToGroupWorkspace(payload.sessionId, group)
   }
   const groups = useSessionStore.getState().groups
   return {
@@ -310,7 +467,9 @@ async function handleAddGroupTerminal(payload: {
   const info = await window.electronAPI.spawnSession(cwd, {
     claudeMode: false,
     initialCommand: payload.command || undefined,
-    autoExecute: !!payload.command && commandMode === 'auto'
+    autoExecute: !!payload.command && commandMode === 'auto',
+    // Group terminals live in their group's workspace, not the active one.
+    workspaceId: group.workspaceId ?? undefined
   })
   const current = useSessionStore.getState()
   useSessionStore.setState({
@@ -335,11 +494,15 @@ async function handleAddGroupTerminal(payload: {
         serverCommand: null,
         hasUnseenActivity: false,
         userRenamed: false,
-        planFilePath: null
+        planFilePath: null,
+        workspaceId: group.workspaceId
       }
     ],
-    selectedSessionIds: [info.id],
-    focusedSessionId: info.id
+    // Focus only when the group's workspace is the visible one — a terminal
+    // added to a hidden workspace's group must not steal the user's view.
+    ...(inActiveWorkspace({ workspaceId: group.workspaceId }, useWorkspaceStore.getState().activeWorkspaceId)
+      ? { selectedSessionIds: [info.id], focusedSessionId: info.id }
+      : {})
   })
   current.setGroupTerminalSessionId(group.id, terminalId, info.id)
   return { terminalId, groupId: group.id, sessionId: info.id }
@@ -628,11 +791,24 @@ function handleReadSession(payload: {
 
 function handleFocus(payload: { sessionId: string }): unknown {
   const state = useSessionStore.getState()
-  if (!state.sessions.some((s) => s.id === payload.sessionId)) {
+  const target = state.sessions.find((s) => s.id === payload.sessionId)
+  if (!target) {
     throw new Error(`No session with id "${payload.sessionId}"`)
   }
-  state.selectSession(payload.sessionId, false)
-  return { focused: payload.sessionId }
+  // An explicit focus request must be honored VISIBLY: focusing a session in a
+  // hidden workspace switches the whole view to that workspace first.
+  const activeId = useWorkspaceStore.getState().activeWorkspaceId
+  if (target.workspaceId && activeId && target.workspaceId !== activeId) {
+    void setActiveWorkspace(target.workspaceId)
+  }
+  useSessionStore.getState().selectSession(payload.sessionId, false)
+  return { focused: payload.sessionId, workspaceId: target.workspaceId ?? null }
+}
+
+function handleSwitchWorkspace(payload: { workspace: string }): unknown {
+  const ws = resolveWorkspace(payload.workspace)
+  void setActiveWorkspace(ws.id)
+  return { activeWorkspaceId: ws.id, name: ws.name }
 }
 
 async function execute(command: string, payload: unknown): Promise<unknown> {
@@ -657,6 +833,8 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleRename(payload as Parameters<typeof handleRename>[0])
     case 'focus':
       return handleFocus(payload as Parameters<typeof handleFocus>[0])
+    case 'switchWorkspace':
+      return handleSwitchWorkspace(payload as Parameters<typeof handleSwitchWorkspace>[0])
     case 'sendToSession':
       return handleSendToSession(payload as Parameters<typeof handleSendToSession>[0])
     case 'readSession':

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { PinnedGroup, PinnedGroupSession, PinnedGroupTerminal, GroupTerminalColor } from './session-types'
 import { useSessionStore } from './session-store'
+import { getActiveWorkspaceId } from './workspace-store'
 
 export type { PinnedGroup }
 
@@ -26,7 +27,7 @@ export function substituteTokens(prompt: string, workspaceRoot: string | null, p
     .replaceAll('@root_path', root)
 }
 
-interface PinnedGroupBlueprint {
+export interface PinnedGroupBlueprint {
   id: string
   name: string
   cwd: string | null
@@ -42,35 +43,34 @@ interface PinnedGroupBlueprint {
   logo?: string | null
   category?: string | null
   discoveredBy?: string | null
+  workspaceId?: string | null
 }
 
-function loadPersistedGroups(): PinnedGroup[] {
-  try {
-    const raw = localStorage.getItem('clave-pinned-groups')
-    if (!raw) return []
-    const blueprints: PinnedGroupBlueprint[] = JSON.parse(raw)
-    return blueprints.map((bp) => ({
-      ...bp,
-      // Back-compat: blueprints persisted before the Antigravity switch key their
-      // sessions by the retired `geminiMode`. Map it forward so the pin still
-      // launches the right provider (now agy) after an upgrade.
-      sessions: bp.sessions.map((s) => ({
-        ...s,
-        antigravityMode: s.antigravityMode ?? (s as { geminiMode?: boolean }).geminiMode ?? false
-      })),
-      activeGroupId: null,
-      visible: false
-    }))
-  } catch {
-    return []
-  }
-}
-
-function persistGroups(groups: PinnedGroup[]): void {
-  const blueprints: PinnedGroupBlueprint[] = groups.map(({ id, name, cwd, color, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy }) => ({
-    id, name, cwd, color, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy
+/** Blueprint snapshot of the current pins — what gets persisted into
+ *  workspace-state.json (runtime activeGroupId/visible deliberately excluded,
+ *  exactly like the retired localStorage serialization). */
+export function serializePinnedGroups(groups: PinnedGroup[]): PinnedGroupBlueprint[] {
+  return groups.map(({ id, name, cwd, color, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy, workspaceId }) => ({
+    id, name, cwd, color, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy, workspaceId
   }))
-  localStorage.setItem('clave-pinned-groups', JSON.stringify(blueprints))
+}
+
+/** Hydrate pins from persisted blueprints (workspace:load at boot). Replaces
+ *  the retired localStorage read; runtime state starts reset, as always. */
+export function hydratePinnedGroups(blueprints: PinnedGroupBlueprint[]): void {
+  const groups: PinnedGroup[] = blueprints.map((bp) => ({
+    ...bp,
+    // Back-compat: blueprints persisted before the Antigravity switch key their
+    // sessions by the retired `geminiMode`. Map it forward so the pin still
+    // launches the right provider (now agy) after an upgrade.
+    sessions: bp.sessions.map((s) => ({
+      ...s,
+      antigravityMode: s.antigravityMode ?? (s as { geminiMode?: boolean }).geminiMode ?? false
+    })),
+    activeGroupId: null,
+    visible: false
+  }))
+  usePinnedStore.setState({ pinnedGroups: groups })
 }
 
 interface PinnedStoreState {
@@ -86,14 +86,12 @@ interface PinnedStoreState {
 }
 
 export const usePinnedStore = create<PinnedStoreState>((set) => ({
-  pinnedGroups: loadPersistedGroups(),
+  pinnedGroups: [],
   pinnedCollapsed: localStorage.getItem('clave-pinned-collapsed') === 'true',
 
   addPinnedGroup: (pg) =>
     set((s) => {
-      const next = [...s.pinnedGroups, pg]
-      persistGroups(next)
-      return { pinnedGroups: next }
+      return { pinnedGroups: [...s.pinnedGroups, pg] }
     }),
 
   removePinnedGroup: (id) =>
@@ -104,14 +102,12 @@ export const usePinnedStore = create<PinnedStoreState>((set) => ({
       if (removed?.filePath && !next.some((pg) => pg.filePath === removed.filePath)) {
         window.electronAPI?.unwatchClaveFile(removed.filePath).catch(() => {})
       }
-      persistGroups(next)
       return { pinnedGroups: next }
     }),
 
   renamePinnedGroup: (id, name) =>
     set((s) => {
       const next = s.pinnedGroups.map((pg) => (pg.id === id ? { ...pg, name } : pg))
-      persistGroups(next)
       const renamed = next.find((pg) => pg.id === id)
       if (renamed) syncToClaveFile(renamed)
       return { pinnedGroups: next }
@@ -143,7 +139,6 @@ export const usePinnedStore = create<PinnedStoreState>((set) => ({
       const next = s.pinnedGroups.map((pg) =>
         pg.id === pinnedId ? { ...pg, ...updates } : pg
       )
-      persistGroups(next)
       return { pinnedGroups: next }
     })
 }))
@@ -203,7 +198,8 @@ function createPinnedFromGroup(
   groupIndex?: number,
   rootDir?: string | null,
   discoveredBy?: string | null,
-  workspaceRoot?: string | null
+  workspaceRoot?: string | null,
+  workspaceId?: string | null
 ): PinnedGroup {
   return {
     id: crypto.randomUUID(),
@@ -221,6 +217,7 @@ function createPinnedFromGroup(
     logo: g.logo,
     category: g.category ?? null,
     discoveredBy: discoveredBy ?? null,
+    workspaceId: workspaceId ?? null,
     activeGroupId: null,
     visible: false
   }
@@ -241,10 +238,11 @@ function groupDataToPinnedTerminals(terminals: { command: string; commandMode: '
 
 /** Import a .clave file as pinned group(s) and optionally auto-launch.
  *  Returns info about the first pin, and whether it already existed. */
-export async function importClaveFile(filePath: string, options?: { autoLaunch?: boolean; rootDir?: string; discoveredBy?: string; workspaceRoot?: string }): Promise<{ pinnedId: string; alreadyExists: boolean } | null> {
+export async function importClaveFile(filePath: string, options?: { autoLaunch?: boolean; rootDir?: string; discoveredBy?: string; workspaceRoot?: string; workspaceId?: string | null }): Promise<{ pinnedId: string; alreadyExists: boolean } | null> {
   const rootDir = options?.rootDir
   const discoveredBy = options?.discoveredBy
   const workspaceRoot = options?.workspaceRoot
+  const workspaceId = options?.workspaceId
   const result = await window.electronAPI?.readClaveFile(filePath, rootDir)
   if (!result) return null
 
@@ -276,7 +274,9 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
           // Re-stamp resolution context on boot re-import (repairs pins persisted
           // before these fields existed, so sync-back re-relativizes correctly).
           ...(rootDir !== undefined ? { rootDir } : {}),
-          ...(workspaceRoot !== undefined ? { workspaceRoot } : {})
+          ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+          ...(discoveredBy !== undefined ? { discoveredBy } : {}),
+          ...(workspaceId !== undefined ? { workspaceId } : {})
         })
         if (autoLaunch) {
           const state = getPinnedState(existing)
@@ -289,7 +289,7 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
     // Add any new groups that weren't in existing pins
     for (let i = existingPins.length; i < groups.length; i++) {
       const g = groups[i]
-      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir, discoveredBy, workspaceRoot)
+      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir, discoveredBy, workspaceRoot, workspaceId)
       usePinnedStore.getState().addPinnedGroup(pinned)
       if (autoLaunch) await togglePinnedGroup(pinned.id)
     }
@@ -302,13 +302,73 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
   let firstId: string | null = null
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i]
-    const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir, discoveredBy, workspaceRoot)
+    const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, rootDir, discoveredBy, workspaceRoot, workspaceId)
     usePinnedStore.getState().addPinnedGroup(pinned)
     if (!firstId) firstId = pinned.id
     if (autoLaunch) await togglePinnedGroup(pinned.id)
   }
 
   return firstId ? { pinnedId: firstId, alreadyExists: false } : null
+}
+
+/** Sync one workspace's pins from its profile file + auto-discovery. Replaces
+ *  the retired activation import/remove dance: pins are upserted stamped with
+ *  the workspace id, and pins of this workspace whose backing file vanished
+ *  from the profile/discovery set are pruned. Ad-hoc pins (no filePath) are
+ *  never touched. Called on boot (active workspace), activation, profile
+ *  change, and workspace registration — never on plain view switches away. */
+export async function refreshWorkspacePins(ws: { id: string; rootDir: string; profileFile: string | null }): Promise<void> {
+  const keep = new Set<string>()
+
+  if (ws.profileFile) {
+    const exists = await window.electronAPI?.claveFileExists(ws.profileFile)
+    if (exists) {
+      keep.add(ws.profileFile)
+      await importClaveFile(ws.profileFile, {
+        autoLaunch: false,
+        rootDir: ws.rootDir,
+        workspaceRoot: ws.rootDir,
+        workspaceId: ws.id
+      })
+
+      // Auto-discover repo .clave files when the profile enables it. The
+      // discovery workspaceId hint prefers a same-named profile inside each
+      // repo (romain.clave over default.clave for the "romain" profile).
+      const adConfig = await window.electronAPI?.readAutoDiscoverConfig(ws.profileFile)
+      if (adConfig?.enabled) {
+        const profileName = ws.profileFile.split(/[\\/]/).pop()?.replace('.clave', '')
+        const discovered = await window.electronAPI?.discoverClaveFilesRecursive(ws.rootDir, {
+          ...adConfig,
+          workspaceId: profileName && profileName !== 'default' ? profileName : undefined
+        })
+        for (const file of discovered ?? []) {
+          if (file.path === ws.profileFile) continue
+          keep.add(file.path)
+          await importClaveFile(file.path, {
+            autoLaunch: false,
+            rootDir: file.rootDir,
+            discoveredBy: ws.profileFile,
+            workspaceRoot: ws.rootDir,
+            workspaceId: ws.id
+          })
+        }
+      }
+    }
+    // Profile file missing → keep persisted pins as-is (stale but functional);
+    // Settings surfaces the warning. Pruning here would punish a transient
+    // unmount (network volume, git checkout) by wiping the workspace.
+    else return
+  }
+
+  // Prune file-backed pins of this workspace whose file left the set (profile
+  // switched, repo deleted, group removed from the file). null profile prunes
+  // everything file-backed — a bare workspace has no file-defined pins.
+  const stale = usePinnedStore
+    .getState()
+    .pinnedGroups.filter((pg) => pg.workspaceId === ws.id && pg.filePath && !keep.has(pg.filePath))
+  for (const pg of stale) {
+    usePinnedStore.getState().removePinnedGroup(pg.id)
+  }
 }
 
 /** Get the default file name for a pinned group export */
@@ -577,7 +637,10 @@ async function spawnPinnedGroup(
         codexMode: session.codexMode,
         claudeAgentsMode: session.claudeAgentsMode,
         dangerousMode: session.dangerousMode,
-        initialPrompt
+        initialPrompt,
+        // The pin's workspace wins over the active one — an MCP launch of a
+        // hidden workspace's pin must not leak its sessions into the active view.
+        workspaceId: pg.workspaceId ?? undefined
       })
 
       useSessionStore.getState().addSession({
@@ -598,7 +661,8 @@ async function spawnPinnedGroup(
         initialPrompt,
         sessionType: 'local',
         detectedUrl: null,
-        hasUnseenActivity: false
+        hasUnseenActivity: false,
+        workspaceId: pg.workspaceId ?? undefined
       })
 
       if (session.name !== sessionInfo.folderName) {
@@ -616,8 +680,8 @@ async function spawnPinnedGroup(
     return
   }
 
-  // Create group
-  useSessionStore.getState().createGroup(spawnedIds, pg.name)
+  // Create group — stamped with the pin's workspace, not the active one.
+  useSessionStore.getState().createGroup(spawnedIds, pg.name, pg.workspaceId ?? undefined)
 
   const sessionState = useSessionStore.getState()
   const newGroup = sessionState.groups[sessionState.groups.length - 1]
@@ -655,8 +719,11 @@ async function spawnPinnedGroup(
     usePinnedStore.getState().setVisible(pinnedId, true)
   }
 
-  // Focus the first session
-  if (spawnedIds.length > 0) {
+  // Focus the first session — unless the pin belongs to a hidden workspace
+  // (MCP launch): the spawned group must not steal the user's visible focus.
+  const activeWorkspaceId = getActiveWorkspaceId()
+  const pinVisible = pg.workspaceId == null || activeWorkspaceId == null || pg.workspaceId === activeWorkspaceId
+  if (spawnedIds.length > 0 && pinVisible) {
     useSessionStore.getState().setFocusedSession(spawnedIds[0])
     useSessionStore.getState().selectSession(spawnedIds[0], false)
   }
@@ -749,7 +816,6 @@ export function resyncPinnedGroup(groupId: string): void {
           }
         : p
     )
-    persistGroups(next)
     // Sync to .clave file if backed
     const updated = next.find((p) => p.id === pg.id)
     if (updated) syncToClaveFile(updated)
@@ -818,7 +884,6 @@ useSessionStore.subscribe((state, prevState) => {
 
   if (changed) {
     usePinnedStore.setState({ pinnedGroups: updated })
-    persistGroups(updated)
     // Sync changed pins to .clave files
     for (const pg of updated) {
       if (pg.filePath) syncToClaveFile(pg)

@@ -3,6 +3,7 @@ import type {
   MutationResult,
   MutationScope
 } from '../shared/extensions-types'
+import type { WorkspaceStateFile } from '../shared/workspace-types'
 
 export interface SecretRequestView {
   id: string
@@ -113,8 +114,9 @@ export interface SessionInfo {
   claudeSessionId: string | null
 }
 
-export interface AdoptableTmuxSession {
-  tmuxName: string
+export interface SessionRecord {
+  /** Backing tmux session when there is one; absent = plain record (relaunch-only). */
+  tmuxName?: string
   id: string
   claudeSessionId?: string
   cwd: string
@@ -133,6 +135,9 @@ export interface AdoptableTmuxSession {
   configDir?: string
   claudeProfileId?: string
   claudeProfileLabel?: string
+  /** Workspace this session belongs to (stamped at spawn, inferred from cwd
+   *  for legacy records). Absent → unstamped; the renderer assigns active. */
+  workspaceId?: string
   /** True → reattach to a still-running tmux session. False → the tmux server
    *  died (reboot) but the sidecar survived; re-spawn fresh (Claude resumes). */
   live?: boolean
@@ -279,6 +284,7 @@ export interface ElectronAPI {
       configDir?: string
       claudeProfileId?: string
       claudeProfileLabel?: string
+      workspaceId?: string
     }
   ) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
@@ -291,9 +297,10 @@ export interface ElectronAPI {
     displayName: string | null,
     userRenamed: boolean
   ) => Promise<void>
+  setSessionWorkspace: (id: string, workspaceId: string | null) => Promise<void>
   tmuxAvailable: () => Promise<boolean>
-  tmuxListAdoptable: () => Promise<AdoptableTmuxSession[]>
-  tmuxDiscard: (tmuxName: string) => Promise<void>
+  listSessionRecords: () => Promise<SessionRecord[]>
+  discardSessionRecord: (key: string) => Promise<void>
   onSessionData: (id: string, callback: (data: string) => void) => () => void
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void
@@ -368,6 +375,8 @@ export interface ElectronAPI {
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => () => void
   sidebarLayoutLoad: () => Promise<{ groups: unknown[]; displayOrder: string[] }>
   sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) => Promise<void>
+  workspaceLoad: () => Promise<WorkspaceStateFile>
+  workspaceSave: (data: WorkspaceStateFile) => Promise<void>
   getUsageLimits: () => Promise<UsageLimits | UsageError>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>

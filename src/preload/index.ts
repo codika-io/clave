@@ -33,6 +33,7 @@ const electronAPI = {
       configDir?: string
       claudeProfileId?: string
       claudeProfileLabel?: string
+      workspaceId?: string
     }
   ) => ipcRenderer.invoke('pty:spawn', cwd, options),
 
@@ -51,11 +52,14 @@ const electronAPI = {
   setSessionDisplayName: (id: string, displayName: string | null, userRenamed: boolean) =>
     ipcRenderer.invoke('session:set-display-name', id, displayName, userRenamed),
 
+  setSessionWorkspace: (id: string, workspaceId: string | null) =>
+    ipcRenderer.invoke('session:set-workspace', id, workspaceId),
+
   tmuxAvailable: () => ipcRenderer.invoke('tmux:available'),
 
-  tmuxListAdoptable: () => ipcRenderer.invoke('tmux:list-adoptable'),
+  listSessionRecords: () => ipcRenderer.invoke('records:list-adoptable'),
 
-  tmuxDiscard: (tmuxName: string) => ipcRenderer.invoke('tmux:discard', tmuxName),
+  discardSessionRecord: (key: string) => ipcRenderer.invoke('records:discard', key),
 
   onSessionData: (id: string, callback: (data: string) => void) =>
     createIpcListener<[string]>(`pty:data:${id}`, callback),
@@ -186,6 +190,11 @@ const electronAPI = {
   sidebarLayoutLoad: () => ipcRenderer.invoke('sidebar-layout:load'),
   sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) =>
     ipcRenderer.invoke('sidebar-layout:save', data),
+
+  // Workspace registry + pins — main-process JSON storage, same crash-safety
+  // rationale as the sidebar layout.
+  workspaceLoad: () => ipcRenderer.invoke('workspace:load'),
+  workspaceSave: (data: unknown) => ipcRenderer.invoke('workspace:save', data),
 
   // Usage
   getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),

@@ -163,6 +163,12 @@ export interface Session {
   injectedFrom?: string | null
   userRenamed: boolean
   planFilePath: string | null
+  /** Workspace this session belongs to, stamped at spawn from the then-active
+   *  workspace (or inherited: duplicate/resume take the source session's, pin
+   *  launches the pin's, MCP spawns the caller's). Persisted in the session
+   *  record so it survives restarts. Undefined = unstamped → visible in every
+   *  workspace (no-workspace mode and the legacy safety net). */
+  workspaceId?: string
 }
 
 export interface SessionGroup {
@@ -173,6 +179,9 @@ export interface SessionGroup {
   cwd: string | null
   terminals: GroupTerminalConfig[]
   color?: GroupTerminalColor | null
+  /** Workspace this group belongs to (see Session.workspaceId). Persists via
+   *  sidebar-layout.json since groups are serialized whole. */
+  workspaceId?: string
 }
 
 export interface FileTabDiffInfo {
@@ -246,7 +255,11 @@ export interface PinnedGroup {
   toolbar?: boolean    // Show this group's terminals as toolbar quick-actions
   logo?: string | null // Absolute path to logo image
   category?: string | null // Category label for organizing pins in the sidebar
-  discoveredBy?: string | null // filePath of workspace that auto-discovered this pin
+  discoveredBy?: string | null // filePath of workspace profile that auto-discovered this pin
+  /** Workspace this pin belongs to. All registered workspaces' pins live in the
+   *  store simultaneously; the UI filters by the active workspace. null =
+   *  unscoped (no-workspace mode), visible everywhere until a workspace exists. */
+  workspaceId?: string | null
   // Runtime state (not persisted)
   activeGroupId: string | null
   visible: boolean

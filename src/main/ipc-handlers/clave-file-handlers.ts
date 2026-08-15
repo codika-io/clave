@@ -126,7 +126,7 @@ function persistTrustedRoots(): void {
   }
 }
 
-function addTrustedRoot(root: string): void {
+export function addTrustedRoot(root: string): void {
   const set = loadTrustedRoots()
   const norm = normalizeRoot(root)
   if (!set.includes(norm)) {

@@ -1,3 +1,6 @@
+// MUST stay the first import: applies --user-data-dir before any manager
+// captures app.getPath('userData') at module-import time.
+import './user-data-override'
 import { app, BrowserWindow, shell, nativeImage, nativeTheme } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'

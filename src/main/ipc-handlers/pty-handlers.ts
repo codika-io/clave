@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { ptyManager, isTmuxAvailable, type PtySpawnOptions } from '../pty-manager'
 import { getPreference } from './clave-file-handlers'
+import { workspaceManager } from '../workspace-manager'
 import * as titleGenerator from '../title-generator'
 import { startWatching as startAgentStateWatching, clearState as clearAgentState } from '../agent-state-manager'
 
@@ -20,7 +21,11 @@ export function registerPtyHandlers(): void {
     // caller overrides per-spawn or the user explicitly turned it off. (When
     // tmux isn't installed the spawn transparently falls back to a plain shell.)
     const tmuxMode = options?.tmuxMode ?? getPreference('tmuxMode') !== false
-    const session = ptyManager.spawn(cwd, { ...options, tmuxMode })
+    // Central workspace stamp: every spawn defaults to the active workspace so
+    // renderer call sites don't have to thread it through. Explicit values win
+    // (pin launches into a hidden workspace, MCP caller inheritance, adoption).
+    const workspaceId = options?.workspaceId ?? workspaceManager.getActiveWorkspaceId() ?? undefined
+    const session = ptyManager.spawn(cwd, { ...options, tmuxMode, workspaceId })
     const win = BrowserWindow.fromWebContents(_event.sender)
     const isClaudeMode = options?.claudeMode !== false && !options?.antigravityMode && !options?.codexMode && !options?.claudeAgentsMode
     const isResumed = !!options?.resumeSessionId
@@ -116,20 +121,26 @@ export function registerPtyHandlers(): void {
     }
   )
 
+  // Workspace reassignment (workspace removal, future "move to workspace") —
+  // mirrored into the session record so the stamp survives restarts.
+  ipcMain.handle('session:set-workspace', (_event, id: string, workspaceId: string | null) => {
+    ptyManager.setSessionWorkspace(id, workspaceId)
+  })
+
   // Lets the settings UI enable/disable the "persistent sessions" toggle.
   ipcMain.handle('tmux:available', () => {
     return isTmuxAvailable()
   })
 
-  // On launch the renderer asks which tmux-backed sessions survived a previous
-  // run so it can recreate their tabs and reattach. This call also prunes stale
-  // sidecars and reaps orphaned clave sessions.
-  ipcMain.handle('tmux:list-adoptable', () => {
-    return ptyManager.listAdoptableTmuxSessions()
+  // On launch the renderer asks which sessions survived a previous run — live
+  // tmux survivors to reattach silently, dead records (plain or post-reboot
+  // tmux) to offer behind the restore prompt. Also prunes stale records.
+  ipcMain.handle('records:list-adoptable', () => {
+    return ptyManager.listAdoptableSessions()
   })
 
-  // User declined to adopt a survivor → destroy it.
-  ipcMain.handle('tmux:discard', (_event, tmuxName: string) => {
-    ptyManager.discardTmuxSession(tmuxName)
+  // User declined to bring a survivor back → destroy it (record + tmux session).
+  ipcMain.handle('records:discard', (_event, key: string) => {
+    ptyManager.discardSessionRecord(key)
   })
 }

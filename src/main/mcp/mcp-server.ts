@@ -23,7 +23,7 @@ import {
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company); exactly one workspace is active and is all the user sees — other workspaces' sessions keep running hidden. Things you open default to your own tab's workspace; pass the workspace parameter to open work elsewhere without switching the user's view, and clave_switch_workspace only when the user should look at it. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -93,9 +93,17 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_list',
     {
       description:
-        'List all groups and sessions (tabs) currently open in Clave, plus the pinned workspace groups (launchable templates from .clave files, with their state: idle / active-visible / active-hidden), the focused session, and — when called from inside a Clave tab — which session/group is yours.'
+        'List the registered workspaces (root folders; exactly one is active and scopes what the user sees), all groups and sessions (tabs) currently open in Clave, plus the pinned workspace groups (launchable templates from .clave files, with their state: idle / active-visible / active-hidden), the focused session, and — when called from inside a Clave tab — which session/group is yours. Sessions, groups, and pins are annotated with their workspaceId/workspaceName.',
+      inputSchema: {
+        workspace: z
+          .string()
+          .optional()
+          .describe(
+            'Scope the listing: "all" (default), "active", or a workspace id/name. Hidden workspaces\' sessions keep running — "all" shows everything.'
+          )
+      }
     },
-    () => runCommand('list', { callerSessionId })
+    (args) => runCommand('list', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -103,9 +111,17 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     {
       description:
         'Create a new (empty) group in the Clave sidebar. Returns the new groupId. Follow up with clave_open_session to put a tab in it — some interactions prune empty groups.',
-      inputSchema: { name: z.string().describe('Display name for the group') }
+      inputSchema: {
+        name: z.string().describe('Display name for the group'),
+        workspace: z
+          .string()
+          .optional()
+          .describe(
+            'Workspace (id or name) the group belongs to. Default: your own tab\'s workspace, else the active one.'
+          )
+      }
     },
-    (args) => runCommand('createGroup', args)
+    (args) => runCommand('createGroup', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -150,7 +166,13 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         prompt: z
           .string()
           .optional()
-          .describe('Agent modes only: an initial prompt the agent starts working on immediately')
+          .describe('Agent modes only: an initial prompt the agent starts working on immediately'),
+        workspace: z
+          .string()
+          .optional()
+          .describe(
+            'Workspace (id or name) the new tab belongs to — lets you open work in another workspace WITHOUT switching the user\'s view. Default: the target group\'s workspace, else your own tab\'s, else the active one.'
+          )
       }
     },
     (args) => runCommand('openSession', { ...args, callerSessionId })
@@ -160,12 +182,28 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_launch_group',
     {
       description:
-        'Launch a pinned workspace group (a template from a .clave file): spawns all its sessions and attaches its quick-launch terminals as one group. If the group is already running but hidden, it is shown instead. Use clave_list to see the available pinned groups and their state.',
+        'Launch a pinned workspace group (a template from a .clave file): spawns all its sessions and attaches its quick-launch terminals as one group. If the group is already running but hidden, it is shown instead. Use clave_list to see the available pinned groups and their state. A name existing in several workspaces resolves to your own workspace first, then the active one; still-ambiguous names error with qualified candidates.',
       inputSchema: {
-        group: z.string().describe('Pinned group id or name (case-insensitive)')
+        group: z.string().describe('Pinned group id or name (case-insensitive)'),
+        workspace: z
+          .string()
+          .optional()
+          .describe('Restrict the lookup to one workspace (id or name)')
       }
     },
-    (args) => runCommand('launchGroup', args)
+    (args) => runCommand('launchGroup', { ...args, callerSessionId })
+  )
+
+  server.registerTool(
+    'clave_switch_workspace',
+    {
+      description:
+        'Switch the app\'s ACTIVE workspace — the user\'s whole visible world (sidebar sessions, groups, templates, toolbar) flips to that workspace; hidden workspaces\' sessions keep running. Prefer opening background work with clave_open_session\'s workspace parameter instead; switch only when the user should actually look at the other workspace.',
+      inputSchema: {
+        workspace: z.string().describe('Workspace id or name to activate')
+      }
+    },
+    (args) => runCommand('switchWorkspace', args)
   )
 
   server.registerTool(

@@ -3,10 +3,18 @@ import { type Theme, useSessionStore } from '../../store/session-store'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { useUserStore, USER_ICONS, USER_ICON_COLORS } from '../../store/user-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
+import {
+  addWorkspace,
+  removeWorkspace,
+  setActiveWorkspace,
+  renameWorkspace,
+  setWorkspaceProfile,
+  describeWorkspaceRemoval
+} from '../../lib/workspace-actions'
 import { useClaudeProfileStore, DEFAULT_CLAUDE_PROFILE_ID } from '../../store/claude-profile-store'
 import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
 import { CheckIcon } from '@heroicons/react/24/solid'
-import { TrashIcon, PlusIcon, PencilIcon, FolderIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
+import { TrashIcon, PlusIcon, PencilIcon, FolderIcon, ShieldCheckIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { LocationsTab } from './LocationsTab'
 import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsSection, SettingsCard, SettingsRow, ToggleRow } from './primitives'
@@ -506,15 +514,20 @@ function SidebarWidgetsSection() {
 function WorkspacesSection() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const addWorkspace = useWorkspaceStore((s) => s.addWorkspace)
-  const addWorkspaceFiles = useWorkspaceStore((s) => s.addWorkspaceFiles)
-  const removeWorkspace = useWorkspaceStore((s) => s.removeWorkspace)
-  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
 
-  const [discoveredFiles, setDiscoveredFiles] = useState<{ name: string; path: string; rootDir: string | null }[] | null>(null)
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
-  const [discoveryError, setDiscoveryError] = useState<string | null>(null)
   const [trustedRoots, setTrustedRoots] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  /** Add flow: a folder with several .clave candidates awaits ONE profile pick. */
+  const [pendingAdd, setPendingAdd] = useState<{
+    rootDir: string
+    candidates: { name: string; path: string }[]
+    selected: string | null
+  } | null>(null)
+  const [profileCandidates, setProfileCandidates] = useState<Record<string, { name: string; path: string }[]>>({})
+  const [profileMissing, setProfileMissing] = useState<Record<string, boolean>>({})
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
 
   const refreshTrustedRoots = () => {
     window.electronAPI?.listTrustedRoots().then((r) => setTrustedRoots(r ?? []))
@@ -523,108 +536,173 @@ function WorkspacesSection() {
     refreshTrustedRoots()
   }, [])
 
-  const handleAddWorkspace = async () => {
-    setDiscoveryError(null)
-    setDiscoveredFiles(null)
+  // Profile candidates per workspace (for the selector) + missing-file warnings.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const cands: Record<string, { name: string; path: string }[]> = {}
+      const missing: Record<string, boolean> = {}
+      for (const ws of workspaces) {
+        const files = (await window.electronAPI?.discoverClaveFiles(ws.rootDir)) ?? []
+        cands[ws.id] = files.map((f) => ({ name: f.name, path: f.path }))
+        missing[ws.id] =
+          !!ws.profileFile && !(await window.electronAPI?.claveFileExists(ws.profileFile))
+      }
+      if (!cancelled) {
+        setProfileCandidates(cands)
+        setProfileMissing(missing)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [workspaces])
 
+  const flashError = (msg: string) => {
+    setError(msg)
+    setTimeout(() => setError(null), 4000)
+  }
+
+  const handleAddWorkspace = async () => {
+    setError(null)
+    setPendingAdd(null)
     const folder = await window.electronAPI?.openFolderDialog()
     if (!folder) return
 
-    // Explicitly picking a folder is the trust grant: every .clave discovered
-    // under it runs its auto commands without re-prompting.
-    await window.electronAPI?.trustWorkspaceRoot(folder)
-    refreshTrustedRoots()
-
-    // Try discovery first
-    const files = await window.electronAPI?.discoverClaveFiles(folder)
-
-    if (!files || files.length === 0) {
-      // Legacy fallback: try direct workspace.clave
-      const added = await addWorkspace(folder)
-      if (!added) {
-        setDiscoveryError('No .clave files found in this folder.')
-        setTimeout(() => setDiscoveryError(null), 3000)
-      }
+    const files = (await window.electronAPI?.discoverClaveFiles(folder)) ?? []
+    if (files.length <= 1) {
+      // Zero candidates → bare workspace (sessions scope to it, no pins).
+      const added = await addWorkspace(folder, files[0]?.path ?? null)
+      if (!added) flashError('This folder overlaps an already-registered workspace.')
+      refreshTrustedRoots()
       return
     }
-
-    if (files.length === 1) {
-      // Single file — auto-add
-      const added = await addWorkspaceFiles(files)
-      if (!added) {
-        setDiscoveryError('Workspace already registered.')
-        setTimeout(() => setDiscoveryError(null), 3000)
-      }
-      return
-    }
-
-    // Multiple files — show picker
-    setDiscoveredFiles(files)
-    setSelectedFiles(new Set(files.map((f) => f.path)))
-  }
-
-  const handleConfirmSelection = async () => {
-    if (!discoveredFiles) return
-    const toAdd = discoveredFiles.filter((f) => selectedFiles.has(f.path))
-    if (toAdd.length > 0) {
-      await addWorkspaceFiles(toAdd)
-    }
-    setDiscoveredFiles(null)
-    setSelectedFiles(new Set())
-  }
-
-  const handleCancelDiscovery = () => {
-    setDiscoveredFiles(null)
-    setSelectedFiles(new Set())
-  }
-
-  const toggleFile = (filePath: string) => {
-    setSelectedFiles((prev) => {
-      const next = new Set(prev)
-      if (next.has(filePath)) {
-        next.delete(filePath)
-      } else {
-        next.add(filePath)
-      }
-      return next
+    // Several candidates → pick exactly one profile (default.clave preselected).
+    const preselected = files.find((f) => f.name === 'default')?.path ?? files[0].path
+    setPendingAdd({
+      rootDir: folder,
+      candidates: files.map((f) => ({ name: f.name, path: f.path })),
+      selected: preselected
     })
   }
+
+  const handleConfirmAdd = async () => {
+    if (!pendingAdd) return
+    const added = await addWorkspace(pendingAdd.rootDir, pendingAdd.selected)
+    if (!added) flashError('This folder overlaps an already-registered workspace.')
+    setPendingAdd(null)
+    refreshTrustedRoots()
+  }
+
+  const startRename = (id: string, current: string) => {
+    setRenamingId(id)
+    setRenameValue(current)
+  }
+  const commitRename = () => {
+    if (renamingId && renameValue.trim()) void renameWorkspace(renamingId, renameValue)
+    setRenamingId(null)
+  }
+
+  const removal = confirmRemoveId ? describeWorkspaceRemoval(confirmRemoveId) : null
+  const removalWs = confirmRemoveId ? workspaces.find((w) => w.id === confirmRemoveId) : null
 
   return (
     <SettingsSection
       title="Workspaces"
       description={
         <>
-          Select a folder to discover <code className="text-text-secondary">.clave</code> workspace files.
-          The active workspace auto-loads its groups as pins.
+          A workspace is a root folder: its sessions, groups, pinned templates, and toolbar are
+          scoped together, and the switcher at the top of the sidebar flips between them. Each
+          workspace reads one <code className="text-text-secondary">.clave</code> profile file.
         </>
       }
     >
       <SettingsCard>
         {workspaces.map((ws) => {
           const isActive = ws.id === activeWorkspaceId
+          const candidates = profileCandidates[ws.id] ?? []
+          const missing = profileMissing[ws.id] === true
+          const orphanProfile =
+            ws.profileFile && !candidates.some((c) => c.path === ws.profileFile)
           return (
             <div
               key={ws.id}
               className={cn(
-                'settings-row cursor-pointer transition-colors',
+                'settings-row transition-colors',
                 isActive ? 'bg-accent/5' : 'hover:bg-surface-100/60'
               )}
-              onClick={() => setActiveWorkspace(isActive ? null : ws.id)}
             >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div
+                className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                onClick={() => {
+                  if (!isActive) void setActiveWorkspace(ws.id)
+                }}
+                title={isActive ? 'Active workspace' : 'Switch to this workspace'}
+              >
                 <FolderIcon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
                 <div className="flex-1 min-w-0">
-                  <p className="settings-row-title truncate">{ws.name}</p>
-                  <p className="settings-row-description truncate" title={ws.claveFilePath}>{ws.claveFilePath}</p>
+                  {renamingId === ws.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={commitRename}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitRename()
+                        if (e.key === 'Escape') setRenamingId(null)
+                      }}
+                      className="input-compact w-40"
+                    />
+                  ) : (
+                    <p className="settings-row-title truncate">{ws.name}</p>
+                  )}
+                  <p className="settings-row-description truncate" title={ws.rootDir}>
+                    {ws.rootDir}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
+                {missing && (
+                  <span title="The selected profile file no longer exists — pins are frozen at their last state.">
+                    <ExclamationTriangleIcon className="w-3.5 h-3.5 text-amber-400" />
+                  </span>
+                )}
+                <select
+                  value={ws.profileFile ?? ''}
+                  onChange={(e) => void setWorkspaceProfile(ws.id, e.target.value || null)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="input-compact text-xs max-w-28"
+                  title="Profile file defining this workspace's groups and toolbar"
+                >
+                  {orphanProfile && (
+                    <option value={ws.profileFile!}>
+                      {ws.profileFile!.split('/').pop()?.replace('.clave', '')} (missing)
+                    </option>
+                  )}
+                  {candidates.map((c) => (
+                    <option key={c.path} value={c.path}>
+                      {c.name}
+                    </option>
+                  ))}
+                  <option value="">No profile</option>
+                </select>
                 {isActive && <div className="w-2 h-2 rounded-full bg-accent" />}
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    removeWorkspace(ws.id)
+                    startRename(ws.id, ws.name)
+                  }}
+                  className="btn-icon btn-icon-xs"
+                  title="Rename workspace"
+                  aria-label="Rename workspace"
+                >
+                  <PencilIcon className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setConfirmRemoveId(ws.id)
                   }}
                   className="btn-icon btn-icon-xs hover:text-red-400"
                   title="Remove workspace"
@@ -643,52 +721,74 @@ function WorkspacesSection() {
         </button>
       </SettingsCard>
 
-      {/* Discovery picker */}
-      {discoveredFiles && (
+      {/* Removal confirmation — spells out the cascade before anything happens */}
+      {removal && removalWs && (
+        <div className="mt-2 p-3 rounded-lg border border-red-400/30 bg-red-400/5">
+          <p className="text-xs text-text-primary font-medium mb-1">
+            Remove workspace “{removalWs.name}”?
+          </p>
+          <p className="text-xs text-text-secondary">
+            {removal.pinCount > 0
+              ? `${removal.pinCount} pinned template${removal.pinCount === 1 ? '' : 's'} will be removed (recoverable from their .clave files). `
+              : ''}
+            {removal.sessionCount > 0
+              ? `${removal.sessionCount} running session${removal.sessionCount === 1 ? '' : 's'} will be kept and moved to ${removal.target ? `“${removal.target.name}”` : 'the unscoped view'}.`
+              : 'No running sessions are affected.'}
+          </p>
+          <div className="flex gap-2 mt-2.5">
+            <button
+              onClick={() => {
+                void removeWorkspace(confirmRemoveId!)
+                setConfirmRemoveId(null)
+              }}
+              className="btn-primary btn-compact flex-1"
+            >
+              Remove
+            </button>
+            <button
+              onClick={() => setConfirmRemoveId(null)}
+              className="btn-secondary btn-compact border border-border-subtle"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Profile picker for a freshly added folder with several candidates */}
+      {pendingAdd && (
         <div className="mt-2 p-3 rounded-lg border border-accent/30 bg-accent/5">
           <p className="text-xs text-text-secondary mb-2 font-medium">
-            Found {discoveredFiles.length} workspace files:
+            Pick the profile for this workspace ({pendingAdd.candidates.length} found):
           </p>
           <div className="space-y-1">
-            {discoveredFiles.map((file) => {
-              const isSelected = selectedFiles.has(file.path)
-              const alreadyRegistered = workspaces.some((w) => w.claveFilePath === file.path)
+            {pendingAdd.candidates.map((file) => {
+              const isSelected = pendingAdd.selected === file.path
               return (
                 <label
                   key={file.path}
                   className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors ${
-                    alreadyRegistered
-                      ? 'opacity-40 cursor-default'
-                      : isSelected
-                        ? 'bg-accent/10'
-                        : 'hover:bg-surface-200'
+                    isSelected ? 'bg-accent/10' : 'hover:bg-surface-200'
                   }`}
                 >
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="workspace-profile"
                     checked={isSelected}
-                    disabled={alreadyRegistered}
-                    onChange={() => toggleFile(file.path)}
-                    className="rounded border-border text-accent focus:ring-accent/30 w-3.5 h-3.5"
+                    onChange={() => setPendingAdd({ ...pendingAdd, selected: file.path })}
+                    className="border-border text-accent focus:ring-accent/30 w-3.5 h-3.5"
                   />
                   <span className="text-xs text-text-primary font-medium">{file.name}</span>
-                  {alreadyRegistered && (
-                    <span className="text-[11px] text-text-tertiary">(already added)</span>
-                  )}
                 </label>
               )
             })}
           </div>
           <div className="flex gap-2 mt-2.5">
-            <button
-              onClick={handleConfirmSelection}
-              disabled={selectedFiles.size === 0}
-              className="btn-primary btn-compact flex-1"
-            >
-              Add Selected
+            <button onClick={handleConfirmAdd} className="btn-primary btn-compact flex-1">
+              Add Workspace
             </button>
             <button
-              onClick={handleCancelDiscovery}
+              onClick={() => setPendingAdd(null)}
               className="btn-secondary btn-compact border border-border-subtle"
             >
               Cancel
@@ -698,9 +798,7 @@ function WorkspacesSection() {
       )}
 
       {/* Error message */}
-      {discoveryError && (
-        <p className="mt-2 text-xs text-red-400 px-1">{discoveryError}</p>
-      )}
+      {error && <p className="mt-2 text-xs text-red-400 px-1">{error}</p>}
 
       {/* Trusted workspace folders */}
       {trustedRoots.length > 0 && (

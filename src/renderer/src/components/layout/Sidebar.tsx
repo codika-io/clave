@@ -3,8 +3,11 @@ import {
   useSessionStore,
   GROUP_TERMINAL_COLORS,
   resolveColorHex,
+  inActiveWorkspace,
   type GroupTerminalColor
 } from '../../store/session-store'
+import { useWorkspaceStore } from '../../store/workspace-store'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import ColorPicker from '../ui/ColorPicker'
 import { SessionItem } from '../session/SessionItem'
 import { FileTabItem } from '../session/FileTabItem'
@@ -23,7 +26,7 @@ import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
 import { useClaudeProfileStore, getClaudeProfile, claudeProfileSpawnFields } from '../../store/claude-profile-store'
-import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName, initClaveFileWatchers } from '../../store/pinned-store'
+import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { TemplatePickerPopover } from '../session/TemplatePickerPopover'
 import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
@@ -329,12 +332,10 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [createGroup, ungroupSessions, undoSidebar])
 
-  // Initialize .clave file watchers + load workspace config
+  // Load Claude account profiles. (Workspace boot + .clave file watchers moved
+  // to AppShell's sequential boot effect — adoption needs the registry first.)
   useEffect(() => {
-    const cleanup = initClaveFileWatchers()
-    import('../../store/workspace-store').then(({ loadWorkspaces }) => loadWorkspaces())
     import('../../store/claude-profile-store').then(({ loadClaudeProfiles }) => loadClaudeProfiles())
-    return cleanup
   }, [])
 
   // Detect file drag over window (for showing pinned section as drop target).
@@ -385,6 +386,9 @@ export function Sidebar() {
   const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
   const hiddenGroupIds = useMemo(() => getHiddenGroupIds(), [pinnedGroups])
 
+  // Workspace scoping: the sidebar shows only the active workspace's world.
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+
   // Templates launcher popover (anchored to the Sessions header's folder-plus icon)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
   const [templatePopoverOpen, setTemplatePopoverOpen] = useState(false)
@@ -415,6 +419,7 @@ export function Sidebar() {
       const group = groups.find((g) => g.id === id)
       if (group) {
         if (group.sessionIds.length === 0 || hiddenGroupIds.has(group.id)) continue
+        if (!inActiveWorkspace(group, activeWorkspaceId)) continue
         for (const sessionId of group.sessionIds) {
           const session = sessions.find((s) => s.id === sessionId)
           if (session) ordered.push(session)
@@ -423,20 +428,20 @@ export function Sidebar() {
       }
 
       const session = sessions.find((s) => s.id === id)
-      if (session) {
+      if (session && inActiveWorkspace(session, activeWorkspaceId)) {
         ordered.push(session)
       }
     }
 
     const seen = new Set(ordered.map((session) => session.id))
     for (const session of sessions) {
-      if (!seen.has(session.id)) {
+      if (!seen.has(session.id) && inActiveWorkspace(session, activeWorkspaceId)) {
         ordered.push(session)
       }
     }
 
     return ordered
-  }, [displayOrder, groups, hiddenGroupIds, sessions])
+  }, [displayOrder, groups, hiddenGroupIds, sessions, activeWorkspaceId])
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery) return null
@@ -485,19 +490,24 @@ export function Sidebar() {
       .filter(
         (item): item is NonNullable<typeof item> => {
           if (item === null) return false
-          if (item.type === 'session') return true
+          if (item.type === 'session') {
+            const session = sessions.find((s) => s.id === item.sessionId)
+            return !!session && inActiveWorkspace(session, activeWorkspaceId)
+          }
+          // File tabs are lightweight viewers, deliberately global.
           if (item.type === 'fileTab') return true
           if (item.type === 'group') {
             const group = groups.find((g) => g.id === item.groupId)
             if (!group || group.sessionIds.length === 0) return false
             // Hide groups toggled off via pinned buttons
             if (hiddenGroupIds.has(item.groupId)) return false
+            if (!inActiveWorkspace(group, activeWorkspaceId)) return false
             return true
           }
           return false
         }
       )
-  }, [displayOrder, sessions, groups, fileTabs, filteredSessions, hiddenGroupIds])
+  }, [displayOrder, sessions, groups, fileTabs, filteredSessions, hiddenGroupIds, activeWorkspaceId])
 
   // Flat ordered list of session/file tab IDs for range selection
   const flatSessionOrder = useMemo(() => {
@@ -567,7 +577,9 @@ export function Sidebar() {
         const sessionInfo = await window.electronAPI.spawnSession(cwd, {
           claudeMode: false,
           initialCommand: command || undefined,
-          autoExecute: command ? commandMode === 'auto' : false
+          autoExecute: command ? commandMode === 'auto' : false,
+          // Group terminals live in their group's workspace, not the active one.
+          workspaceId: group.workspaceId ?? undefined
         })
         const newSession = {
           id: sessionInfo.id,
@@ -580,7 +592,8 @@ export function Sidebar() {
           claudeMode: false,
           dangerousMode: false,
           claudeSessionId: sessionInfo.claudeSessionId,
-          sessionType: 'local' as const
+          sessionType: 'local' as const,
+          workspaceId: group.workspaceId
         }
 
         const currentState = useSessionStore.getState()
@@ -727,7 +740,9 @@ export function Sidebar() {
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
             model: session.model,
-            initialPrompt
+            initialPrompt,
+            // A duplicate belongs where its source lives, not to the active view.
+            workspaceId: session.workspaceId
           })
           addSession({
             id: sessionInfo.id,
@@ -743,6 +758,7 @@ export function Sidebar() {
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
             model: session.model,
+            workspaceId: session.workspaceId,
             claudeSessionId: sessionInfo.claudeSessionId,
             // Persist so re-duplicating the clone also re-primes.
             initialPrompt,
@@ -778,7 +794,9 @@ export function Sidebar() {
           claudeAgentsMode: isAgents,
           dangerousMode,
           model: session.model,
-          resumeSessionId: session.claudeSessionId
+          resumeSessionId: session.claudeSessionId,
+          // The resumed conversation stays in its session's workspace.
+          workspaceId: session.workspaceId
         })
         addSession({
           id: sessionInfo.id,
@@ -792,6 +810,7 @@ export function Sidebar() {
           claudeAgentsMode: isAgents,
           dangerousMode,
           model: session.model,
+          workspaceId: session.workspaceId,
           claudeSessionId: sessionInfo.claudeSessionId,
           sessionType: 'local'
         })
@@ -1084,6 +1103,9 @@ export function Sidebar() {
         className="pt-11 pb-1 flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
+
+      {/* Workspace switcher — pinned above the scroll area so it never scrolls away */}
+      <WorkspaceSwitcher />
 
       {/* Single scrollable area for all sections */}
       <ScrollArea

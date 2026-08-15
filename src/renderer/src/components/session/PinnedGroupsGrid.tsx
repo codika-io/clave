@@ -56,7 +56,11 @@ export const PinnedGroupsGrid = forwardRef<HTMLDivElement, PinnedGroupsGridProps
       const filePath = window.electronAPI?.getPathForFile(file)
       if (!filePath || !filePath.endsWith('.clave')) return
 
-      await importClaveFile(filePath)
+      // Explicit drop = the pin (and what it launches) joins the ACTIVE workspace.
+      const { useWorkspaceStore } = await import('../../store/workspace-store')
+      await importClaveFile(filePath, {
+        workspaceId: useWorkspaceStore.getState().activeWorkspaceId
+      })
     }, [])
 
     return (

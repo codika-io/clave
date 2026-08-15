@@ -15,10 +15,24 @@ import type {
   SessionType
 } from './session-types'
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
+import { useWorkspaceStore } from './workspace-store'
 
 // Re-export types and constants so existing imports continue to work
 export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
 export { GROUP_TERMINAL_COLORS, GROUP_TERMINAL_ICONS, TERMINAL_COLOR_VALUES, resolveColorHex } from './session-types'
+
+/** THE visibility predicate — single source of truth for workspace scoping.
+ *  activeId null → no-workspace mode, everything visible (today's app).
+ *  x.workspaceId null/undefined → unstamped safety net: nothing can ever
+ *  disappear because it predates the workspace model. */
+export function inActiveWorkspace(
+  x: { workspaceId?: string | null },
+  activeId: string | null
+): boolean {
+  if (activeId === null) return true
+  if (x.workspaceId == null) return true
+  return x.workspaceId === activeId
+}
 
 interface SessionState {
   sessions: Session[]
@@ -67,6 +81,12 @@ interface SessionState {
   generatingCommitCwds: Set<string>
   hiddenAgentIds: Set<string>
   sidebarUndoStack: SidebarSnapshot[]
+  /** Last selection/focus per workspace, restored when switching back so each
+   *  workspace feels like the tab set you left. Session-lifetime only. */
+  workspaceSelections: Record<string, { selectedSessionIds: string[]; focusedSessionId: string | null }>
+  /** Save the outgoing workspace's selection and restore (or initialize) the
+   *  incoming one's. Pure view/selection change — sessions are untouched. */
+  applyWorkspaceSwitch: (fromId: string | null, toId: string | null) => void
   addSession: (session: Session) => void
   removeSession: (id: string) => void
   resetSessions: () => Promise<void>
@@ -80,7 +100,7 @@ interface SessionState {
   selectSession: (id: string, addToSelection: boolean) => void
   selectSessions: (ids: string[]) => void
   setFocusedSession: (id: string) => void
-  createGroup: (sessionIds: string[], name?: string) => void
+  createGroup: (sessionIds: string[], name?: string, workspaceId?: string) => void
   ungroupSessions: (groupId: string) => void
   deleteGroup: (groupId: string) => void
   renameGroup: (groupId: string, name: string) => void
@@ -254,6 +274,28 @@ function pushSidebarSnapshot(
   return next
 }
 
+/** Flattened, workspace-filtered session id order — the one list behind
+ *  Cmd+1..9 and Cmd+Shift+]/[ session cycling. Groups expand to their member
+ *  sessions; anything outside the active workspace is skipped; file tabs are
+ *  not sessions and never cycle. */
+export function getVisibleFlatOrder(
+  state: { sessions: Session[]; groups: SessionGroup[]; displayOrder: string[] },
+  activeId: string | null
+): string[] {
+  const flatIds: string[] = []
+  for (const id of getDisplayOrder(state)) {
+    const group = state.groups.find((g) => g.id === id)
+    if (group) {
+      if (!inActiveWorkspace(group, activeId)) continue
+      flatIds.push(...group.sessionIds)
+      continue
+    }
+    const session = state.sessions.find((s) => s.id === id)
+    if (session && inActiveWorkspace(session, activeId)) flatIds.push(id)
+  }
+  return flatIds
+}
+
 export function getDisplayOrder(state: {
   sessions: Session[]
   groups: SessionGroup[]
@@ -338,9 +380,53 @@ export const useSessionStore = create<SessionState>((set) => ({
     JSON.parse(localStorage.getItem('clave-hidden-agent-ids') || '[]')
   ),
   sidebarUndoStack: [] as SidebarSnapshot[],
+  workspaceSelections: {},
+  applyWorkspaceSwitch: (fromId, toId) =>
+    set((state) => {
+      const workspaceSelections = { ...state.workspaceSelections }
+      if (fromId) {
+        workspaceSelections[fromId] = {
+          selectedSessionIds: state.selectedSessionIds,
+          focusedSessionId: state.focusedSessionId
+        }
+      }
+      // Restore the target's saved selection, validated against live sessions;
+      // fall back to the first visible session; else an empty selection.
+      const visibleIds = new Set(
+        state.sessions.filter((s) => inActiveWorkspace(s, toId)).map((s) => s.id)
+      )
+      const saved = toId ? workspaceSelections[toId] : undefined
+      let selectedSessionIds = (saved?.selectedSessionIds ?? []).filter((id) => visibleIds.has(id))
+      if (selectedSessionIds.length === 0) {
+        const first = state.sessions.find((s) => inActiveWorkspace(s, toId))
+        selectedSessionIds = first ? [first.id] : []
+      }
+      const focusedSessionId =
+        saved?.focusedSessionId && visibleIds.has(saved.focusedSessionId)
+          ? saved.focusedSessionId
+          : selectedSessionIds[0] ?? null
+      return { workspaceSelections, selectedSessionIds, focusedSessionId }
+    }),
   addSession: (session) =>
     set((state) => {
-      const newSession = { ...session, antigravityMode: session.antigravityMode ?? false, codexMode: session.codexMode ?? false, claudeAgentsMode: session.claudeAgentsMode ?? false, detectedUrl: session.detectedUrl ?? null, serverStatus: session.serverStatus ?? null, serverCommand: session.serverCommand ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false, userRenamed: session.userRenamed ?? false, planFilePath: session.planFilePath ?? null }
+      // Central workspace stamp: callers with a specific home pass it (pin
+      // launches, MCP caller inheritance, adoption, duplicate/resume); everyone
+      // else inherits the active workspace. Mirrors the pty:spawn-side default.
+      const workspaceId = session.workspaceId ?? useWorkspaceStore.getState().activeWorkspaceId ?? undefined
+      const newSession = { ...session, workspaceId, antigravityMode: session.antigravityMode ?? false, codexMode: session.codexMode ?? false, claudeAgentsMode: session.claudeAgentsMode ?? false, detectedUrl: session.detectedUrl ?? null, serverStatus: session.serverStatus ?? null, serverCommand: session.serverCommand ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false, userRenamed: session.userRenamed ?? false, planFilePath: session.planFilePath ?? null }
+
+      // A spawn into a HIDDEN workspace (MCP background work) must not steal
+      // the user's view: the sidebar already filters the tab out, so grabbing
+      // selection/focus here would show its terminal pane over the active
+      // workspace's world. Only visible spawns take focus.
+      const visible = inActiveWorkspace(newSession, useWorkspaceStore.getState().activeWorkspaceId)
+      const focusPatch = visible
+        ? {
+            selectedSessionIds: [session.id],
+            focusedSessionId: session.id,
+            activeView: 'terminals' as const
+          }
+        : {}
 
       // Check if selected sessions all belong to a single group
       const selectedIds = state.selectedSessionIds
@@ -349,16 +435,16 @@ export const useSessionStore = create<SessionState>((set) => ({
         const group = state.groups.find((g) =>
           selectedIds.every((sid) => g.sessionIds.includes(sid))
         )
-        if (group) targetGroup = group
+        // Never auto-nest across workspaces: a hidden-workspace spawn (MCP)
+        // must not land inside the visible selection's group.
+        if (group && (group.workspaceId ?? undefined) === workspaceId) targetGroup = group
       }
 
       if (targetGroup) {
         // Add session inside the selected group
         return {
           sessions: [...state.sessions, newSession],
-          selectedSessionIds: [session.id],
-          focusedSessionId: session.id,
-          activeView: 'terminals',
+          ...focusPatch,
           groups: state.groups.map((g) =>
             g.id === targetGroup!.id
               ? { ...g, sessionIds: [...g.sessionIds, session.id] }
@@ -370,9 +456,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
       return {
         sessions: [...state.sessions, newSession],
-        selectedSessionIds: [session.id],
-        focusedSessionId: session.id,
-        activeView: 'terminals',
+        ...focusPatch,
         displayOrder: [...getDisplayOrder(state), session.id]
       }
     }),
@@ -411,7 +495,10 @@ export const useSessionStore = create<SessionState>((set) => ({
         const terminals = (g.terminals ?? []).map((t) =>
           t.sessionId && !surviving.has(t.sessionId) ? { ...t, sessionId: null } : t
         )
-        groups.push({ ...g, sessionIds, terminals })
+        // Legacy stamp: groups persisted before the workspace model inherit
+        // their first surviving member's workspace (adoption stamped it).
+        const memberWorkspaceId = state.sessions.find((s) => s.id === sessionIds[0])?.workspaceId
+        groups.push({ ...g, sessionIds, terminals, workspaceId: g.workspaceId ?? memberWorkspaceId })
       }
       if (groups.length === 0) return state
 
@@ -472,12 +559,18 @@ export const useSessionStore = create<SessionState>((set) => ({
       }))
       const displayOrder = getDisplayOrder(state).filter((did) => did !== id)
 
+      // Fallback focus stays inside the active workspace — closing the last
+      // visible tab must never silently focus a hidden workspace's session.
+      const activeId = useWorkspaceStore.getState().activeWorkspaceId
+      const visibleSessions = sessions.filter((s) => inActiveWorkspace(s, activeId))
+
       let focusedSessionId = state.focusedSessionId
       if (focusedSessionId === id) {
-        focusedSessionId = selectedSessionIds[0] ?? sessions[sessions.length - 1]?.id ?? null
+        focusedSessionId =
+          selectedSessionIds[0] ?? visibleSessions[visibleSessions.length - 1]?.id ?? null
       }
-      if (selectedSessionIds.length === 0 && sessions.length > 0) {
-        const lastId = sessions[sessions.length - 1].id
+      if (selectedSessionIds.length === 0 && visibleSessions.length > 0) {
+        const lastId = visibleSessions[visibleSessions.length - 1].id
         return {
           sessions,
           selectedSessionIds: [lastId],
@@ -518,7 +611,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setFocusedSession: (id) => set(() => ({ focusedSessionId: id })),
 
-  createGroup: (sessionIds, name?) =>
+  createGroup: (sessionIds, name?, workspaceId?) =>
     set((state) => {
       const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
       groupCounter++
@@ -530,7 +623,13 @@ export const useSessionStore = create<SessionState>((set) => ({
         sessionIds: [...sessionIds],
         collapsed: false,
         cwd: firstSession?.cwd ?? null,
-        terminals: []
+        terminals: [],
+        // Explicit stamp > first member's home > the active workspace.
+        workspaceId:
+          workspaceId ??
+          firstSession?.workspaceId ??
+          useWorkspaceStore.getState().activeWorkspaceId ??
+          undefined
       }
       // Remove these sessions from any existing groups
       const groups = state.groups.map((g) => ({

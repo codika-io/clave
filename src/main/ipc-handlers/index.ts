@@ -17,6 +17,7 @@ import { registerSidebarLayoutHandlers } from './sidebar-layout-handlers'
 import { registerSecretHandlers } from './secret-handlers'
 import { registerExtensionsHandlers } from './extensions-handlers'
 import { registerMissionControlHandlers } from './mission-control-handlers'
+import { registerWorkspaceHandlers } from './workspace-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -38,4 +39,5 @@ export function registerIpcHandlers(): void {
   registerSecretHandlers()
   registerExtensionsHandlers()
   registerMissionControlHandlers()
+  registerWorkspaceHandlers()
 }

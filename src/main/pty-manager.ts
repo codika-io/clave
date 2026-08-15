@@ -7,6 +7,7 @@ import { app } from 'electron'
 import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS, INITIAL_COMMAND_DELAY_MS } from './constants'
 import { stateFilePath } from './agent-state-manager'
 import { getMcpRuntime, writeSessionMcpConfig, deleteSessionMcpConfig } from './mcp/mcp-runtime'
+import { workspaceManager } from './workspace-manager'
 
 const isWindows = process.platform === 'win32'
 
@@ -286,9 +287,18 @@ function baseTmuxName(cwd: string, modeTag: string): string {
 // session is gone, and reap any stray `clave-*` session that has no sidecar —
 // so nothing can pile up invisibly.
 
-/** What the renderer needs to recreate + reattach a surviving session's tab. */
-export interface AdoptableTmuxSession {
-  tmuxName: string
+/** What the renderer needs to recreate + reattach a surviving session's tab.
+ *
+ *  Historically this metadata only existed for tmux-backed sessions (the
+ *  "sidecar"). It is now a SESSION RECORD written for every local session,
+ *  tmux or not: plain sessions can't be reattached (their process dies with
+ *  the app), but the record lets the launch flow offer to RELAUNCH them —
+ *  fresh shell in the same cwd, Claude conversations resumed via
+ *  claudeSessionId — which is exactly the dead-tmux path that always existed. */
+export interface SessionRecord {
+  /** Backing tmux session, when there is one. Absent = plain record: the
+   *  session runs (ran) directly on a PTY and is only ever relaunched. */
+  tmuxName?: string
   /** Original PTY session id, reused on adoption so the Claude lifecycle-hook
    *  state file (keyed by this id) keeps matching after reattach. */
   id: string
@@ -315,8 +325,13 @@ export interface AdoptableTmuxSession {
   configDir?: string
   claudeProfileId?: string
   claudeProfileLabel?: string
-  /** Populated only on the listAdoptableTmuxSessions() path (not persisted in
-   *  the sidecar). True when the backing tmux session is still running (app
+  /** Workspace this session belongs to. Stamped at spawn from the active
+   *  workspace (or an explicit caller override) and carried forward across
+   *  adoption rewrites. Legacy records without it are annotated at list time
+   *  by inferring from cwd against registered workspace roots. */
+  workspaceId?: string
+  /** Populated only on the listAdoptableSessions() path (not persisted in
+   *  the record). True when the backing tmux session is still running (app
    *  quit/reopen, no reboot) → reattach to the live process. False when the
    *  tmux server died (e.g. a shutdown/reboot killed it) but the sidecar
    *  metadata survives → re-spawn fresh (Claude resumes via claudeSessionId). */
@@ -330,22 +345,51 @@ function isValidTmuxName(name: string): boolean {
   return /^clave-[A-Za-z0-9_-]+$/.test(name)
 }
 
-function tmuxSidecarDir(): string {
-  return path.join(app.getPath('userData'), 'clave-tmux-sessions')
+/** Plain records are keyed by the PTY session id (a UUID). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** A record file's basename: the tmux name for tmux-backed sessions, the
+ *  session id for plain ones. Everything that touches the filesystem or a
+ *  kill-session call validates through this. */
+function isValidRecordKey(key: string): boolean {
+  return isValidTmuxName(key) || UUID_RE.test(key)
 }
 
-/** Persist restore metadata. Returns false if it couldn't be written, in which
- *  case the caller falls back to a non-tmux spawn so we never create a tmux
+function recordKeyOf(meta: SessionRecord): string {
+  return meta.tmuxName ?? meta.id
+}
+
+let recordsDirEnsured = false
+
+export function sessionRecordsDir(): string {
+  const dir = path.join(app.getPath('userData'), 'session-records')
+  if (!recordsDirEnsured) {
+    recordsDirEnsured = true
+    // One-time move: records used to live in clave-tmux-sessions/ back when
+    // only tmux-backed sessions had them.
+    const legacy = path.join(app.getPath('userData'), 'clave-tmux-sessions')
+    try {
+      if (!fs.existsSync(dir) && fs.existsSync(legacy)) fs.renameSync(legacy, dir)
+    } catch {
+      // Fall through — worst case the legacy dir stays and records start fresh.
+    }
+  }
+  return dir
+}
+
+/** Persist restore metadata. Returns false if it couldn't be written — the
+ *  tmux path then falls back to a non-tmux spawn so we never create a tmux
  *  session we can't track (and would later be unable to adopt or clean up). */
-function writeTmuxSidecar(meta: AdoptableTmuxSession): boolean {
-  if (!isValidTmuxName(meta.tmuxName)) return false
+function writeSessionRecord(meta: SessionRecord): boolean {
+  const key = recordKeyOf(meta)
+  if (!isValidRecordKey(key)) return false
   try {
-    const dir = tmuxSidecarDir()
+    const dir = sessionRecordsDir()
     fs.mkdirSync(dir, { recursive: true })
-    // Write-then-rename: sidecars are rewritten on every rename, so a kill
+    // Write-then-rename: records are rewritten on every rename, so a kill
     // mid-write must never be able to leave a truncated file behind — that
     // would lose the whole session, not just its name.
-    const target = path.join(dir, `${meta.tmuxName}.json`)
+    const target = path.join(dir, `${key}.json`)
     const tmp = `${target}.tmp`
     fs.writeFileSync(tmp, JSON.stringify(meta), 'utf-8')
     fs.renameSync(tmp, target)
@@ -355,21 +399,21 @@ function writeTmuxSidecar(meta: AdoptableTmuxSession): boolean {
   }
 }
 
-function readTmuxSidecar(tmuxName: string): AdoptableTmuxSession | null {
-  if (!isValidTmuxName(tmuxName)) return null
+function readSessionRecord(key: string): SessionRecord | null {
+  if (!isValidRecordKey(key)) return null
   try {
     return JSON.parse(
-      fs.readFileSync(path.join(tmuxSidecarDir(), `${tmuxName}.json`), 'utf-8')
-    ) as AdoptableTmuxSession
+      fs.readFileSync(path.join(sessionRecordsDir(), `${key}.json`), 'utf-8')
+    ) as SessionRecord
   } catch {
     return null
   }
 }
 
-function deleteTmuxSidecar(tmuxName: string): void {
-  if (!isValidTmuxName(tmuxName)) return
+function deleteSessionRecord(key: string): void {
+  if (!isValidRecordKey(key)) return
   try {
-    fs.unlinkSync(path.join(tmuxSidecarDir(), `${tmuxName}.json`))
+    fs.unlinkSync(path.join(sessionRecordsDir(), `${key}.json`))
   } catch {
     // already gone
   }
@@ -444,6 +488,9 @@ export interface PtySpawnOptions {
   /** Profile metadata persisted for restore + the session-header badge. */
   claudeProfileId?: string
   claudeProfileLabel?: string
+  /** Workspace to stamp on the session record. The pty:spawn handler defaults
+   *  it to the active workspace; explicit values win (pin launches, MCP). */
+  workspaceId?: string
 }
 
 interface PendingSpawn {
@@ -482,10 +529,13 @@ class PtyManager {
    * `start(id, cols, rows)` finalises the spawn at the correct size.
    */
   spawn(cwd: string, options?: PtySpawnOptions): PtySession {
-    // Reuse the original id when adopting a survivor, so the Claude hook state
-    // file (baked with this id at first spawn) still routes to this tab.
+    // Reuse the original id when adopting/relaunching a survivor, so the
+    // Claude hook state file (baked with this id at first spawn) still routes
+    // to this tab. Plain records relaunch with adoptSessionId alone.
     const id =
-      options?.adoptSessionId && options?.adoptTmuxName ? options.adoptSessionId : randomUUID()
+      options?.adoptSessionId && UUID_RE.test(options.adoptSessionId)
+        ? options.adoptSessionId
+        : randomUUID()
     const folderName = (isWindows ? cwd.split('\\') : cwd.split('/')).pop() || cwd
     const useAgentsMode = options?.claudeAgentsMode === true
     const useAntigravityMode = options?.antigravityMode === true
@@ -598,6 +648,37 @@ class PtyManager {
     let spawnArgs = shellArgs
     let tmuxName: string | undefined
 
+    // Adoption/relaunch rewrites the record from scratch, so carry the tab's
+    // name and workspace forward — otherwise bringing a session back would
+    // erase the very metadata we persisted for it.
+    const previousKey =
+      options?.adoptTmuxName && isValidTmuxName(options.adoptTmuxName)
+        ? options.adoptTmuxName
+        : options?.adoptSessionId && UUID_RE.test(options.adoptSessionId)
+          ? options.adoptSessionId
+          : null
+    const previous = previousKey ? readSessionRecord(previousKey) : null
+
+    const recordBase: SessionRecord = {
+      id,
+      claudeSessionId,
+      cwd,
+      folderName,
+      displayName: previous?.displayName,
+      userRenamed: previous?.userRenamed,
+      claudeMode: useClaudeMode,
+      antigravityMode: useAntigravityMode,
+      codexMode: useCodexMode,
+      claudeAgentsMode: useAgentsMode,
+      dangerousMode: options?.dangerousMode === true,
+      model,
+      configDir: options?.configDir,
+      claudeProfileId: options?.claudeProfileId,
+      claudeProfileLabel: options?.claudeProfileLabel,
+      workspaceId: previous?.workspaceId ?? options?.workspaceId
+    }
+    let recordKey: string | null = null
+
     const tmuxPath = options?.tmuxMode ? detectTmux() : null
     if (tmuxPath) {
       // When adopting a survivor, reattach to its exact (validated) name;
@@ -606,33 +687,12 @@ class PtyManager {
       const candidateName =
         adopt && isValidTmuxName(adopt) ? adopt : this.uniqueTmuxName(cwd, agentModeTag(options))
 
-      // Adoption rewrites the sidecar from scratch, so carry the tab's name
-      // forward — otherwise re-adopting a session would erase the very name we
-      // persisted for it and the next crash would show the folder name again.
-      const previous = adopt ? readTmuxSidecar(candidateName) : null
-
       // Persist restore metadata first. If we can't track the session, fall back
       // to a plain shell spawn rather than create an untrackable tmux session.
-      const sidecarOk = writeTmuxSidecar({
-        tmuxName: candidateName,
-        displayName: previous?.displayName,
-        userRenamed: previous?.userRenamed,
-        id,
-        claudeSessionId,
-        cwd,
-        folderName,
-        claudeMode: useClaudeMode,
-        antigravityMode: useAntigravityMode,
-        codexMode: useCodexMode,
-        claudeAgentsMode: useAgentsMode,
-        dangerousMode: options?.dangerousMode === true,
-        model,
-        configDir: options?.configDir,
-        claudeProfileId: options?.claudeProfileId,
-        claudeProfileLabel: options?.claudeProfileLabel
-      })
+      const sidecarOk = writeSessionRecord({ ...recordBase, tmuxName: candidateName })
 
       if (sidecarOk) {
+        recordKey = candidateName
         tmuxName = candidateName
         const confPath = getTmuxConfigPath()
         // A server predating this fix still carries the old click-to-cancel
@@ -656,6 +716,20 @@ class PtyManager {
         spawnFile = tmuxPath
         spawnArgs = tmuxArgs
       }
+    }
+
+    // Plain session (tmux off or unavailable) — record it anyway, keyed by the
+    // session id. The process can't outlive the app, but the record lets the
+    // next launch offer to RELAUNCH the whole setup (fresh shell in the same
+    // cwd; Claude resumes via claudeSessionId).
+    if (!recordKey && writeSessionRecord(recordBase)) {
+      recordKey = id
+    }
+    // A record can change keys across an adoption (plain→tmux when the global
+    // toggle flipped, or tmux→plain after it was turned off) — drop the stale
+    // file or the next launch would offer the same session twice.
+    if (previousKey && previousKey !== recordKey) {
+      deleteSessionRecord(previousKey)
     }
 
     const session: PtySession = {
@@ -799,16 +873,21 @@ class PtyManager {
   kill(id: string, killTmuxSession = true): void {
     const session = this.sessions.get(id)
     if (session) {
-      if (session.tmuxName && killTmuxSession) {
-        const tmuxPath = detectTmux()
-        if (tmuxPath) {
-          execFile(
-            tmuxPath,
-            ['-L', TMUX_SOCKET, 'kill-session', '-t', session.tmuxName],
-            () => {}
-          )
+      if (killTmuxSession) {
+        // Real close: destroy the backing tmux session (if any) and the
+        // session record — the tab is gone for good. On app quit we keep both
+        // so the next launch can reattach (tmux) or offer a relaunch (plain).
+        if (session.tmuxName) {
+          const tmuxPath = detectTmux()
+          if (tmuxPath) {
+            execFile(
+              tmuxPath,
+              ['-L', TMUX_SOCKET, 'kill-session', '-t', session.tmuxName],
+              () => {}
+            )
+          }
         }
-        deleteTmuxSidecar(session.tmuxName)
+        deleteSessionRecord(session.tmuxName ?? id)
       }
       // On a real close the session is gone for good; on app quit (tmux
       // survivor) the config must stay valid for the reattached agent.
@@ -827,48 +906,69 @@ class PtyManager {
    * that outlives it. Called on every rename (manual, auto-title, or reset to
    * the folder name); a no-op for sessions with no tmux sidecar to update.
    */
+  /** The persisted record key for an in-memory session (tmux name or id). */
+  private recordKeyForSession(id: string): string | null {
+    const session = this.sessions.get(id)
+    if (!session) return null
+    return session.tmuxName ?? id
+  }
+
   setSessionDisplayName(id: string, displayName: string | null, userRenamed: boolean): void {
-    const tmuxName = this.sessions.get(id)?.tmuxName
-    if (!tmuxName) return
-    const meta = readTmuxSidecar(tmuxName)
+    const key = this.recordKeyForSession(id)
+    if (!key) return
+    const meta = readSessionRecord(key)
     if (!meta) return
     const next = displayName?.trim() || undefined
     if (meta.displayName === next && !!meta.userRenamed === userRenamed) return
-    writeTmuxSidecar({ ...meta, displayName: next, userRenamed })
+    writeSessionRecord({ ...meta, displayName: next, userRenamed })
   }
 
   /**
-   * Reconcile sidecars with the live tmux server and return the sessions that
-   * survived a previous run and should be brought back as tabs. Each is flagged
-   * `live`:
+   * Re-stamp a session's workspace in its persisted record (workspace removal
+   * reassigns sessions; a future "move to workspace" uses the same primitive).
+   * Mirrors setSessionDisplayName: renderer state dies with the window, the
+   * record is what survives.
+   */
+  setSessionWorkspace(id: string, workspaceId: string | null): void {
+    const key = this.recordKeyForSession(id)
+    if (!key) return
+    const meta = readSessionRecord(key)
+    if (!meta) return
+    const next = workspaceId ?? undefined
+    if (meta.workspaceId === next) return
+    writeSessionRecord({ ...meta, workspaceId: next })
+  }
+
+  /**
+   * Reconcile session records with the live tmux server and return the
+   * sessions that survived a previous run. Each is flagged `live`:
    *   - `live: true`  → the tmux session is still running (app quit/reopen, no
-   *     reboot). The caller reattaches to the live process.
-   *   - `live: false` → the tmux server is gone (a shutdown/reboot killed it)
-   *     but the sidecar survived on disk. The caller re-spawns the session fresh
-   *     in the same cwd; Claude sessions resume their conversation via
-   *     claudeSessionId. The agent's in-memory state is unrecoverable across a
-   *     reboot, so a fresh spawn is the best we can do.
+   *     reboot). The caller reattaches to the live process silently — the
+   *     session was never disrupted.
+   *   - `live: false` → the process is gone: a plain record (its PTY died with
+   *     the app), or a tmux record whose server a shutdown/reboot killed. The
+   *     caller RELAUNCHES it — fresh spawn in the same cwd, Claude resuming
+   *     via claudeSessionId — behind the launch restore prompt.
    *
-   * We deliberately do NOT kill live sessions that lack a sidecar: the `clave`
+   * We deliberately do NOT kill live sessions that lack a record: the `clave`
    * socket is user-attachable (the settings panel advertises `tmux -L clave
    * attach`), so a name prefix isn't proof of ownership. Because every
-   * Clave-created session is written a sidecar before it is spawned (and falls
-   * back to a non-tmux spawn if that write fails), our own sessions are always
-   * tracked. Sidecars are pruned only when malformed or when their cwd no longer
-   * exists (un-restorable) — so they can't accumulate across reboots.
+   * Clave-created session is written a record before it is spawned, our own
+   * sessions are always tracked. Records are pruned only when malformed or
+   * when their cwd no longer exists (un-restorable) — so they can't
+   * accumulate across reboots.
    */
-  listAdoptableTmuxSessions(): AdoptableTmuxSession[] {
+  listAdoptableSessions(): SessionRecord[] {
     const tmuxPath = detectTmux()
-    if (!tmuxPath) return []
-
-    const live = liveTmuxSessions(tmuxPath)
-    const alreadyAdopted = new Set(
+    const live = tmuxPath ? liveTmuxSessions(tmuxPath) : new Set<string>()
+    const adoptedTmuxNames = new Set(
       Array.from(this.sessions.values())
         .map((s) => s.tmuxName)
         .filter((n): n is string => !!n)
     )
+    const adoptedIds = new Set(this.sessions.keys())
 
-    const dir = tmuxSidecarDir()
+    const dir = sessionRecordsDir()
     let files: string[] = []
     try {
       files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'))
@@ -876,21 +976,26 @@ class PtyManager {
       files = []
     }
 
-    const adoptable: AdoptableTmuxSession[] = []
+    const adoptable: SessionRecord[] = []
     for (const file of files) {
-      let meta: AdoptableTmuxSession | null = null
+      let meta: SessionRecord | null = null
       try {
         meta = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'))
       } catch {
         meta = null
       }
       if (meta && meta.antigravityMode === undefined) {
-        // Legacy sidecars (written before the Antigravity switch) carry the old
+        // Legacy records (written before the Antigravity switch) carry the old
         // `antigravityMode`'s predecessor key. Map it forward so a survivor of the
         // retired Gemini CLI re-spawns as Antigravity (`agy`) on adoption.
         meta.antigravityMode = (meta as { geminiMode?: boolean }).geminiMode ?? false
       }
-      if (!meta?.tmuxName || !isValidTmuxName(meta.tmuxName)) {
+      // Malformed record → prune the file. Valid shapes: tmux-backed (valid
+      // tmux name) or plain (no tmuxName, uuid session id).
+      const validShape =
+        meta &&
+        (meta.tmuxName ? isValidTmuxName(meta.tmuxName) : !!meta.id && UUID_RE.test(meta.id))
+      if (!meta || !validShape) {
         try {
           fs.unlinkSync(path.join(dir, file))
         } catch {
@@ -898,29 +1003,41 @@ class PtyManager {
         }
         continue
       }
-      const isLive = live.has(meta.tmuxName)
+      const isLive = !!meta.tmuxName && live.has(meta.tmuxName)
       if (!isLive && !fs.existsSync(meta.cwd)) {
-        // The working directory is gone — the session can't be re-spawned, so
-        // its sidecar is dead weight. Prune it.
-        deleteTmuxSidecar(meta.tmuxName)
+        // The working directory is gone — the session can't be relaunched, so
+        // its record is dead weight. Prune it.
+        deleteSessionRecord(recordKeyOf(meta))
         continue
       }
-      if (!alreadyAdopted.has(meta.tmuxName)) {
-        adoptable.push({ ...meta, live: isLive })
+      const alreadyAdopted = meta.tmuxName ? adoptedTmuxNames.has(meta.tmuxName) : adoptedIds.has(meta.id)
+      if (!alreadyAdopted) {
+        adoptable.push({
+          ...meta,
+          // Legacy inference, implemented once: records written before the
+          // workspace model (or spawned with none active) are placed by cwd —
+          // under a registered root → that workspace; else left unstamped for
+          // the renderer to assign to the active workspace.
+          workspaceId: meta.workspaceId ?? workspaceManager.resolveWorkspaceForCwd(meta.cwd) ?? undefined,
+          live: isLive
+        })
       }
     }
 
     return adoptable
   }
 
-  /** Destroy a surviving tmux session the user chose not to adopt. */
-  discardTmuxSession(tmuxName: string): void {
-    if (!isValidTmuxName(tmuxName)) return
-    const tmuxPath = detectTmux()
-    if (tmuxPath) {
-      execFile(tmuxPath, ['-L', TMUX_SOCKET, 'kill-session', '-t', tmuxName], () => {})
+  /** Destroy a surviving session the user chose not to bring back: kill the
+   *  backing tmux session when there is one, then drop the record. */
+  discardSessionRecord(key: string): void {
+    if (!isValidRecordKey(key)) return
+    if (isValidTmuxName(key)) {
+      const tmuxPath = detectTmux()
+      if (tmuxPath) {
+        execFile(tmuxPath, ['-L', TMUX_SOCKET, 'kill-session', '-t', key], () => {})
+      }
     }
-    deleteTmuxSidecar(tmuxName)
+    deleteSessionRecord(key)
   }
 
   getSession(id: string): PtySession | undefined {

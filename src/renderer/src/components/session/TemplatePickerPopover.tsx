@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { usePinnedStore, spawnTemplate, importClaveFile, type PinnedGroup } from '../../store/pinned-store'
 import { resolveColorHex } from '../../store/session-types'
-import { useSessionStore } from '../../store/session-store'
+import { useSessionStore, inActiveWorkspace } from '../../store/session-store'
+import { useWorkspaceStore } from '../../store/workspace-store'
 import { cn } from '../../lib/utils'
 import { DocumentIcon } from '@heroicons/react/24/outline'
 
@@ -19,7 +20,11 @@ interface TemplatePickerPopoverProps {
 
 export function TemplatePickerPopover({ anchorRef, onClose, onContextMenu }: TemplatePickerPopoverProps) {
   const allPinnedGroups = usePinnedStore((s) => s.pinnedGroups)
-  const templates = useMemo(() => allPinnedGroups.filter((pg) => !pg.toolbar), [allPinnedGroups])
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const templates = useMemo(
+    () => allPinnedGroups.filter((pg) => !pg.toolbar && inActiveWorkspace(pg, activeWorkspaceId)),
+    [allPinnedGroups, activeWorkspaceId]
+  )
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const menuRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
@@ -93,7 +98,12 @@ export function TemplatePickerPopover({ anchorRef, onClose, onContextMenu }: Tem
     if (!filePath || !filePath.endsWith('.clave')) return
     // Dropping a .clave only adds it to the template list — it doesn't launch.
     // Templates are stamps: the user clicks one to spawn it when ready.
-    const result = await importClaveFile(filePath, { autoLaunch: false })
+    // An explicit drop is an explicit act: the pin joins the ACTIVE workspace,
+    // even when the file lives outside its root.
+    const result = await importClaveFile(filePath, {
+      autoLaunch: false,
+      workspaceId: useWorkspaceStore.getState().activeWorkspaceId
+    })
     if (result?.alreadyExists) {
       setFlashPinnedId(result.pinnedId)
       setTimeout(() => setFlashPinnedId(null), 1500)

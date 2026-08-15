@@ -2,6 +2,11 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { randomBytes } from 'crypto'
 import { app } from 'electron'
+// Runtime-only use inside sweepSessionMcpConfigs — the import cycle with
+// pty-manager is safe (no module-eval-time access), and going through
+// sessionRecordsDir() is what guarantees the legacy-dir rename has run before
+// the sweep decides which configs are stale.
+import { sessionRecordsDir } from '../pty-manager'
 
 /** Runtime info about the in-app MCP server, set once it is listening. */
 export interface McpRuntimeInfo {
@@ -184,8 +189,8 @@ export function deleteSessionMcpConfig(claveSessionId: string): void {
 
 /**
  * Remove per-session config files whose session no longer exists. A session
- * can outlive an app run only via its tmux sidecar, so any config whose id has
- * no sidecar is stale. Call once on startup.
+ * can outlive an app run only via its session record, so any config whose id
+ * has no record is stale. Call once on startup.
  */
 export function sweepSessionMcpConfigs(): void {
   let configFiles: string[]
@@ -196,19 +201,19 @@ export function sweepSessionMcpConfigs(): void {
   }
   const liveIds = new Set<string>()
   try {
-    const sidecarDir = path.join(app.getPath('userData'), 'clave-tmux-sessions')
-    for (const file of fs.readdirSync(sidecarDir)) {
+    const recordsDir = sessionRecordsDir()
+    for (const file of fs.readdirSync(recordsDir)) {
       try {
-        const meta = JSON.parse(fs.readFileSync(path.join(sidecarDir, file), 'utf-8')) as {
+        const meta = JSON.parse(fs.readFileSync(path.join(recordsDir, file), 'utf-8')) as {
           id?: string
         }
         if (meta.id) liveIds.add(meta.id)
       } catch {
-        /* malformed sidecar — pty-manager prunes these */
+        /* malformed record — pty-manager prunes these */
       }
     }
   } catch {
-    /* no sidecar dir — every config is stale */
+    /* no records dir — every config is stale */
   }
   for (const file of configFiles) {
     if (!liveIds.has(path.basename(file, '.json'))) {

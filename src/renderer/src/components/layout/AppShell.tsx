@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSessionStore, isFileTabId, getDisplayOrder, enableSidebarPersistence } from '../../store/session-store'
+import { useSessionStore, isFileTabId, getVisibleFlatOrder, inActiveWorkspace, enableSidebarPersistence } from '../../store/session-store'
 import type { SessionGroup } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
 import { getSelectedClaudeProfile, claudeProfileSpawnFields } from '../../store/claude-profile-store'
@@ -21,7 +21,11 @@ import { GitDiffPreview } from '../git/GitDiffPreview'
 import { GitJourneyPanel } from '../git/GitJourneyPanel'
 import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { cn, safePort } from '../../lib/utils'
-import { usePinnedStore } from '../../store/pinned-store'
+import { usePinnedStore, initClaveFileWatchers } from '../../store/pinned-store'
+import { useWorkspaceStore } from '../../store/workspace-store'
+import { bootWorkspaces, refreshActiveWorkspacePins, cycleWorkspace } from '../../lib/workspace-actions'
+import { promptRestore } from '../../store/restore-prompt-store'
+import { RestorePromptDialog } from '../ui/RestorePromptDialog'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
 import { initSecretStore } from '../../store/secret-store'
 import { ToolbarSecretPopover } from './ToolbarSecretPopover'
@@ -128,6 +132,13 @@ export function AppShell() {
     tmuxAdoptionStarted = true
     void (async () => {
       try {
+        // Workspace registry + pins hydrate FIRST: adoption stamps each
+        // surviving session against it, and unstamped survivors fall back to
+        // the active workspace. (This is the single sequential boot owner —
+        // the old lazy loadWorkspaces() in Sidebar raced this effect.)
+        await bootWorkspaces()
+        const activeWorkspaceId = useWorkspaceStore.getState().activeWorkspaceId
+
         // Read the previous run's saved groups BEFORE any session is adopted
         // (re-adoption mutates the layout). Then rebuild groups around the
         // survivors and only then turn persistence on, so the saved file is
@@ -138,10 +149,14 @@ export function AppShell() {
           displayOrder: savedLayout?.displayOrder ?? []
         }
 
-        const survivors = await window.electronAPI?.tmuxListAdoptable?.()
-        const adoptedIds: string[] = []
-        for (const s of survivors ?? []) {
+        const survivors = (await window.electronAPI?.listSessionRecords?.()) ?? []
+
+        /** Bring one record back as a tab. Live tmux survivors reattach; dead
+         *  ones (plain, or tmux killed by a reboot) relaunch fresh in the same
+         *  cwd, Claude resuming via claudeSessionId. */
+        const adoptRecord = async (s: (typeof survivors)[number]): Promise<string | null> => {
           try {
+            const workspaceId = s.workspaceId ?? activeWorkspaceId ?? undefined
             const info = await window.electronAPI.spawnSession(s.cwd, {
               claudeMode: s.claudeMode,
               antigravityMode: s.antigravityMode,
@@ -149,16 +164,23 @@ export function AppShell() {
               claudeAgentsMode: s.claudeAgentsMode,
               dangerousMode: s.dangerousMode,
               model: s.model,
-              tmuxMode: true,
-              adoptTmuxName: s.tmuxName,
+              // Live survivor: MUST go through tmux to reattach. Dead record:
+              // fresh spawn under the current global tmux preference — the
+              // name is still offered so a tmux respawn reuses it (spawn
+              // handles record-key transitions either way).
+              ...(s.live && s.tmuxName
+                ? { tmuxMode: true, adoptTmuxName: s.tmuxName }
+                : s.tmuxName
+                  ? { adoptTmuxName: s.tmuxName }
+                  : {}),
               // Reuse the original id so lifecycle-hook status routing keeps
               // working after the session comes back.
               adoptSessionId: s.id,
               // Live survivor (quit/reopen): reattach to the running process —
               // claudeSessionId only drives the header badge, the agent isn't
-              // re-run. Dead sidecar (reboot killed tmux): re-spawn fresh, so
-              // pass resumeSessionId to relaunch Claude with `--resume <id>` and
-              // reload the prior conversation.
+              // re-run. Dead record: re-spawn fresh, so pass resumeSessionId to
+              // relaunch Claude with `--resume <id>` and reload the prior
+              // conversation.
               ...(s.live
                 ? { claudeSessionId: s.claudeSessionId }
                 : s.claudeMode && s.claudeSessionId
@@ -167,7 +189,11 @@ export function AppShell() {
               // Carry the account/profile forward so the badge is restored.
               configDir: s.configDir,
               claudeProfileId: s.claudeProfileId,
-              claudeProfileLabel: s.claudeProfileLabel
+              claudeProfileLabel: s.claudeProfileLabel,
+              // Explicit stamp (record value or legacy inference) so the
+              // rewritten record keeps the session's workspace, not the
+              // active one at adoption time.
+              workspaceId
             })
             addSession({
               id: info.id,
@@ -190,13 +216,41 @@ export function AppShell() {
               claudeProfileId: s.claudeProfileId,
               claudeProfileLabel: s.claudeProfileLabel,
               claudeConfigDir: s.configDir,
-              sessionType: 'local'
+              sessionType: 'local',
+              workspaceId
             })
-            adoptedIds.push(info.id)
+            return info.id
           } catch (err) {
-            console.error('Failed to adopt persistent session:', s.tmuxName, err)
+            console.error('Failed to adopt persistent session:', s.tmuxName ?? s.id, err)
+            return null
           }
         }
+
+        // Reattach = silent, relaunch = ask. Live tmux survivors were never
+        // disrupted, so they come back unprompted (as always). Everything else
+        // needs actual process launches on the user's behalf — gate those
+        // behind the restore prompt, "Start fresh" discarding the records.
+        const liveOnes = survivors.filter((s) => s.live)
+        const deadOnes = survivors.filter((s) => !s.live)
+
+        const adoptedIds: string[] = []
+        for (const s of liveOnes) {
+          const id = await adoptRecord(s)
+          if (id) adoptedIds.push(id)
+        }
+        if (deadOnes.length > 0) {
+          if (await promptRestore(deadOnes)) {
+            for (const s of deadOnes) {
+              const id = await adoptRecord(s)
+              if (id) adoptedIds.push(id)
+            }
+          } else {
+            for (const s of deadOnes) {
+              void window.electronAPI?.discardSessionRecord?.(s.tmuxName ?? s.id)
+            }
+          }
+        }
+
         // Rebuild the persisted groups around the sessions that came back.
         if (adoptedIds.length && persisted.groups.length) {
           useSessionStore.getState().restoreGroups(adoptedIds, persisted)
@@ -208,6 +262,15 @@ export function AppShell() {
         // groups restored — so adoption writes can't clobber the saved file.
         enableSidebarPersistence()
       }
+
+      // Boot tail: land the initial selection in the active workspace, start
+      // watching every file-backed pin (all workspaces — hidden ones stay
+      // fresh), and refresh the active workspace's pins from its files.
+      useSessionStore
+        .getState()
+        .applyWorkspaceSwitch(null, useWorkspaceStore.getState().activeWorkspaceId)
+      initClaveFileWatchers()
+      void refreshActiveWorkspacePins()
     })()
   }, [addSession])
 
@@ -393,40 +456,27 @@ export function AppShell() {
           input?.focus()
         }, 50)
       }
-      // Cmd+1-9: Switch to session by index
-      if (e.metaKey && !e.shiftKey && e.key >= '1' && e.key <= '9') {
+      // Cmd+Ctrl+] / Cmd+Ctrl+[: cycle the active workspace
+      if (e.metaKey && e.ctrlKey && (e.key === ']' || e.key === '[')) {
+        e.preventDefault()
+        cycleWorkspace(e.key === ']' ? 1 : -1)
+        return
+      }
+      // Cmd+1-9: Switch to session by index (within the active workspace)
+      if (e.metaKey && !e.shiftKey && !e.ctrlKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault()
         const state = useSessionStore.getState()
-        const order = getDisplayOrder(state)
-        // Flatten: expand groups into their session IDs
-        const flatIds: string[] = []
-        for (const id of order) {
-          const group = state.groups.find((g) => g.id === id)
-          if (group) {
-            flatIds.push(...group.sessionIds)
-          } else {
-            flatIds.push(id)
-          }
-        }
+        const flatIds = getVisibleFlatOrder(state, useWorkspaceStore.getState().activeWorkspaceId)
         const idx = parseInt(e.key) - 1
         if (idx < flatIds.length) {
           state.selectSession(flatIds[idx], false)
         }
       }
-      // Cmd+Shift+] / Cmd+Shift+[: Next / previous session
+      // Cmd+Shift+] / Cmd+Shift+[: Next / previous session (active workspace)
       if (e.metaKey && e.shiftKey && (e.key === ']' || e.key === '[')) {
         e.preventDefault()
         const state = useSessionStore.getState()
-        const order = getDisplayOrder(state)
-        const flatIds: string[] = []
-        for (const id of order) {
-          const group = state.groups.find((g) => g.id === id)
-          if (group) {
-            flatIds.push(...group.sessionIds)
-          } else {
-            flatIds.push(id)
-          }
-        }
+        const flatIds = getVisibleFlatOrder(state, useWorkspaceStore.getState().activeWorkspaceId)
         if (flatIds.length === 0) return
         const currentIdx = flatIds.indexOf(state.focusedSessionId ?? '')
         let nextIdx: number
@@ -623,10 +673,8 @@ export function AppShell() {
               </button>
             </div>
 
-            {/* Center — workspace title */}
-            <span className="text-[11px] font-medium text-text-tertiary tracking-wide select-none flex-shrink-0 whitespace-nowrap">
-              Codika
-            </span>
+            {/* Center — active workspace name */}
+            <ToolbarWorkspaceTitle />
 
             {/* Right — active URLs + quick actions + divider + search + file tree */}
             <div
@@ -714,16 +762,22 @@ export function AppShell() {
       <GitJourneyPanel />
       <UpdateOverlay />
       <MissionControlOverlay />
+      <RestorePromptDialog />
     </div>
   )
 }
 
 function ToolbarQuickActions() {
   const pinnedGroups = usePinnedStore((s) => s.pinnedGroups)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const [openId, setOpenId] = useState<string | null>(null)
 
-  // Collect terminals from all pinned groups marked as toolbar
-  const toolbarPins = pinnedGroups.filter((pg) => pg.toolbar)
+  // Toolbar buttons of the ACTIVE workspace only — hidden workspaces' dev
+  // servers keep running (their sessions live in the registry), the buttons
+  // just come back when switching back.
+  const toolbarPins = pinnedGroups.filter(
+    (pg) => pg.toolbar && inActiveWorkspace(pg, activeWorkspaceId)
+  )
   if (toolbarPins.length === 0) return null
 
   // Darken color for better toolbar contrast
@@ -751,7 +805,8 @@ function ToolbarQuickActions() {
             return (
               <ToolbarTerminalPopover
                 key={key}
-                cwd={pg.cwd || '.'}
+                cwd={t.cwd || pg.cwd || '.'}
+                registryKey={`${pg.id}:${i}`}
                 command={t.command}
                 // A declared serverUrl implies persistent: closing the popover
                 // must never kill the server the click just asked to exist.
@@ -808,9 +863,21 @@ function ToolbarQuickActions() {
   )
 }
 
+function ToolbarWorkspaceTitle() {
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const name = workspaces.find((w) => w.id === activeWorkspaceId)?.name ?? 'Clave'
+  return (
+    <span className="text-[11px] font-medium text-text-tertiary tracking-wide select-none flex-shrink-0 whitespace-nowrap">
+      {name}
+    </span>
+  )
+}
+
 function ToolbarActiveUrls() {
   const sessions = useSessionStore((s) => s.sessions)
   const groups = useSessionStore((s) => s.groups)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const setSessionServerStatus = useSessionStore((s) => s.setSessionServerStatus)
 
   // Collect sessions with detected URLs (any server status)
@@ -818,6 +885,7 @@ function ToolbarActiveUrls() {
 
   for (const session of sessions) {
     if (!session.detectedUrl || !session.serverStatus) continue
+    if (!inActiveWorkspace(session, activeWorkspaceId)) continue
     const port = safePort(session.detectedUrl)
     if (!port) continue
     const group = groups.find((g) =>

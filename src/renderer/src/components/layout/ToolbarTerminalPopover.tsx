@@ -3,12 +3,21 @@ import { Popover, PopoverTrigger, PopoverAnchor, PopoverContent } from '../ui/po
 import { XMarkIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { useToolbarTerminal, type ToolbarTerminalStatus } from '../../hooks/use-toolbar-terminal'
 import { useServerButton, type ServerButtonApi } from '../../hooks/use-server-button'
+import {
+  adoptPersistentToolbarSession,
+  getPersistentToolbarSession
+} from '../../lib/toolbar-terminal-registry'
 import { cn, safePort } from '../../lib/utils'
 
 interface ToolbarTerminalPopoverProps {
   cwd: string
   command: string
   persistent?: boolean
+  /** Stable identity of this toolbar terminal (`${pinId}:${terminalIndex}`) in
+   *  the persistent-session registry. Required so a running dev server
+   *  survives its button unmounting (workspace switch) and is reattached —
+   *  never duplicated — when the button comes back. */
+  registryKey: string
   /** Declared dev-server URL — turns this popover's button into a server button
    *  (probe-first "ensure running, then open"; see use-server-button.ts). */
   serverUrl?: string
@@ -42,6 +51,7 @@ export function ToolbarTerminalPopover({
   cwd,
   command,
   persistent,
+  registryKey,
   serverUrl,
   open,
   onOpenChange,
@@ -51,46 +61,25 @@ export function ToolbarTerminalPopover({
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [status, setStatus] = useState<ToolbarTerminalStatus>('running')
   const [respawnNonce, setRespawnNonce] = useState(0)
-  const persistentSessionRef = useRef<string | null>(null)
-  const persistentExitCleanupRef = useRef<(() => void) | null>(null)
   const sessionIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     sessionIdRef.current = sessionId
   }, [sessionId])
 
-  // Track a persistent session's exit for the session's whole lifetime — NOT
-  // tied to the popover being open. Without this, a session dying while the
-  // popover is closed leaves a stale ref: the next open would "reattach" to a
-  // dead PTY, and a server-button restart would type into a corpse.
-  const adoptPersistentSession = useCallback((id: string) => {
-    persistentSessionRef.current = id
-    persistentExitCleanupRef.current?.()
-    persistentExitCleanupRef.current = window.electronAPI.onSessionExit(id, () => {
-      if (persistentSessionRef.current === id) {
-        persistentSessionRef.current = null
-      }
-      persistentExitCleanupRef.current?.()
-      persistentExitCleanupRef.current = null
-      setStatus('exited')
-    })
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      persistentExitCleanupRef.current?.()
-      persistentExitCleanupRef.current = null
-    }
-  }, [])
-
   // Spawn PTY when popover opens (or when a respawn is explicitly requested
   // while already open — a server-button restart after the session died).
+  // Persistent sessions live in the module-level registry, NOT component
+  // state: workspace switching unmounts this button, and the running dev
+  // server must be reattachable — never duplicated — when it comes back.
   useEffect(() => {
     if (!open) return
 
-    // Reattach to persistent session if still alive
-    if (persistent && persistentSessionRef.current) {
-      setSessionId(persistentSessionRef.current)
+    // Reattach to the registry's live session, if any
+    const existing = persistent ? getPersistentToolbarSession(registryKey) : null
+    if (existing) {
+      setStatus('running')
+      setSessionId(existing)
       return
     }
 
@@ -111,14 +100,15 @@ export function ToolbarTerminalPopover({
         }
         spawnedId = info.id
 
-        // Listen for exit immediately so we don't miss fast-exiting commands
+        // Listen for exit immediately so we don't miss fast-exiting commands.
+        // Persistent sessions register their lifetime listener in the registry;
+        // the component-scoped one below only drives the visible status dot.
         if (persistent) {
-          adoptPersistentSession(info.id)
-        } else {
-          exitCleanup = window.electronAPI.onSessionExit(info.id, () => {
-            setStatus('exited')
-          })
+          adoptPersistentToolbarSession(registryKey, info.id)
         }
+        exitCleanup = window.electronAPI.onSessionExit(info.id, () => {
+          setStatus('exited')
+        })
 
         setStatus('running')
         setSessionId(info.id)
@@ -134,7 +124,7 @@ export function ToolbarTerminalPopover({
         window.electronAPI.killSession(spawnedId)
       }
     }
-  }, [open, cwd, command, persistent, respawnNonce, adoptPersistentSession])
+  }, [open, cwd, command, persistent, registryKey, respawnNonce])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -147,31 +137,26 @@ export function ToolbarTerminalPopover({
     [onOpenChange, persistent]
   )
 
-  const handleStatusChange = useCallback(
-    (s: ToolbarTerminalStatus) => {
-      setStatus(s)
-      if (s === 'exited' && persistent) {
-        persistentSessionRef.current = null
-      }
-    },
-    [persistent]
-  )
+  const handleStatusChange = useCallback((s: ToolbarTerminalStatus) => {
+    // Registry cleanup on exit is handled by its own module-level listener.
+    setStatus(s)
+  }, [])
 
   // ── Server button wiring ──
   const openTerminal = useCallback(() => {
     // Already open with a dead session → the open-effect won't re-run on its
     // own; bump the nonce to force a respawn.
-    if (open && !persistentSessionRef.current) {
+    if (open && !getPersistentToolbarSession(registryKey)) {
       setRespawnNonce((n) => n + 1)
     }
     onOpenChange(true)
-  }, [open, onOpenChange])
+  }, [open, onOpenChange, registryKey])
 
   const serverButton = useServerButton({
     serverUrl,
     command,
     sessionId,
-    getLiveSessionId: () => persistentSessionRef.current,
+    getLiveSessionId: () => getPersistentToolbarSession(registryKey),
     openTerminal
   })
 
