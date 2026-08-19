@@ -28,6 +28,7 @@ import { promptRestore } from '../../store/restore-prompt-store'
 import { RestorePromptDialog } from '../ui/RestorePromptDialog'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
 import { initSecretStore } from '../../store/secret-store'
+import { initCopyOfferStore } from '../../store/copy-offer-store'
 import { ToolbarSecretPopover } from './ToolbarSecretPopover'
 import { resolveColorHex } from '../../store/session-types'
 import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
@@ -125,6 +126,7 @@ export function AppShell() {
     mcpDispatcherStarted = true
     initMcpDispatcher()
     initSecretStore()
+    initCopyOfferStore()
   }, [])
 
   useEffect(() => {

@@ -15,6 +15,7 @@ import { registerSessionExportHandlers } from './session-export-handlers'
 import { registerDroppedFileHandlers } from './dropped-file-handlers'
 import { registerSidebarLayoutHandlers } from './sidebar-layout-handlers'
 import { registerSecretHandlers } from './secret-handlers'
+import { registerCopyOfferHandlers } from './copy-offer-handlers'
 import { registerExtensionsHandlers } from './extensions-handlers'
 import { registerMissionControlHandlers } from './mission-control-handlers'
 import { registerWorkspaceHandlers } from './workspace-handlers'
@@ -37,6 +38,7 @@ export function registerIpcHandlers(): void {
   registerDroppedFileHandlers()
   registerSidebarLayoutHandlers()
   registerSecretHandlers()
+  registerCopyOfferHandlers()
   registerExtensionsHandlers()
   registerMissionControlHandlers()
   registerWorkspaceHandlers()

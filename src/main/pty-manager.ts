@@ -8,6 +8,7 @@ import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS, INITIAL_COMMAND_DELAY_MS 
 import { stateFilePath } from './agent-state-manager'
 import { getMcpRuntime, writeSessionMcpConfig, deleteSessionMcpConfig } from './mcp/mcp-runtime'
 import { workspaceManager } from './workspace-manager'
+import { dismissSessionOffers } from './copy-offer-manager'
 
 const isWindows = process.platform === 'win32'
 
@@ -891,7 +892,12 @@ class PtyManager {
       }
       // On a real close the session is gone for good; on app quit (tmux
       // survivor) the config must stay valid for the reattached agent.
-      if (killTmuxSession) deleteSessionMcpConfig(id)
+      if (killTmuxSession) {
+        deleteSessionMcpConfig(id)
+        // Copy offers are surfaced in the tab's own header — once the tab is
+        // gone they are unreachable, so don't keep their values in memory.
+        dismissSessionOffers(id)
+      }
       if (session.alive && session.ptyProcess) {
         session.ptyProcess.kill()
       }

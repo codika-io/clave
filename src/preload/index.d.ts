@@ -25,6 +25,19 @@ export interface SecretRequestView {
   }
 }
 
+export interface CopyOfferView {
+  id: string
+  callerSessionId: string
+  label: string
+  preview: string
+  truncated: boolean
+  lineCount: number
+  charCount: number
+  sensitive: boolean
+  createdAt: number
+  copiedAt?: number
+}
+
 export interface ClaveFileGroupData {
   name: string
   cwd: string
@@ -320,6 +333,11 @@ export interface ElectronAPI {
   secretSubmit: (id: string, secret: string) => Promise<SecretRequestView>
   secretDismiss: (id: string) => Promise<SecretRequestView>
   onSecretRequestsChanged: (callback: (requests: SecretRequestView[]) => void) => () => void
+  copyOfferList: () => Promise<CopyOfferView[]>
+  copyOfferCopy: (id: string) => Promise<CopyOfferView>
+  copyOfferDismiss: (id: string) => Promise<void>
+  copyOfferDismissSession: (sessionId: string) => Promise<void>
+  onCopyOffersChanged: (callback: (offers: CopyOfferView[]) => void) => () => void
   saveDiscussion: (
     cwd: string,
     claudeSessionId: string,
