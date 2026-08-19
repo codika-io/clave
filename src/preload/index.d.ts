@@ -168,6 +168,7 @@ export interface UsageWindow {
   label: string
   usedPercentage: number
   resetsAt: number | null
+  severity: 'normal' | 'warning' | 'critical' | null
 }
 
 export interface UsageLimits {

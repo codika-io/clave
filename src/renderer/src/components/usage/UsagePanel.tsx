@@ -27,10 +27,17 @@ function formatReset(resetsAt: number | null): string | null {
   return 'resets shortly'
 }
 
-// Fill color tracks urgency, so a near-full cap reads at a glance.
-function barColor(pct: number): string {
-  if (pct >= 90) return 'bg-red-500'
-  if (pct >= 70) return 'bg-amber-500'
+// Fill color tracks urgency, so a near-full cap reads at a glance. The service sends
+// its own plan-aware severity; we take whichever of the two reads more urgent so a
+// scoped cap the percentage alone would understate still shows red.
+function barColor(window: UsageWindow): string {
+  const fromPct =
+    window.usedPercentage >= 90 ? 'critical' : window.usedPercentage >= 70 ? 'warning' : 'normal'
+  const rank = { normal: 0, warning: 1, critical: 2 }
+  const level = rank[window.severity ?? 'normal'] >= rank[fromPct] ? window.severity : fromPct
+
+  if (level === 'critical') return 'bg-red-500'
+  if (level === 'warning') return 'bg-amber-500'
   return 'bg-accent'
 }
 
@@ -45,7 +52,7 @@ function UsageBar({ window }: { window: UsageWindow }) {
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-surface-200">
         <div
-          className={`h-full rounded-full transition-all ${barColor(window.usedPercentage)}`}
+          className={`h-full rounded-full transition-all ${barColor(window)}`}
           style={{ width: `${Math.min(100, Math.max(window.usedPercentage, pct === 0 ? 0 : 2))}%` }}
         />
       </div>
