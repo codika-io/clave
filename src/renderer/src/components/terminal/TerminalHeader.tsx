@@ -4,6 +4,7 @@ import { useSessionStore } from '../../store/session-store'
 import { useClaudeProfileStore } from '../../store/claude-profile-store'
 import { cn, safePort } from '../../lib/utils'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { SessionCopyOffers } from './SessionCopyOffers'
 
 interface TerminalHeaderProps {
   sessionId: string
@@ -126,6 +127,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          <SessionCopyOffers sessionId={sessionId} />
           {session.claudeMode && session.claudeSessionId && (
             <>
               <button

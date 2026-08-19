@@ -20,10 +20,11 @@ import {
   type SecretAction,
   type SecretRequest
 } from '../secret-request-manager'
+import { createOffer } from '../copy-offer-manager'
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company); exactly one workspace is active and is all the user sees — other workspaces' sessions keep running hidden. Things you open default to your own tab's workspace; pass the workspace parameter to open work elsewhere without switching the user's view, and clave_switch_workspace only when the user should look at it. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company); exactly one workspace is active and is all the user sees — other workspaces' sessions keep running hidden. Things you open default to your own tab's workspace; pass the workspace parameter to open work elsewhere without switching the user's view, and clave_switch_workspace only when the user should look at it. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -453,6 +454,53 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       })
       const result = await waitForOutcome(request.id, args.timeoutSeconds * 1000)
       return secretRequestResult(result)
+    }
+  )
+
+  server.registerTool(
+    'clave_offer_copy',
+    {
+      description:
+        'Hand the user a value to copy with ONE CLICK — the outbound mirror of clave_request_secret. Use it whenever the user will paste something you produced somewhere else (a command for another machine, a config snippet, a URL, a message for Slack/email): selecting text in a terminal mangles lines, this preserves the exact bytes. A copy button appears in your tab\'s header listing every value you have offered; one call per value, with a short label so the user knows what they are copying. Returns immediately — you are not told if or when the user copies. Set sensitive:true for values that should not be previewed on screen (the user can still copy them). For long-running work, pair with clave_notify so the user knows a value is waiting.',
+      inputSchema: {
+        label: z
+          .string()
+          .min(1)
+          .max(120)
+          .describe('Short human-readable name for the value, e.g. "Webhook URL for the Stripe dashboard"'),
+        value: z
+          .string()
+          .min(1)
+          .max(262144)
+          .describe('The exact text to place on the clipboard — newlines and formatting are preserved byte-for-byte'),
+        sensitive: z
+          .boolean()
+          .default(false)
+          .describe('Mask the on-screen preview (for values like tokens that should not be shoulder-surfable)')
+      }
+    },
+    async (args) => {
+      // Identity-gated like the cross-tab tools: the button is rendered in the
+      // calling tab's header, so an anonymous caller has nowhere to surface it.
+      if (!callerSessionId) {
+        return errorResult(
+          'clave_offer_copy requires a per-session token (it surfaces the value in the calling tab). The shared discovery token is anonymous.'
+        )
+      }
+      const offer = createOffer({
+        callerSessionId,
+        label: args.label,
+        value: args.value,
+        sensitive: args.sensitive
+      })
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ ok: true, offerId: offer.id, label: offer.label })
+          }
+        ]
+      }
     }
   )
 

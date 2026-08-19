@@ -95,6 +95,18 @@ const electronAPI = {
   onSecretRequestsChanged: (callback: (requests: unknown[]) => void) =>
     createIpcListener<[unknown[]]>('secret:requests-changed', callback),
 
+  copyOfferList: () => ipcRenderer.invoke('copy-offer:list'),
+
+  copyOfferCopy: (id: string) => ipcRenderer.invoke('copy-offer:copy', id),
+
+  copyOfferDismiss: (id: string) => ipcRenderer.invoke('copy-offer:dismiss', id),
+
+  copyOfferDismissSession: (sessionId: string) =>
+    ipcRenderer.invoke('copy-offer:dismiss-session', sessionId),
+
+  onCopyOffersChanged: (callback: (offers: unknown[]) => void) =>
+    createIpcListener<[unknown[]]>('copy-offer:changed', callback),
+
   saveDiscussion: (
     cwd: string,
     claudeSessionId: string,
