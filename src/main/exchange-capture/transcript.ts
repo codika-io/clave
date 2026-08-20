@@ -1,7 +1,8 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { homedir } from 'os'
-import type { BilledCounters, ConversationEntry, TokenSnapshot } from './types'
+import { hasProvenanceHeader } from '../../shared/exchange-provenance'
+import type { BilledCounters, ConversationEntry, ConversationOrigin, TokenSnapshot } from './types'
 
 /**
  * Pure transcript reading for the exchange capture: token-usage summation,
@@ -213,6 +214,29 @@ const NON_CONVERSATION_PREFIXES = [
   '<bash-stderr>'
 ]
 
+/**
+ * Claude Code control markers that reach the transcript as user entries
+ * without the human having written them.
+ *
+ * Verified against 1075 real transcript files on 2026-08-20: exactly these
+ * two variants occur (407 occurrences), and ALWAYS as the entry's entire
+ * text — never with trailing content. Exact match is therefore both
+ * sufficient and safer than a prefix match, which could swallow a human
+ * message that happened to follow.
+ */
+const CONTROL_MARKERS = [
+  '[Request interrupted by user]',
+  '[Request interrupted by user for tool use]'
+]
+
+/** Classify a user-side entry: the human, a sibling agent's delivery, or a
+ *  control marker. Labelling only — the entry is emitted either way. */
+function classifyUserText(text: string): ConversationOrigin {
+  if (CONTROL_MARKERS.includes(text.trim())) return 'system'
+  if (hasProvenanceHeader(text)) return 'agent-transport'
+  return 'human'
+}
+
 function isConversationText(text: string): boolean {
   const trimmed = text.trimStart()
   return trimmed !== '' && !NON_CONVERSATION_PREFIXES.some((p) => trimmed.startsWith(p))
@@ -230,10 +254,20 @@ export interface ConversationResult {
  * no tool results, no thinking). Agent text is tagged `end-of-turn` when no
  * tool use follows it before the next human message, else `mid-turn`.
  * Throws when the transcript is missing or unreadable.
+ *
+ * Every entry carries an `origin` (see ConversationOrigin): user-side entries
+ * are classified as the human, a sibling agent's delivery, or a control
+ * marker. That classification is labelling only — it changes no entry's
+ * presence, order, `role`, or turn tag.
  */
 export function parseConversation(filePath: string, sinceMs?: number): ConversationResult {
   const { objects, skipped } = parseLines(filePath)
-  type Item = { kind: 'human' | 'text' | 'tool'; ts: string | null; text: string }
+  type Item = {
+    kind: 'human' | 'text' | 'tool'
+    ts: string | null
+    text: string
+    origin?: ConversationOrigin
+  }
   const items: Item[] = []
   for (const o of objects) {
     if (o?.isSidechain) continue
@@ -243,7 +277,9 @@ export function parseConversation(filePath: string, sinceMs?: number): Conversat
       // A tool_result line is an operation, not something the human typed.
       if (Array.isArray(content) && content.some((b: any) => b?.type === 'tool_result')) continue
       const text = textOfContent(content)
-      if (text !== null && isConversationText(text)) items.push({ kind: 'human', ts, text })
+      if (text !== null && isConversationText(text)) {
+        items.push({ kind: 'human', ts, text, origin: classifyUserText(text) })
+      }
     } else if (o?.type === 'assistant' && !o.isApiErrorMessage) {
       const content = o.message?.content
       if (!Array.isArray(content)) continue
@@ -271,8 +307,17 @@ export function parseConversation(filePath: string, sinceMs?: number): Conversat
     const item = items[i]
     if (item.kind === 'tool') continue
     if (sinceMs !== undefined && item.ts !== null && Date.parse(item.ts) < sinceMs) continue
-    if (item.kind === 'human') entries.push({ role: 'human', ts: item.ts, text: item.text })
-    else entries.push({ role: 'agent', ts: item.ts, text: item.text, position: positions[i]! })
+    if (item.kind === 'human') {
+      entries.push({ role: 'human', ts: item.ts, text: item.text, origin: item.origin ?? 'human' })
+    } else {
+      entries.push({
+        role: 'agent',
+        ts: item.ts,
+        text: item.text,
+        origin: 'agent',
+        position: positions[i]!
+      })
+    }
   }
   return { entries, skippedLines: skipped }
 }

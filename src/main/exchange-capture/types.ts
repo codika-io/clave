@@ -164,9 +164,29 @@ export interface ExchangeQueryArgs {
  *  (no tool use follows it before the next human message), 'mid-turn' for
  *  progress notes emitted between operations. The last turn of a live
  *  transcript is tagged on what is visible so far. */
+/**
+ * Who actually authored a conversation entry. Additive to `role`, which keeps
+ * its meaning (which side of the transcript the entry sits on) — a transcript
+ * stores an inter-agent delivery as a user entry, so `role: 'human'` alone
+ * cannot tell a human's message from a sibling agent's.
+ *
+ * - `human` — a user entry the human typed.
+ * - `agent-transport` — a user entry that ARRIVED from a sibling tab via
+ *   clave_send_to_session: it carries Clave's provenance header (matched
+ *   through the shared `exchange-provenance` module, the same code that
+ *   stamps it). It sits on the user side, but no human wrote it.
+ * - `system` — a Claude Code control marker, e.g. an interrupt notice.
+ * - `agent` — an assistant text block; every `role: 'agent'` entry.
+ */
+export type ConversationOrigin = 'human' | 'agent-transport' | 'system' | 'agent'
+
 export interface ConversationEntry {
   role: 'human' | 'agent'
   ts: string | null
   text: string
+  /** Always present. Classification is LABELLING ONLY: no entry is dropped or
+   *  reordered, and `since`, `limit`, and the mid-turn/end-of-turn tags behave
+   *  exactly as they did before this field existed. */
+  origin: ConversationOrigin
   position?: 'mid-turn' | 'end-of-turn'
 }

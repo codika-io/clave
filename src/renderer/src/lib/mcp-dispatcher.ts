@@ -6,6 +6,7 @@ import { useWorkspaceStore, type Workspace } from '../store/workspace-store'
 import { setActiveWorkspace } from './workspace-actions'
 import { getRegisteredTerminal } from './terminal-registry'
 import { getDraftShadow, type DraftStash } from './draft-shadow'
+import { buildProvenanceHeader } from '../../../shared/exchange-provenance'
 
 /**
  * Renderer-side executor for the in-app MCP server. The sidebar state (groups,
@@ -757,10 +758,11 @@ async function handleSendToSession(payload: {
     ? useSessionStore.getState().sessions.find((s) => s.id === payload.callerSessionId)
     : undefined
   // Provenance header: the receiving agent must be able to tell this text came
-  // from a sibling tab, not from the user — and know how to answer it.
-  const header = sender
-    ? `[Message from Clave tab "${sender.name}" — reply with clave_send_to_session sessionId="${sender.id}"]`
-    : '[Message from a Clave agent]'
+  // from a sibling tab, not from the user — and know how to answer it. Built
+  // from the shared module so the capture's transcript parser matches the same
+  // string it stamps here (a drifted copy would silently relabel a sibling's
+  // message as the human's).
+  const header = buildProvenanceHeader(sender)
   // Sanitize BOTH parts (header + message): a tab renamed to carry control
   // bytes must not be able to smuggle them in via the header either. Parts
   // are sanitized separately (the per-character filter distributes over
