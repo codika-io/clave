@@ -21,6 +21,8 @@ Three-process Electron app:
 - **Preload** (`src/preload/`): Typed `window.electronAPI` via contextBridge. All main↔renderer communication goes through IPC.
 - **Renderer** (`src/renderer/src/`): React + Zustand + xterm.js + Tailwind v4 + Framer Motion.
 
+**Exchange capture** (`src/main/exchange-capture/`): transport-layer observability. Every `clave_send_to_session` delivery (with both endpoints' token snapshots computed from the Claude Code transcript files, Task-sidecar burn included), every agent-initiated tab spawn, and lazily discovered Task-subagent fan-outs land as JSONL events in `<userData>/exchange-capture/events.jsonl`, queried read-only through the `clave_read_exchanges` MCP tool (reach-gated like `clave_read_session`). The renderer resolves scope and enforces the gate; the main process owns the store and all transcript reads; capture IPC is fire-and-forget so recording can never delay or fail a delivery. `billed` (cumulative spend, sidecars included) and `contextOccupancy` (the root window's current fill) are distinct numbers — never conflate them, and never confuse this with `usage-manager.ts`, which tracks OAuth rate-limit usage.
+
 ## Conventions
 
 - **Icons**: Use Heroicons (`@heroicons/react/24/outline`) for all UI icons. No hand-rolled SVGs for standard icons. Custom SVGs only for file-type icons in `components/files/file-icons.tsx`.
