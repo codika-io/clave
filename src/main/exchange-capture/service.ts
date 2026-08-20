@@ -1,5 +1,6 @@
 import * as path from 'path'
 import { app } from 'electron'
+import { filterEvents } from './query'
 import { CaptureStore } from './store'
 import {
   computeTokenSnapshot,
@@ -9,7 +10,6 @@ import {
   subagentsDir
 } from './transcript'
 import type {
-  CaptureEvent,
   EndpointIdentity,
   ExchangeQueryArgs,
   MessageCapturePayload,
@@ -109,31 +109,6 @@ export function captureTabSpawn(payload: TabSpawnCapturePayload): void {
   }
 }
 
-/** Which sessions an event involves, for direction filtering: `out` sent or
- *  spawned; `in` received or was spawned. Subagents are not tabs, so a
- *  subagent_spawn only ever matches its parent session, outgoing. */
-function eventSides(event: CaptureEvent): { out: string[]; in: string[] } {
-  switch (event.kind) {
-    case 'message':
-      return { out: [event.sender.sessionId], in: [event.target.sessionId] }
-    case 'tab_spawn':
-      return { out: [event.spawner.sessionId], in: [event.session.sessionId] }
-    case 'subagent_spawn':
-      return { out: [event.session.sessionId], in: [] }
-  }
-}
-
-function eventGroupIds(event: CaptureEvent): (string | null)[] {
-  switch (event.kind) {
-    case 'message':
-      return [event.sender.groupId, event.target.groupId]
-    case 'tab_spawn':
-      return [event.spawner.groupId, event.session.groupId]
-    case 'subagent_spawn':
-      return [event.session.groupId]
-  }
-}
-
 function scopeSummary(scope: ResolvedExchangeScope): unknown {
   return {
     kind: scope.scope,
@@ -218,37 +193,17 @@ export function queryExchanges(scope: ResolvedExchangeScope, args: ExchangeQuery
   }
 
   const { events, skippedLines } = getStore().readAll()
-  const sessionIds = new Set(scope.sessions.map((s) => s.sessionId))
-  const matched = events.filter((event) => {
-    if (scope.scope === 'group') {
-      if (!eventGroupIds(event).includes(scope.group!.id)) return false
-    } else {
-      const sides = eventSides(event)
-      const involved =
-        args.direction === 'outgoing'
-          ? sides.out
-          : args.direction === 'incoming'
-            ? sides.in
-            : [...sides.out, ...sides.in]
-      if (!involved.some((id) => sessionIds.has(id))) return false
-    }
-    if (sinceMs !== undefined) {
-      const ts = Date.parse(event.ts)
-      if (!Number.isNaN(ts) && ts < sinceMs) return false
-    }
-    return true
+  const filtered = filterEvents(events, scope, {
+    direction: args.direction,
+    sinceMs,
+    limit: args.limit
   })
-  // Append order is delivery order; subagent_spawn events carry their true
-  // spawn time but are appended at discovery — sort by ts so the timeline
-  // reads chronologically (stable sort keeps append order on ties).
-  matched.sort((a, b) => (Date.parse(a.ts) || 0) - (Date.parse(b.ts) || 0))
-  const truncated = matched.length > args.limit
   return {
     view: 'exchanges',
     scope: scopeSummary(scope),
-    events: truncated ? matched.slice(matched.length - args.limit) : matched,
-    totalMatched: matched.length,
-    truncated,
+    events: filtered.events,
+    totalMatched: filtered.totalMatched,
+    truncated: filtered.truncated,
     storeSkippedLines: skippedLines
   }
 }
