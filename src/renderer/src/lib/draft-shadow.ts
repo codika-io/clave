@@ -36,14 +36,20 @@
  * Degraded-case stance (decided for PRDCT-1569): when confidence is lost we
  * still deliver — never hold the message hostage to screen-scraping the TUI —
  * and we clear with a generous overshoot instead of an exact count. The clear
- * sequence is built ONLY from keys verified on the real CLI to be no-ops both
- * at the input-buffer boundary and inside its Ink dialogs (e.g. /model):
- * backspace and forward-delete. Right-arrow is deliberately never used — it
- * is inert in the input box but adjusts the effort control in /model, and a
- * degraded shadow is exactly the state in which such a dialog may be open.
- * Undershoot would leave residue that gets co-submitted. The degradation is
- * reported only in the send tool's result (draftHandling: best-effort); the
- * app UI does not surface it.
+ * sequence uses two keys only, backspace and forward-delete, measured on the
+ * real CLI to be no-ops at the input-buffer boundary and inside the /model
+ * and /mcp dialogs. That is exactly what was measured, not a property of
+ * every dialog: with /config open in filter mode (empty filter after "Esc to
+ * clear"), forward-deletes change nothing but the FIRST backspace flips the
+ * dialog from filter mode to select mode, and the CR the dispatcher sends
+ * next would act on that. This residual is an accepted, documented limit of
+ * this fix; the structural answer (deferring delivery while a dialog is
+ * open) is a follow-up filed by coordination. Right-arrow is deliberately
+ * never used — inert in the input box, it adjusts the effort control in
+ * /model, and a degraded shadow is exactly the state in which such a dialog
+ * may be open. Undershoot would leave residue that gets co-submitted. The
+ * degradation is reported only in the send tool's result (draftHandling:
+ * best-effort); the app UI does not surface it.
  * Residual honesty: an untracked input larger than the cushion (e.g. a very
  * long history recall) can still leave residue; that is the documented limit
  * of a keystroke shadow with no read-back of the TUI screen.
@@ -60,8 +66,8 @@ export interface DraftStash {
 
 /** Overshoot applied to the clear sequence when tracking confidence is lost.
  *  Covers completion-inserted paths and typical history recalls; excess
- *  presses are no-ops at the input boundary and in the CLI's dialogs (only
- *  keys verified for both are used — see beginInjection). */
+ *  presses are no-ops at the input boundary and in the /model and /mcp
+ *  dialogs (measured), not in every dialog — see beginInjection. */
 const UNCONFIDENT_CLEAR_CUSHION = 1024
 
 const segmenter = new Intl.Segmenter()
@@ -424,13 +430,21 @@ export class DraftShadow {
    * lost both counts get a cushion; undershoot would leave residue to be
    * co-submitted.
    *
-   * Only these two keys are used, and nothing that moves the cursor: both
-   * were verified on the real CLI to be no-ops at the input boundary AND
-   * inside its Ink dialogs (/model with 64 presses each), whereas right-arrow
-   * — inert in the input box — adjusts the effort control in /model, and the
+   * Only these two keys are used, and nothing that moves the cursor. Measured
+   * on the real CLI: both are no-ops at the input boundary and inside the
+   * /model and /mcp dialogs (64 presses each in /model; a full degraded burst
+   * leaves /model and /mcp byte-identical), whereas right-arrow — inert in
+   * the input box — adjusts the effort control in /model, and the
    * dispatcher's very next write is the submitting CR. A degraded shadow is
    * precisely the state in which such a dialog may be open (the user pressed
    * Down to browse), so the clear sequence itself has to be dialog-safe.
+   *
+   * Measured NOT to hold everywhere: in /config's filter mode (empty filter
+   * after "Esc to clear") forward-deletes change nothing, but the first
+   * backspace flips the dialog into select mode, which the following CR
+   * would then act on. Accepted here as a documented limitation; the general
+   * dialog class (defer delivery while a dialog is open) is a follow-up
+   * filed by coordination.
    */
   beginInjection(): DraftStash {
     this.injectionActive = true
