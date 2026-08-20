@@ -10,6 +10,13 @@
  * writer — Clave itself never writes there). One JSON object per line; the
  * `v`/`kind`/`ts` envelope is what downstream lint validates, so those three
  * fields are required on every line and new event kinds are additive.
+ *
+ * Export contract: the exchanges view returns stored events AS STORED,
+ * envelope included, and an export serializes each returned event with
+ * JSON.stringify. That is a faithful-JSON-value guarantee, deliberately NOT
+ * byte-identity: a line Clave itself never serialized (hand-written or
+ * foreign) round-trips as an equivalent JSON value, not necessarily the same
+ * bytes.
  */
 
 /** Identity of one endpoint of an event, stamped AT CAPTURE TIME — events keep
