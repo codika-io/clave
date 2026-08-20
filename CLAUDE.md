@@ -21,8 +21,6 @@ Three-process Electron app:
 - **Preload** (`src/preload/`): Typed `window.electronAPI` via contextBridge. All main↔renderer communication goes through IPC.
 - **Renderer** (`src/renderer/src/`): React + Zustand + xterm.js + Tailwind v4 + Framer Motion.
 
-**Exchange capture** (`src/main/exchange-capture/`): the transport-layer record of inter-agent coordination — every `clave_send_to_session` delivery (with both endpoints' token snapshots computed from the Claude Code transcript files, Task-sidecar burn included), agent-initiated tab spawns with their launch prompts, and lazily discovered Task-subagent fan-outs — appended to `<userData>/exchange-capture/events.jsonl` and queried through the read-only `clave_read_exchanges` MCP tool (event timeline, token usage, or the operations-stripped conversation view). Capture is fire-and-forget: it never delays or fails the delivery it records. ⚠️ The line schema in `exchange-capture/types.ts` is a cross-repo contract: the exos workstream `telemetry.jsonl` sidecar carries these lines verbatim (readback + lint live in the exos monorepo), so schema changes must stay additive — new event kinds and new fields, never renames or removals.
-
 ## Conventions
 
 - **Icons**: Use Heroicons (`@heroicons/react/24/outline`) for all UI icons. No hand-rolled SVGs for standard icons. Custom SVGs only for file-type icons in `components/files/file-icons.tsx`.
