@@ -19,6 +19,7 @@ import { registerCopyOfferHandlers } from './copy-offer-handlers'
 import { registerExtensionsHandlers } from './extensions-handlers'
 import { registerMissionControlHandlers } from './mission-control-handlers'
 import { registerWorkspaceHandlers } from './workspace-handlers'
+import { registerExchangeHandlers } from './exchange-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -42,4 +43,5 @@ export function registerIpcHandlers(): void {
   registerExtensionsHandlers()
   registerMissionControlHandlers()
   registerWorkspaceHandlers()
+  registerExchangeHandlers()
 }

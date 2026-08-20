@@ -5,6 +5,18 @@ import type {
 } from '../shared/extensions-types'
 import type { WorkspaceStateFile } from '../shared/workspace-types'
 
+/** Endpoint identity stamped on exchange-capture events; mirrors
+ *  src/main/exchange-capture/types.ts EndpointIdentity. */
+export interface ExchangeEndpoint {
+  sessionId: string
+  name: string
+  mode: 'claude' | 'antigravity' | 'codex' | 'claude-agents' | 'terminal'
+  cwd: string
+  claudeSessionId: string | null
+  groupId: string | null
+  groupName: string | null
+}
+
 export interface SecretRequestView {
   id: string
   callerSessionId?: string
@@ -328,6 +340,21 @@ export interface ElectronAPI {
     ok: boolean
     result?: unknown
     error?: string
+  }) => void
+  captureExchangeMessage: (payload: {
+    ts: string
+    sender: ExchangeEndpoint
+    target: ExchangeEndpoint
+    text: string
+    provenance: string
+    delivered: boolean
+  }) => void
+  captureTabSpawn: (payload: {
+    ts: string
+    spawner: ExchangeEndpoint
+    session: ExchangeEndpoint
+    prompt: string | null
+    model: string | null
   }) => void
   secretList: () => Promise<SecretRequestView[]>
   secretSubmit: (id: string, secret: string) => Promise<SecretRequestView>
