@@ -734,8 +734,10 @@ async function handleSendToSession(payload: {
   // Degraded-case stance: when the shadow's tracking confidence is lost
   // (word ops, history recall, completions, dialog input…) we still deliver —
   // never hold the message on screen-scraping the TUI — clearing with a
-  // cushioned overshoot (boundary presses are no-ops; undershoot would leave
-  // residue to co-submit) and labeling the result best-effort.
+  // cushioned overshoot built only from keys verified inert both at the input
+  // boundary and inside the CLI's dialogs (see draft-shadow.ts; undershoot
+  // would leave residue to co-submit). The degradation is reported ONLY in
+  // this tool's result (draftHandling) — nothing in the app UI shows it.
   const runInjection = async (): Promise<DraftStash> => {
     const shadow = getDraftShadow(targetId)
     const stash = shadow.beginInjection()

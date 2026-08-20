@@ -35,11 +35,15 @@
  *
  * Degraded-case stance (decided for PRDCT-1569): when confidence is lost we
  * still deliver — never hold the message hostage to screen-scraping the TUI —
- * and we clear with a generous overshoot instead of an exact count. Overshoot
- * is safe because backspace and right-arrow are no-ops at the buffer
- * boundaries in every target CLI, while undershoot would leave residue that
- * gets co-submitted. The send result is labeled best-effort so the sender
- * (and the user, via the injected-from badge) can see the degradation.
+ * and we clear with a generous overshoot instead of an exact count. The clear
+ * sequence is built ONLY from keys verified on the real CLI to be no-ops both
+ * at the input-buffer boundary and inside its Ink dialogs (e.g. /model):
+ * backspace and forward-delete. Right-arrow is deliberately never used — it
+ * is inert in the input box but adjusts the effort control in /model, and a
+ * degraded shadow is exactly the state in which such a dialog may be open.
+ * Undershoot would leave residue that gets co-submitted. The degradation is
+ * reported only in the send tool's result (draftHandling: best-effort); the
+ * app UI does not surface it.
  * Residual honesty: an untracked input larger than the cushion (e.g. a very
  * long history recall) can still leave residue; that is the documented limit
  * of a keystroke shadow with no read-back of the TUI screen.
@@ -56,7 +60,8 @@ export interface DraftStash {
 
 /** Overshoot applied to the clear sequence when tracking confidence is lost.
  *  Covers completion-inserted paths and typical history recalls; excess
- *  presses are boundary no-ops in the target TUIs. */
+ *  presses are no-ops at the input boundary and in the CLI's dialogs (only
+ *  keys verified for both are used — see beginInjection). */
 const UNCONFIDENT_CLEAR_CUSHION = 1024
 
 const segmenter = new Intl.Segmenter()
@@ -413,10 +418,19 @@ export class DraftShadow {
 
   /**
    * Start an injection (stash → clear → deliver → submit → restore). Returns
-   * the stash plus the precomputed clear sequence: right-arrows to reach the
-   * end of the buffer, then backspaces over its full length. When confidence
-   * is lost both counts get a cushion — overshoot is a boundary no-op,
-   * undershoot would leave residue to be co-submitted.
+   * the stash plus the precomputed clear sequence: forward-deletes over
+   * everything after the cursor, then backspaces over the buffer's full
+   * length (code points: an upper bound on keypresses). When confidence is
+   * lost both counts get a cushion; undershoot would leave residue to be
+   * co-submitted.
+   *
+   * Only these two keys are used, and nothing that moves the cursor: both
+   * were verified on the real CLI to be no-ops at the input boundary AND
+   * inside its Ink dialogs (/model with 64 presses each), whereas right-arrow
+   * — inert in the input box — adjusts the effort control in /model, and the
+   * dispatcher's very next write is the submitting CR. A degraded shadow is
+   * precisely the state in which such a dialog may be open (the user pressed
+   * Down to browse), so the clear sequence itself has to be dialog-safe.
    */
   beginInjection(): DraftStash {
     this.injectionActive = true
@@ -425,10 +439,10 @@ export class DraftShadow {
     const cpAfterCursor = codePointCount(this.text.slice(this.cursor))
     let clear = ''
     if (this.confident) {
-      if (cpAll > 0) clear = '\x1b[C'.repeat(cpAfterCursor) + '\x7f'.repeat(cpAll)
+      if (cpAll > 0) clear = '\x1b[3~'.repeat(cpAfterCursor) + '\x7f'.repeat(cpAll)
     } else {
       const n = cpAll + UNCONFIDENT_CLEAR_CUSHION
-      clear = '\x1b[C'.repeat(n) + '\x7f'.repeat(n)
+      clear = '\x1b[3~'.repeat(n) + '\x7f'.repeat(n)
     }
     return { text: this.text, confident: this.confident, clear }
   }

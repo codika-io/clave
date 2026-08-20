@@ -7,7 +7,7 @@ import { getXtermTheme } from '../lib/terminal-theme'
 import { safePort } from '../lib/utils'
 import { stripAnsi, detectLocalhostUrl } from '../lib/localhost-url'
 import { registerTerminal, unregisterTerminal } from '../lib/terminal-registry'
-import { getDraftShadow } from '../lib/draft-shadow'
+import { writeUserInput } from '../lib/user-input'
 import '@xterm/xterm/css/xterm.css'
 
 function detectPrompt(buffer: string): string | null {
@@ -70,17 +70,10 @@ export function useTerminal(sessionId: string) {
     fitAddonRef.current = fitAddon
     registerTerminal(sessionId, terminal)
 
-    // User input -> PTY, mirrored into the session's draft shadow so
-    // clave_send_to_session can stash/clear/restore a half-typed draft
-    // (PRDCT-1569). While the CLI shows a permission prompt the keystrokes
-    // drive a dialog, not the input line, so they are fed as opaque.
-    const writeUser = (data: string): void => {
-      const shadow = getDraftShadow(sessionId)
-      const s = useSessionStore.getState().sessions.find((x) => x.id === sessionId)
-      if (s && (s.promptWaiting !== null || s.agentState === 'blocked')) shadow.noteOpaqueInput()
-      else shadow.feed(data)
-      window.electronAPI.writeSession(sessionId, data)
-    }
+    // User input -> PTY through the shared helper, which mirrors it into the
+    // session's draft shadow (PRDCT-1569: clave_send_to_session stashes,
+    // clears, and restores a half-typed draft).
+    const writeUser = (data: string): void => writeUserInput(sessionId, data)
 
     // Custom key bindings — bypass xterm.js local processing, send directly to PTY
     terminal.attachCustomKeyEventHandler((e) => {

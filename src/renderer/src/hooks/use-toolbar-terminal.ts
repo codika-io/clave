@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { useSessionStore } from '../store/session-store'
 import { getXtermTheme } from '../lib/terminal-theme'
+import { writeUserInput } from '../lib/user-input'
 import '@xterm/xterm/css/xterm.css'
 
 export type ToolbarTerminalStatus = 'running' | 'exited'
@@ -49,9 +50,11 @@ export function useToolbarTerminal({ sessionId, persistent }: UseToolbarTerminal
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
-    // Wire terminal input -> PTY
+    // Wire terminal input -> PTY via the shared user-input helper (toolbar
+    // terminals are never send targets, but every user-input writer feeds the
+    // draft shadow so the rule has no exceptions).
     const inputDisposable = terminal.onData((data) => {
-      window.electronAPI.writeSession(sessionId, data)
+      writeUserInput(sessionId, data)
     })
 
     // Wire terminal resize -> PTY
