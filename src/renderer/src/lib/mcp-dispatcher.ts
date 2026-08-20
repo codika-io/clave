@@ -5,6 +5,7 @@ import type { PinnedGroupSession } from '../store/session-types'
 import { useWorkspaceStore, type Workspace } from '../store/workspace-store'
 import { setActiveWorkspace } from './workspace-actions'
 import { getRegisteredTerminal } from './terminal-registry'
+import { getDraftShadow, type DraftStash } from './draft-shadow'
 
 /**
  * Renderer-side executor for the in-app MCP server. The sidebar state (groups,
@@ -722,21 +723,57 @@ async function handleSendToSession(payload: {
   const text = sanitizeForPaste(`${header}\n${payload.message}`)
 
   const targetId = target.id
+
+  // PRDCT-1569: the target CLI's input buffer may hold the user's half-typed
+  // draft, which would otherwise be co-submitted with (and swallowed by) the
+  // injected turn. Stash the tracked draft, clear the input line, deliver
+  // header+message and submit ALONE, then restore the draft unsubmitted.
+  // The whole sequence lives inside one per-target chain link so a concurrent
+  // send cannot interleave with the restore.
+  //
+  // Degraded-case stance: when the shadow's tracking confidence is lost
+  // (word ops, history recall, completions, dialog input…) we still deliver —
+  // never hold the message on screen-scraping the TUI — clearing with a
+  // cushioned overshoot (boundary presses are no-ops; undershoot would leave
+  // residue to co-submit) and labeling the result best-effort.
+  const runInjection = async (): Promise<DraftStash> => {
+    const shadow = getDraftShadow(targetId)
+    const stash = shadow.beginInjection()
+    try {
+      if (stash.clear) {
+        window.electronAPI.writeSession(targetId, stash.clear)
+        await new Promise((r) => setTimeout(r, 150))
+      }
+      // Deliver as one bracketed paste so embedded newlines don't submit early,
+      // then submit. The TUI queues input that arrives mid-turn, so a busy agent
+      // sees the message as its next user turn.
+      window.electronAPI.writeSession(targetId, `\x1b[200~${text}\x1b[201~`)
+      await new Promise((r) => setTimeout(r, 150))
+      window.electronAPI.writeSession(targetId, '\r')
+      if (stash.text) {
+        // Give the TUI a beat to consume the submit, then re-paste the draft
+        // with NO trailing submit — same sanitize + bracketed-paste discipline
+        // as the message itself (the draft is user text, not keystrokes).
+        await new Promise((r) => setTimeout(r, 150))
+        window.electronAPI.writeSession(
+          targetId,
+          `\x1b[200~${sanitizeForPaste(stash.text)}\x1b[201~`
+        )
+      }
+    } finally {
+      shadow.endInjection(stash.text)
+    }
+    return stash
+  }
+
   const prior = sendChains.get(targetId) ?? Promise.resolve()
-  const run = prior.catch(() => {}).then(async () => {
-    // Deliver as one bracketed paste so embedded newlines don't submit early,
-    // then submit. The TUI queues input that arrives mid-turn, so a busy agent
-    // sees the message as its next user turn.
-    window.electronAPI.writeSession(targetId, `\x1b[200~${text}\x1b[201~`)
-    await new Promise((r) => setTimeout(r, 150))
-    window.electronAPI.writeSession(targetId, '\r')
-  })
+  const run = prior.catch(() => {}).then(runInjection)
   sendChains.set(targetId, run)
   run.finally(() => {
     // Drop the chain once it drains so the map doesn't grow unboundedly.
     if (sendChains.get(targetId) === run) sendChains.delete(targetId)
   })
-  await run
+  const stash = await run
 
   // The target can exit during the 150ms envelope→submit gap; the PTY write is
   // then a silent no-op, so report what actually happened rather than a blanket
@@ -750,12 +787,22 @@ async function handleSendToSession(payload: {
     store.setSessionInjectedFrom(targetId, sender?.name ?? 'another tab')
     if (!store.selectedSessionIds.includes(targetId)) store.setSessionUnseenActivity(targetId, true)
   }
+  // How the user's pending input draft was handled: 'none' (input believed
+  // empty, nothing touched), 'stashed-restored' (draft cleared before the
+  // injected turn and re-pasted unsubmitted after it), or the best-effort
+  // variant when keystroke tracking had lost confidence.
+  const draftHandling = stash.confident
+    ? stash.text
+      ? 'stashed-restored'
+      : 'none'
+    : 'stashed-restored-best-effort'
   return {
     delivered: stillAlive,
     sessionId: targetId,
     name: target.name,
     mode,
-    agentState: target.agentState ?? null
+    agentState: target.agentState ?? null,
+    draftHandling
   }
 }
 

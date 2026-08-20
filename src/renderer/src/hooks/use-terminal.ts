@@ -7,6 +7,7 @@ import { getXtermTheme } from '../lib/terminal-theme'
 import { safePort } from '../lib/utils'
 import { stripAnsi, detectLocalhostUrl } from '../lib/localhost-url'
 import { registerTerminal, unregisterTerminal } from '../lib/terminal-registry'
+import { getDraftShadow } from '../lib/draft-shadow'
 import '@xterm/xterm/css/xterm.css'
 
 function detectPrompt(buffer: string): string | null {
@@ -69,37 +70,49 @@ export function useTerminal(sessionId: string) {
     fitAddonRef.current = fitAddon
     registerTerminal(sessionId, terminal)
 
+    // User input -> PTY, mirrored into the session's draft shadow so
+    // clave_send_to_session can stash/clear/restore a half-typed draft
+    // (PRDCT-1569). While the CLI shows a permission prompt the keystrokes
+    // drive a dialog, not the input line, so they are fed as opaque.
+    const writeUser = (data: string): void => {
+      const shadow = getDraftShadow(sessionId)
+      const s = useSessionStore.getState().sessions.find((x) => x.id === sessionId)
+      if (s && (s.promptWaiting !== null || s.agentState === 'blocked')) shadow.noteOpaqueInput()
+      else shadow.feed(data)
+      window.electronAPI.writeSession(sessionId, data)
+    }
+
     // Custom key bindings — bypass xterm.js local processing, send directly to PTY
     terminal.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
       // Shift+Enter → newline
       if (e.key === 'Enter' && e.shiftKey) {
         e.preventDefault()
-        window.electronAPI.writeSession(sessionId, '\n')
+        writeUser('\n')
         return false
       }
       // Option+Backspace → word delete backward
       if (e.key === 'Backspace' && e.altKey && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        window.electronAPI.writeSession(sessionId, '\x1b\x7f')
+        writeUser('\x1b\x7f')
         return false
       }
       // Option+Delete → forward word delete
       if (e.key === 'Delete' && e.altKey && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        window.electronAPI.writeSession(sessionId, '\x1bd')
+        writeUser('\x1bd')
         return false
       }
       // Option+Left → word backward
       if (e.key === 'ArrowLeft' && e.altKey && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        window.electronAPI.writeSession(sessionId, '\x1bb')
+        writeUser('\x1bb')
         return false
       }
       // Option+Right → word forward
       if (e.key === 'ArrowRight' && e.altKey && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        window.electronAPI.writeSession(sessionId, '\x1bf')
+        writeUser('\x1bf')
         return false
       }
       return true
@@ -107,7 +120,7 @@ export function useTerminal(sessionId: string) {
 
     // Wire terminal input -> PTY
     const inputDisposable = terminal.onData((data) => {
-      window.electronAPI.writeSession(sessionId, data)
+      writeUser(data)
     })
 
     // Wire terminal resize -> PTY.
@@ -396,7 +409,7 @@ export function useTerminal(sessionId: string) {
       const escaped = stablePaths.map((p) => shellEscape(p))
 
       if (escaped.length > 0) {
-        window.electronAPI.writeSession(sessionId, escaped.join(' '))
+        writeUser(escaped.join(' '))
         terminal.focus()
       }
     }
