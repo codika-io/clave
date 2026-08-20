@@ -33,6 +33,30 @@ function groupOfSession(groups: SessionGroup[], sessionId: string): SessionGroup
   return groups.find((g) => g.sessionIds.includes(sessionId))
 }
 
+/** Identity stamped on exchange-capture events — read at event time, so the
+ *  record keeps the names and group membership that were true when the event
+ *  happened and survives later renames, moves, and deletions. */
+function captureEndpoint(s: Session): {
+  sessionId: string
+  name: string
+  mode: SessionMode
+  cwd: string
+  claudeSessionId: string | null
+  groupId: string | null
+  groupName: string | null
+} {
+  const group = groupOfSession(useSessionStore.getState().groups, s.id)
+  return {
+    sessionId: s.id,
+    name: s.name,
+    mode: sessionMode(s),
+    cwd: s.cwd,
+    claudeSessionId: s.claudeSessionId ?? null,
+    groupId: group?.id ?? null,
+    groupName: group?.name ?? null
+  }
+}
+
 /** Resolve a workspace reference: id, exact name, or case-insensitive name. */
 function resolveWorkspace(ref: string): Workspace {
   const { workspaces } = useWorkspaceStore.getState()
@@ -396,6 +420,25 @@ export async function openSessionProgrammatically(payload: {
     useSessionStore.getState().moveItems([info.id], '__clave-mcp-root__', 'after')
   }
 
+  // Agent-delegation spawns are transport events (PRDCT-1568): record them
+  // with their launch prompt. UI-originated opens have no caller identity and
+  // are the human's own act, not transport — never captured. Terminals are
+  // not agents; not captured either.
+  if (payload.callerSessionId && mode !== 'terminal') {
+    const current = useSessionStore.getState().sessions
+    const spawner = current.find((s) => s.id === payload.callerSessionId)
+    const spawned = current.find((s) => s.id === info.id)
+    if (spawner && spawned) {
+      window.electronAPI.captureTabSpawn({
+        ts: new Date().toISOString(),
+        spawner: captureEndpoint(spawner),
+        session: captureEndpoint(spawned),
+        prompt: payload.prompt || null,
+        model: model ?? null
+      })
+    }
+  }
+
   const groups = useSessionStore.getState().groups
   return { sessionId: info.id, groupId: groupOfSession(groups, info.id)?.id ?? null }
 }
@@ -718,11 +761,22 @@ async function handleSendToSession(payload: {
   const header = sender
     ? `[Message from Clave tab "${sender.name}" — reply with clave_send_to_session sessionId="${sender.id}"]`
     : '[Message from a Clave agent]'
-  // Sanitize the WHOLE payload (header + message): a tab renamed to carry
-  // control bytes must not be able to smuggle them in via the header either.
-  const text = sanitizeForPaste(`${header}\n${payload.message}`)
+  // Sanitize BOTH parts (header + message): a tab renamed to carry control
+  // bytes must not be able to smuggle them in via the header either. Parts
+  // are sanitized separately (the per-character filter distributes over
+  // concatenation, so this equals sanitizing the joined text) so the capture
+  // below can record exactly what was delivered under which provenance.
+  const cleanHeader = sanitizeForPaste(header)
+  const cleanMessage = sanitizeForPaste(payload.message)
+  const text = `${cleanHeader}\n${cleanMessage}`
 
   const targetId = target.id
+
+  // Set once the SUBMIT below has landed — the moment the message exists in
+  // the target. The capture (see the chain wiring) keys off this and NOT off
+  // the draft restore that follows, so a failed or best-effort restore can
+  // neither suppress the record nor change `delivered`.
+  let submitted = false
 
   // PRDCT-1569: the target CLI's input buffer may hold the user's half-typed
   // draft, which would otherwise be co-submitted with (and swallowed by) the
@@ -752,6 +806,7 @@ async function handleSendToSession(payload: {
       window.electronAPI.writeSession(targetId, `\x1b[200~${text}\x1b[201~`)
       await new Promise((r) => setTimeout(r, 150))
       window.electronAPI.writeSession(targetId, '\r')
+      submitted = true
       if (stash.text) {
         // Give the TUI a beat to consume the submit, then re-paste the draft
         // with NO trailing submit — same sanitize + bracketed-paste discipline
@@ -775,6 +830,27 @@ async function handleSendToSession(payload: {
     // Drop the chain once it drains so the map doesn't grow unboundedly.
     if (sendChains.get(targetId) === run) sendChains.delete(targetId)
   })
+  // Transport-layer capture (PRDCT-1568), on a chain of its own so the delivery
+  // never waits on it: it records the message once the submit has landed, and
+  // fires on BOTH settle paths — a restore that failed still delivered a
+  // message, and the record must show that. Fire-and-forget IPC, off the
+  // stash->restore critical path. `sender` is always set here: assertCanReach
+  // refused identity-less callers above.
+  if (sender) {
+    const recordDelivery = (): void => {
+      if (!submitted) return
+      window.electronAPI.captureExchangeMessage({
+        ts: new Date().toISOString(),
+        sender: captureEndpoint(sender),
+        target: captureEndpoint(target),
+        text: cleanMessage,
+        provenance: cleanHeader,
+        delivered:
+          useSessionStore.getState().sessions.find((s) => s.id === targetId)?.alive === true
+      })
+    }
+    void run.then(recordDelivery, recordDelivery)
+  }
   const stash = await run
 
   // The target can exit during the 150ms envelope→submit gap; the PTY write is
@@ -838,6 +914,51 @@ function handleReadSession(payload: {
   }
 }
 
+/**
+ * Resolve and reach-gate a clave_read_exchanges scope. The renderer owns the
+ * identities and relationships, so the gate lives here; the main process then
+ * runs the actual query over the capture store and the transcript files.
+ * The gate is clave_read_session's relationship gate, applied to the capture:
+ * group scope requires membership, session scope requires spawn lineage or a
+ * shared group, anonymous callers are refused. The durable read path for
+ * anyone outside those relationships is the workstream record the capture
+ * exports to — not this live tool.
+ */
+function handleResolveExchangeScope(payload: {
+  group?: string
+  session?: string
+  callerSessionId?: string
+}): unknown {
+  if ((payload.group === undefined) === (payload.session === undefined)) {
+    throw new Error('Pass exactly one of group or session to scope the query')
+  }
+  const state = useSessionStore.getState()
+  const caller = payload.callerSessionId
+    ? state.sessions.find((s) => s.id === payload.callerSessionId)
+    : undefined
+  if (!caller) {
+    throw new Error(
+      'clave_read_exchanges must be called from inside a Clave agent tab — this request has no tab identity.'
+    )
+  }
+  if (payload.group !== undefined) {
+    const group = resolveGroup(state.groups, payload.group, payload.callerSessionId)
+    if (!group.sessionIds.includes(caller.id)) {
+      throw new Error(
+        `Refusing to read exchanges of group "${group.name}": your tab is not a member. Group-scoped reads are for the group's own members; target a related session instead, or read the workstream record.`
+      )
+    }
+    const sessions = group.sessionIds
+      .map((id) => state.sessions.find((s) => s.id === id))
+      .filter((s): s is Session => !!s && s.sessionType === 'local')
+      .map(captureEndpoint)
+    return { scope: 'group', group: { id: group.id, name: group.name }, sessions }
+  }
+  const target = resolveTargetSession(payload.session!, payload.callerSessionId)
+  assertCanReach(payload.callerSessionId, target, 'read')
+  return { scope: 'session', group: null, sessions: [captureEndpoint(target)] }
+}
+
 function handleFocus(payload: { sessionId: string }): unknown {
   const state = useSessionStore.getState()
   const target = state.sessions.find((s) => s.id === payload.sessionId)
@@ -888,6 +1009,8 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleSendToSession(payload as Parameters<typeof handleSendToSession>[0])
     case 'readSession':
       return handleReadSession(payload as Parameters<typeof handleReadSession>[0])
+    case 'resolveExchangeScope':
+      return handleResolveExchangeScope(payload as Parameters<typeof handleResolveExchangeScope>[0])
     case 'openFile':
       return handleOpenFile(payload as Parameters<typeof handleOpenFile>[0])
     case 'notify':

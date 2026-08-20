@@ -21,10 +21,12 @@ import {
   type SecretRequest
 } from '../secret-request-manager'
 import { createOffer } from '../copy-offer-manager'
+import { queryExchanges } from '../exchange-capture/service'
+import type { ResolvedExchangeScope } from '../exchange-capture/types'
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company); exactly one workspace is active and is all the user sees — other workspaces' sessions keep running hidden. Things you open default to your own tab's workspace; pass the workspace parameter to open work elsewhere without switching the user's view, and clave_switch_workspace only when the user should look at it. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company); exactly one workspace is active and is all the user sees — other workspaces' sessions keep running hidden. Things you open default to your own tab's workspace; pass the workspace parameter to open work elsewhere without switching the user's view, and clave_switch_workspace only when the user should look at it. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Clave also records the transport layer it mediates — cross-tab message deliveries with both endpoints' token usage, agent tab spawns, Task-subagent fan-outs — and clave_read_exchanges queries that capture for your group or a related session: the event timeline, current token usage, or each session's human-layer conversation with operations stripped. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -350,6 +352,71 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       }
     },
     (args) => runCommand('readSession', { ...args, callerSessionId })
+  )
+
+  server.registerTool(
+    'clave_read_exchanges',
+    {
+      description:
+        'Query Clave\'s transport-layer exchange capture: what Clave recorded about inter-agent coordination — every clave_send_to_session delivery (timestamp, sender and target tab, full text, provenance header), agent-initiated tab spawns with their launch prompts, and Task-subagent fan-outs (discovered lazily from transcripts: recorded from the first delivery or query touching their parent session). Scope by group OR session, exactly one. Three views: "exchanges" (the recorded event timeline, with both endpoints\' token snapshots on each delivery), "usage" (each in-scope session\'s current token snapshot), "conversation" (the human-layer exchange: the human\'s messages plus the agent\'s text blocks with operations stripped — no tool calls, no tool results, no thinking — each agent entry tagged mid-turn or end-of-turn). Token snapshots carry two DISTINCT numbers, never conflate them: `billed` is cumulative spend — input/output/cache-creation/cache-read tokens summed over every API call in the session\'s transcript, Task-subagent sidecars INCLUDED (their share broken out under billed.subagents) — while `contextOccupancy` is how full the root session\'s context window is right now (the tokens that entered its latest completed call; sidecars excluded). Snapshots read the transcript as it is on disk: a still-streaming turn shows the last completed call. Read-only: nothing about the queried sessions is touched. Access uses clave_read_session\'s relationship gate — group scope requires your tab to be a member of that group; session scope requires spawn lineage ("parent", a tab you opened) or a shared group; anonymous callers are refused. The durable read path for anyone outside those relationships is the workstream record the capture exports to, not this live tool.',
+      inputSchema: {
+        group: z
+          .string()
+          .optional()
+          .describe(
+            'Group scope: a group id, an exact group name, or "mine". Pass exactly one of group/session.'
+          ),
+        session: z
+          .string()
+          .optional()
+          .describe(
+            'Session scope: a session id, an exact tab name, or "parent". Pass exactly one of group/session.'
+          ),
+        view: z
+          .enum(['exchanges', 'usage', 'conversation'])
+          .default('exchanges')
+          .describe('What to return: the event timeline, token snapshots, or the human-layer conversation'),
+        direction: z
+          .enum(['incoming', 'outgoing'])
+          .optional()
+          .describe(
+            'Session scope only (errors on group scope): "outgoing" = events the session sent or spawned; "incoming" = events it received or being spawned. Omit for both.'
+          ),
+        since: z
+          .string()
+          .optional()
+          .describe(
+            'ISO-8601 timestamp: only events (exchanges view) or entries (conversation view) at or after it. Errors on the usage view — a snapshot has no time range.'
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(1000)
+          .default(200)
+          .describe(
+            'Keep the newest N events (exchanges) or entries per session (conversation); truncation is reported via truncated/totalMatched, never silent. Inert for usage.'
+          )
+      }
+    },
+    async (args) => {
+      try {
+        const scope = await callRenderer<ResolvedExchangeScope>('resolveExchangeScope', {
+          group: args.group,
+          session: args.session,
+          callerSessionId
+        })
+        const result = queryExchanges(scope, {
+          view: args.view,
+          direction: args.direction,
+          since: args.since,
+          limit: args.limit
+        })
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err))
+      }
+    }
   )
 
   server.registerTool(

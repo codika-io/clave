@@ -24,11 +24,24 @@ function encodeProjectDir(cwd: string): string {
 }
 
 export function rootTranscriptPath(cwd: string, claudeSessionId: string): string {
-  return path.join(homedir(), '.claude', 'projects', encodeProjectDir(cwd), `${claudeSessionId}.jsonl`)
+  return path.join(
+    homedir(),
+    '.claude',
+    'projects',
+    encodeProjectDir(cwd),
+    `${claudeSessionId}.jsonl`
+  )
 }
 
 export function subagentsDir(cwd: string, claudeSessionId: string): string {
-  return path.join(homedir(), '.claude', 'projects', encodeProjectDir(cwd), claudeSessionId, 'subagents')
+  return path.join(
+    homedir(),
+    '.claude',
+    'projects',
+    encodeProjectDir(cwd),
+    claudeSessionId,
+    'subagents'
+  )
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
