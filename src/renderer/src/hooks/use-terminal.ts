@@ -1,3 +1,4 @@
+import { emitAgentStateWord, emitSessionExited } from '../lib/exchange-capture'
 import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -153,6 +154,12 @@ export function useTerminal(sessionId: string) {
     // Deterministic Claude run state from CC lifecycle hooks (working/blocked/done).
     const cleanupAgentState = window.electronAPI.onAgentState(sessionId, (state) => {
       if (state === 'idle' || state === 'working' || state === 'blocked' || state === 'done') {
+        // Capture the transition BEFORE the store applies the word: the
+        // session's current agentState is the event's `previous` (mapped,
+        // so done→idle is a no-op and emits nothing).
+        const current = useSessionStore.getState()
+        const session = current.sessions.find((s) => s.id === sessionId)
+        if (session) emitAgentStateWord(session, current.groups, state)
         setAgentState(sessionId, state)
       }
       // 'ended' is derived from the PTY exit / alive flag, so it's ignored here.
@@ -272,6 +279,13 @@ export function useTerminal(sessionId: string) {
       if (notificationTimer) {
         clearTimeout(notificationTimer)
         notificationTimer = null
+      }
+      // The pty is gone for good: `session_state: exited` (source pty), stamped
+      // while the identity is still in the store.
+      {
+        const current = useSessionStore.getState()
+        const session = current.sessions.find((s) => s.id === sessionId)
+        if (session) emitSessionExited(session, current.groups)
       }
       updateSessionAlive(sessionId, false)
       // Keep the URL so the button remains visible; mark as stopped

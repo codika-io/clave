@@ -3,12 +3,13 @@
  * the matcher that recognizes it again in a session's transcript.
  *
  * ONE source of truth on purpose. The renderer BUILDS the header when
- * delivering (`mcp-dispatcher.handleSendToSession`); the main process MATCHES
- * it when parsing a transcript back into the human-layer conversation view
- * (`exchange-capture/transcript.parseConversation`). A hand-typed second copy
- * of this string would drift, and the failure is silent in the worst
- * direction: an unmatched header makes a sibling agent's message read as
- * something the human typed.
+ * delivering (`mcp-dispatcher.handleSendToSession`), and `hasProvenanceHeader`
+ * is the matcher any reader of a transcript uses to tell a sibling agent's
+ * delivery from something the human typed (the in-app conversation view that
+ * used it went with the clave_read_exchanges tool; the exos side reads the
+ * record instead). A hand-typed second copy of this string would drift, and
+ * the failure is silent in the worst direction: an unmatched header makes a
+ * sibling agent's message read as something the human typed.
  */
 
 /** Sender identity as it appears in a named header. */

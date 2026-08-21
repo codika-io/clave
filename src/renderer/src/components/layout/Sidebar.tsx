@@ -1,3 +1,4 @@
+import { emitTabClosed } from '../../lib/exchange-capture'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   useSessionStore,
@@ -535,6 +536,9 @@ export function Sidebar() {
 
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
+      const current = useSessionStore.getState()
+      const session = current.sessions.find((s) => s.id === sessionId)
+      if (session) emitTabClosed(session, current.groups, 'user', null)
       try {
         await window.electronAPI.killSession(sessionId)
       } catch {
@@ -547,10 +551,13 @@ export function Sidebar() {
 
   const handleDeleteGroup = useCallback(
     async (groupId: string) => {
-      const group = useSessionStore.getState().groups.find((g) => g.id === groupId)
+      const current = useSessionStore.getState()
+      const group = current.groups.find((g) => g.id === groupId)
       if (!group) return
       await Promise.all(
         group.sessionIds.map(async (sid) => {
+          const session = current.sessions.find((s) => s.id === sid)
+          if (session) emitTabClosed(session, current.groups, 'user', null)
           try {
             await window.electronAPI.killSession(sid)
           } catch {

@@ -1,3 +1,4 @@
+import { emitTabClosed } from '../lib/exchange-capture'
 import { create } from 'zustand'
 import type {
   Theme,
@@ -462,7 +463,11 @@ export const useSessionStore = create<SessionState>((set) => ({
     }),
 
   resetSessions: async () => {
-    const { sessions } = useSessionStore.getState()
+    const { sessions, groups } = useSessionStore.getState()
+
+    // The one app-initiated close: every tab goes, recorded as such. (An app
+    // QUIT is not a close — sessions survive in tmux and are re-adopted.)
+    for (const s of sessions) emitTabClosed(s, groups, 'app', null)
 
     // Kill all PTYs
     await Promise.allSettled(

@@ -1,3 +1,10 @@
+import {
+  captureEndpoint as captureEndpointOf,
+  emitTabClosed,
+  groupOfSession,
+  sessionMode,
+  type SessionMode
+} from './exchange-capture'
 import { useSessionStore, fileTabDedupKey, inActiveWorkspace } from '../store/session-store'
 import type { GroupTerminalConfig, Session, SessionGroup } from '../store/session-store'
 import { usePinnedStore, getPinnedState, togglePinnedGroup } from '../store/pinned-store'
@@ -18,44 +25,6 @@ interface McpCommandMessage {
   requestId: string
   command: string
   payload: unknown
-}
-
-type SessionMode = 'claude' | 'antigravity' | 'codex' | 'claude-agents' | 'terminal'
-
-function sessionMode(s: Session): SessionMode {
-  if (s.antigravityMode) return 'antigravity'
-  if (s.codexMode) return 'codex'
-  if (s.claudeAgentsMode) return 'claude-agents'
-  if (s.claudeMode) return 'claude'
-  return 'terminal'
-}
-
-function groupOfSession(groups: SessionGroup[], sessionId: string): SessionGroup | undefined {
-  return groups.find((g) => g.sessionIds.includes(sessionId))
-}
-
-/** Identity stamped on exchange-capture events — read at event time, so the
- *  record keeps the names and group membership that were true when the event
- *  happened and survives later renames, moves, and deletions. */
-function captureEndpoint(s: Session): {
-  sessionId: string
-  name: string
-  mode: SessionMode
-  cwd: string
-  claudeSessionId: string | null
-  groupId: string | null
-  groupName: string | null
-} {
-  const group = groupOfSession(useSessionStore.getState().groups, s.id)
-  return {
-    sessionId: s.id,
-    name: s.name,
-    mode: sessionMode(s),
-    cwd: s.cwd,
-    claudeSessionId: s.claudeSessionId ?? null,
-    groupId: group?.id ?? null,
-    groupName: group?.name ?? null
-  }
 }
 
 /** Resolve a workspace reference: id, exact name, or case-insensitive name. */
@@ -432,8 +401,8 @@ export async function openSessionProgrammatically(payload: {
     if (spawner && spawned) {
       window.electronAPI.captureTabSpawn({
         ts: new Date().toISOString(),
-        spawner: captureEndpoint(spawner),
-        session: captureEndpoint(spawned),
+        spawner: captureEndpointOf(spawner, useSessionStore.getState().groups),
+        session: captureEndpointOf(spawned, useSessionStore.getState().groups),
         prompt: payload.prompt || null,
         model: model ?? null
       })
@@ -553,10 +522,19 @@ async function handleAddGroupTerminal(payload: {
   return { terminalId, groupId: group.id, sessionId: info.id }
 }
 
-async function handleCloseSession(payload: { sessionId: string }): Promise<unknown> {
+async function handleCloseSession(payload: {
+  sessionId: string
+  callerSessionId?: string
+}): Promise<unknown> {
   const state = useSessionStore.getState()
   const session = state.sessions.find((s) => s.id === payload.sessionId)
   if (!session) throw new Error(`No session with id "${payload.sessionId}"`)
+  // An agent-initiated close is a transport event: recorded with the closing
+  // tab as `closer` BEFORE the kill, while the identity is still in the store.
+  const closer = payload.callerSessionId
+    ? (state.sessions.find((s) => s.id === payload.callerSessionId) ?? null)
+    : null
+  emitTabClosed(session, state.groups, 'agent', closer)
   await window.electronAPI.killSession(payload.sessionId)
   useSessionStore.getState().removeSession(payload.sessionId)
   return { closed: payload.sessionId }
@@ -843,8 +821,8 @@ async function handleSendToSession(payload: {
       if (!submitted) return
       window.electronAPI.captureExchangeMessage({
         ts: new Date().toISOString(),
-        sender: captureEndpoint(sender),
-        target: captureEndpoint(target),
+        sender: captureEndpointOf(sender, useSessionStore.getState().groups),
+        target: captureEndpointOf(target, useSessionStore.getState().groups),
         text: cleanMessage,
         provenance: cleanHeader,
         delivered:
@@ -916,51 +894,6 @@ function handleReadSession(payload: {
   }
 }
 
-/**
- * Resolve and reach-gate a clave_read_exchanges scope. The renderer owns the
- * identities and relationships, so the gate lives here; the main process then
- * runs the actual query over the capture store and the transcript files.
- * The gate is clave_read_session's relationship gate, applied to the capture:
- * group scope requires membership, session scope requires spawn lineage or a
- * shared group, anonymous callers are refused. The durable read path for
- * anyone outside those relationships is the workstream record the capture
- * exports to — not this live tool.
- */
-function handleResolveExchangeScope(payload: {
-  group?: string
-  session?: string
-  callerSessionId?: string
-}): unknown {
-  if ((payload.group === undefined) === (payload.session === undefined)) {
-    throw new Error('Pass exactly one of group or session to scope the query')
-  }
-  const state = useSessionStore.getState()
-  const caller = payload.callerSessionId
-    ? state.sessions.find((s) => s.id === payload.callerSessionId)
-    : undefined
-  if (!caller) {
-    throw new Error(
-      'clave_read_exchanges must be called from inside a Clave agent tab — this request has no tab identity.'
-    )
-  }
-  if (payload.group !== undefined) {
-    const group = resolveGroup(state.groups, payload.group, payload.callerSessionId)
-    if (!group.sessionIds.includes(caller.id)) {
-      throw new Error(
-        `Refusing to read exchanges of group "${group.name}": your tab is not a member. Group-scoped reads are for the group's own members; target a related session instead, or read the workstream record.`
-      )
-    }
-    const sessions = group.sessionIds
-      .map((id) => state.sessions.find((s) => s.id === id))
-      .filter((s): s is Session => !!s && s.sessionType === 'local')
-      .map(captureEndpoint)
-    return { scope: 'group', group: { id: group.id, name: group.name }, sessions }
-  }
-  const target = resolveTargetSession(payload.session!, payload.callerSessionId)
-  assertCanReach(payload.callerSessionId, target, 'read')
-  return { scope: 'session', group: null, sessions: [captureEndpoint(target)] }
-}
-
 function handleFocus(payload: { sessionId: string }): unknown {
   const state = useSessionStore.getState()
   const target = state.sessions.find((s) => s.id === payload.sessionId)
@@ -1011,8 +944,6 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleSendToSession(payload as Parameters<typeof handleSendToSession>[0])
     case 'readSession':
       return handleReadSession(payload as Parameters<typeof handleReadSession>[0])
-    case 'resolveExchangeScope':
-      return handleResolveExchangeScope(payload as Parameters<typeof handleResolveExchangeScope>[0])
     case 'openFile':
       return handleOpenFile(payload as Parameters<typeof handleOpenFile>[0])
     case 'notify':
