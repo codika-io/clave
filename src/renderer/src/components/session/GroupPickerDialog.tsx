@@ -213,7 +213,7 @@ function GroupCard({
   onPick: (pinnedId: string) => void
   onContextMenu: (e: React.MouseEvent, pinnedId: string) => void
 }): React.JSX.Element {
-  const dotColor = resolveColorHex(template.color) || 'var(--accent)'
+  const dotColor = resolveColorHex(template.color) || 'var(--color-accent)'
   const sessionCount = template.sessions.length
   const terminalCount = template.terminals.length
 

@@ -1,6 +1,46 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+import {
+  describeElevated,
+  sanitizeElevated,
+  type ClaveGroupData,
+  type ClaveFileReadResult
+} from './clave-trust'
+
+export {
+  describeElevated,
+  sanitizeElevated,
+  type ClaveGroupData,
+  type ClaveFileReadResult
+} from './clave-trust'
+
+interface ClaveFileRaw {
+  $schema?: string
+  // Single-group format
+  name?: string
+  cwd?: string
+  color?: string | null
+  prompt?: string
+  sessions?: ClaveGroupData['sessions']
+  terminals?: ClaveGroupData['terminals']
+  toolbar?: boolean
+  category?: string
+  logo?: string
+  // Multi-group format
+  groups?: Array<{
+    name: string
+    cwd?: string
+    color?: string | null
+    toolbar?: boolean
+    category?: string
+    logo?: string
+    prompt?: string
+    sessions?: ClaveGroupData['sessions']
+    terminals?: ClaveGroupData['terminals']
+  }>
+}
+
 import { createHash } from 'crypto'
 
 /** Async existence check — keeps directory walks off the main process's event loop. */
@@ -155,88 +195,6 @@ function isUnderTrustedRoot(absolutePath: string): boolean {
   }
   return false
 }
-
-/** Auto-run commands, auto-submitted agent prompts, or dangerousMode sessions
- *  present in a parsed result — anything that acts on launch without user input. */
-function describeElevated(result: ClaveFileReadResult): { autoCommands: string[]; prompts: string[]; dangerous: boolean } {
-  const groups = result.type === 'multi' ? result.groups : [result]
-  const autoCommands: string[] = []
-  const prompts: string[] = []
-  let dangerous = false
-  for (const g of groups) {
-    for (const t of g.terminals) {
-      if (t.commandMode === 'auto' && t.command.trim()) autoCommands.push(t.command)
-    }
-    // A group-level prompt is auto-submitted to every session the group's `+`
-    // launches, so it is elevated for exactly the same reason a session prompt is.
-    if (g.prompt && g.prompt.trim()) prompts.push(g.prompt)
-    for (const s of g.sessions) {
-      if (s.dangerousMode) dangerous = true
-      if (s.prompt && s.prompt.trim()) prompts.push(s.prompt)
-    }
-  }
-  return { autoCommands, prompts, dangerous }
-}
-
-/** Strip elevated behavior: downgrade auto→prefill, disable dangerousMode, and
- *  drop auto-submitted prompts (an untrusted file must not drive the agent). */
-function sanitizeElevated(result: ClaveFileReadResult): ClaveFileReadResult {
-  const sanitizeGroup = (g: ClaveGroupData): ClaveGroupData => ({
-    ...g,
-    prompt: undefined,
-    sessions: g.sessions.map((s) => ({ ...s, dangerousMode: false, prompt: undefined })),
-    terminals: g.terminals.map((t) => (t.commandMode === 'auto' ? { ...t, commandMode: 'prefill' } : t))
-  })
-  if (result.type === 'multi') {
-    return { type: 'multi', groups: result.groups.map(sanitizeGroup) }
-  }
-  return { type: 'single', ...sanitizeGroup(result) }
-}
-
-interface ClaveGroupData {
-  name: string
-  cwd: string
-  color: string | null
-  toolbar?: boolean
-  category?: string
-  logo?: string
-  /** Group-level default prompt. Sessions launched from the group's own `+`
-   *  inherit it; a session's own `prompt` still wins for that session. Same
-   *  @-token vocabulary as a session prompt, substituted at spawn. */
-  prompt?: string
-  sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
-  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[]
-}
-
-interface ClaveFileRaw {
-  $schema?: string
-  // Single-group format
-  name?: string
-  cwd?: string
-  color?: string | null
-  prompt?: string
-  sessions?: ClaveGroupData['sessions']
-  terminals?: ClaveGroupData['terminals']
-  toolbar?: boolean
-  category?: string
-  logo?: string
-  // Multi-group format
-  groups?: Array<{
-    name: string
-    cwd?: string
-    color?: string | null
-    toolbar?: boolean
-    category?: string
-    logo?: string
-    prompt?: string
-    sessions?: ClaveGroupData['sessions']
-    terminals?: ClaveGroupData['terminals']
-  }>
-}
-
-type ClaveFileReadResult =
-  | ({ type: 'single' } & ClaveGroupData)
-  | { type: 'multi'; groups: ClaveGroupData[] }
 
 interface ClaveFileWriteData {
   name?: string

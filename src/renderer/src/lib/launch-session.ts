@@ -5,7 +5,12 @@ import {
   useClaudeProfileStore
 } from '../store/claude-profile-store'
 import { getActiveWorkspaceId, getWorkspaceById } from '../store/workspace-store'
-import { agentSetupToModes, rememberAgentSetup, type AgentSetup } from '../store/launch-prefs'
+import {
+  agentAcceptsPrompt,
+  agentSetupToModes,
+  rememberAgentSetup,
+  type AgentSetup
+} from '../store/launch-prefs'
 
 /** Where a new session starts.
  *
@@ -43,8 +48,12 @@ async function resolveCwd(cwd: LaunchCwd): Promise<string | null> {
   if (cwd.kind === 'path') return cwd.path
   if (cwd.kind === 'workspace-root') {
     const root = getWorkspaceById(getActiveWorkspaceId())?.rootDir
-    if (root) return root
-    // No workspace registered: nothing to default to, so ask.
+    // A registered root can stop existing — a deleted folder, an unmounted
+    // volume. Before this change the picker could only ever hand back a real
+    // directory; now the root is taken on trust, so it has to be checked or the
+    // session spawns at a path that isn't there with no error and no fallback.
+    if (root && window.electronAPI?.existsSync?.(root, '.')) return root
+    // No workspace, or its root is gone: nothing to default to, so ask.
   }
   return (await window.electronAPI.openFolderDialog()) ?? null
 }
@@ -77,7 +86,7 @@ export async function launchSession(req: LaunchRequest): Promise<string | null> 
   //  to profiles[0] — the Default — which would silently run keyboard launches
   //  under the wrong account.
   const initialPrompt =
-    req.initialPrompt && req.setup && !modes.claudeAgentsMode ? req.initialPrompt : undefined
+    req.initialPrompt && agentAcceptsPrompt(req.setup) ? req.initialPrompt : undefined
 
   const isClaudeSession = modes.claudeMode || modes.claudeAgentsMode
   const profile = isClaudeSession

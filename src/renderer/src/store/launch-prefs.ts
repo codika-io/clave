@@ -46,31 +46,14 @@ export function agentSetupToModes(setup: AgentSetup): {
   }
 }
 
-/** Read a setup back out of the spawn booleans. `claudeAgentsMode` wins over
- *  `claudeMode` because the spawn paths force `claudeMode: false` whenever
- *  another provider is set, so a record carrying both is legacy, not ambiguous. */
-export function agentSetupFromModes(modes: {
-  claudeMode?: boolean
-  claudeAgentsMode?: boolean
-  antigravityMode?: boolean
-  codexMode?: boolean
-  dangerousMode?: boolean
-  claudeProfileId?: string
-}): AgentSetup {
-  const kind: AgentKind = modes.claudeAgentsMode
-    ? 'claude-agents'
-    : modes.antigravityMode
-      ? 'antigravity'
-      : modes.codexMode
-        ? 'codex'
-        : 'claude'
-  return {
-    kind,
-    dangerousMode: !!modes.dangerousMode,
-    ...(kind === 'claude' || kind === 'claude-agents'
-      ? { claudeProfileId: modes.claudeProfileId }
-      : {})
-  }
+/** Whether a setup accepts a one-shot launch prompt.
+ *
+ *  `claude agents` is spawned bare and rejects a positional prompt, and a plain
+ *  terminal would run the text as a shell command. Exported so the UI and the
+ *  spawn path share ONE answer: they used to each carry their own, which let the
+ *  group's `+` row promise a prompt that the launch then silently dropped. */
+export function agentAcceptsPrompt(setup: AgentSetup | null): boolean {
+  return !!setup && setup.kind !== 'claude-agents'
 }
 
 /** Reject anything the preference file might hold from an older build or a

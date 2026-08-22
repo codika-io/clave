@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { substituteTokens } from './prompt-tokens'
 import type { PinnedGroup, PinnedGroupSession, PinnedGroupTerminal, GroupTerminalColor } from './session-types'
 import { useSessionStore } from './session-store'
 import { getActiveWorkspaceId } from './workspace-store'
@@ -10,21 +11,6 @@ type PinnedState = 'idle' | 'active-visible' | 'active-hidden'
 export function getPinnedState(pg: PinnedGroup): PinnedState {
   if (!pg.activeGroupId) return 'idle'
   return pg.visible ? 'active-visible' : 'active-hidden'
-}
-
-/** Substitute prompt path tokens at spawn time. macOS-only app → absolute paths
- *  use `/`, so this is pure string work (the renderer has no Node `path`).
- *  @root_path → workspace root, @project_path → project dir relative to root
- *  (`.` if equal, absolute if outside root), @project_abs → project dir absolute.
- *  No-op when the prompt contains no tokens. */
-export function substituteTokens(prompt: string, workspaceRoot: string | null, projectAbs: string): string {
-  const root = (workspaceRoot ?? projectAbs).replace(/\/+$/, '')
-  const rel =
-    projectAbs === root ? '.' : projectAbs.startsWith(root + '/') ? projectAbs.slice(root.length + 1) : projectAbs
-  return prompt
-    .replaceAll('@project_abs', projectAbs)
-    .replaceAll('@project_path', rel)
-    .replaceAll('@root_path', root)
 }
 
 export interface PinnedGroupBlueprint {
@@ -50,6 +36,8 @@ export interface PinnedGroupBlueprint {
 /** Blueprint snapshot of the current pins — what gets persisted into
  *  workspace-state.json (runtime activeGroupId/visible deliberately excluded,
  *  exactly like the retired localStorage serialization). */
+export { substituteTokens } from './prompt-tokens'
+
 export function serializePinnedGroups(groups: PinnedGroup[]): PinnedGroupBlueprint[] {
   return groups.map(({ id, name, cwd, color, prompt, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy, workspaceId }) => ({
     id, name, cwd, color, prompt, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy, workspaceId
@@ -557,6 +545,10 @@ export function pinGroupFromCurrent(groupId: string): void {
     name: group.name,
     cwd: group.cwd,
     color: group.color ?? null,
+    // Round-trips the group's default prompt the same way createPinnedFromGroup
+    // does. Without it the trip is one-way: .clave → pin → group keeps the
+    // prompt, group → pin → .clave silently loses it.
+    prompt: group.prompt ?? null,
     sessions: groupSessions,
     terminals: groupTerminals,
     createdAt: Date.now(),

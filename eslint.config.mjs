@@ -28,5 +28,15 @@ export default defineConfig(
       ...eslintPluginReactRefresh.configs.vite.rules
     }
   },
+  {
+    // The Electron end-to-end harness is plain JavaScript that drives the built
+    // app from node. It is not part of the TypeScript sources, so the TS-flavoured
+    // rules the shared config applies (notably explicit-function-return-type)
+    // do not apply — there are no types to annotate.
+    files: ['tests/e2e/**/*.mjs'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off'
+    }
+  },
   eslintConfigPrettier
 )

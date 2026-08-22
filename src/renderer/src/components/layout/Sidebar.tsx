@@ -24,7 +24,7 @@ import { TelemetryNoticeBanner } from '../help/TelemetryNoticeBanner'
 import { FeedbackBanner } from '../help/FeedbackBanner'
 import { SessionLauncher } from './SessionLauncher'
 import { launchSession } from '../../lib/launch-session'
-import { getLastAgentSetup } from '../../store/launch-prefs'
+import { agentAcceptsPrompt, getLastAgentSetup, useLaunchPrefsStore } from '../../store/launch-prefs'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
 import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName } from '../../store/pinned-store'
@@ -337,6 +337,14 @@ export function Sidebar() {
 
   // Workspace scoping: the sidebar shows only the active workspace's world.
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  // Subscribing to the map (rather than calling the getter) is what re-renders
+  // the group `+` rows when a launch changes the workspace's remembered agent.
+  const launchPrefsByWorkspace = useLaunchPrefsStore((s) => s.byWorkspace)
+  void launchPrefsByWorkspace
+  // Whether a group's `+` will actually seed its prompt. `claude agents` refuses
+  // a positional prompt, so with it remembered the `+` still launches — it just
+  // cannot carry the brief, and the row has to say so rather than promise it.
+  const groupPromptApplies = agentAcceptsPrompt(getLastAgentSetup(activeWorkspaceId))
 
   // Templates launcher popover (anchored to the Sessions header's folder-plus icon)
   const [groupPickerOpen, setGroupPickerOpen] = useState(false)
@@ -1142,26 +1150,15 @@ export function Sidebar() {
             <SectionHeading
               title="Sessions"
               actions={
-                <>
-                  <button
-                    onClick={() => setGroupPickerOpen(true)}
-                    data-active={groupPickerOpen ? 'true' : undefined}
-                    className="btn-icon btn-icon-xs"
-                    title="Add a group"
-                    aria-label="Add a group"
-                  >
-                    <PlusIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setGroupPickerOpen(true)}
-                    data-active={groupPickerOpen ? 'true' : undefined}
-                    className="btn-icon btn-icon-xs"
-                    title="Groups"
-                    aria-label="Groups"
-                  >
-                    <SquaresPlusIcon className="w-4 h-4" />
-                  </button>
-                </>
+                <button
+                  onClick={() => setGroupPickerOpen(true)}
+                  data-active={groupPickerOpen ? 'true' : undefined}
+                  className="btn-icon btn-icon-xs"
+                  title="Add a group"
+                  aria-label="Add a group"
+                >
+                  <SquaresPlusIcon className="w-4 h-4" />
+                </button>
               }
             />
             <PinnedSection
@@ -1380,9 +1377,11 @@ export function Sidebar() {
                                     <button
                                       className="group-add-row"
                                       title={
-                                        group.prompt
-                                          ? `New session in ${group.name} — starts on the group's prompt`
-                                          : `New session in ${group.name}`
+                                        !group.prompt
+                                          ? `New session in ${group.name}`
+                                          : groupPromptApplies
+                                            ? `New session in ${group.name} — starts on the group's prompt`
+                                            : `New session in ${group.name} — Claude Agents can't take the group's prompt`
                                       }
                                       aria-label={`New session in ${group.name}`}
                                       onClick={(e) => {

@@ -1,0 +1,72 @@
+#!/usr/bin/env node
+// Runner for the Electron end-to-end checks.
+//
+// The point of this file is the exit code. A verification script that prints
+// JSON and exits 0 whatever happened is a probe, not a check — it verifies
+// nothing the moment nobody is reading the output. Every spec here asserts, and
+// a failed assertion fails the run.
+import { readdirSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const DIR = path.dirname(fileURLToPath(import.meta.url))
+const only = process.argv[2]
+const GREEN = '\u001b[32m'
+const RED = '\u001b[31m'
+const BOLD = '\u001b[1m'
+const OFF = '\u001b[0m'
+
+/** Assertion collector handed to each spec. */
+function createT(specName) {
+  const results = []
+  return {
+    specName,
+    results,
+    /** Assert `cond`. `detail` is printed on failure — make it the actual value. */
+    check(name, cond, detail) {
+      results.push({ name, ok: !!cond, detail })
+      console.log(`${cond ? GREEN + '  PASS' : RED + '  FAIL'}${OFF}  ${name}`)
+      if (!cond && detail !== undefined) {
+        console.log(`        ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`)
+      }
+    },
+    equal(name, actual, expected) {
+      this.check(
+        name,
+        Object.is(actual, expected),
+        `expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
+      )
+    }
+  }
+}
+
+const specs = readdirSync(DIR)
+  .filter((f) => f.endsWith('.spec.mjs'))
+  .filter((f) => !only || f.includes(only))
+  .sort()
+
+if (specs.length === 0) {
+  console.error(only ? `No spec matches "${only}"` : 'No specs found')
+  process.exit(1)
+}
+
+let failed = 0
+let passed = 0
+
+for (const file of specs) {
+  console.log(`\n${BOLD}${file}${OFF}`)
+  const t = createT(file)
+  try {
+    const mod = await import(pathToFileURL(path.join(DIR, file)).href)
+    await mod.run(t)
+  } catch (err) {
+    // A spec that throws is a failure, not a silent skip — the two dead
+    // PRDCT-1663 scripts exited 0 on a missing selector for exactly this reason.
+    t.check(`${file} ran to completion`, false, err?.stack ?? String(err))
+  }
+  passed += t.results.filter((r) => r.ok).length
+  failed += t.results.filter((r) => !r.ok).length
+}
+
+console.log(`\n${passed} passed, ${failed} failed`)
+process.exit(failed > 0 ? 1 : 0)

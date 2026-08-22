@@ -190,9 +190,10 @@ export interface SessionGroup {
   cwd: string | null
   terminals: GroupTerminalConfig[]
   /** Default prompt new sessions launched from this group's `+` inherit.
-   *  Comes from the group's `.clave` entry when the group was stamped out of a
-   *  pin, and is editable on a live group. Null/absent = the `+` launches with
-   *  no prompt, exactly like the sidebar's own agent button. */
+   *  Set from the group's `.clave` entry when the group was stamped out of a
+   *  pin, or by an agent through `clave_create_group`. There is no UI to edit it
+   *  on a live group. Null/absent = the `+` launches with no prompt, exactly
+   *  like the sidebar's own agent button. */
   prompt?: string | null
   color?: GroupTerminalColor | null
   /** Attached web view — persists with the group (serialized whole). */
