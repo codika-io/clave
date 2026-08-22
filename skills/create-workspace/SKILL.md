@@ -11,7 +11,7 @@ This skill helps you create and configure `.clave` workspace files for the Clave
 
 A `.clave` file is a JSON file that defines one or more **groups**. Each group contains **sessions** (terminal instances) and **terminals** (quick-action buttons with pre-configured commands). When dropped into Clave or loaded via the Workspaces settings, these groups become **launchable templates**.
 
-Templates live in the **template picker** — the popover behind the icon in the Sessions header of the sidebar. Clicking a template stamps out a fresh group every time; it never links back to the running group. The picker:
+Templates live in the **group picker** — a full-screen dialog opened from either action beside the Sessions heading in the sidebar (`+` or the grid icon). Clicking a group stamps out a fresh one every time; it never links back to the running group. The picker shows one card per group, with a search field, and:
 
 - Groups templates under their `category` as section headers. Uncategorized templates render first, then categories **alphabetically**. There is no manual ordering — if you need a specific order, name the categories so they sort that way.
 - Hides groups marked `"toolbar": true` (those render as icon buttons in the top toolbar instead).
@@ -77,7 +77,8 @@ Each group has these fields:
 | `color` | string | No | Group accent color (see Colors below) |
 | `category` | string | No | Section header in the template picker (e.g. `"Platform"`, `"Clients"`). Sections sort alphabetically; uncategorized groups come first. Has no effect anywhere else in the UI |
 | `logo` | string | No | Small icon shown on the template row. Either a path relative to the root dir (`.png`, `.svg`, `.jpg`, `.gif`, `.webp`, `.ico`) or an inline `data:` URI. Path form is read and inlined as a data URI at load |
-| `toolbar` | boolean | No | If `true`, this group's terminals appear as quick-action buttons in the top toolbar and the group is **hidden from the template picker** |
+| `toolbar` | boolean | No | If `true`, this group's terminals appear as quick-action buttons in the top toolbar and the group is **hidden from the group picker** |
+| `prompt` | string | No | The group's **default prompt**. Sessions launched from the group's own `+` button in the sidebar start on it, so a whole lane shares one starting brief. A session's own `prompt` still wins for that session. Same path tokens as a session prompt, and elevated the same way (see below) |
 | `sessions` | array | Yes | Terminal sessions to spawn (see Sessions below) |
 | `terminals` | array | Yes | Command buttons shown on the group (see Terminals below) |
 
@@ -123,7 +124,7 @@ Set at most one agent mode. If `antigravityMode`, `codexMode`, or `claudeAgentsM
 - Session names should be short and descriptive
 - An empty `sessions` array is valid (useful for toolbar-only groups)
 - The DRY way to open a deep project's session at the umbrella root: set `rootSession: true`, leave `cwd` as the tiny relative path to the project (`.` or `..`), and reference the project in the prompt with `@project_path` — no `../../..` climbs, no hardcoded paths. See "Priming a session" below.
-- A `prompt` on an untrusted `.clave` file is treated as elevated: Clave shows the review dialog (like auto-run commands) before it will auto-submit. Files under a trusted workspace root, or that you authored in Clave, skip the dialog. (`rootSession` alone is not elevated.)
+- A `prompt` on an untrusted `.clave` file is treated as elevated — the group-level `prompt` exactly as much as a session's, since it auto-submits to every session the group's `+` launches: Clave shows the review dialog (like auto-run commands) before it will auto-submit. Files under a trusted workspace root, or that you authored in Clave, skip the dialog. (`rootSession` alone is not elevated.)
 
 ## Terminals
 
