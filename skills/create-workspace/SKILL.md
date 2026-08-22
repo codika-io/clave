@@ -75,10 +75,10 @@ Each group has these fields:
 | `name` | string | Yes | Display name shown on the template row |
 | `cwd` | string | Yes | Working directory for the group (relative path) |
 | `color` | string | No | Group accent color (see Colors below) |
-| `category` | string | No | Section header in the template picker (e.g. `"Platform"`, `"Clients"`). Sections sort alphabetically; uncategorized groups come first. Has no effect anywhere else in the UI |
+| `category` | string | No | Section header in the group picker (e.g. `"Platform"`, `"Clients"`). Sections sort alphabetically; uncategorized groups come first. Has no effect anywhere else in the UI |
 | `logo` | string | No | Small icon shown on the template row. Either a path relative to the root dir (`.png`, `.svg`, `.jpg`, `.gif`, `.webp`, `.ico`) or an inline `data:` URI. Path form is read and inlined as a data URI at load |
 | `toolbar` | boolean | No | If `true`, this group's terminals appear as quick-action buttons in the top toolbar and the group is **hidden from the group picker** |
-| `prompt` | string | No | The group's **default prompt**. Sessions launched from the group's own `+` button in the sidebar start on it, so a whole lane shares one starting brief. A session's own `prompt` still wins for that session. Same path tokens as a session prompt, and elevated the same way (see below) |
+| `prompt` | string | No | The group's **default prompt**. Sessions launched from the group's own `+` button in the sidebar start on it, so a whole lane shares one starting brief. A session's own `prompt` still wins for that session. Same path tokens as a session prompt, and elevated the same way (see below). Does **not** apply when the remembered agent is `claude agents` — that subcommand rejects a positional prompt, and the `+` says so rather than promising one |
 | `sessions` | array | Yes | Terminal sessions to spawn (see Sessions below) |
 | `terminals` | array | Yes | Command buttons shown on the group (see Terminals below) |
 
