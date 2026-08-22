@@ -990,37 +990,40 @@ export function MultiRepoGitPanel({
   const [collapsedDirs, _setCollapsedDirs] = useState<Set<string>>(
     () => collapsedDirsCacheMap.get(cacheKey) ?? new Set()
   )
-  const prevCacheKeyRef = useRef(cacheKey)
-  useEffect(() => {
-    if (prevCacheKeyRef.current !== cacheKey) {
-      prevCacheKeyRef.current = cacheKey
-      _setCollapsedDirs(collapsedDirsCacheMap.get(cacheKey) ?? new Set())
-    }
-  }, [cacheKey])
 
-  const toggleDir = useCallback(
-    (dirPath: string) => {
-      _setCollapsedDirs((prev) => {
-        const next = new Set(prev)
-        if (next.has(dirPath)) next.delete(dirPath)
-        else next.add(dirPath)
-        collapsedDirsCacheMap.set(cacheKey, next)
-        return next
-      })
-    },
-    [cacheKey]
-  )
-
-  // Collapse-all folds every directory too (repo sections handle themselves).
+  // Guarded adjust-during-render instead of sync effects: a basePath switch
+  // re-reads that folder's cache, and a NEW collapse-all press folds every
+  // directory. Initializing the prev-trigger to the current value is what
+  // keeps an old press from re-folding (and clobbering the cache) on
+  // remount — the trigger is a monotonic global counter that never resets.
   const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
-  useEffect(() => {
-    if (collapseAllTrigger > 0 && repoTree) {
-      const all = collectRepoTreeDirPaths(repoTree)
-      collapsedDirsCacheMap.set(cacheKey, all)
-      _setCollapsedDirs(all)
+  const [prevCacheKey, setPrevCacheKey] = useState(cacheKey)
+  const [prevCollapseAll, setPrevCollapseAll] = useState(collapseAllTrigger)
+  if (prevCacheKey !== cacheKey) {
+    setPrevCacheKey(cacheKey)
+    _setCollapsedDirs(collapsedDirsCacheMap.get(cacheKey) ?? new Set())
+  }
+  if (prevCollapseAll !== collapseAllTrigger) {
+    setPrevCollapseAll(collapseAllTrigger)
+    if (repoTree) {
+      _setCollapsedDirs(collectRepoTreeDirPaths(repoTree))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collapseAllTrigger])
+  }
+
+  // Mirror the fold state into the per-basePath cache so it survives
+  // unmount (the cache write lives here, outside render, on purpose).
+  useEffect(() => {
+    collapsedDirsCacheMap.set(cacheKey, collapsedDirs)
+  }, [cacheKey, collapsedDirs])
+
+  const toggleDir = useCallback((dirPath: string) => {
+    _setCollapsedDirs((prev) => {
+      const next = new Set(prev)
+      if (next.has(dirPath)) next.delete(dirPath)
+      else next.add(dirPath)
+      return next
+    })
+  }, [])
 
   const treeRows = useMemo(
     () => (repoTree ? flattenRepoTree(repoTree, collapsedDirs) : null),

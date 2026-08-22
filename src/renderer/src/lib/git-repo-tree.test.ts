@@ -91,6 +91,38 @@ describe('buildRepoTree', () => {
     expect(names(tree)).toEqual(['repo:stray'])
   })
 
+  it('compacts chains below the top level too', () => {
+    // Verifier gap M11: labs branches, but the chain under services must
+    // still merge into one node.
+    const tree = buildRepoTree(WS, [
+      { name: 'hub', path: `${WS}/labs/ant/hub` },
+      { name: 'sched', path: `${WS}/labs/services/deep/chain/sched` }
+    ])
+    const labs = tree[0] as RepoTreeDir
+    expect(names(labs.children)).toEqual(['dir:ant', 'dir:services/deep/chain'])
+    const chain = labs.children[1] as RepoTreeDir
+    expect(chain.path).toBe(`${WS}/labs/services/deep/chain`)
+    expect(names(chain.children)).toEqual(['repo:sched'])
+  })
+
+  it('a sibling folder sharing the base as a string prefix is NOT inside it', () => {
+    // Verifier gap M10: /Users/u/ws-old shares the prefix "/Users/u/ws" as a
+    // string but is a sibling on disk — it must become a top-level leaf, not
+    // an invented "-old" directory.
+    const tree = buildRepoTree(WS, [{ name: 'a', path: `${WS}-old/a` }])
+    expect(names(tree)).toEqual(['repo:a'])
+  })
+
+  it('tolerates trailing and doubled separators on repo paths', () => {
+    // Verifier gap M12: empty segments must never become directory nodes.
+    const trailing = buildRepoTree(WS, [{ name: 'a', path: `${WS}/d/a/` }])
+    expect(names(trailing)).toEqual(['dir:d'])
+    expect(names((trailing[0] as RepoTreeDir).children)).toEqual(['repo:a'])
+    const doubled = buildRepoTree(WS, [{ name: 'a', path: `${WS}//d/a` }])
+    expect(names(doubled)).toEqual(['dir:d'])
+    expect(names((doubled[0] as RepoTreeDir).children)).toEqual(['repo:a'])
+  })
+
   it('tolerates a trailing slash on the base and a "/" base', () => {
     const slashed = buildRepoTree(`${WS}/`, [{ name: 'a', path: `${WS}/labs/a` }])
     expect(names(slashed)).toEqual(['dir:labs'])
@@ -137,6 +169,18 @@ describe('collectRepoTreeDirPaths', () => {
     ])
     expect(collectRepoTreeDirPaths(tree)).toEqual(
       new Set([`${WS}/company`, `${WS}/labs/products/x`])
+    )
+  })
+
+  it('recurses into nested directories', () => {
+    // Verifier gap M9: dirs below the top level must be collected too, or
+    // collapse-all misses them.
+    const tree = buildRepoTree(WS, [
+      { name: 'r1', path: `${WS}/labs/a/r1` },
+      { name: 'r2', path: `${WS}/labs/b/r2` }
+    ])
+    expect(collectRepoTreeDirPaths(tree)).toEqual(
+      new Set([`${WS}/labs`, `${WS}/labs/a`, `${WS}/labs/b`])
     )
   })
 })
