@@ -1,6 +1,15 @@
 [
   {
     "version": "1.68.0",
+    "title": "The git panel is your real folder tree",
+    "description": "Repos now sit exactly where they live on disk — nested under their real parent folders, single-child chains merged into one row, folders foldable with rolled-up change counts and ahead/behind badges so nothing hides while folded. And the commit bar is tucked away by default (agents do the committing) — the pencil icon in the git toolbar brings it back.",
+    "action": {
+      "type": "navigate",
+      "target": "side:git"
+    }
+  },
+  {
+    "version": "1.68.0",
     "title": "Groups open as live pages",
     "description": "Attach a web view to a group — a dev server, a live dashboard, or an HTML file — and clicking the group shows the rendered page instead of the tiled terminals, with a Sessions switch one click away. HTML files also render as live pages in their own tabs now, with a Rendered ⇄ Source toggle. Agents can drive both: clave_set_group_view and clave_open_file's rendered view.",
     "action": {

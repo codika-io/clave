@@ -77,6 +77,9 @@ interface SessionState {
   sidePanelTab: 'files' | 'git' | 'help'
   gitViewMode: 'list' | 'tree'
   gitPanelMode: 'changes' | 'log'
+  /** Per-repo commit bar (message box, commit, push/pull). Hidden by default —
+   *  agents commit and push; the panel is for reading state. */
+  gitShowCommitBar: boolean
   /** Above this many repos, the multi-repo git panel stops auto-polling and
    *  switches to event-driven + manual refresh (see use-multi-repo-status). */
   gitLivePollLimit: number
@@ -166,6 +169,7 @@ interface SessionState {
   setSidePanelTab: (tab: 'files' | 'git' | 'help') => void
   setGitViewMode: (mode: 'list' | 'tree') => void
   setGitPanelMode: (mode: 'changes' | 'log') => void
+  setGitShowCommitBar: (show: boolean) => void
   setGitLivePollLimit: (limit: number) => void
   setGitLivePollAlways: (always: boolean) => void
   openJourneyPanel: (cwd: string, repoName: string) => void
@@ -379,6 +383,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidePanelTab: 'files' as const,
   gitViewMode: (localStorage.getItem('clave-git-view-mode') === 'tree' ? 'tree' : 'list') as 'list' | 'tree',
   gitPanelMode: 'changes' as const,
+  gitShowCommitBar: localStorage.getItem('clave-git-commit-bar') === 'show',
   gitLivePollLimit: (() => {
     const raw = Number(localStorage.getItem('clave-git-live-poll-limit'))
     return Number.isFinite(raw) && raw > 0 ? raw : 50
@@ -1112,6 +1117,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 
   setGitPanelMode: (mode) => set({ gitPanelMode: mode }),
+
+  setGitShowCommitBar: (show) => {
+    localStorage.setItem('clave-git-commit-bar', show ? 'show' : 'hide')
+    set({ gitShowCommitBar: show })
+  },
 
   setGitLivePollLimit: (limit) => {
     const clamped = Math.max(1, Math.round(limit))

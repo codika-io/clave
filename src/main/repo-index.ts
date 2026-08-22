@@ -194,7 +194,9 @@ class RepoIndexManager {
 
     await Promise.all(Array.from({ length: Math.min(DISCOVERY_CONCURRENCY, 64) }, () => worker()))
 
-    const repos = Array.from(found.values()).sort((a, b) => a.name.localeCompare(b.name))
+    // Path order, not name order: the renderer arranges repos spatially
+    // (PRDCT-1455), so siblings arrive grouped by their parent directory.
+    const repos = Array.from(found.values()).sort((a, b) => a.path.localeCompare(b.path))
 
     this.cache.set(root, { repos, complete: !truncated, scannedAt: Date.now() })
 

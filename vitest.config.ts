@@ -9,7 +9,11 @@ import { defineConfig } from 'vitest/config'
  */
 export default defineConfig({
   test: {
-    include: ['src/main/exchange-capture/**/*.test.ts', 'src/shared/**/*.test.ts'],
+    include: [
+      'src/main/exchange-capture/**/*.test.ts',
+      'src/shared/**/*.test.ts',
+      'src/renderer/src/lib/**/*.test.ts'
+    ],
     environment: 'node'
   }
 })
