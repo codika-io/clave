@@ -20,6 +20,7 @@ import { registerExtensionsHandlers } from './extensions-handlers'
 import { registerMissionControlHandlers } from './mission-control-handlers'
 import { registerWorkspaceHandlers } from './workspace-handlers'
 import { registerExchangeHandlers } from './exchange-handlers'
+import { registerPreviewHandlers } from './preview-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -44,4 +45,5 @@ export function registerIpcHandlers(): void {
   registerMissionControlHandlers()
   registerWorkspaceHandlers()
   registerExchangeHandlers()
+  registerPreviewHandlers()
 }

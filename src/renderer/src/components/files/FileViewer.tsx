@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useSessionStore, type FileTab } from '../../store/session-store'
 import { FileContentRenderer } from './FileContentRenderer'
 import { ViewModeToggle } from './ViewModeToggle'
+import { HTML_MODES } from './file-types'
 import { useFileEditor } from '../../hooks/use-file-editor'
 import { useFileViewMode } from '../../hooks/use-file-view-mode'
 import { DocumentTextIcon, CheckIcon } from '@heroicons/react/24/outline'
@@ -32,7 +33,10 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
 
   const editor = useFileEditor({ cwd, filePath: relativePath })
   const { isDirty, saving, canEdit, save } = editor
-  const { isMarkdown, viewMode, setViewMode } = useFileViewMode(fileTab.filePath)
+  const { isMarkdown, isHtml, viewMode, setViewMode } = useFileViewMode(
+    fileTab.filePath,
+    fileTab.view
+  )
 
   const handleCopyPath = useCallback(() => {
     navigator.clipboard.writeText(fileTab.filePath)
@@ -60,6 +64,7 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
           </span>
         </div>
         {isMarkdown && <ViewModeToggle mode={viewMode} onChange={setViewMode} />}
+        {isHtml && <ViewModeToggle mode={viewMode} onChange={setViewMode} modes={HTML_MODES} />}
         {canEdit &&
           (isDirty || saving ? (
             <button

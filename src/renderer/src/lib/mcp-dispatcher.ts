@@ -6,7 +6,7 @@ import {
   type SessionMode
 } from './exchange-capture'
 import { useSessionStore, fileTabDedupKey, inActiveWorkspace } from '../store/session-store'
-import type { GroupTerminalConfig, Session, SessionGroup } from '../store/session-store'
+import type { GroupTerminalConfig, GroupViewConfig, Session, SessionGroup } from '../store/session-store'
 import { usePinnedStore, getPinnedState, togglePinnedGroup } from '../store/pinned-store'
 import type { PinnedGroupSession } from '../store/session-types'
 import { useWorkspaceStore, type Workspace } from '../store/workspace-store'
@@ -137,6 +137,7 @@ function handleList(payload: { callerSessionId?: string; workspace?: string }): 
     name: g.name,
     cwd: g.cwd,
     color: g.color ?? null,
+    view: g.view ?? null,
     sessionIds: g.sessionIds,
     workspaceId: g.workspaceId ?? null,
     workspaceName: workspaceNameOf(g.workspaceId),
@@ -448,12 +449,16 @@ async function handleAddGroupTerminal(payload: {
   icon?: string
   cwd?: string
   serverUrl?: string
+  groupView?: boolean
   launch?: boolean
   callerSessionId?: string
 }): Promise<unknown> {
   const state = useSessionStore.getState()
   const group = resolveGroup(state.groups, payload.groupId, payload.callerSessionId)
   const commandMode = payload.commandMode ?? 'auto'
+  if (payload.groupView && !payload.serverUrl) {
+    throw new Error('groupView requires a serverUrl — the group view shows that URL')
+  }
 
   const groupCwd =
     group.cwd ?? state.sessions.find((s) => group.sessionIds.includes(s.id))?.cwd ?? null
@@ -474,6 +479,16 @@ async function handleAddGroupTerminal(payload: {
     serverUrl: payload.serverUrl
   })
 
+  // groupView binds the served URL as the group's web view (what the user sees
+  // when clicking the group). Attach only — never steal the user's screen.
+  if (payload.groupView && payload.serverUrl) {
+    useSessionStore.getState().setGroupView(group.id, {
+      url: payload.serverUrl,
+      title: payload.command || undefined,
+      terminalId
+    })
+  }
+
   if (payload.launch === false) return { terminalId, groupId: group.id, sessionId: null }
 
   // Same flow as the sidebar's spawnGroupTerminal: the session is linked to the
@@ -485,6 +500,10 @@ async function handleAddGroupTerminal(payload: {
     // Group terminals live in their group's workspace, not the active one.
     workspaceId: group.workspaceId ?? undefined
   })
+  // PTYs spawn lazily on the first sized start() — normally the visible pane's
+  // measure. A terminal spawned into a hidden workspace (or behind an active
+  // group view) has no measured pane, so kick it or the command never runs.
+  window.electronAPI.startSession(info.id, 120, 30)
   const current = useSessionStore.getState()
   useSessionStore.setState({
     sessions: [
@@ -520,6 +539,51 @@ async function handleAddGroupTerminal(payload: {
   })
   current.setGroupTerminalSessionId(group.id, terminalId, info.id)
   return { terminalId, groupId: group.id, sessionId: info.id }
+}
+
+async function handleSetGroupView(payload: {
+  groupId: string
+  url: string | null
+  title?: string
+  terminalId?: string
+  callerSessionId?: string
+}): Promise<unknown> {
+  const state = useSessionStore.getState()
+  const group = resolveGroup(state.groups, payload.groupId, payload.callerSessionId)
+
+  if (payload.url === null) {
+    state.setGroupView(group.id, null)
+    return { groupId: group.id, view: null }
+  }
+
+  const url = payload.url.trim()
+  const isFile = url.startsWith('/')
+  if (isFile) {
+    if (!/\.html?$/i.test(url)) {
+      throw new Error('A file view must be an .html/.htm file (or pass an http(s) URL)')
+    }
+    const slash = url.lastIndexOf('/')
+    try {
+      const stat = await window.electronAPI.statFile(url.substring(0, slash) || '/', url.substring(slash + 1))
+      if (stat.type === 'directory') throw new Error('directory')
+    } catch {
+      throw new Error(`No file at "${url}"`)
+    }
+  } else if (!/^https?:\/\//i.test(url)) {
+    throw new Error('url must be an http(s) URL or an absolute .html file path')
+  }
+
+  if (payload.terminalId && !group.terminals.some((t) => t.id === payload.terminalId)) {
+    throw new Error(`Group has no terminal "${payload.terminalId}"`)
+  }
+
+  const view: GroupViewConfig = {
+    url,
+    title: payload.title,
+    terminalId: payload.terminalId ?? null
+  }
+  state.setGroupView(group.id, view)
+  return { groupId: group.id, view }
 }
 
 async function handleCloseSession(payload: {
@@ -570,6 +634,7 @@ function normalizePath(absPath: string): string {
 async function handleOpenFile(payload: {
   path: string
   name?: string
+  view?: 'rendered' | 'source'
   callerSessionId?: string
 }): Promise<unknown> {
   const state = useSessionStore.getState()
@@ -598,11 +663,17 @@ async function handleOpenFile(payload: {
     throw new Error(`"${abs}" is a directory — clave_open_file opens files only`)
   }
 
-  // addFileTab dedups by path: an already-open file just gets focused.
+  // The view pin only means something for HTML files (rendered is their
+  // default anyway; source pins the code editor). Other kinds ignore it.
+  const isHtml = /\.(html?|htm)$/i.test(fileName)
+
+  // addFileTab dedups by path: an already-open file just gets focused (and
+  // retargeted when an explicit view is requested).
   state.addFileTab({
     id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     filePath: abs,
-    name: payload.name ?? fileName
+    name: payload.name ?? fileName,
+    ...(isHtml && payload.view ? { view: payload.view } : {})
   })
   const tab = useSessionStore.getState().fileTabs.find((f) => fileTabDedupKey(f) === `file:${abs}`)
   return { fileTabId: tab?.id ?? null, filePath: abs }
@@ -932,6 +1003,8 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleLaunchGroup(payload as Parameters<typeof handleLaunchGroup>[0])
     case 'addGroupTerminal':
       return handleAddGroupTerminal(payload as Parameters<typeof handleAddGroupTerminal>[0])
+    case 'setGroupView':
+      return handleSetGroupView(payload as Parameters<typeof handleSetGroupView>[0])
     case 'closeSession':
       return handleCloseSession(payload as Parameters<typeof handleCloseSession>[0])
     case 'rename':

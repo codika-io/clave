@@ -7,6 +7,7 @@ import type {
   GroupTerminalConfig,
   GroupTerminalColor,
   GroupTerminalIcon,
+  GroupViewConfig,
   Session,
   SessionGroup,
   FileTab,
@@ -19,7 +20,7 @@ import type { Agent, AgentStatus } from '../../../shared/remote-types'
 import { useWorkspaceStore } from './workspace-store'
 
 // Re-export types and constants so existing imports continue to work
-export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
+export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, GroupViewConfig, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
 export { GROUP_TERMINAL_COLORS, GROUP_TERMINAL_ICONS, TERMINAL_COLOR_VALUES, resolveColorHex } from './session-types'
 
 /** THE visibility predicate — single source of truth for workspace scoping.
@@ -42,6 +43,10 @@ interface SessionState {
   selectedSessionIds: string[]
   groups: SessionGroup[]
   displayOrder: string[]
+  /** Group whose attached web view fills the main pane instead of the session
+   *  mosaic (set by clicking a group that has a view). Cleared by any explicit
+   *  tab selection. Stale ids are harmless — the grid re-validates. */
+  activeGroupViewId: string | null
   sidebarOpen: boolean
   sidebarWidth: number
   theme: Theme
@@ -106,6 +111,10 @@ interface SessionState {
   deleteGroup: (groupId: string) => void
   renameGroup: (groupId: string, name: string) => void
   toggleGroupCollapsed: (groupId: string) => void
+  /** Attach (or clear, with null) a group's web view. */
+  setGroupView: (groupId: string, view: GroupViewConfig | null) => void
+  /** Show (or hide, with null) a group's web view in the main pane. */
+  setActiveGroupView: (groupId: string | null) => void
   addGroupTerminal: (groupId: string, config: Omit<GroupTerminalConfig, 'sessionId'>) => void
   removeGroupTerminal: (groupId: string, terminalId: string) => void
   updateGroupTerminal: (groupId: string, terminalId: string, updates: Partial<Pick<GroupTerminalConfig, 'command' | 'commandMode' | 'color' | 'icon'>>) => void
@@ -341,6 +350,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   selectedSessionIds: [],
   groups: [],
   displayOrder: [],
+  activeGroupViewId: null,
   sidebarOpen: true,
   sidebarWidth: 260,
   theme: (localStorage.getItem('clave-theme') as Theme) || 'light',
@@ -602,16 +612,17 @@ export const useSessionStore = create<SessionState>((set) => ({
           ? state.selectedSessionIds.filter((sid) => sid !== id)
           : [...state.selectedSessionIds, id]
         const focusedSessionId = isSelected ? (newSelected[0] ?? null) : id
-        return { sessions, selectedSessionIds: newSelected, focusedSessionId, activeView: targetView }
+        return { sessions, selectedSessionIds: newSelected, focusedSessionId, activeView: targetView, activeGroupViewId: null }
       }
-      return { sessions, selectedSessionIds: [id], focusedSessionId: id, activeView: targetView }
+      return { sessions, selectedSessionIds: [id], focusedSessionId: id, activeView: targetView, activeGroupViewId: null }
     }),
 
   selectSessions: (ids) =>
     set(() => ({
       selectedSessionIds: ids,
       focusedSessionId: ids[0] ?? null,
-      activeView: 'terminals' as ActiveView
+      activeView: 'terminals' as ActiveView,
+      activeGroupViewId: null
     })),
 
   setFocusedSession: (id) => set(() => ({ focusedSessionId: id })),
@@ -733,6 +744,17 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => ({
       groups: state.groups.map((g) => (g.id === groupId ? { ...g, collapsed: !g.collapsed } : g))
     })),
+
+  setGroupView: (groupId, view) =>
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === groupId ? { ...g, view } : g)),
+      // Clearing a view that is currently showing drops back to the mosaic.
+      ...(view === null && state.activeGroupViewId === groupId
+        ? { activeGroupViewId: null }
+        : {})
+    })),
+
+  setActiveGroupView: (groupId) => set(() => ({ activeGroupViewId: groupId })),
 
   addGroupTerminal: (groupId, config) =>
     set((state) => ({
@@ -1140,9 +1162,18 @@ export const useSessionStore = create<SessionState>((set) => ({
       const existing = state.fileTabs.find((f) => fileTabDedupKey(f) === key)
       if (existing) {
         return {
+          // A re-open with an explicit view mode retargets the existing tab.
+          ...(tab.view && tab.view !== existing.view
+            ? {
+                fileTabs: state.fileTabs.map((f) =>
+                  f.id === existing.id ? { ...f, view: tab.view } : f
+                )
+              }
+            : {}),
           selectedSessionIds: [existing.id],
           focusedSessionId: existing.id,
-          activeView: 'terminals' as ActiveView
+          activeView: 'terminals' as ActiveView,
+          activeGroupViewId: null
         }
       }
       return {
@@ -1150,7 +1181,8 @@ export const useSessionStore = create<SessionState>((set) => ({
         displayOrder: [...getDisplayOrder(state), tab.id],
         selectedSessionIds: [tab.id],
         focusedSessionId: tab.id,
-        activeView: 'terminals' as ActiveView
+        activeView: 'terminals' as ActiveView,
+        activeGroupViewId: null
       }
     }),
 

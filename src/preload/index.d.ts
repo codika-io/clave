@@ -400,6 +400,9 @@ export interface ElectronAPI {
    *  proves a server answers, not just that something bound the port. */
   probeServerUrl: (url: string, timeoutMs?: number) => Promise<boolean>
   openPath: (filePath: string) => Promise<string>
+  /** Register an HTML file with the clave-preview protocol; returns the URL an
+   *  in-app preview iframe loads it from (assets scoped to the file's directory). */
+  registerHtmlPreview: (filePath: string) => Promise<{ url: string }>
   openFolderDialog: (defaultPath?: string) => Promise<string | null>
   onUpdateAvailable: (callback: (version: string) => void) => () => void
   onUpdateDownloaded: (callback: (version: string) => void) => () => void

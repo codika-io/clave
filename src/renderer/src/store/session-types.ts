@@ -171,6 +171,17 @@ export interface Session {
   workspaceId?: string
 }
 
+/** A web page attached to a group: clicking the group shows this rendered page
+ *  in the main pane instead of the tiled session mosaic. `url` is an http(s)
+ *  URL (a dev server, a workstream dashboard) or an absolute .html file path
+ *  (rendered via the clave-preview protocol). `terminalId` links the group
+ *  terminal that serves the URL, powering the down-state "start server" action. */
+export interface GroupViewConfig {
+  url: string
+  title?: string
+  terminalId?: string | null
+}
+
 export interface SessionGroup {
   id: string
   name: string
@@ -179,6 +190,8 @@ export interface SessionGroup {
   cwd: string | null
   terminals: GroupTerminalConfig[]
   color?: GroupTerminalColor | null
+  /** Attached web view — persists with the group (serialized whole). */
+  view?: GroupViewConfig | null
   /** Workspace this group belongs to (see Session.workspaceId). Persists via
    *  sidebar-layout.json since groups are serialized whole. */
   workspaceId?: string
@@ -199,6 +212,9 @@ export interface FileTab {
   name: string
   kind?: 'file' | 'diff'
   diff?: FileTabDiffInfo
+  /** Requested view mode for .html files (e.g. an agent opening one rendered
+   *  via clave_open_file). Undefined = the file kind's default. */
+  view?: 'rendered' | 'source'
 }
 
 export type ActiveView = 'terminals' | 'settings' | 'agents' | 'extensions'

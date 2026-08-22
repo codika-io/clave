@@ -5,7 +5,12 @@ import { FileContent } from './FileContent'
 import { ViewModeToggle } from './ViewModeToggle'
 import { useFileEditor } from '../../hooks/use-file-editor'
 import { useFileViewMode } from '../../hooks/use-file-view-mode'
-import { canOpenExternally as canOpenExternallyExt, formatSize, countLines } from './file-types'
+import {
+  canOpenExternally as canOpenExternallyExt,
+  formatSize,
+  countLines,
+  HTML_MODES
+} from './file-types'
 import {
   DocumentDuplicateIcon,
   ArrowTopRightOnSquareIcon,
@@ -34,7 +39,11 @@ export function FilePreview(): React.JSX.Element | null {
   const editor = useFileEditor({ cwd, filePath: previewFile, locationId: previewLocationId })
   const { fileData, filename, content, isDirty, canEdit, saving, saveError, loadError, save } =
     editor
-  const { isMarkdown, viewMode, setViewMode } = useFileViewMode(previewFile)
+  // Remote files can't be served by the local preview protocol — pin them to source.
+  const { isMarkdown, isHtml, viewMode, setViewMode } = useFileViewMode(
+    previewFile,
+    previewLocationId ? 'source' : undefined
+  )
 
   const canOpenExternally = canOpenExternallyExt(filename)
 
@@ -138,6 +147,9 @@ export function FilePreview(): React.JSX.Element | null {
         </div>
         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
           {isMarkdown && <ViewModeToggle mode={viewMode} onChange={setViewMode} />}
+          {isHtml && !previewLocationId && (
+            <ViewModeToggle mode={viewMode} onChange={setViewMode} modes={HTML_MODES} />
+          )}
           {canEdit && (
             <button
               onClick={save}

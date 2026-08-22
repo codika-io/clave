@@ -1,7 +1,8 @@
 import { CodeEditor } from './CodeEditor'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { MarkdownPageEditor } from './MarkdownPageEditor'
-import { formatSize, isMarkdownFile, type FileViewMode } from './file-types'
+import { HtmlPreviewFrame } from './HtmlPreviewFrame'
+import { formatSize, isHtmlFile, isMarkdownFile, type FileViewMode } from './file-types'
 import type { useFileEditor } from '../../hooks/use-file-editor'
 
 interface FileContentProps {
@@ -25,6 +26,7 @@ export function FileContent({
 }: FileContentProps): React.JSX.Element {
   const { fileData, filename, content, setContent, canEdit, isImage, loadError, save } = editor
   const isMarkdown = filePath ? isMarkdownFile(filename) : false
+  const isHtml = filePath ? isHtmlFile(filename) : false
 
   if (loadError) {
     return (
@@ -37,6 +39,18 @@ export function FileContent({
     return (
       <div className="p-4 flex items-center justify-center">
         <img src={src} alt={filename} className="max-w-full max-h-[50vh] object-contain rounded" />
+      </div>
+    )
+  }
+
+  // HTML, rendered as a live page — served by the clave-preview protocol, so
+  // this works for any size file (the 1MB editor cap below applies to source
+  // mode only, where the same editable buffer as any code file takes over).
+  if (isHtml && viewMode === 'rendered' && filePath) {
+    const abs = filePath.startsWith('/') ? filePath : `${cwd}/${filePath}`
+    return (
+      <div className="flex-1 min-h-0">
+        <HtmlPreviewFrame filePath={abs} />
       </div>
     )
   }

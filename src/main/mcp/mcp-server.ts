@@ -24,7 +24,7 @@ import { createOffer } from '../copy-offer-manager'
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company); exactly one workspace is active and is all the user sees — other workspaces' sessions keep running hidden. Things you open default to your own tab's workspace; pass the workspace parameter to open work elsewhere without switching the user's view, and clave_switch_workspace only when the user should look at it. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Clave also records the transport layer it mediates — cross-tab message deliveries with both endpoints' token usage, agent tab spawns, Task-subagent fan-outs, session state transitions and tab closes — into an append-only event store that the exos CLI lands into each workstream's record (exos workstream capture); read it there (exos workstream events, stats, log) — there is no live query tool. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company); exactly one workspace is active and is all the user sees — other workspaces' sessions keep running hidden. Things you open default to your own tab's workspace; pass the workspace parameter to open work elsewhere without switching the user's view, and clave_switch_workspace only when the user should look at it. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file — .html files render as a live page), attach a web view to a group (clave_set_group_view: a dev server URL or an .html file the user sees in the main pane when clicking the group — the way to surface a live dashboard, a preview, or a presentation right where its sessions live), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Clave also records the transport layer it mediates — cross-tab message deliveries with both endpoints' token usage, agent tab spawns, Task-subagent fan-outs, session state transitions and tab closes — into an append-only event store that the exos CLI lands into each workstream's record (exos workstream capture); read it there (exos workstream events, stats, log) — there is no live query tool. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -268,7 +268,13 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .string()
           .optional()
           .describe(
-            'Declared dev-server URL (e.g. "http://localhost:3000") for commands that serve one. On toolbar server buttons this enables probe-first "ensure running, then open"; stored but inert for sidebar group terminals today.'
+            'Declared dev-server URL (e.g. "http://localhost:3000") for commands that serve one. On toolbar server buttons this enables probe-first "ensure running, then open"; with groupView it becomes the page shown when the user clicks the group.'
+          ),
+        groupView: z
+          .boolean()
+          .optional()
+          .describe(
+            "Requires serverUrl: also attach that URL as the group's web view — clicking the group then shows the served page in the main pane instead of the tiled sessions, with a start-server action bound to this terminal. Same binding as clave_set_group_view with a terminalId."
           ),
         launch: z
           .boolean()
@@ -277,6 +283,34 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       }
     },
     (args) => runCommand('addGroupTerminal', { ...args, callerSessionId })
+  )
+
+  server.registerTool(
+    'clave_set_group_view',
+    {
+      description:
+        "Attach a web view to a Clave group: the page the user sees in the main pane when they click the group, instead of the tiled session mosaic. Point it at a local dev server (a live dashboard, a docs site, a design preview — e.g. a workstream viewer or a Slideless dev server) or at an absolute .html file path rendered in-app. Optionally link the group terminal that serves the URL (terminalId from clave_add_group_terminal) so a down server shows a one-click start action. Attaching never switches what the user is currently looking at — they see the view on their next group click. Pass url: null to detach. Returns { groupId, view }.",
+      inputSchema: {
+        groupId: z.string().describe('Target group: a group id, an exact group name, or "mine"'),
+        url: z
+          .string()
+          .nullable()
+          .describe(
+            'What the view shows: an http(s) URL (typically a localhost dev server) or an absolute path to an .html file. null detaches the view.'
+          ),
+        title: z
+          .string()
+          .optional()
+          .describe("Short label shown in the view's header (defaults to the group name)"),
+        terminalId: z
+          .string()
+          .optional()
+          .describe(
+            'Id of the group terminal whose command serves this URL — powers the "start server" action when the URL is down'
+          )
+      }
+    },
+    (args) => runCommand('setGroupView', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -357,12 +391,18 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_open_file',
     {
       description:
-        'Open a file as a tab in Clave for the user to read or edit — e.g. to present a document, plan, or report you produced. Idempotent: opening an already-open file focuses its existing tab. Text files render with editing; markdown renders formatted.',
+        'Open a file as a tab in Clave for the user to read or edit — e.g. to present a document, plan, report, or HTML page you produced. Idempotent: opening an already-open file focuses its existing tab. Text files render with editing; markdown renders formatted; .html files render as a live page by default (a Rendered ⇄ Source toggle sits in the tab header).',
       inputSchema: {
         path: z
           .string()
           .describe("File path — absolute, or relative to the calling tab's working directory"),
-        name: z.string().optional().describe('Display name for the tab (defaults to the file name)')
+        name: z.string().optional().describe('Display name for the tab (defaults to the file name)'),
+        view: z
+          .enum(['rendered', 'source'])
+          .optional()
+          .describe(
+            'How an .html/.htm file opens: "rendered" shows the live page (the default for HTML), "source" the code editor. Ignored for other file types.'
+          )
       }
     },
     (args) => runCommand('openFile', { ...args, callerSessionId })

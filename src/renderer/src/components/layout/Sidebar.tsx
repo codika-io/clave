@@ -49,7 +49,8 @@ import {
   ShieldExclamationIcon,
   ClipboardDocumentIcon,
   MagnifyingGlassIcon,
-  CubeTransparentIcon
+  CubeTransparentIcon,
+  GlobeAltIcon
 } from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
@@ -121,6 +122,8 @@ export function Sidebar() {
   const deleteGroup = useSessionStore((s) => s.deleteGroup)
   const setGroupColor = useSessionStore((s) => s.setGroupColor)
   const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
+  const setGroupView = useSessionStore((s) => s.setGroupView)
+  const setActiveGroupView = useSessionStore((s) => s.setActiveGroupView)
   const moveItems = useSessionStore((s) => s.moveItems)
   const addGroupTerminal = useSessionStore((s) => s.addGroupTerminal)
   const removeGroupTerminal = useSessionStore((s) => s.removeGroupTerminal)
@@ -662,6 +665,24 @@ export function Sidebar() {
             icon: <PencilSquareIcon className="w-3.5 h-3.5" />,
             onClick: () => setTerminalDialogState({ groupId, terminalId })
           },
+          // A terminal that declares a serverUrl can become the group's web
+          // view: clicking the group then shows the served page in the main pane.
+          ...(config.serverUrl
+            ? [
+                {
+                  label: 'Use as group view',
+                  icon: <GlobeAltIcon className="w-3.5 h-3.5" />,
+                  onClick: () => {
+                    setGroupView(groupId, {
+                      url: config.serverUrl!,
+                      title: config.command || undefined,
+                      terminalId
+                    })
+                    setActiveGroupView(groupId)
+                  }
+                }
+              ]
+            : []),
           {
             label: 'Delete',
             icon: <TrashIcon className="w-3.5 h-3.5" />,
@@ -676,7 +697,7 @@ export function Sidebar() {
         ]
       })
     },
-    [removeGroupTerminal]
+    [removeGroupTerminal, setGroupView, setActiveGroupView]
   )
 
   const hideAgentSession = useSessionStore((s) => s.hideAgentSession)
@@ -945,6 +966,20 @@ export function Sidebar() {
             icon: <CommandLineIcon className="w-3.5 h-3.5" />,
             onClick: () => setTerminalDialogState({ groupId, terminalId: null })
           },
+          group?.view
+            ? {
+                label: 'Show web view',
+                icon: <GlobeAltIcon className="w-3.5 h-3.5" />,
+                onClick: () => setActiveGroupView(groupId)
+              }
+            : null,
+          group?.view
+            ? {
+                label: 'Detach web view',
+                icon: <GlobeAltIcon className="w-3.5 h-3.5" />,
+                onClick: () => setGroupView(groupId, null)
+              }
+            : null,
           {
             label: 'Ungroup',
             icon: <FolderMinusIcon className="w-3.5 h-3.5" />,
@@ -959,7 +994,7 @@ export function Sidebar() {
         ].filter((item): item is NonNullable<typeof item> => item !== null)
       })
     },
-    [ungroupSessions, handleDeleteGroup, setGroupColor]
+    [ungroupSessions, handleDeleteGroup, setGroupColor, setGroupView, setActiveGroupView]
   )
 
   const handleFileTabContextMenu = useCallback(
@@ -1078,19 +1113,28 @@ export function Sidebar() {
           // Collapsed group: expand it and select
           toggleGroupCollapsed(group.id)
           selectSessions(group.sessionIds)
+          if (group.view) setActiveGroupView(group.id)
         } else if (allSelected) {
-          // Already selected and expanded: collapse it
-          toggleGroupCollapsed(group.id)
+          if (group.view && state.activeGroupViewId !== group.id) {
+            // Selected but showing the mosaic: bring the attached view back
+            // before any collapse.
+            selectSessions(group.sessionIds)
+            setActiveGroupView(group.id)
+          } else {
+            // Already selected and expanded: collapse it
+            toggleGroupCollapsed(group.id)
+          }
         } else {
-          // Not selected: select it
+          // Not selected: select it — a group carrying a view opens on it
           selectSessions(group.sessionIds)
+          if (group.view) setActiveGroupView(group.id)
         }
         if (group.sessionIds.length > 0) {
           selectionAnchorRef.current = group.sessionIds[0]
         }
       }
     },
-    [selectSessions, toggleGroupCollapsed]
+    [selectSessions, toggleGroupCollapsed, setActiveGroupView]
   )
 
   const clearRenaming = useCallback(() => setRenamingId(null), [])
