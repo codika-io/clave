@@ -1,8 +1,14 @@
-/** Display modes for markdown files: document-style page (default), compact preview, raw source. */
-export type FileViewMode = 'page' | 'preview' | 'source'
+/** Display modes for file surfaces. Markdown uses page (document-style,
+ *  default) / preview (compact) / source; HTML uses rendered (live page,
+ *  default) / source. */
+export type FileViewMode = 'page' | 'preview' | 'source' | 'rendered'
+
+export const MARKDOWN_MODES: FileViewMode[] = ['page', 'preview', 'source']
+export const HTML_MODES: FileViewMode[] = ['rendered', 'source']
 
 export const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'])
 export const MARKDOWN_EXTS = new Set(['md', 'mdx'])
+export const HTML_EXTS = new Set(['html', 'htm'])
 export const EXTERNAL_EXTS = new Set([
   'html',
   'htm',
@@ -25,6 +31,10 @@ export function isImageFile(filename: string): boolean {
 
 export function isMarkdownFile(filename: string): boolean {
   return MARKDOWN_EXTS.has(extOf(filename))
+}
+
+export function isHtmlFile(filename: string): boolean {
+  return HTML_EXTS.has(extOf(filename))
 }
 
 export function canOpenExternally(filename: string): boolean {

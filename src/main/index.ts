@@ -23,6 +23,10 @@ import {
 import { cleanupClaveWatchers } from './ipc-handlers/clave-file-handlers'
 import { startMcpServer, stopMcpServer } from './mcp/mcp-server'
 import { sweepSessionMcpConfigs } from './mcp/mcp-runtime'
+import { registerPreviewScheme, installPreviewProtocol } from './preview-protocol'
+
+// Scheme privileges must be declared before app ready.
+registerPreviewScheme()
 
 function createWindow(): void {
   const savedIcon = preferencesManager.get('appIcon')
@@ -110,6 +114,7 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
+  installPreviewProtocol()
   // MCP failure must not break the app — spawns just omit the --mcp-config flag.
   void startMcpServer().catch((err) => console.error('[mcp] failed to start', err))
   sweepSessionMcpConfigs()

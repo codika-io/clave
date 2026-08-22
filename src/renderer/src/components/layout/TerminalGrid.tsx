@@ -1,11 +1,18 @@
 import { useMemo } from 'react'
-import { useSessionStore, getDisplayOrder, isFileTabId } from '../../store/session-store'
+import {
+  useSessionStore,
+  getDisplayOrder,
+  isFileTabId,
+  inActiveWorkspace
+} from '../../store/session-store'
+import { useWorkspaceStore } from '../../store/workspace-store'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { RemoteTerminalPanel } from '../terminal/RemoteTerminalPanel'
 import { TerminalErrorBoundary } from '../terminal/TerminalErrorBoundary'
 import { FileViewer } from '../files/FileViewer'
 import { DiffViewer } from '../files/DiffViewer'
 import { EmptyState } from '../ui/EmptyState'
+import { GroupViewPanel } from './GroupViewPanel'
 
 function computeGridLayout(count: number): { cols: number; rows: number } {
   if (count <= 1) return { cols: 1, rows: 1 }
@@ -21,6 +28,18 @@ export function TerminalGrid() {
   const fileTabs = useSessionStore((s) => s.fileTabs)
   const groups = useSessionStore((s) => s.groups)
   const displayOrder = useSessionStore((s) => s.displayOrder)
+  const activeGroupViewId = useSessionStore((s) => s.activeGroupViewId)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+
+  // Re-validate the active group view — the id may be stale (group deleted,
+  // view detached, workspace switched); a stale id silently falls back to the grid.
+  const viewGroup =
+    (activeGroupViewId &&
+      groups.find(
+        (g) =>
+          g.id === activeGroupViewId && g.view && inActiveWorkspace(g, activeWorkspaceId)
+      )) ||
+    null
 
   const orderedSessions = useMemo(() => {
     const order = getDisplayOrder({ sessions, groups, displayOrder })
@@ -63,9 +82,17 @@ export function TerminalGrid() {
   return (
     <div className="flex-1 relative overflow-hidden">
       {/* "Select a session" overlay when nothing is selected */}
-      {!hasSelection && (
+      {!hasSelection && !viewGroup && (
         <div className="absolute inset-0 flex items-center justify-center text-text-tertiary text-sm z-10">
           Select a session
+        </div>
+      )}
+
+      {/* A group's attached web view replaces the mosaic; the grid below stays
+          mounted (hidden) so every terminal keeps running. */}
+      {viewGroup && (
+        <div className="absolute inset-0">
+          <GroupViewPanel group={viewGroup} />
         </div>
       )}
 
@@ -74,7 +101,8 @@ export function TerminalGrid() {
         className="h-full grid gap-2"
         style={{
           gridTemplateColumns: `repeat(${cols}, 1fr)`,
-          gridTemplateRows: `repeat(${rows}, 1fr)`
+          gridTemplateRows: `repeat(${rows}, 1fr)`,
+          ...(viewGroup ? { visibility: 'hidden' as const } : {})
         }}
       >
         {orderedSessions.map((session) => {

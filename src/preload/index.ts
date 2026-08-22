@@ -158,6 +158,9 @@ const electronAPI = {
 
   openPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 
+  registerHtmlPreview: (filePath: string) =>
+    ipcRenderer.invoke('preview:register', filePath) as Promise<{ url: string }>,
+
   openFolderDialog: (defaultPath?: string) => ipcRenderer.invoke('dialog:openFolder', defaultPath),
 
   onUpdateAvailable: (callback: (version: string) => void) =>

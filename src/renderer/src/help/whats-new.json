@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.67.0",
+    "title": "Groups open as live pages",
+    "description": "Attach a web view to a group — a dev server, a live dashboard, or an HTML file — and clicking the group shows the rendered page instead of the tiled terminals, with a Sessions switch one click away. HTML files also render as live pages in their own tabs now, with a Rendered ⇄ Source toggle. Agents can drive both: clave_set_group_view and clave_open_file's rendered view.",
+    "action": {
+      "type": "navigate",
+      "target": "side:help"
+    }
+  },
+  {
     "version": "1.64.0",
     "title": "Server buttons in the toolbar",
     "description": "Give a quick-launch terminal a serverUrl and its button becomes a service switch: one click starts the server if needed and opens it in your browser, with a live status dot showing up, starting, or down.",
