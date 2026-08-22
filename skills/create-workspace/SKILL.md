@@ -11,7 +11,7 @@ This skill helps you create and configure `.clave` workspace files for the Clave
 
 A `.clave` file is a JSON file that defines one or more **groups**. Each group contains **sessions** (terminal instances) and **terminals** (quick-action buttons with pre-configured commands). When dropped into Clave or loaded via the Workspaces settings, these groups become **launchable templates**.
 
-Templates live in the **group picker** — a full-screen dialog opened from either action beside the Sessions heading in the sidebar (`+` or the grid icon). Clicking a group stamps out a fresh one every time; it never links back to the running group. The picker shows one card per group, with a search field, and:
+Templates live in the **group picker** — a full-screen dialog opened from the grid icon beside the Sessions heading in the sidebar. Clicking a group stamps out a fresh one every time; it never links back to the running group. The picker shows one card per group, with a search field, and:
 
 - Groups templates under their `category` as section headers. Uncategorized templates render first, then categories **alphabetically**. There is no manual ordering — if you need a specific order, name the categories so they sort that way.
 - Hides groups marked `"toolbar": true` (those render as icon buttons in the top toolbar instead).
