@@ -412,6 +412,185 @@ body,
   height: var(--sidebar-tab-icon-size);
 }
 
+/* ── Session launcher ── */
+
+/* The pinned launch row at the top of the sidebar: a plain-terminal button, an
+   agent button that relaunches the workspace's remembered setup, a caret for a
+   different setup, and a folder button for a directory other than the workspace
+   root. Every control is a real sibling <button> — the caret only LOOKS welded
+   to the agent button (shared pill, hairline divider), so there is no nested
+   button and each target keeps its own hit area and tab stop. */
+.launcher-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.launcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;           /* gap-1.5 */
+  min-width: 0;
+  height: var(--control-h-md);
+  padding: 0 0.5rem;       /* px-2 */
+  border-radius: var(--radius-lg);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  color: var(--sidebar-item-text);
+  background-color: var(--surface-100);
+  transition: color 150ms, background-color 150ms, opacity 150ms;
+}
+.launcher-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-200);
+}
+.launcher-btn:disabled {
+  opacity: 0.5;
+}
+
+/* The pill holding the agent button and its caret. It owns the row's leftover
+   width because the agent label is the variable-length one. */
+.launcher-split {
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-100);
+  overflow: hidden;
+}
+.launcher-split .launcher-btn {
+  flex: 1 1 auto;
+  border-radius: 0;
+  background-color: transparent;
+}
+.launcher-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0 0.25rem;      /* px-1 */
+  border-left: 1px solid var(--color-border);
+  color: var(--text-tertiary);
+  transition: color 150ms, background-color 150ms;
+}
+.launcher-caret:hover,
+.launcher-caret[data-state="open"] {
+  color: var(--text-primary);
+  background-color: var(--surface-200);
+}
+
+/* The `+` row at the bottom of a group: launches a session into that group,
+   with the group's own default prompt. Quieter than a session row — it is an
+   affordance, not a tab — and it takes the group's colour on hover so it reads
+   as belonging to the group rather than to the list. */
+.group-add-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;           /* gap-1.5 */
+  height: var(--control-h-md);
+  padding: 0 var(--sidebar-row-px);
+  border-radius: var(--radius-lg);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+  opacity: 0.75;
+  transition: color 150ms, background-color 150ms, opacity 150ms;
+}
+.group-add-row:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-200);
+  opacity: 1;
+}
+.group-add-row:disabled {
+  opacity: 0.4;
+}
+
+/* The group's colour as a rail down its session list.
+   The answer to "should selecting a group filter the sidebar?" was no — the
+   sidebar's job is showing which lane is waiting on you, and hiding the others
+   defeats it. So the boundary is made unmistakable instead: a continuous bar in
+   the group's own colour spanning its sessions, brightened while the group is
+   the selection. */
+.group-rail {
+  position: relative;
+  padding-left: 0.5rem;    /* clears the rail */
+}
+.group-rail::before {
+  content: '';
+  position: absolute;
+  left: 0.125rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background-color: var(--group-rail-color, var(--color-accent));
+  opacity: 0.35;
+  transition: opacity 150ms;
+}
+.group-rail[data-selected='true']::before {
+  opacity: 0.9;
+}
+
+/* ── Group picker ── */
+
+/* The full-screen group picker: one card per group you can add, laid out big
+   enough to scan, with a search field. It REPLACES the old narrow template
+   popover — one surface for one action. */
+.group-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  background-color: rgb(0 0 0 / 0.45);
+  backdrop-filter: blur(6px);
+}
+.group-picker-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 62rem;
+  max-height: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-border);
+  background-color: var(--surface-50);
+  box-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.35);
+  overflow: hidden;
+}
+.group-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+/* One group, as an "app" tile: big enough to carry its name, what it holds,
+   and whether it starts its sessions on a prompt. */
+.group-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.875rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle-color);
+  background-color: var(--surface-100);
+  text-align: left;
+  transition: border-color 150ms, background-color 150ms, transform 150ms;
+}
+.group-picker-card:hover {
+  border-color: var(--color-border);
+  background-color: var(--surface-200);
+  transform: translateY(-1px);
+}
+.group-picker-card[data-flashing='true'] {
+  border-color: var(--color-accent);
+}
+
 /* ── Buttons ── */
 
 /* Primary: filled accent background */

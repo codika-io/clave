@@ -60,6 +60,9 @@ export interface ClaveFileGroupData {
   toolbar?: boolean
   category?: string
   logo?: string
+  /** Group-level default prompt: what sessions launched from the live group's
+   *  `+` start on. Mirrors `ClaveGroupData.prompt` in the main process. */
+  prompt?: string
   sessions: {
     cwd: string
     name: string
@@ -91,6 +94,7 @@ export interface ClaveFileWriteData {
   name?: string
   cwd?: string | null
   color?: string | null
+  prompt?: string
   sessions?: {
     cwd: string
     name: string
@@ -110,6 +114,7 @@ export interface ClaveFileWriteData {
     toolbar?: boolean
     category?: string
     logo?: string
+    prompt?: string
     sessions: {
       cwd: string
       name: string

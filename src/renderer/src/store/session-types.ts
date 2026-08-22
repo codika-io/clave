@@ -189,6 +189,11 @@ export interface SessionGroup {
   collapsed: boolean
   cwd: string | null
   terminals: GroupTerminalConfig[]
+  /** Default prompt new sessions launched from this group's `+` inherit.
+   *  Comes from the group's `.clave` entry when the group was stamped out of a
+   *  pin, and is editable on a live group. Null/absent = the `+` launches with
+   *  no prompt, exactly like the sidebar's own agent button. */
+  prompt?: string | null
   color?: GroupTerminalColor | null
   /** Attached web view — persists with the group (serialized whole). */
   view?: GroupViewConfig | null
@@ -261,6 +266,10 @@ export interface PinnedGroup {
   name: string
   cwd: string | null
   color: GroupTerminalColor | null
+  /** Group-level default prompt (`.clave` `prompt`). Inherited by sessions the
+   *  live group's `+` launches; a session's own `prompt` still wins for that
+   *  session. Carries the same @-tokens, substituted at spawn. */
+  prompt?: string | null
   sessions: PinnedGroupSession[]
   terminals: PinnedGroupTerminal[]
   createdAt: number

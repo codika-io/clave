@@ -167,6 +167,9 @@ function describeElevated(result: ClaveFileReadResult): { autoCommands: string[]
     for (const t of g.terminals) {
       if (t.commandMode === 'auto' && t.command.trim()) autoCommands.push(t.command)
     }
+    // A group-level prompt is auto-submitted to every session the group's `+`
+    // launches, so it is elevated for exactly the same reason a session prompt is.
+    if (g.prompt && g.prompt.trim()) prompts.push(g.prompt)
     for (const s of g.sessions) {
       if (s.dangerousMode) dangerous = true
       if (s.prompt && s.prompt.trim()) prompts.push(s.prompt)
@@ -180,6 +183,7 @@ function describeElevated(result: ClaveFileReadResult): { autoCommands: string[]
 function sanitizeElevated(result: ClaveFileReadResult): ClaveFileReadResult {
   const sanitizeGroup = (g: ClaveGroupData): ClaveGroupData => ({
     ...g,
+    prompt: undefined,
     sessions: g.sessions.map((s) => ({ ...s, dangerousMode: false, prompt: undefined })),
     terminals: g.terminals.map((t) => (t.commandMode === 'auto' ? { ...t, commandMode: 'prefill' } : t))
   })
@@ -196,6 +200,10 @@ interface ClaveGroupData {
   toolbar?: boolean
   category?: string
   logo?: string
+  /** Group-level default prompt. Sessions launched from the group's own `+`
+   *  inherit it; a session's own `prompt` still wins for that session. Same
+   *  @-token vocabulary as a session prompt, substituted at spawn. */
+  prompt?: string
   sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
   terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[]
 }
@@ -206,6 +214,7 @@ interface ClaveFileRaw {
   name?: string
   cwd?: string
   color?: string | null
+  prompt?: string
   sessions?: ClaveGroupData['sessions']
   terminals?: ClaveGroupData['terminals']
   toolbar?: boolean
@@ -219,6 +228,7 @@ interface ClaveFileRaw {
     toolbar?: boolean
     category?: string
     logo?: string
+    prompt?: string
     sessions?: ClaveGroupData['sessions']
     terminals?: ClaveGroupData['terminals']
   }>
@@ -233,6 +243,7 @@ interface ClaveFileWriteData {
   cwd?: string | null
   color?: string | null
   logo?: string
+  prompt?: string
   sessions?: ClaveGroupData['sessions']
   terminals?: ClaveGroupData['terminals']
   groups?: Array<{
@@ -240,12 +251,13 @@ interface ClaveFileWriteData {
     cwd: string | null
     color: string | null
     logo?: string
+    prompt?: string
     sessions: ClaveGroupData['sessions']
     terminals: ClaveGroupData['terminals']
   }>
 }
 
-function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null; toolbar?: boolean; category?: string; logo?: string; sessions?: ClaveGroupData['sessions']; terminals?: ClaveGroupData['terminals'] }, dir: string, fallbackName: string): ClaveGroupData {
+function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; sessions?: ClaveGroupData['sessions']; terminals?: ClaveGroupData['terminals'] }, dir: string, fallbackName: string): ClaveGroupData {
   return {
     name: raw.name || fallbackName,
     cwd: path.resolve(dir, raw.cwd || '.'),
@@ -255,6 +267,9 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
     logo: raw.logo
       ? raw.logo.startsWith('data:') ? raw.logo : readImageAsDataUrl(path.resolve(dir, raw.logo)) ?? undefined
       : undefined,
+    // Free text, like a session prompt: kept as the raw template, @-tokens
+    // substituted at spawn, never path-resolved here.
+    ...(raw.prompt ? { prompt: raw.prompt } : {}),
     sessions: (raw.sessions || []).map((s) => ({
       cwd: path.resolve(dir, s.cwd || '.'),
       name: s.name,
@@ -376,13 +391,14 @@ export function registerClaveFileHandlers(): void {
           return rel === '' ? '.' : rel
         }
 
-        const serializeGroup = (g: { name: string; cwd: string | null; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: ClaveGroupData['sessions']; terminals: ClaveGroupData['terminals'] }) => ({
+        const serializeGroup = (g: { name: string; cwd: string | null; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; sessions: ClaveGroupData['sessions']; terminals: ClaveGroupData['terminals'] }) => ({
           name: g.name,
           cwd: toRelative(g.cwd),
           color: g.color,
           ...(g.toolbar ? { toolbar: true } : {}),
           ...(g.category ? { category: g.category } : {}),
           ...(g.logo ? { logo: g.logo.startsWith('data:') ? g.logo : toRelative(g.logo) } : {}),
+          ...(g.prompt ? { prompt: g.prompt } : {}),
           sessions: g.sessions.map((s) => ({
             cwd: toRelative(s.cwd),
             name: s.name,

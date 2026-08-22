@@ -278,6 +278,7 @@ async function handleLaunchGroup(payload: {
 
 function handleCreateGroup(payload: {
   name: string
+  prompt?: string
   workspace?: string
   callerSessionId?: string
 }): unknown {
@@ -285,7 +286,13 @@ function handleCreateGroup(payload: {
   store.createGroup([], payload.name, workspaceForSpawn(payload.workspace, payload.callerSessionId))
   const created = useSessionStore.getState().groups.at(-1)
   if (!created) throw new Error('Group creation failed')
-  return { groupId: created.id, name: created.name, workspaceId: created.workspaceId ?? null }
+  if (payload.prompt) useSessionStore.getState().setGroupPrompt(created.id, payload.prompt)
+  return {
+    groupId: created.id,
+    name: created.name,
+    workspaceId: created.workspaceId ?? null,
+    prompt: useSessionStore.getState().groups.find((g) => g.id === created.id)?.prompt ?? null
+  }
 }
 
 /** A session moved into a group joins that group's workspace — a group must
