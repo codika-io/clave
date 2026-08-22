@@ -5,8 +5,10 @@ import type {
 } from '../shared/extensions-types'
 import type { WorkspaceStateFile } from '../shared/workspace-types'
 
-/** Endpoint identity stamped on exchange-capture events; mirrors
- *  src/main/exchange-capture/types.ts EndpointIdentity. */
+/** Endpoint identity stamped on exchange-capture events; mirrors the
+ *  contract's EndpointIdentity (src/main/exchange-capture/contract). `model`
+ *  is additive (v2): the model the tab was opened with, null = the CLI's
+ *  default. Clave never emits the contract's `gemini` mode. */
 export interface ExchangeEndpoint {
   sessionId: string
   name: string
@@ -15,6 +17,7 @@ export interface ExchangeEndpoint {
   claudeSessionId: string | null
   groupId: string | null
   groupName: string | null
+  model: string | null
 }
 
 export interface SecretRequestView {
@@ -356,6 +359,19 @@ export interface ElectronAPI {
     session: ExchangeEndpoint
     prompt: string | null
     model: string | null
+  }) => void
+  captureSessionState: (payload: {
+    ts: string
+    session: ExchangeEndpoint
+    state: 'working' | 'idle' | 'blocked' | 'exited'
+    previous: 'working' | 'idle' | 'blocked' | 'exited' | null
+    source: 'hooks' | 'pty'
+  }) => void
+  captureTabClosed: (payload: {
+    ts: string
+    session: ExchangeEndpoint
+    by: 'user' | 'agent' | 'app'
+    closer: ExchangeEndpoint | null
   }) => void
   secretList: () => Promise<SecretRequestView[]>
   secretSubmit: (id: string, secret: string) => Promise<SecretRequestView>

@@ -1,0 +1,7 @@
+{
+  "note": "What a per-ENTRY sum would report: the regression this fixture turns red.",
+  "distinctCalls": 15,
+  "entries": 46,
+  "inputSummedPerEntry": 4477,
+  "inputSummedPerCall": 1374
+}

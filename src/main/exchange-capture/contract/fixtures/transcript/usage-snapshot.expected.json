@@ -1,0 +1,41 @@
+{
+  "computedAt": "2026-08-21T12:00:00.000Z",
+  "cumulative": {
+    "byModel": {
+      "claude-fable-5": {
+        "calls": 8,
+        "input": 836,
+        "output": 652,
+        "cacheWrite": 36000,
+        "cacheRead": 178000,
+        "cacheWrite1h": 16000,
+        "cacheWrite5m": 20000
+      },
+      "claude-opus-5": {
+        "calls": 7,
+        "input": 538,
+        "output": 620,
+        "cacheWrite": 45000,
+        "cacheRead": 122006,
+        "cacheWrite1h": 20000,
+        "cacheWrite5m": 22000
+      }
+    },
+    "subagents": {
+      "count": 1,
+      "byModel": {
+        "claude-opus-5": {
+          "calls": 3,
+          "input": 96,
+          "output": 126,
+          "cacheWrite": 3000,
+          "cacheRead": 21006
+        }
+      }
+    }
+  },
+  "context": {
+    "tokens": 36611,
+    "asOf": "2026-08-21T10:00:45.000Z"
+  }
+}

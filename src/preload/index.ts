@@ -105,6 +105,17 @@ const electronAPI = {
     model: string | null
   }) => ipcRenderer.send('exchange:capture-tab-spawn', payload),
 
+  captureSessionState: (payload: {
+    ts: string
+    session: unknown
+    state: string
+    previous: string | null
+    source: string
+  }) => ipcRenderer.send('exchange:capture-session-state', payload),
+
+  captureTabClosed: (payload: { ts: string; session: unknown; by: string; closer: unknown }) =>
+    ipcRenderer.send('exchange:capture-tab-closed', payload),
+
   secretList: () => ipcRenderer.invoke('secret:list'),
 
   secretSubmit: (id: string, secret: string) => ipcRenderer.invoke('secret:submit', id, secret),

@@ -1,3 +1,4 @@
+import { emitTabClosed } from '../../lib/exchange-capture'
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSessionStore, isFileTabId, getVisibleFlatOrder, inActiveWorkspace, enableSidebarPersistence } from '../../store/session-store'
@@ -437,6 +438,9 @@ export function AppShell() {
           if (isFileTabId(sid)) {
             removeFileTab(sid)
           } else {
+            const current = useSessionStore.getState()
+            const closing = current.sessions.find((s) => s.id === sid)
+            if (closing) emitTabClosed(closing, current.groups, 'user', null)
             window.electronAPI.killSession(sid).catch(() => {})
             removeSession(sid)
           }

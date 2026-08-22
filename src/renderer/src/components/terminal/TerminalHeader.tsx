@@ -1,3 +1,4 @@
+import { emitTabClosed } from '../../lib/exchange-capture'
 import { useCallback, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, PlayIcon, ArrowDownTrayIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
@@ -18,6 +19,9 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
   const [showConfirm, setShowConfirm] = useState(false)
 
   const handleKill = useCallback(async () => {
+    const current = useSessionStore.getState()
+    const closing = current.sessions.find((s) => s.id === sessionId)
+    if (closing) emitTabClosed(closing, current.groups, 'user', null)
     try {
       await window.electronAPI.killSession(sessionId)
     } catch {
