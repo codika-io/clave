@@ -58,14 +58,21 @@ function RepoSection({
   status,
   filterPrefix,
   refresh,
-  fillHeight = true
+  fillHeight = true,
+  depth = 0
 }: {
   cwd: string
   status: GitStatusResult
   filterPrefix?: string | null
   refresh: () => void
   fillHeight?: boolean
+  /** Tree level of the section headers — files sit one level deeper, so the
+   *  repo's content continues the spatial tree's indentation. */
+  depth?: number
 }) {
+  const sectionIndentPx = 12 + depth * TREE_INDENT_PX
+  const fileIndentPx = sectionIndentPx + TREE_INDENT_PX
+  const treeBaseIndentPx = (depth + 1) * TREE_INDENT_PX
   const gitViewMode = useSessionStore((s) => s.gitViewMode)
   const gitShowCommitBar = useSessionStore((s) => s.gitShowCommitBar)
   const setDiffPreview = useSessionStore((s) => s.setDiffPreview)
@@ -417,6 +424,7 @@ function RepoSection({
           <>
             <SectionHeader
               label="Staged"
+              indentPx={sectionIndentPx}
               count={staged.length}
               action="Unstage All"
               onAction={unstageAll}
@@ -426,6 +434,7 @@ function RepoSection({
             />
             {gitViewMode === 'tree' ? (
               <GitTreeSection
+                baseIndentPx={treeBaseIndentPx}
                 files={staged}
                 cwd={repoRoot}
                 selectedPaths={selectedPaths}
@@ -443,6 +452,7 @@ function RepoSection({
               staged.map((f) => (
                 <FileRow
                   key={`s-${f.path}`}
+                  indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}
                   isSelected={selectedPaths.has(f.path)}
@@ -463,6 +473,7 @@ function RepoSection({
           <>
             <SectionHeader
               label="Modified"
+              indentPx={sectionIndentPx}
               count={unstaged.length}
               action="Stage All"
               onAction={() => stageAll(unstaged)}
@@ -472,6 +483,7 @@ function RepoSection({
             />
             {gitViewMode === 'tree' ? (
               <GitTreeSection
+                baseIndentPx={treeBaseIndentPx}
                 files={unstaged}
                 cwd={repoRoot}
                 selectedPaths={selectedPaths}
@@ -489,6 +501,7 @@ function RepoSection({
               unstaged.map((f) => (
                 <FileRow
                   key={`u-${f.path}`}
+                  indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}
                   isSelected={selectedPaths.has(f.path)}
@@ -509,6 +522,7 @@ function RepoSection({
           <>
             <SectionHeader
               label="Untracked"
+              indentPx={sectionIndentPx}
               count={untracked.length}
               action="Stage All"
               onAction={() => stageAll(untracked)}
@@ -518,6 +532,7 @@ function RepoSection({
             />
             {gitViewMode === 'tree' ? (
               <GitTreeSection
+                baseIndentPx={treeBaseIndentPx}
                 files={untracked}
                 cwd={repoRoot}
                 selectedPaths={selectedPaths}
@@ -535,6 +550,7 @@ function RepoSection({
               untracked.map((f) => (
                 <FileRow
                   key={`t-${f.path}`}
+                  indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}
                   isSelected={selectedPaths.has(f.path)}
@@ -830,6 +846,7 @@ function MultiRepoSection({
               status={status}
               refresh={refresh}
               fillHeight={false}
+              depth={depth + 1}
             />
           )}
         </div>

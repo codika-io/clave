@@ -17,7 +17,8 @@ export function FileRow({
   onDiscard,
   onContextMenu,
   disabled,
-  selectedPaths
+  selectedPaths,
+  indentPx
 }: {
   file: GitFileStatus
   cwd: string
@@ -30,6 +31,8 @@ export function FileRow({
   onContextMenu?: (file: GitFileStatus, clientX: number, clientY: number) => void
   disabled?: boolean
   selectedPaths?: Set<string>
+  /** Left offset in px — sits the row one tree level under its section header (default 12 = px-3). */
+  indentPx?: number
 }) {
   const { name, dir } = splitPath(file.path)
   const isStaged = file.staged
@@ -72,9 +75,10 @@ export function FileRow({
 
   return (
     <div
-      className={`flex items-center gap-1.5 px-3 py-0.5 text-xs transition-colors cursor-pointer group ${
+      className={`flex items-center gap-1.5 pr-3 py-0.5 text-xs transition-colors cursor-pointer group ${
         disabled ? 'opacity-50 pointer-events-none' : isActiveDiff ? 'bg-accent/15 border-l-2 border-l-accent' : isSelected ? 'bg-surface-200 border-l-2 border-l-transparent' : 'hover:bg-surface-100 border-l-2 border-l-transparent'
       }`}
+      style={{ paddingLeft: indentPx ?? 12 }}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       draggable
@@ -118,13 +122,15 @@ export function GitTreeDirRow({
   cwd,
   isSelected,
   onToggle,
-  onSelect
+  onSelect,
+  baseIndentPx = 0
 }: {
   node: FlatGitTreeNode
   cwd: string
   isSelected?: boolean
   onToggle: (path: string) => void
   onSelect?: (path: string, metaKey: boolean) => void
+  baseIndentPx?: number
 }) {
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -151,7 +157,7 @@ export function GitTreeDirRow({
       className={`flex items-center gap-1.5 py-0.5 text-xs transition-colors cursor-pointer pr-3 ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       }`}
-      style={{ paddingLeft: `${8 + node.depth * 8}px` }}
+      style={{ paddingLeft: `${baseIndentPx + 8 + node.depth * 8}px` }}
       onClick={handleClick}
       draggable
       onDragStart={handleDragStart}
@@ -184,7 +190,8 @@ export function GitTreeFileRow({
   onDiscard,
   onContextMenu,
   disabled,
-  selectedPaths
+  selectedPaths,
+  baseIndentPx = 0
 }: {
   node: FlatGitTreeNode
   cwd: string
@@ -197,6 +204,7 @@ export function GitTreeFileRow({
   onContextMenu?: (file: GitFileStatus, clientX: number, clientY: number) => void
   disabled?: boolean
   selectedPaths?: Set<string>
+  baseIndentPx?: number
 }) {
   const file = node.file!
   const isStaged = file.staged
@@ -242,7 +250,7 @@ export function GitTreeFileRow({
       className={`flex items-center gap-1.5 py-0.5 text-xs transition-colors cursor-pointer group pr-3 ${
         disabled ? 'opacity-50 pointer-events-none' : isActiveDiff ? 'bg-accent/15 border-l-2 border-l-accent' : isSelected ? 'bg-surface-200 border-l-2 border-l-transparent' : 'hover:bg-surface-100 border-l-2 border-l-transparent'
       }`}
-      style={{ paddingLeft: `${8 + node.depth * 8}px` }}
+      style={{ paddingLeft: `${baseIndentPx + 8 + node.depth * 8}px` }}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       draggable
@@ -293,7 +301,8 @@ export function GitTreeSection({
   onStageToggle,
   onDiscard,
   onContextMenu,
-  disabled
+  disabled,
+  baseIndentPx = 0
 }: {
   files: GitFileStatus[]
   cwd: string
@@ -307,6 +316,8 @@ export function GitTreeSection({
   onDiscard: (file: GitFileStatus) => void
   onContextMenu?: (file: GitFileStatus, clientX: number, clientY: number) => void
   disabled?: boolean
+  /** Base left offset in px — sits the whole file tree under its section header. */
+  baseIndentPx?: number
 }) {
   const flatNodes = useMemo(() => {
     if (files.length === 0) return []
@@ -325,6 +336,7 @@ export function GitTreeSection({
             isSelected={selectedPaths.has(node.path)}
             onToggle={onToggleExpanded}
             onSelect={onSelect}
+            baseIndentPx={baseIndentPx}
           />
         ) : (
           <GitTreeFileRow
@@ -340,6 +352,7 @@ export function GitTreeSection({
             onContextMenu={onContextMenu}
             disabled={disabled}
             selectedPaths={selectedPaths}
+            baseIndentPx={baseIndentPx}
           />
         )
       )}
