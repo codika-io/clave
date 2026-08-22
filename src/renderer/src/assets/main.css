@@ -321,16 +321,6 @@ body,
   background: var(--scrollbar-thumb-hover);
 }
 
-/* Toolbar URL tags — horizontal scroll, scrollbar hidden (trackpad scroll) */
-.toolbar-url-scroll {
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.toolbar-url-scroll::-webkit-scrollbar {
-  display: none;
-}
-
 /* xterm.js overrides */
 .xterm {
   /* Left inset only: the scroll area reaches the panel edges on every other

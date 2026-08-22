@@ -21,7 +21,7 @@ import { FilePreview } from '../files/FilePreview'
 import { GitDiffPreview } from '../git/GitDiffPreview'
 import { GitJourneyPanel } from '../git/GitJourneyPanel'
 import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-import { cn, safePort } from '../../lib/utils'
+import { cn } from '../../lib/utils'
 import { usePinnedStore, initClaveFileWatchers } from '../../store/pinned-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
 import { bootWorkspaces, refreshActiveWorkspacePins, cycleWorkspace } from '../../lib/workspace-actions'
@@ -682,12 +682,11 @@ export function AppShell() {
             {/* Center — active workspace name */}
             <ToolbarWorkspaceTitle />
 
-            {/* Right — active URLs + quick actions + divider + search + file tree */}
+            {/* Right — quick actions + divider + search + file tree */}
             <div
               className="flex items-center gap-0.5 min-w-0"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
-              <ToolbarActiveUrls />
               <ToolbarQuickActions />
               <ToolbarSecretPopover />
               {/* File palette button */}
@@ -877,87 +876,5 @@ function ToolbarWorkspaceTitle() {
     <span className="text-[11px] font-medium text-text-tertiary tracking-wide select-none flex-shrink-0 whitespace-nowrap">
       {name}
     </span>
-  )
-}
-
-function ToolbarActiveUrls() {
-  const sessions = useSessionStore((s) => s.sessions)
-  const groups = useSessionStore((s) => s.groups)
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const setSessionServerStatus = useSessionStore((s) => s.setSessionServerStatus)
-
-  // Collect sessions with detected URLs (any server status)
-  const urlEntries: { sessionId: string; url: string; port: string; groupName: string; groupColor: string | undefined; serverStatus: string; serverCommand: string | null }[] = []
-
-  for (const session of sessions) {
-    if (!session.detectedUrl || !session.serverStatus) continue
-    if (!inActiveWorkspace(session, activeWorkspaceId)) continue
-    const port = safePort(session.detectedUrl)
-    if (!port) continue
-    const group = groups.find((g) =>
-      g.sessionIds.includes(session.id) ||
-      g.terminals.some((t) => t.sessionId === session.id)
-    )
-    urlEntries.push({
-      sessionId: session.id,
-      url: session.detectedUrl,
-      port: String(port),
-      groupName: session.cwd.split('/').pop() || session.name,
-      groupColor: resolveColorHex(group?.color),
-      serverStatus: session.serverStatus,
-      serverCommand: session.serverCommand
-    })
-  }
-
-  if (urlEntries.length === 0) return null
-
-  return (
-    <>
-      <div className="toolbar-url-scroll flex items-center gap-0.5 min-w-0">
-        {urlEntries.map((entry, i) => (
-          <button
-            key={`${entry.url}-${i}`}
-            onClick={() => {
-              if (entry.serverStatus === 'running') {
-                window.electronAPI.openExternal(entry.url)
-              } else if (entry.serverStatus === 'stopped' && entry.serverCommand) {
-                setSessionServerStatus(entry.sessionId, 'starting')
-                window.electronAPI.writeSession(entry.sessionId, entry.serverCommand + '\r')
-              }
-            }}
-            disabled={entry.serverStatus === 'starting'}
-            className={cn(
-              'flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors',
-              entry.serverStatus === 'running' && 'bg-surface-100 hover:bg-surface-200',
-              entry.serverStatus === 'stopped' && 'bg-red-500/5 hover:bg-red-500/10',
-              entry.serverStatus === 'starting' && 'bg-amber-500/5 cursor-wait'
-            )}
-            title={
-              entry.serverStatus === 'running' ? entry.url :
-              entry.serverStatus === 'stopped' ? `Restart ${entry.serverCommand}` :
-              'Starting…'
-            }
-          >
-            <div
-              className={cn(
-                'w-1.5 h-1.5 rounded-full flex-shrink-0',
-                entry.serverStatus === 'running' && 'bg-emerald-500',
-                entry.serverStatus === 'stopped' && 'bg-red-400',
-                entry.serverStatus === 'starting' && 'bg-amber-400'
-              )}
-              style={
-                entry.serverStatus === 'running' || entry.serverStatus === 'starting'
-                  ? { animation: 'pulse-dot 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }
-                  : undefined
-              }
-            />
-            <span className="text-[10px] font-medium whitespace-nowrap text-text-primary">
-              {entry.groupName}
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="w-px h-3.5 bg-border-subtle mx-0.5 flex-shrink-0" />
-    </>
   )
 }
