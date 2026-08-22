@@ -67,6 +67,7 @@ function RepoSection({
   fillHeight?: boolean
 }) {
   const gitViewMode = useSessionStore((s) => s.gitViewMode)
+  const gitShowCommitBar = useSessionStore((s) => s.gitShowCommitBar)
   const setDiffPreview = useSessionStore((s) => s.setDiffPreview)
   const diffPreview = useSessionStore((s) => s.diffPreview)
   const addFileTab = useSessionStore((s) => s.addFileTab)
@@ -385,7 +386,7 @@ function RepoSection({
             {relativeFilterPrefix ? 'No changes in this folder' : 'Working tree clean'}
           </span>
         </div>
-        {(status.ahead > 0 || status.behind > 0 || (!status.hasUpstream && !!status.branch)) && (
+        {gitShowCommitBar && (status.ahead > 0 || status.behind > 0 || (!status.hasUpstream && !!status.branch)) && (
           <CommitBar
             cwd={cwd}
             stagedCount={0}
@@ -551,17 +552,19 @@ function RepoSection({
           </>
         )}
       </div>
-      <CommitBar
-        cwd={cwd}
-        stagedCount={staged.length}
-        totalFileCount={staged.length + unstaged.length + untracked.length}
-        unstagedFilePaths={[...unstaged, ...untracked].map((f) => f.path)}
-        ahead={status.ahead}
-        behind={status.behind}
-        hasUpstream={status.hasUpstream}
-        operating={operating}
-        onOperation={runOperation}
-      />
+      {gitShowCommitBar && (
+        <CommitBar
+          cwd={cwd}
+          stagedCount={staged.length}
+          totalFileCount={staged.length + unstaged.length + untracked.length}
+          unstagedFilePaths={[...unstaged, ...untracked].map((f) => f.path)}
+          ahead={status.ahead}
+          behind={status.behind}
+          hasUpstream={status.hasUpstream}
+          operating={operating}
+          onOperation={runOperation}
+        />
+      )}
       <ConfirmDialog
         isOpen={confirmDiscard !== null}
         title="Discard changes"

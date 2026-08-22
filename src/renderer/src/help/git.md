@@ -22,6 +22,8 @@ Switch between **list** (flat file list) and **tree** (directory tree) views usi
 
 ## Staging and Committing
 
+The commit bar (message input, Commit, Push/Pull) is **hidden by default** — most commits are made by your agents. Click the pencil icon in the git toolbar to show it; the choice is remembered.
+
 1. Files appear in three sections: **Staged**, **Unstaged**, and **Untracked**
 2. Click the **+** icon on a file to stage it (or **-** to unstage)
 3. Write a commit message in the input at the bottom

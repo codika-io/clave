@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useSessionStore } from '../../store/session-store'
-import { ListBulletIcon, Bars3BottomLeftIcon, ArrowPathIcon, ArrowDownIcon } from '@heroicons/react/24/outline'
+import { ListBulletIcon, Bars3BottomLeftIcon, ArrowPathIcon, ArrowDownIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
 import { IconButton } from '../ui/tooltip'
 import type { MagicSyncStep, MagicPullStep } from '../../../../preload/index.d'
 
@@ -81,6 +81,20 @@ export function ViewModeToggle() {
       ) : (
         <Bars3BottomLeftIcon className="w-3 h-3" />
       )}
+    </IconButton>
+  )
+}
+
+export function CommitBarToggle(): React.JSX.Element {
+  const gitShowCommitBar = useSessionStore((s) => s.gitShowCommitBar)
+  const setGitShowCommitBar = useSessionStore((s) => s.setGitShowCommitBar)
+  return (
+    <IconButton
+      onClick={() => setGitShowCommitBar(!gitShowCommitBar)}
+      className={`btn-icon btn-icon-sm flex-shrink-0 ${gitShowCommitBar ? 'text-accent' : ''}`}
+      tooltip={gitShowCommitBar ? 'Hide commit bar' : 'Show commit bar'}
+    >
+      <PencilSquareIcon className="w-3 h-3" />
     </IconButton>
   )
 }
