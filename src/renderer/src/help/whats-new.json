@@ -1,6 +1,6 @@
 [
   {
-    "version": "1.67.0",
+    "version": "1.68.0",
     "title": "Groups open as live pages",
     "description": "Attach a web view to a group — a dev server, a live dashboard, or an HTML file — and clicking the group shows the rendered page instead of the tiled terminals, with a Sessions switch one click away. HTML files also render as live pages in their own tabs now, with a Rendered ⇄ Source toggle. Agents can drive both: clave_set_group_view and clave_open_file's rendered view.",
     "action": {
