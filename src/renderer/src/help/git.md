@@ -51,3 +51,9 @@ Click the journey icon in the git panel toolbar to visualize your commit history
 ## Multi-Repo Support
 
 If your workspace contains multiple git repos (e.g., a monorepo with nested repositories), the panel auto-detects them and shows each repo as a collapsible section.
+
+Repos are arranged as your real folder structure, not an alphabetical list: each repo sits under its parent directories, so you find it exactly where you know it lives on disk. Folder chains with nothing else in them are merged into one row (e.g. `labs/products`) to keep the panel compact.
+
+- Click a folder row to fold or unfold that whole area — the fold state is remembered per folder.
+- A folded folder rolls up what's inside it: total modified files, plus commits ahead (↑) and behind (↓) across its repos, so nothing hides while folded.
+- **Collapse all** in the toolbar folds every folder and repo at once.

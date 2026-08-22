@@ -495,6 +495,7 @@ export function SidePanel() {
               <MultiRepoGitPanel
                 repos={multiRepo.result.repos}
                 rootPath={multiRepo.hasNestedRepos ? cwd : null}
+                basePath={cwd}
                 refresh={multiRepo.refresh}
                 truncated={multiRepo.result.truncated}
                 live={multiRepo.result.live}

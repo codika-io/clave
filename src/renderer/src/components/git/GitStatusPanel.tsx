@@ -5,8 +5,15 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ContextMenu } from '../ui/ContextMenu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import { shortenPath } from '../../lib/utils'
-import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon, InformationCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon, InformationCircleIcon, ArrowPathIcon, FolderIcon } from '@heroicons/react/24/outline'
 import { buildGitTree, compactTree, collectAllDirPaths } from '../../lib/git-file-tree'
+import {
+  buildRepoTree,
+  flattenRepoTree,
+  collectRepoTreeDirPaths,
+  type FlatRepoRow,
+  type RepoTreeDir
+} from '../../lib/git-repo-tree'
 import { GitLogView } from './GitLogView'
 import { FileRow, GitTreeSection } from './GitFileRows'
 import { SectionHeader, ErrorBanner } from './GitPanelControls'
@@ -646,6 +653,10 @@ export function GitStatusPanel({
 // MultiRepoGitPanel — multi-repo collapsible view with minimize/dock
 // ---------------------------------------------------------------------------
 
+// Indent per tree level — header rows only; expanded repo content stays
+// full-width so file rows keep their room in the narrow panel.
+const TREE_INDENT_PX = 12
+
 function MultiRepoSection({
   name,
   repoPath,
@@ -653,7 +664,8 @@ function MultiRepoSection({
   refresh,
   isSelected,
   onSelect,
-  selectedRepoPaths
+  selectedRepoPaths,
+  depth = 0
 }: {
   name: string
   repoPath: string
@@ -662,6 +674,7 @@ function MultiRepoSection({
   isSelected?: boolean
   onSelect?: (path: string, metaKey: boolean) => void
   selectedRepoPaths?: Set<string>
+  depth?: number
 }) {
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
   const openJourneyPanel = useSessionStore((s) => s.openJourneyPanel)
@@ -722,9 +735,10 @@ function MultiRepoSection({
     <div className="border-b border-border-subtle">
       {/* Collapsible header */}
       <button
-        className={`w-full flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
+        className={`w-full flex items-center gap-1.5 pr-3 py-1.5 text-xs transition-colors ${
           isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
         }`}
+        style={{ paddingLeft: 12 + depth * TREE_INDENT_PX }}
         onClick={handleClick}
         onDoubleClick={(e) => {
           e.stopPropagation()
@@ -781,7 +795,10 @@ function MultiRepoSection({
 
       {/* Parent-repo notice — the opened folder isn't a repo; changes come from above */}
       {isParentRepo && (
-        <div className="flex items-center gap-1 px-3 pb-1.5 text-[10px] text-text-tertiary">
+        <div
+          className="flex items-center gap-1 pr-3 pb-1.5 text-[10px] text-text-tertiary"
+          style={{ paddingLeft: 12 + depth * TREE_INDENT_PX }}
+        >
           <InformationCircleIcon className="w-3 h-3 flex-shrink-0" />
           <Tooltip delayDuration={300}>
             <TooltipTrigger asChild>
@@ -819,9 +836,91 @@ function MultiRepoSection({
   )
 }
 
+// ---------------------------------------------------------------------------
+// Spatial repo tree (PRDCT-1235 / PRDCT-1455) — repos render at their real
+// place on disk instead of one alphabetical list. Directory rows collapse;
+// a collapsed folder rolls its subtree's counts up so nothing hides.
+// ---------------------------------------------------------------------------
+
+// Per-basePath collapsed-dir cache — survives unmount/remount, same idiom as
+// expandedCacheMap above. Default is fully expanded, so the cache stores the
+// folders the user folded.
+const collapsedDirsCacheMap = new Map<string, Set<string>>()
+
+function RepoDirRow({
+  node,
+  depth,
+  collapsed,
+  onToggle,
+  statusByPath
+}: {
+  node: RepoTreeDir
+  depth: number
+  collapsed: boolean
+  onToggle: () => void
+  statusByPath: Map<string, GitStatusResult>
+}): React.JSX.Element {
+  // Subtree roll-up — shown only while folded; expanded children carry their own.
+  const rollup = useMemo(() => {
+    let changes = 0
+    let ahead = 0
+    let behind = 0
+    for (const p of node.repoPaths) {
+      const s = statusByPath.get(p)
+      if (!s) continue
+      changes += s.files.length
+      ahead += s.ahead
+      behind += s.behind
+    }
+    return { changes, ahead, behind }
+  }, [node, statusByPath])
+
+  return (
+    <button
+      className="w-full flex items-center gap-1.5 pr-3 py-1 text-xs hover:bg-surface-100 transition-colors"
+      style={{ paddingLeft: 12 + depth * TREE_INDENT_PX }}
+      onClick={onToggle}
+    >
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 10 10"
+        fill="none"
+        className={`text-text-tertiary flex-shrink-0 transition-transform duration-150 ${
+          collapsed ? '' : 'rotate-90'
+        }`}
+      >
+        <path d="M3 1.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <FolderIcon className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0" />
+      <span className="text-text-secondary font-medium truncate">{node.name}</span>
+      {collapsed && (
+        <span className="ml-auto flex-shrink-0 flex items-center gap-1.5">
+          {rollup.behind > 0 && (
+            <span className="text-[10px] font-medium text-orange-400">
+              {'↓'}{rollup.behind}
+            </span>
+          )}
+          {rollup.ahead > 0 && (
+            <span className="text-[10px] font-medium text-green-400">
+              {'↑'}{rollup.ahead}
+            </span>
+          )}
+          {rollup.changes > 0 && (
+            <span className="badge bg-surface-200 text-text-secondary min-w-[18px] text-center">
+              {rollup.changes}
+            </span>
+          )}
+        </span>
+      )}
+    </button>
+  )
+}
+
 export function MultiRepoGitPanel({
   repos,
   rootPath,
+  basePath,
   refresh,
   truncated = false,
   live = true,
@@ -830,6 +929,8 @@ export function MultiRepoGitPanel({
 }: {
   repos: Array<{ name: string; path: string; status: GitStatusResult }>
   rootPath?: string | null
+  /** The panel's folder — the tree's root. Falls back to a flat list when null. */
+  basePath?: string | null
   refresh: () => void
   truncated?: boolean
   live?: boolean
@@ -856,13 +957,105 @@ export function MultiRepoGitPanel({
   )
 
   const rootRepo = rootPath ? repos.find((r) => r.path === rootPath) ?? null : null
-  const nestedRepos = rootPath ? repos.filter((r) => r.path !== rootPath) : repos
+  const nestedRepos = useMemo(
+    () => (rootPath ? repos.filter((r) => r.path !== rootPath) : repos),
+    [repos, rootPath]
+  )
   const hasRoot = rootRepo !== null
 
   const nestedChangeCount = useMemo(
     () => nestedRepos.reduce((sum, r) => sum + r.status.files.length, 0),
     [nestedRepos]
   )
+
+  const statusByPath = useMemo(
+    () => new Map(repos.map((r) => [r.path, r.status])),
+    [repos]
+  )
+
+  // The spatial tree of the (nested) repos, rooted at the panel's folder.
+  const repoTree = useMemo(
+    () =>
+      basePath
+        ? buildRepoTree(
+            basePath,
+            nestedRepos.map((r) => ({ name: r.name, path: r.path }))
+          )
+        : null,
+    [basePath, nestedRepos]
+  )
+
+  // Folded directories, persisted per basePath (default: fully expanded).
+  const cacheKey = basePath ?? ''
+  const [collapsedDirs, _setCollapsedDirs] = useState<Set<string>>(
+    () => collapsedDirsCacheMap.get(cacheKey) ?? new Set()
+  )
+  const prevCacheKeyRef = useRef(cacheKey)
+  useEffect(() => {
+    if (prevCacheKeyRef.current !== cacheKey) {
+      prevCacheKeyRef.current = cacheKey
+      _setCollapsedDirs(collapsedDirsCacheMap.get(cacheKey) ?? new Set())
+    }
+  }, [cacheKey])
+
+  const toggleDir = useCallback(
+    (dirPath: string) => {
+      _setCollapsedDirs((prev) => {
+        const next = new Set(prev)
+        if (next.has(dirPath)) next.delete(dirPath)
+        else next.add(dirPath)
+        collapsedDirsCacheMap.set(cacheKey, next)
+        return next
+      })
+    },
+    [cacheKey]
+  )
+
+  // Collapse-all folds every directory too (repo sections handle themselves).
+  const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
+  useEffect(() => {
+    if (collapseAllTrigger > 0 && repoTree) {
+      const all = collectRepoTreeDirPaths(repoTree)
+      collapsedDirsCacheMap.set(cacheKey, all)
+      _setCollapsedDirs(all)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapseAllTrigger])
+
+  const treeRows = useMemo(
+    () => (repoTree ? flattenRepoTree(repoTree, collapsedDirs) : null),
+    [repoTree, collapsedDirs]
+  )
+
+  const renderTreeRow = (row: FlatRepoRow): React.JSX.Element | null => {
+    if (row.node.type === 'dir') {
+      return (
+        <RepoDirRow
+          key={`dir:${row.node.path}`}
+          node={row.node}
+          depth={row.depth}
+          collapsed={row.collapsed}
+          onToggle={() => toggleDir(row.node.path)}
+          statusByPath={statusByPath}
+        />
+      )
+    }
+    const status = statusByPath.get(row.node.path)
+    if (!status) return null
+    return (
+      <MultiRepoSection
+        key={row.node.path}
+        name={row.node.name}
+        repoPath={row.node.path}
+        status={status}
+        refresh={refresh}
+        isSelected={selectedRepoPaths.has(row.node.path)}
+        onSelect={handleRepoSelect}
+        selectedRepoPaths={selectedRepoPaths}
+        depth={row.depth}
+      />
+    )
+  }
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -918,36 +1111,23 @@ export function MultiRepoGitPanel({
           </div>
         )}
 
-        {/* Nested repos (when root exists) — visible when not docked */}
-        {hasRoot &&
-          !nestedDocked &&
-          nestedRepos.map((repo) => (
-            <MultiRepoSection
-              key={repo.path}
-              name={repo.name}
-              repoPath={repo.path}
-              status={repo.status}
-              refresh={refresh}
-              isSelected={selectedRepoPaths.has(repo.path)}
-              onSelect={handleRepoSelect}
-              selectedRepoPaths={selectedRepoPaths}
-            />
-          ))}
-
-        {/* All repos flat when CWD is not itself a repo (no root) */}
-        {!hasRoot &&
-          repos.map((repo) => (
-            <MultiRepoSection
-              key={repo.path}
-              name={repo.name}
-              repoPath={repo.path}
-              status={repo.status}
-              refresh={refresh}
-              isSelected={selectedRepoPaths.has(repo.path)}
-              onSelect={handleRepoSelect}
-              selectedRepoPaths={selectedRepoPaths}
-            />
-          ))}
+        {/* Nested repos as the spatial tree (flat fallback without a basePath) —
+            hidden when docked */}
+        {!(hasRoot && nestedDocked) &&
+          (treeRows
+            ? treeRows.map(renderTreeRow)
+            : nestedRepos.map((repo) => (
+                <MultiRepoSection
+                  key={repo.path}
+                  name={repo.name}
+                  repoPath={repo.path}
+                  status={repo.status}
+                  refresh={refresh}
+                  isSelected={selectedRepoPaths.has(repo.path)}
+                  onSelect={handleRepoSelect}
+                  selectedRepoPaths={selectedRepoPaths}
+                />
+              )))}
       </div>
 
       {/* Bottom dock tab for nested repos */}
