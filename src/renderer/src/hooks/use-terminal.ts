@@ -71,6 +71,12 @@ export function useTerminal(sessionId: string) {
     fitAddonRef.current = fitAddon
     registerTerminal(sessionId, terminal)
 
+    // Breathing room above the first line, written INTO the buffer rather than
+    // set as CSS padding: padding on .xterm insets the viewport permanently,
+    // while this scrolls away with the content the way it should — the gap
+    // only exists at the top of the scrollback, where the emptiness looks odd.
+    terminal.write('\r\n')
+
     // User input -> PTY through the shared helper, which mirrors it into the
     // session's draft shadow (PRDCT-1569: clave_send_to_session stashes,
     // clears, and restores a half-typed draft).

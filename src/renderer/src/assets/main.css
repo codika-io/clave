@@ -333,7 +333,13 @@ body,
 
 /* xterm.js overrides */
 .xterm {
-  padding: 8px 12px;
+  /* Left inset only: the scroll area reaches the panel edges on every other
+     side. The right edge needs no padding because the viewport is absolutely
+     positioned at right:0 and always reserves a 6px scrollbar gutter
+     (overflow-y: scroll), so text keeps its breathing room there anyway. The
+     gap above the first line is written into the buffer instead (see
+     use-terminal.ts), so it scrolls away with the content. */
+  padding: 0 0 0 12px;
   background-color: var(--surface-0);
 }
 
