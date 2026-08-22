@@ -52,7 +52,11 @@ async function resolveCwd(cwd: LaunchCwd): Promise<string | null> {
     // volume. Before this change the picker could only ever hand back a real
     // directory; now the root is taken on trust, so it has to be checked or the
     // session spawns at a path that isn't there with no error and no fallback.
-    if (root && window.electronAPI?.existsSync?.(root, '.')) return root
+    //
+    // Deliberately the ASYNC check, not `existsSync`: that one is `sendSync`, and
+    // this runs on every ⌘T/⌘N and every launcher click. A stale network mount
+    // would freeze the renderer until the stat returned.
+    if (root && (await window.electronAPI?.claveFileExists?.(root))) return root
     // No workspace, or its root is gone: nothing to default to, so ask.
   }
   return (await window.electronAPI.openFolderDialog()) ?? null

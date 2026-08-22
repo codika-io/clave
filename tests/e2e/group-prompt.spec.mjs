@@ -1,12 +1,19 @@
 /**
  * The group's default prompt actually reaching the agent (PRDCT-1665).
  *
- * This asserts on the SPAWNED PROCESS, not on the UI. The prompt was silently
- * dropped twice on the `.clave` import path while every screen still looked
- * right — a group card showing "prompt" and a `+` row promising it prove only
- * that the renderer has a string, never that the agent got one.
+ * This asserts on the PAYLOAD CROSSING INTO THE MAIN PROCESS, not on the UI. The
+ * prompt was silently dropped twice on the `.clave` import path while every
+ * screen still looked right — a group card showing "prompt" and a `+` row
+ * promising it prove only that the renderer holds a string, never that anything
+ * was handed on.
  */
-import { launchApp, seedWorkspaces, seedTrustedRoots, userDataDir } from './harness.mjs'
+import {
+  launchApp,
+  seedWorkspaces,
+  seedTrustedRoots,
+  userDataDir,
+  spyPtySpawn
+} from './harness.mjs'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 const DIR = userDataDir('group-prompt')
@@ -96,6 +103,7 @@ export async function run(t) {
       /starts on the group's prompt/.test(addRow ?? ''),
       addRow
     )
+    const readSpawns = await spyPtySpawn(app)
     const before = await win.evaluate(
       () => document.querySelectorAll('[class*="sidebar-item"]').length
     )
@@ -105,22 +113,51 @@ export async function run(t) {
       () => document.querySelectorAll('[class*="sidebar-item"]').length
     )
     t.equal('the + launches one session', after, before + 1)
+
+    const spawns = await readSpawns()
+    t.equal('and issues exactly one spawn', spawns.length, 1)
+    const sent = spawns[0] ?? {}
+    t.equal('into the group’s own directory', sent.cwd, ROOT)
+    t.equal('under the workspace’s remembered agent', sent.codexMode, true)
     t.check(
-      'and puts it inside the group',
-      await win.evaluate(() => (document.querySelector('.group-rail')?.children.length ?? 0) >= 3),
-      await win.evaluate(() => document.querySelector('.group-rail')?.children.length ?? 0)
+      'carrying the group’s brief',
+      typeof sent.initialPrompt === 'string' && sent.initialPrompt.includes(MARKER),
+      sent.initialPrompt
+    )
+    t.check(
+      'with @root_path expanded to the workspace root',
+      (sent.initialPrompt ?? '').includes(ROOT),
+      sent.initialPrompt
+    )
+    t.check(
+      'and no raw token left behind',
+      !(sent.initialPrompt ?? '').includes('@root_path'),
+      sent.initialPrompt
+    )
+    // ── the `+` must never promise what the launch will drop ──
+    // `claude agents` is spawned bare and refuses a positional prompt. The row's
+    // wording and the spawn both have to come from ONE answer; when they each
+    // carried their own, the row promised a brief that silently never arrived.
+    await win.click('.launcher-caret')
+    await win.waitForTimeout(800)
+    await win.click('[role="menuitem"]:has-text("Claude Agents")')
+    await win.waitForTimeout(4000)
+
+    const agentsTooltip = await win.evaluate(
+      () => document.querySelector('.group-add-row')?.title ?? null
+    )
+    t.check(
+      'with Claude Agents remembered, the + row stops promising the prompt',
+      /can't take the group's prompt/.test(agentsTooltip ?? ''),
+      agentsTooltip
     )
 
-    // KNOWN GAP — the expanded prompt reaching the agent's command line is NOT
-    // asserted here. `pty:spawn` only creates the session record; the command
-    // runs when the terminal mounts and calls `pty:start`, so a tab that is not
-    // on screen has no process to inspect, and focusing it from the harness did
-    // not reliably start one. Checking `ps` anyway passes or fails on which tab
-    // happened to be visible — worse than not checking, because it reads as
-    // proof. What IS covered: the parser reads the group prompt (above), token
-    // expansion is unit tested in store/prompt-tokens.test.ts, and the launcher
-    // spec proves the agent choice reaches the spawn. Closing this properly
-    // needs a hook at `pty:start` — tracked as PRDCT-1677, not faked.
+    const spawnsBefore = (await readSpawns()).length
+    await win.click('.group-add-row')
+    await win.waitForTimeout(4000)
+    const agentsSpawn = (await readSpawns())[spawnsBefore] ?? {}
+    t.equal('and the launch really is Claude Agents', agentsSpawn.claudeAgentsMode, true)
+    t.equal('carrying no prompt, exactly as the row said', agentsSpawn.initialPrompt, null)
   } finally {
     await app.close()
   }

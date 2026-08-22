@@ -10,12 +10,13 @@ import { defineConfig } from 'vitest/config'
  * exactly like one that is.
  *
  * `include` covers `src/` broadly rather than listing directories, so a new test
- * runs by existing. `environment: 'node'` is the default; a test that genuinely
+ * runs by existing — `.tsx` included, or a component test would be skipped in
+ * silence, which is the same failure this suite was written to stop. `environment: 'node'` is the default; a test that genuinely
  * needs a DOM declares `// @vitest-environment jsdom` in its own file.
  */
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
     environment: 'node'
   }
 })

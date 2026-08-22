@@ -456,18 +456,26 @@ export function initClaveFileWatchers(): () => void {
           toolbar: g.toolbar,
           logo: g.logo,
           category: g.category ?? null,
+          // The group's default prompt reloads with the file like every other
+          // field. Without this the watcher parses the edited prompt and throws
+          // it away, so the group's `+` keeps dispatching agents on the brief
+          // the user thinks they just changed — wrong instructions, silently.
+          prompt: g.prompt ?? null,
           sessions: g.sessions,
           terminals: groupDataToPinnedTerminals(g.terminals),
           groupIndex
         })
       } else {
-        // Active — only cosmetic updates, never touch running sessions
+        // Active — only cosmetic updates, never touch running sessions. The
+        // prompt is safe to refresh: it is read at the next `+` press, never
+        // applied to a session that is already running.
         usePinnedStore.getState().updatePinnedGroup(pg.id, {
           name: g.name,
           color: (g.color as GroupTerminalColor) ?? null,
           toolbar: g.toolbar,
           logo: g.logo,
           category: g.category ?? null,
+          prompt: g.prompt ?? null,
           terminals: groupDataToPinnedTerminals(g.terminals),
           groupIndex
         })

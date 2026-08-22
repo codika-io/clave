@@ -4,16 +4,19 @@
  * decides what a persisted preference file is allowed to say.
  *
  * All pure. The persistence itself (`rememberAgentSetup` / `loadLaunchPrefs`)
- * talks to the main process and is covered by the Electron specs instead.
+ * talks to the main process and is covered by the Electron specs instead — as is
+ * the thing `agentAcceptsPrompt` exists to prevent: the group `+` row promising
+ * a prompt the launch then drops. No unit test can see both the tooltip and the
+ * spawn, so that guard lives in tests/e2e/group-prompt.spec.mjs where it can.
  */
 
 import { describe, expect, it } from 'vitest'
 import {
   agentAcceptsPrompt,
   agentSetupToModes,
+  parseSetup,
   DEFAULT_AGENT_SETUP,
-  type AgentKind,
-  type AgentSetup
+  type AgentKind
 } from './launch-prefs'
 
 const KINDS: AgentKind[] = ['claude', 'claude-agents', 'antigravity', 'codex']
@@ -29,8 +32,12 @@ describe('agentSetupToModes', () => {
 
   it('maps each kind to its own boolean', () => {
     expect(agentSetupToModes({ kind: 'claude', dangerousMode: false }).claudeMode).toBe(true)
-    expect(agentSetupToModes({ kind: 'claude-agents', dangerousMode: false }).claudeAgentsMode).toBe(true)
-    expect(agentSetupToModes({ kind: 'antigravity', dangerousMode: false }).antigravityMode).toBe(true)
+    expect(
+      agentSetupToModes({ kind: 'claude-agents', dangerousMode: false }).claudeAgentsMode
+    ).toBe(true)
+    expect(agentSetupToModes({ kind: 'antigravity', dangerousMode: false }).antigravityMode).toBe(
+      true
+    )
     expect(agentSetupToModes({ kind: 'codex', dangerousMode: false }).codexMode).toBe(true)
   })
 
@@ -55,19 +62,47 @@ describe('agentAcceptsPrompt', () => {
       expect(agentAcceptsPrompt({ kind, dangerousMode: false })).toBe(true)
     }
   })
-
-  it('is the single source of truth the UI and the spawn path both read', () => {
-    // Regression guard: the group `+` row promised a prompt that the launch then
-    // dropped, because the tooltip and the spawn path each had their own rule.
-    const setup: AgentSetup = { kind: 'claude-agents', dangerousMode: false }
-    const uiWillPromise = agentAcceptsPrompt(setup)
-    const spawnWillSend = agentAcceptsPrompt(setup)
-    expect(uiWillPromise).toBe(spawnWillSend)
-  })
 })
 
 describe('DEFAULT_AGENT_SETUP', () => {
   it('is a safe default — Claude, permissions on', () => {
     expect(DEFAULT_AGENT_SETUP).toEqual({ kind: 'claude', dangerousMode: false })
+  })
+})
+
+describe('parseSetup — what a persisted preference file is allowed to say', () => {
+  it('accepts a well-formed setup', () => {
+    expect(parseSetup({ kind: 'codex', dangerousMode: true })).toEqual({
+      kind: 'codex',
+      dangerousMode: true
+    })
+  })
+
+  it('rejects an unknown kind rather than launching nothing', () => {
+    // A hand-edited file, or one written by a build that had a kind this one
+    // dropped. Trusting it would leave the agent button unable to launch at all.
+    expect(parseSetup({ kind: 'gemini', dangerousMode: false })).toBeNull()
+  })
+
+  it('rejects anything that is not an object', () => {
+    for (const bad of [null, undefined, 'claude', 42, []]) {
+      expect(parseSetup(bad)).toBeNull()
+    }
+  })
+
+  it('treats a missing or non-true dangerousMode as false', () => {
+    expect(parseSetup({ kind: 'claude' })?.dangerousMode).toBe(false)
+    expect(parseSetup({ kind: 'claude', dangerousMode: 'yes' })?.dangerousMode).toBe(false)
+  })
+
+  it('keeps a Claude account id, and drops one that cannot apply', () => {
+    expect(parseSetup({ kind: 'claude', claudeProfileId: 'work' })?.claudeProfileId).toBe('work')
+    // Antigravity and Codex never take a Claude account; carrying one would be
+    // a value the spawn path silently ignores.
+    expect(parseSetup({ kind: 'codex', claudeProfileId: 'work' })?.claudeProfileId).toBeUndefined()
+  })
+
+  it('ignores a non-string account id', () => {
+    expect(parseSetup({ kind: 'claude', claudeProfileId: 7 })?.claudeProfileId).toBeUndefined()
   })
 })

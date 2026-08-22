@@ -57,8 +57,10 @@ export function agentAcceptsPrompt(setup: AgentSetup | null): boolean {
 }
 
 /** Reject anything the preference file might hold from an older build or a
- *  hand-edit: an unknown kind would launch nothing at all. */
-function parseSetup(raw: unknown): AgentSetup | null {
+ *  hand-edit: an unknown kind would launch nothing at all. Exported so the
+ *  hardening is testable — it is the only thing standing between a hand-edited
+ *  preference file and a launch button that does nothing. */
+export function parseSetup(raw: unknown): AgentSetup | null {
   if (!raw || typeof raw !== 'object') return null
   const value = raw as Record<string, unknown>
   if (typeof value.kind !== 'string') return null

@@ -105,3 +105,44 @@ export function agentButtonLabel(win) {
     (document.querySelector('.launcher-split .launcher-btn')?.textContent || '').trim()
   )
 }
+
+/** Record every `pty:spawn` payload as it crosses into the main process.
+ *
+ *  This is the assertion point for prompt delivery. `pty:spawn` creates the
+ *  session record; the command itself does not run until the terminal mounts and
+ *  calls `pty:start`, so a tab that is not on screen has no process and a `ps`
+ *  check answers on which tab happened to be mounted rather than on the code.
+ *  Tapping the IPC boundary is deterministic and is exactly where the renderer's
+ *  decision — which agent, which directory, which prompt with its tokens already
+ *  substituted — is expressed.
+ *
+ *  `_invokeHandlers` is Electron-private, so this fails loudly if it ever
+ *  disappears rather than quietly recording nothing and passing.  */
+export async function spyPtySpawn(app) {
+  const installed = await app.evaluate(async ({ ipcMain }) => {
+    const handlers = ipcMain._invokeHandlers
+    if (!handlers || typeof handlers.get !== 'function') return false
+    const original = handlers.get('pty:spawn')
+    if (!original) return false
+    globalThis.__e2eSpawns = []
+    handlers.set('pty:spawn', async (event, cwd, options) => {
+      globalThis.__e2eSpawns.push({
+        cwd,
+        initialPrompt: options?.initialPrompt ?? null,
+        claudeMode: options?.claudeMode ?? false,
+        claudeAgentsMode: options?.claudeAgentsMode ?? false,
+        codexMode: options?.codexMode ?? false,
+        antigravityMode: options?.antigravityMode ?? false
+      })
+      return original(event, cwd, options)
+    })
+    return true
+  })
+  if (!installed) {
+    throw new Error(
+      'could not tap pty:spawn — ipcMain._invokeHandlers is Electron-private and may have changed. ' +
+        'Fix the tap; do not skip it, or prompt delivery goes unasserted.'
+    )
+  }
+  return async () => app.evaluate(() => globalThis.__e2eSpawns ?? [])
+}

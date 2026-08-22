@@ -64,6 +64,12 @@ for (const file of specs) {
     // PRDCT-1663 scripts exited 0 on a missing selector for exactly this reason.
     t.check(`${file} ran to completion`, false, err?.stack ?? String(err))
   }
+  // A spec that asserts nothing is not a passing spec. Emptying one `run()`
+  // used to drop the suite from 20 checks to 13 and still exit 0 — the round-1
+  // failure at file granularity instead of statement granularity.
+  if (t.results.length === 0) {
+    t.check(`${file} made at least one assertion`, false, 'the spec ran but asserted nothing')
+  }
   passed += t.results.filter((r) => r.ok).length
   failed += t.results.filter((r) => !r.ok).length
 }
