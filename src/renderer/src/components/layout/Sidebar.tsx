@@ -49,7 +49,6 @@ import {
   ShieldExclamationIcon,
   ClipboardDocumentIcon,
   MagnifyingGlassIcon,
-  CubeTransparentIcon,
   GlobeAltIcon
 } from '@heroicons/react/24/outline'
 
@@ -1213,14 +1212,6 @@ export function Sidebar() {
             }}
             loading={loading}
           />
-          <button
-            onClick={() => useSessionStore.getState().openExtensions()}
-            className="sidebar-item w-full"
-            title="Extensions"
-          >
-            <CubeTransparentIcon className="sidebar-tab-icon flex-shrink-0 text-text-tertiary" />
-            <span className="truncate">Extensions</span>
-          </button>
         </div>
 
         {!isSearchMode && (
