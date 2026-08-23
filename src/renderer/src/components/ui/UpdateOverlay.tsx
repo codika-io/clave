@@ -69,7 +69,18 @@ export function UpdateOverlay() {
 
   const handleRetry = () => {
     setDownloading()
-    window.electronAPI?.startDownload()
+    // 'retry' tells the main process to drop the differential download and
+    // fetch the whole file. Retrying the identical request is what made a
+    // failed update unescapable — see downloadStrategy() in auto-updater.ts.
+    window.electronAPI?.startDownload('retry')
+  }
+
+  const handleOpenReleases = (): void => {
+    window.electronAPI?.openExternal('https://github.com/codika-io/clave/releases/latest')
+  }
+
+  const handleOpenLog = (): void => {
+    window.electronAPI?.openUpdaterLog()
   }
 
   const visible = phase === 'downloading' || phase === 'downloaded' || phase === 'error'
@@ -138,6 +149,25 @@ export function UpdateOverlay() {
                   <p className="text-[13px] text-text-tertiary mt-1 max-w-[280px]">
                     {errorMessage || 'An unexpected error occurred'}
                   </p>
+                  {/* Auto-update is the only distribution channel — no App Store,
+                      no package manager. Without these two links a user whose
+                      update keeps failing has no way to get the new version and
+                      nothing to send us about why. */}
+                  <div className="flex items-center justify-center gap-3 mt-3 text-[12px]">
+                    <button
+                      onClick={handleOpenReleases}
+                      className="text-text-tertiary hover:text-text-primary underline underline-offset-2 transition-colors"
+                    >
+                      Download from GitHub
+                    </button>
+                    <span className="text-text-tertiary">·</span>
+                    <button
+                      onClick={handleOpenLog}
+                      className="text-text-tertiary hover:text-text-primary underline underline-offset-2 transition-colors"
+                    >
+                      Open log
+                    </button>
+                  </div>
                 </>
               )}
             </div>
