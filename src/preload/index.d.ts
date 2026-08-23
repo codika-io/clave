@@ -171,6 +171,9 @@ export interface SessionRecord {
   /** Workspace this session belongs to (stamped at spawn, inferred from cwd
    *  for legacy records). Absent → unstamped; the renderer assigns active. */
   workspaceId?: string
+  /** Attached web view behind the row's dashboard icon; restored at adoption.
+   *  The serving session id never persists — the start action respawns it. */
+  view?: { url: string; title?: string; command?: string; cwd?: string }
   /** True → reattach to a still-running tmux session. False → the tmux server
    *  died (reboot) but the sidecar survived; re-spawn fresh (Claude resumes). */
   live?: boolean
@@ -330,6 +333,10 @@ export interface ElectronAPI {
     id: string,
     displayName: string | null,
     userRenamed: boolean
+  ) => Promise<void>
+  setSessionViewRecord: (
+    id: string,
+    view: { url: string; title?: string; command?: string; cwd?: string } | null
   ) => Promise<void>
   setSessionWorkspace: (id: string, workspaceId: string | null) => Promise<void>
   tmuxAvailable: () => Promise<boolean>

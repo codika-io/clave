@@ -106,8 +106,13 @@ export interface GroupTerminalConfig {
   autoLaunchLocalhost?: boolean
   /** Declared dev-server URL (e.g. "http://localhost:3000"). On toolbar buttons
    *  this enables probe-first "ensure running, then open" (see use-server-button.ts).
-   *  Stored but inert for sidebar group terminals today. */
+   *  On a sidebar group terminal it is what `groupView` binds. */
   serverUrl?: string
+  /** This terminal's `serverUrl` is the group's web view: the page the user sees
+   *  when clicking the group, with this terminal as its start action. Declared in
+   *  a `.clave` file (bound at launch) or by `clave_add_group_terminal`; carried
+   *  on the live config so a pin resync never drops it from the file. */
+  groupView?: boolean
   sessionId: string | null
 }
 
@@ -156,6 +161,10 @@ export interface Session {
   detectedUrl: string | null
   serverStatus: ServerStatus
   serverCommand: string | null
+  /** Attached web view (see SessionViewConfig). Shown in the main pane via the
+   *  row's dashboard icon; the row click itself still shows the terminal.
+   *  Persisted in the session's record (main process) so it survives restart. */
+  view?: SessionViewConfig | null
   hasUnseenActivity: boolean
   /** Name of another tab whose agent injected a message into this one via
    *  clave_send_to_session, set on delivery and cleared when the tab is viewed.
@@ -180,6 +189,23 @@ export interface GroupViewConfig {
   url: string
   title?: string
   terminalId?: string | null
+}
+
+/** A session's attached web view — the fast-lane case: a workstream dashboard
+ *  or any served page belonging to ONE tab, with no group around it. The
+ *  serving process is a hidden linked session (`serverSessionId`), respawnable
+ *  from `command`/`cwd` when the probe finds the page down — so the view
+ *  carries its own start action exactly like a group view's linked terminal. */
+export interface SessionViewConfig {
+  url: string
+  title?: string
+  /** Command that serves `url`; the start action when the probe says down. */
+  command?: string
+  /** Working directory for `command` (defaults to the owning session's cwd). */
+  cwd?: string
+  /** The hidden serving session, when one is running. Never persisted — a
+   *  restart leaves it null and the start action respawns from `command`. */
+  serverSessionId?: string | null
 }
 
 export interface SessionGroup {
@@ -260,6 +286,9 @@ export interface PinnedGroupTerminal {
    *  click = probe the URL, open it if reachable, otherwise start the command
    *  and open on URL detection. Implies `persistent` for toolbar buttons. */
   serverUrl?: string
+  /** In a sidebar group: bind `serverUrl` as the group's web view when the group
+   *  launches (requires `serverUrl` — a view needs a page to show). */
+  groupView?: boolean
 }
 
 export interface PinnedGroup {
@@ -271,6 +300,10 @@ export interface PinnedGroup {
    *  live group's `+` launches; a session's own `prompt` still wins for that
    *  session. Carries the same @-tokens, substituted at spawn. */
   prompt?: string | null
+  /** Group-level web view (`.clave` `view`): a page that needs no process — an
+   *  http(s) URL, or an absolute .html path (resolved from the file at read).
+   *  A terminal's `groupView` wins over it; see resolveDeclaredGroupView. */
+  view?: string | null
   sessions: PinnedGroupSession[]
   terminals: PinnedGroupTerminal[]
   createdAt: number

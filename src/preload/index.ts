@@ -51,6 +51,8 @@ const electronAPI = {
 
   setSessionDisplayName: (id: string, displayName: string | null, userRenamed: boolean) =>
     ipcRenderer.invoke('session:set-display-name', id, displayName, userRenamed),
+  setSessionViewRecord: (id: string, view: { url: string; title?: string; command?: string; cwd?: string } | null) =>
+    ipcRenderer.invoke('session:set-view', id, view),
 
   setSessionWorkspace: (id: string, workspaceId: string | null) =>
     ipcRenderer.invoke('session:set-workspace', id, workspaceId),

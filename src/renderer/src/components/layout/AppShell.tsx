@@ -191,7 +191,11 @@ export function AppShell() {
               claudeProfileLabel: s.claudeProfileLabel,
               claudeConfigDir: s.configDir,
               sessionType: 'local',
-              workspaceId
+              workspaceId,
+              // The attached web view comes back with the tab; its hidden
+              // serving session did not survive, so the pane's probe shows
+              // down with a one-click start (serverSessionId stays unset).
+              view: s.view ? { ...s.view } : undefined
             })
             return info.id
           } catch (err) {

@@ -129,6 +129,7 @@ function handleList(payload: { callerSessionId?: string; workspace?: string }): 
       alive: s.alive,
       agentState: s.agentState ?? null,
       groupId: groupOfSession(state.groups, s.id)?.id ?? null,
+      view: s.view ? { url: s.view.url, title: s.view.title ?? null } : null,
       workspaceId: s.workspaceId ?? null,
       workspaceName: workspaceNameOf(s.workspaceId)
     }))
@@ -483,7 +484,11 @@ async function handleAddGroupTerminal(payload: {
     icon: (payload.icon as GroupTerminalConfig['icon']) ?? 'terminal',
     // Per-terminal cwd is stored only when it differs from the group default.
     cwd: payload.cwd && payload.cwd !== groupCwd ? payload.cwd : null,
-    serverUrl: payload.serverUrl
+    serverUrl: payload.serverUrl,
+    // Carried on the config, not just applied once: a pin resync or an export
+    // writes it back as the `.clave` file's `groupView`, so the view survives
+    // the next launch of the group.
+    groupView: payload.groupView === true ? true : undefined
   })
 
   // groupView binds the served URL as the group's web view (what the user sees
@@ -590,7 +595,131 @@ async function handleSetGroupView(payload: {
     terminalId: payload.terminalId ?? null
   }
   state.setGroupView(group.id, view)
+  // Mark the serving terminal so the binding survives where the group does
+  // (sidebar-layout serializes groups whole; a pin resync writes it into the
+  // .clave file). Only when the linked terminal genuinely serves this page:
+  // marking one whose serverUrl points elsewhere would rebind the view later.
+  const linked = payload.terminalId
+    ? group.terminals.find((t) => t.id === payload.terminalId)
+    : undefined
+  if (linked && linked.serverUrl === url && !linked.groupView) {
+    useSessionStore.getState().updateGroupTerminal(group.id, linked.id, { groupView: true })
+  }
   return { groupId: group.id, view }
+}
+
+async function handleSetSessionView(payload: {
+  sessionId: string
+  url: string | null
+  title?: string
+  command?: string
+  cwd?: string
+  callerSessionId?: string
+}): Promise<unknown> {
+  const state = useSessionStore.getState()
+  const id = payload.sessionId === 'mine' ? payload.callerSessionId : payload.sessionId
+  if (!id) throw new Error('sessionId "mine" needs a caller session — pass an explicit id')
+  const session = state.sessions.find((s) => s.id === id)
+  if (!session) throw new Error(`No session with id "${payload.sessionId}"`)
+
+  if (payload.url === null) {
+    // Detach: the hidden serving session goes with the view — nothing else
+    // owns it. removeSession also cascades, but a detach must not wait for
+    // the owner to close.
+    const servingId = session.view?.serverSessionId
+    if (servingId) {
+      window.electronAPI.killSession(servingId).catch(() => {})
+      useSessionStore.setState((current) => ({
+        sessions: current.sessions.filter((s) => s.id !== servingId)
+      }))
+    }
+    useSessionStore.getState().setSessionView(id, null)
+    return { sessionId: id, view: null }
+  }
+
+  const url = payload.url.trim()
+  const isFile = url.startsWith('/')
+  if (isFile) {
+    if (!/\.html?$/i.test(url)) {
+      throw new Error('A file view must be an .html/.htm file (or pass an http(s) URL)')
+    }
+    const slash = url.lastIndexOf('/')
+    try {
+      const stat = await window.electronAPI.statFile(url.substring(0, slash) || '/', url.substring(slash + 1))
+      if (stat.type === 'directory') throw new Error('directory')
+    } catch {
+      throw new Error(`No file at "${url}"`)
+    }
+    if (payload.command) throw new Error('A file view has no server — command only applies to http(s) URLs')
+  } else if (!/^https?:\/\//i.test(url)) {
+    throw new Error('url must be an http(s) URL or an absolute .html file path')
+  }
+
+  // A previous serving session is replaced, not leaked.
+  const previousServing = session.view?.serverSessionId
+  if (previousServing) {
+    window.electronAPI.killSession(previousServing).catch(() => {})
+    useSessionStore.setState((current) => ({
+      sessions: current.sessions.filter((s) => s.id !== previousServing)
+    }))
+  }
+
+  let serverSessionId: string | null = null
+  if (payload.command) {
+    // The serving session launches itself at attach — same contract as
+    // clave_add_group_terminal's default. Hidden: appended to sessions only,
+    // never to displayOrder or a group, so no row appears (and addSession is
+    // bypassed for the same reason the group-terminal spawn bypasses it —
+    // it would steal focus and auto-nest into the selected group).
+    const info = await window.electronAPI.spawnSession(payload.cwd ?? session.cwd, {
+      claudeMode: false,
+      initialCommand: payload.command,
+      autoExecute: true,
+      workspaceId: session.workspaceId ?? undefined
+    })
+    // Hidden pane, zero size: kick the PTY or the command never runs.
+    window.electronAPI.startSession(info.id, 120, 30)
+    useSessionStore.setState((current) => ({
+      sessions: [
+        ...current.sessions,
+        {
+          id: info.id,
+          cwd: info.cwd,
+          folderName: info.folderName,
+          name: info.folderName,
+          alive: info.alive,
+          activityStatus: 'idle' as const,
+          promptWaiting: null,
+          claudeMode: false,
+          antigravityMode: false,
+          codexMode: false,
+          dangerousMode: false,
+          claudeSessionId: info.claudeSessionId ?? null,
+          sessionType: 'local' as const,
+          detectedUrl: null,
+          serverStatus: null,
+          serverCommand: null,
+          hasUnseenActivity: false,
+          userRenamed: false,
+          planFilePath: null,
+          workspaceId: session.workspaceId
+        }
+      ]
+    }))
+    serverSessionId = info.id
+  }
+
+  const view = {
+    url,
+    title: payload.title,
+    command: payload.command,
+    cwd: payload.cwd,
+    serverSessionId
+  }
+  // Attach only — never steal what the user is looking at; they see the view
+  // on the row's dashboard icon (or their next click of it).
+  useSessionStore.getState().setSessionView(id, view)
+  return { sessionId: id, view: { url, title: payload.title } }
 }
 
 async function handleCloseSession(payload: {
@@ -1012,6 +1141,8 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleAddGroupTerminal(payload as Parameters<typeof handleAddGroupTerminal>[0])
     case 'setGroupView':
       return handleSetGroupView(payload as Parameters<typeof handleSetGroupView>[0])
+    case 'setSessionView':
+      return handleSetSessionView(payload as Parameters<typeof handleSetSessionView>[0])
     case 'closeSession':
       return handleCloseSession(payload as Parameters<typeof handleCloseSession>[0])
     case 'rename':

@@ -8,6 +8,7 @@ import type {
   GroupTerminalColor,
   GroupTerminalIcon,
   GroupViewConfig,
+  SessionViewConfig,
   Session,
   SessionGroup,
   FileTab,
@@ -20,7 +21,7 @@ import type { Agent, AgentStatus } from '../../../shared/remote-types'
 import { useWorkspaceStore } from './workspace-store'
 
 // Re-export types and constants so existing imports continue to work
-export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, GroupViewConfig, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
+export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, GroupViewConfig, SessionViewConfig, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
 export { GROUP_TERMINAL_COLORS, GROUP_TERMINAL_ICONS, TERMINAL_COLOR_VALUES, resolveColorHex } from './session-types'
 
 /** THE visibility predicate — single source of truth for workspace scoping.
@@ -47,6 +48,7 @@ interface SessionState {
    *  mosaic (set by clicking a group that has a view). Cleared by any explicit
    *  tab selection. Stale ids are harmless — the grid re-validates. */
   activeGroupViewId: string | null
+  activeSessionViewId: string | null
   sidebarOpen: boolean
   sidebarWidth: number
   theme: Theme
@@ -118,9 +120,15 @@ interface SessionState {
   setGroupView: (groupId: string, view: GroupViewConfig | null) => void
   /** Show (or hide, with null) a group's web view in the main pane. */
   setActiveGroupView: (groupId: string | null) => void
+  /** Attach (or clear, with null) a session's web view; persists to its record. */
+  setSessionView: (sessionId: string, view: SessionViewConfig | null) => void
+  /** Show (or hide, with null) a session's web view in the main pane. */
+  setActiveSessionView: (sessionId: string | null) => void
+  /** The dashboard-icon click: select the session AND show its view. */
+  openSessionView: (sessionId: string) => void
   addGroupTerminal: (groupId: string, config: Omit<GroupTerminalConfig, 'sessionId'>) => void
   removeGroupTerminal: (groupId: string, terminalId: string) => void
-  updateGroupTerminal: (groupId: string, terminalId: string, updates: Partial<Pick<GroupTerminalConfig, 'command' | 'commandMode' | 'color' | 'icon'>>) => void
+  updateGroupTerminal: (groupId: string, terminalId: string, updates: Partial<Pick<GroupTerminalConfig, 'command' | 'commandMode' | 'color' | 'icon' | 'serverUrl' | 'groupView'>>) => void
   setGroupTerminalSessionId: (groupId: string, terminalId: string, sessionId: string | null) => void
   setGroupCwd: (groupId: string, cwd: string) => void
   setGroupColor: (groupId: string, color: GroupTerminalColor | null) => void
@@ -358,6 +366,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   groups: [],
   displayOrder: [],
   activeGroupViewId: null,
+  activeSessionViewId: null,
   sidebarOpen: true,
   sidebarWidth: 260,
   theme: (localStorage.getItem('clave-theme') as Theme) || 'light',
@@ -533,6 +542,11 @@ export const useSessionStore = create<SessionState>((set) => ({
         for (const sid of g.sessionIds) nested.add(sid)
         for (const t of g.terminals) if (t.sessionId) nested.add(t.sessionId)
       }
+      // A session view's hidden serving session is nested the same way a group
+      // terminal's is — it must never surface as a top-level row.
+      for (const sess of state.sessions) {
+        if (sess.view?.serverSessionId) nested.add(sess.view.serverSessionId)
+      }
 
       // Rebuild displayOrder from the persisted order, dropping dead references.
       const order: string[] = []
@@ -571,7 +585,14 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   removeSession: (id) =>
     set((state) => {
-      const sessions = state.sessions.filter((s) => s.id !== id)
+      // A closed session takes its hidden serving session (session.view) with
+      // it: nothing else owns that process, and an orphan would idle invisibly.
+      const owner = state.sessions.find((s) => s.id === id)
+      const servingId = owner?.view?.serverSessionId ?? null
+      if (servingId) {
+        window.electronAPI?.killSession?.(servingId).catch(() => {})
+      }
+      const sessions = state.sessions.filter((s) => s.id !== id && s.id !== servingId)
       const selectedSessionIds = state.selectedSessionIds.filter((sid) => sid !== id)
       const groups = state.groups.map((g) => ({
         ...g,
@@ -592,6 +613,8 @@ export const useSessionStore = create<SessionState>((set) => ({
         focusedSessionId =
           selectedSessionIds[0] ?? visibleSessions[visibleSessions.length - 1]?.id ?? null
       }
+      const viewPatch =
+        state.activeSessionViewId === id ? { activeSessionViewId: null } : {}
       if (selectedSessionIds.length === 0 && visibleSessions.length > 0) {
         const lastId = visibleSessions[visibleSessions.length - 1].id
         return {
@@ -599,11 +622,12 @@ export const useSessionStore = create<SessionState>((set) => ({
           selectedSessionIds: [lastId],
           focusedSessionId: lastId,
           groups,
-          displayOrder
+          displayOrder,
+          ...viewPatch
         }
       }
 
-      return { sessions, selectedSessionIds, focusedSessionId, groups, displayOrder }
+      return { sessions, selectedSessionIds, focusedSessionId, groups, displayOrder, ...viewPatch }
     }),
 
   selectSession: (id, addToSelection) =>
@@ -620,9 +644,9 @@ export const useSessionStore = create<SessionState>((set) => ({
           ? state.selectedSessionIds.filter((sid) => sid !== id)
           : [...state.selectedSessionIds, id]
         const focusedSessionId = isSelected ? (newSelected[0] ?? null) : id
-        return { sessions, selectedSessionIds: newSelected, focusedSessionId, activeView: targetView, activeGroupViewId: null }
+        return { sessions, selectedSessionIds: newSelected, focusedSessionId, activeView: targetView, activeGroupViewId: null, activeSessionViewId: null }
       }
-      return { sessions, selectedSessionIds: [id], focusedSessionId: id, activeView: targetView, activeGroupViewId: null }
+      return { sessions, selectedSessionIds: [id], focusedSessionId: id, activeView: targetView, activeGroupViewId: null, activeSessionViewId: null }
     }),
 
   selectSessions: (ids) =>
@@ -630,7 +654,8 @@ export const useSessionStore = create<SessionState>((set) => ({
       selectedSessionIds: ids,
       focusedSessionId: ids[0] ?? null,
       activeView: 'terminals' as ActiveView,
-      activeGroupViewId: null
+      activeGroupViewId: null,
+      activeSessionViewId: null
     })),
 
   setFocusedSession: (id) => set(() => ({ focusedSessionId: id })),
@@ -762,7 +787,42 @@ export const useSessionStore = create<SessionState>((set) => ({
         : {})
     })),
 
-  setActiveGroupView: (groupId) => set(() => ({ activeGroupViewId: groupId })),
+  setActiveGroupView: (groupId) =>
+    set(() => ({ activeGroupViewId: groupId, ...(groupId !== null ? { activeSessionViewId: null } : {}) })),
+
+  setSessionView: (sessionId, view) => {
+    // The record (main process) is what survives a restart — renderer state
+    // dies with the window, same rationale as persistSessionName. The serving
+    // session id is deliberately not persisted: it never survives a restart,
+    // and the start action respawns from `command`.
+    window.electronAPI?.setSessionViewRecord?.(
+      sessionId,
+      view ? { url: view.url, title: view.title, command: view.command, cwd: view.cwd } : null
+    ).catch(() => {})
+    set((state) => ({
+      sessions: state.sessions.map((s) => (s.id === sessionId ? { ...s, view } : s)),
+      // Clearing the view that is currently showing drops back to the terminal.
+      ...(view === null && state.activeSessionViewId === sessionId
+        ? { activeSessionViewId: null }
+        : {})
+    }))
+  },
+
+  setActiveSessionView: (sessionId) =>
+    set(() => ({ activeSessionViewId: sessionId, ...(sessionId !== null ? { activeGroupViewId: null } : {}) })),
+
+  openSessionView: (sessionId) =>
+    set((state) => {
+      const session = state.sessions.find((s) => s.id === sessionId)
+      if (!session?.view) return state
+      return {
+        selectedSessionIds: [sessionId],
+        focusedSessionId: sessionId,
+        activeView: 'terminals' as ActiveView,
+        activeGroupViewId: null,
+        activeSessionViewId: sessionId
+      }
+    }),
 
   addGroupTerminal: (groupId, config) =>
     set((state) => ({
@@ -1198,7 +1258,8 @@ export const useSessionStore = create<SessionState>((set) => ({
           selectedSessionIds: [existing.id],
           focusedSessionId: existing.id,
           activeView: 'terminals' as ActiveView,
-          activeGroupViewId: null
+          activeGroupViewId: null,
+          activeSessionViewId: null
         }
       }
       return {
@@ -1207,7 +1268,8 @@ export const useSessionStore = create<SessionState>((set) => ({
         selectedSessionIds: [tab.id],
         focusedSessionId: tab.id,
         activeView: 'terminals' as ActiveView,
-        activeGroupViewId: null
+        activeGroupViewId: null,
+        activeSessionViewId: null
       }
     }),
 

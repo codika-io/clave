@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
-import { CommandLineIcon, BoltIcon } from '@heroicons/react/24/outline'
+import { CommandLineIcon, BoltIcon, RectangleGroupIcon } from '@heroicons/react/24/outline'
 import { ClaudeLogo, AntigravityLogo, CodexLogo, ClaudeVariantGlyph } from '../icons/cli-logos'
 import { SidebarTabItem } from './SidebarTabItem'
 
@@ -19,14 +19,40 @@ function LocationBadge({ locationId }: { locationId: string }) {
   )
 }
 
-// Distinguish the Claude variants without touching the brand logo: a faint trailing
-// glyph after the name marks `claude agents` (bolt) and skip-permissions (shield).
-// Plain Claude Code stays unmarked as the baseline.
-function getClaudeVariant(session: Session): 'agents' | 'skip' | null {
+// Distinguish `claude agents` without touching the brand logo: a faint
+// trailing glyph after the name. Plain Claude Code stays unmarked as the
+// baseline; skip-permissions no longer gets a glyph — its slot is where the
+// session view's dashboard icon lives (see SessionViewIcon).
+function getClaudeVariant(session: Session): 'agents' | null {
   if (session.sessionType === 'agent') return null
   if (session.claudeAgentsMode) return 'agents'
-  if (session.claudeMode && session.dangerousMode) return 'skip'
   return null
+}
+
+/** The dashboard icon on a row carrying an attached web view (session.view):
+ *  clicking it shows the view in the main pane; clicking the row itself still
+ *  shows the terminal. A span, not a button — the row is already a button. */
+function SessionViewIcon({ session }: { session: Session }) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      className="flex-shrink-0 text-text-tertiary hover:text-text-primary cursor-pointer"
+      title={session.view?.title || 'Open view'}
+      onClick={(e) => {
+        e.stopPropagation()
+        useSessionStore.getState().openSessionView(session.id)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.stopPropagation()
+          useSessionStore.getState().openSessionView(session.id)
+        }
+      }}
+    >
+      <RectangleGroupIcon className="w-3.5 h-3.5" />
+    </span>
+  )
 }
 
 function SessionIcon({ session }: { session: Session }) {
@@ -148,11 +174,18 @@ function SessionItemImpl({
       onDelete={onDelete}
       icon={<SessionIcon session={session} />}
       extraContent={
-        session.locationId && session.sessionType !== 'local'
-          ? <LocationBadge locationId={session.locationId} />
-          : getClaudeVariant(session)
-            ? <ClaudeVariantGlyph variant={getClaudeVariant(session)!} />
-            : undefined
+        session.view || (session.locationId && session.sessionType !== 'local') || getClaudeVariant(session)
+          ? (
+              <>
+                {session.view ? <SessionViewIcon session={session} /> : null}
+                {session.locationId && session.sessionType !== 'local'
+                  ? <LocationBadge locationId={session.locationId} />
+                  : getClaudeVariant(session)
+                    ? <ClaudeVariantGlyph variant={getClaudeVariant(session)!} />
+                    : null}
+              </>
+            )
+          : undefined
       }
       grouped={grouped}
       groupSelected={groupSelected}

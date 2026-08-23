@@ -348,6 +348,21 @@ export function Sidebar() {
   // Templates launcher popover (anchored to the Sessions header's folder-plus icon)
   const [groupPickerOpen, setGroupPickerOpen] = useState(false)
 
+  // Sessions that exist only as the hidden half of something else — a group
+  // terminal's shell, a session view's serving process. They must never render
+  // as rows: the displayOrder path never contains them, but the no-order
+  // fallback and the search catch-all enumerate `sessions` directly.
+  const linkedHiddenIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const g of groups) {
+      for (const t of g.terminals) if (t.sessionId) ids.add(t.sessionId)
+    }
+    for (const s of sessions) {
+      if (s.view?.serverSessionId) ids.add(s.view.serverSessionId)
+    }
+    return ids
+  }, [groups, sessions])
+
   const orderedVisibleSessions = useMemo(() => {
     const order =
       displayOrder.length > 0
@@ -356,6 +371,7 @@ export function Sidebar() {
             const items: string[] = []
             const placedGroups = new Set<string>()
             for (const session of sessions) {
+              if (linkedHiddenIds.has(session.id)) continue
               const group = groups.find((g) => g.sessionIds.includes(session.id))
               if (group) {
                 if (!placedGroups.has(group.id)) {
@@ -390,13 +406,14 @@ export function Sidebar() {
 
     const seen = new Set(ordered.map((session) => session.id))
     for (const session of sessions) {
+      if (linkedHiddenIds.has(session.id)) continue
       if (!seen.has(session.id) && inActiveWorkspace(session, activeWorkspaceId)) {
         ordered.push(session)
       }
     }
 
     return ordered
-  }, [displayOrder, groups, hiddenGroupIds, sessions, activeWorkspaceId])
+  }, [displayOrder, groups, hiddenGroupIds, sessions, activeWorkspaceId, linkedHiddenIds])
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery) return null
@@ -422,6 +439,7 @@ export function Sidebar() {
             const items: string[] = []
             const placedGroups = new Set<string>()
             for (const session of sessions) {
+              if (linkedHiddenIds.has(session.id)) continue
               const group = groups.find((g) => g.sessionIds.includes(session.id))
               if (group) {
                 if (!placedGroups.has(group.id)) {
@@ -462,7 +480,7 @@ export function Sidebar() {
           return false
         }
       )
-  }, [displayOrder, sessions, groups, fileTabs, filteredSessions, hiddenGroupIds, activeWorkspaceId])
+  }, [displayOrder, sessions, groups, fileTabs, filteredSessions, hiddenGroupIds, activeWorkspaceId, linkedHiddenIds])
 
   // Flat ordered list of session/file tab IDs for range selection
   const flatSessionOrder = useMemo(() => {

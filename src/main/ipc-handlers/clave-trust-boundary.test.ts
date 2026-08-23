@@ -119,6 +119,28 @@ describe('sanitizeElevated — what "Open safely" must strip', () => {
     expect(out.groups.map((g) => g.prompt)).toEqual([undefined, undefined])
   })
 
+  it('drops groupView — an untrusted file must not render a page inside Clave', () => {
+    const out = sanitizeElevated(
+      single(
+        group({
+          terminals: [
+            { command: 'npm run dev', commandMode: 'prefill', color: 'green', serverUrl: 'http://evil.example', groupView: true }
+          ]
+        })
+      )
+    )
+    const terminals = (out as ClaveFileReadResult & ClaveGroupData).terminals
+    expect(terminals[0].groupView).toBeUndefined()
+    // The terminal itself is harmless and survives, serverUrl included.
+    expect(terminals[0].command).toBe('npm run dev')
+    expect(terminals[0].serverUrl).toBe('http://evil.example')
+  })
+
+  it("drops the group's own view for the same reason", () => {
+    const out = sanitizeElevated(single(group({ view: '/tmp/anything.html' })))
+    expect((out as ClaveFileReadResult & ClaveGroupData).view).toBeUndefined()
+  })
+
   it('leaves the harmless parts of the file intact', () => {
     const out = sanitizeElevated(single(group({ name: 'Docs', cwd: '/tmp/docs', prompt: 'x' })))
     const g = out as ClaveFileReadResult & ClaveGroupData

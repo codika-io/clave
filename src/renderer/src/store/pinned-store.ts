@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { substituteTokens } from './prompt-tokens'
-import type { PinnedGroup, PinnedGroupSession, PinnedGroupTerminal, GroupTerminalColor } from './session-types'
+import type { PinnedGroup, PinnedGroupSession, PinnedGroupTerminal, GroupTerminalColor, GroupTerminalConfig } from './session-types'
+import { resolveDeclaredGroupView } from '../../../shared/group-view'
 import { useSessionStore } from './session-store'
 import { getActiveWorkspaceId } from './workspace-store'
 
@@ -161,8 +162,9 @@ function syncToClaveFile(pg: PinnedGroup): void {
         ...(p.toolbar ? { toolbar: true } : {}),
         ...(p.logo ? { logo: p.logo } : {}),
         ...(p.prompt ? { prompt: p.prompt } : {}),
+        ...(p.view ? { view: p.view } : {}),
         sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, antigravityMode: s.antigravityMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode, ...(s.prompt ? { prompt: s.prompt } : {}), ...(s.rootSession ? { rootSession: true } : {}) })),
-        terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent, serverUrl: t.serverUrl })),
+        terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent, serverUrl: t.serverUrl, groupView: t.groupView })),
         ...(p.category ? { category: p.category } : {})
       })
 
@@ -183,7 +185,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
 // ── Import / Export ──
 
 function createPinnedFromGroup(
-  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[] },
+  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; view?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string; groupView?: boolean }[] },
   filePath: string,
   groupIndex?: number,
   rootDir?: string | null,
@@ -197,6 +199,7 @@ function createPinnedFromGroup(
     cwd: g.cwd,
     color: (g.color as GroupTerminalColor) ?? null,
     prompt: g.prompt ?? null,
+    view: g.view ?? null,
     sessions: g.sessions,
     terminals: groupDataToPinnedTerminals(g.terminals),
     createdAt: Date.now(),
@@ -214,7 +217,7 @@ function createPinnedFromGroup(
   }
 }
 
-function groupDataToPinnedTerminals(terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[]): PinnedGroupTerminal[] {
+function groupDataToPinnedTerminals(terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string; groupView?: boolean }[]): PinnedGroupTerminal[] {
   return terminals.map((t) => ({
     command: t.command,
     commandMode: t.commandMode,
@@ -223,7 +226,8 @@ function groupDataToPinnedTerminals(terminals: { command: string; commandMode: '
     cwd: t.cwd,
     autoLaunchLocalhost: t.autoLaunchLocalhost,
     persistent: t.persistent,
-    serverUrl: t.serverUrl
+    serverUrl: t.serverUrl,
+    groupView: t.groupView
   }))
 }
 
@@ -382,6 +386,7 @@ export async function exportClaveFile(pinnedId: string, folder: string, fileName
     cwd: pg.cwd,
     color: pg.color,
     ...(pg.prompt ? { prompt: pg.prompt } : {}),
+    ...(pg.view ? { view: pg.view } : {}),
     sessions: pg.sessions.map((s) => ({
       cwd: s.cwd,
       name: s.name,
@@ -398,7 +403,8 @@ export async function exportClaveFile(pinnedId: string, folder: string, fileName
       icon: t.icon,
       cwd: t.cwd,
       persistent: t.persistent,
-      serverUrl: t.serverUrl
+      serverUrl: t.serverUrl,
+      groupView: t.groupView
     })),
     ...(pg.category ? { category: pg.category } : {})
   })
@@ -692,6 +698,25 @@ async function spawnPinnedGroup(
   const newGroup = sessionState.groups[sessionState.groups.length - 1]
   if (!newGroup) return
 
+  // Terminals are materialized before the patch so the `groupView` binding below
+  // can name the terminal that serves the page (its start action when down).
+  const liveTerminals: GroupTerminalConfig[] = pg.terminals.map((t) => ({
+    id: crypto.randomUUID(),
+    command: t.command,
+    commandMode: t.commandMode,
+    color: t.color as GroupTerminalColor,
+    icon: t.icon,
+    cwd: t.cwd,
+    autoLaunchLocalhost: t.autoLaunchLocalhost,
+    serverUrl: t.serverUrl,
+    groupView: t.groupView,
+    sessionId: null
+  }))
+  // What the user sees on clicking the group: a terminal's served page
+  // (`groupView`) or the group's own `view`, a page needing no process at all.
+  // resolveDeclaredGroupView owns the precedence and both inert cases.
+  const declaredView = resolveDeclaredGroupView(liveTerminals, pg.view, pg.name)
+
   // Patch group with saved metadata
   useSessionStore.setState((s) => ({
     groups: s.groups.map((g) =>
@@ -703,17 +728,8 @@ async function spawnPinnedGroup(
             // The group's default prompt travels with it: sessions launched
             // later from the live group's `+` inherit what the .clave declared.
             prompt: pg.prompt ?? null,
-            terminals: pg.terminals.map((t) => ({
-              id: crypto.randomUUID(),
-              command: t.command,
-              commandMode: t.commandMode,
-              color: t.color as GroupTerminalColor,
-              icon: t.icon,
-              cwd: t.cwd,
-              autoLaunchLocalhost: t.autoLaunchLocalhost,
-              serverUrl: t.serverUrl,
-              sessionId: null
-            }))
+            terminals: liveTerminals,
+            ...(declaredView ? { view: declaredView } : {})
           }
         : g
     )
@@ -808,8 +824,15 @@ export function resyncPinnedGroup(groupId: string): void {
     cwd: t.cwd,
     autoLaunchLocalhost: t.autoLaunchLocalhost,
     serverUrl: t.serverUrl,
+    groupView: t.groupView,
     persistent: pg.terminals[i]?.persistent
   }))
+
+  // A view bound to a terminal is already expressed by that terminal's
+  // `groupView`; writing it here too would declare the same page twice. Only a
+  // free-standing view (a file, or a URL nothing in the group serves) belongs in
+  // the group's own `view` key.
+  const liveView = group.view && !group.view.terminalId ? group.view.url : null
 
   usePinnedStore.setState((s) => {
     const next = s.pinnedGroups.map((p) =>
@@ -819,6 +842,7 @@ export function resyncPinnedGroup(groupId: string): void {
             name: group.name,
             cwd: group.cwd,
             color: group.color ?? null,
+            view: liveView,
             sessions: updatedSessions,
             terminals: updatedTerminals
           }

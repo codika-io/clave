@@ -27,6 +27,7 @@ interface ClaveFileRaw {
   toolbar?: boolean
   category?: string
   logo?: string
+  view?: string
   // Multi-group format
   groups?: Array<{
     name: string
@@ -38,6 +39,7 @@ interface ClaveFileRaw {
     prompt?: string
     sessions?: ClaveGroupData['sessions']
     terminals?: ClaveGroupData['terminals']
+    view?: string
   }>
 }
 
@@ -202,6 +204,7 @@ interface ClaveFileWriteData {
   color?: string | null
   logo?: string
   prompt?: string
+  view?: string
   sessions?: ClaveGroupData['sessions']
   terminals?: ClaveGroupData['terminals']
   groups?: Array<{
@@ -210,12 +213,13 @@ interface ClaveFileWriteData {
     color: string | null
     logo?: string
     prompt?: string
+    view?: string
     sessions: ClaveGroupData['sessions']
     terminals: ClaveGroupData['terminals']
   }>
 }
 
-function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; sessions?: ClaveGroupData['sessions']; terminals?: ClaveGroupData['terminals'] }, dir: string, fallbackName: string): ClaveGroupData {
+function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; sessions?: ClaveGroupData['sessions']; terminals?: ClaveGroupData['terminals']; view?: string }, dir: string, fallbackName: string): ClaveGroupData {
   return {
     name: raw.name || fallbackName,
     cwd: path.resolve(dir, raw.cwd || '.'),
@@ -228,6 +232,11 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
     // Free text, like a session prompt: kept as the raw template, @-tokens
     // substituted at spawn, never path-resolved here.
     ...(raw.prompt ? { prompt: raw.prompt } : {}),
+    // A served view is an http(s) URL and travels verbatim; a page on disk is a
+    // path and resolves against the file's root dir, exactly like `cwd`.
+    ...(raw.view
+      ? { view: /^https?:\/\//i.test(raw.view) ? raw.view : path.resolve(dir, raw.view) }
+      : {}),
     sessions: (raw.sessions || []).map((s) => ({
       cwd: path.resolve(dir, s.cwd || '.'),
       name: s.name,
@@ -251,7 +260,8 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
       cwd: t.cwd ? path.resolve(dir, t.cwd) : undefined,
       autoLaunchLocalhost: t.autoLaunchLocalhost ?? undefined,
       persistent: t.persistent ?? undefined,
-      serverUrl: t.serverUrl ?? undefined
+      serverUrl: t.serverUrl ?? undefined,
+      groupView: t.groupView ?? undefined
     }))
   }
 }
@@ -349,7 +359,7 @@ export function registerClaveFileHandlers(): void {
           return rel === '' ? '.' : rel
         }
 
-        const serializeGroup = (g: { name: string; cwd: string | null; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; sessions: ClaveGroupData['sessions']; terminals: ClaveGroupData['terminals'] }) => ({
+        const serializeGroup = (g: { name: string; cwd: string | null; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; view?: string; sessions: ClaveGroupData['sessions']; terminals: ClaveGroupData['terminals'] }) => ({
           name: g.name,
           cwd: toRelative(g.cwd),
           color: g.color,
@@ -357,6 +367,8 @@ export function registerClaveFileHandlers(): void {
           ...(g.category ? { category: g.category } : {}),
           ...(g.logo ? { logo: g.logo.startsWith('data:') ? g.logo : toRelative(g.logo) } : {}),
           ...(g.prompt ? { prompt: g.prompt } : {}),
+          // Mirror of the read: a URL verbatim, a page on disk back to relative.
+          ...(g.view ? { view: /^https?:\/\//i.test(g.view) ? g.view : toRelative(g.view) } : {}),
           sessions: g.sessions.map((s) => ({
             cwd: toRelative(s.cwd),
             name: s.name,
@@ -376,7 +388,8 @@ export function registerClaveFileHandlers(): void {
             ...(t.cwd ? { cwd: toRelative(t.cwd) } : {}),
             ...(t.autoLaunchLocalhost ? { autoLaunchLocalhost: true } : {}),
             ...(t.persistent ? { persistent: true } : {}),
-            ...(t.serverUrl ? { serverUrl: t.serverUrl } : {})
+            ...(t.serverUrl ? { serverUrl: t.serverUrl } : {}),
+            ...(t.groupView ? { groupView: true } : {})
           }))
         })
 

@@ -121,6 +121,25 @@ export function registerPtyHandlers(): void {
     }
   )
 
+  // A session's attached web view, persisted like its display name. The shape
+  // is re-picked field by field: the renderer object crosses the IPC boundary
+  // and must not smuggle extra keys into the record file.
+  ipcMain.handle(
+    'session:set-view',
+    (_event, id: string, view: { url?: unknown; title?: unknown; command?: unknown; cwd?: unknown } | null) => {
+      const clean =
+        view && typeof view.url === 'string' && view.url.length > 0
+          ? {
+              url: view.url,
+              ...(typeof view.title === 'string' ? { title: view.title } : {}),
+              ...(typeof view.command === 'string' ? { command: view.command } : {}),
+              ...(typeof view.cwd === 'string' ? { cwd: view.cwd } : {})
+            }
+          : null
+      ptyManager.setSessionViewRecord(id, clean)
+    }
+  )
+
   // Workspace reassignment (workspace removal, future "move to workspace") —
   // mirrored into the session record so the stamp survives restarts.
   ipcMain.handle('session:set-workspace', (_event, id: string, workspaceId: string | null) => {

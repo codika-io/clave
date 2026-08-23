@@ -331,6 +331,12 @@ export interface SessionRecord {
    *  adoption rewrites. Legacy records without it are annotated at list time
    *  by inferring from cwd against registered workspace roots. */
   workspaceId?: string
+  /** Attached web view (renderer session.view): the page behind the row's
+   *  dashboard icon, restored at adoption. The hidden serving session's id is
+   *  deliberately absent — it never survives a restart; the view's start
+   *  action respawns the command. Mirrors displayName: renderer state dies
+   *  with the window, the record is what survives. */
+  view?: { url: string; title?: string; command?: string; cwd?: string }
   /** Populated only on the listAdoptableSessions() path (not persisted in
    *  the record). True when the backing tmux session is still running (app
    *  quit/reopen, no reboot) → reattach to the live process. False when the
@@ -927,6 +933,16 @@ class PtyManager {
     const next = displayName?.trim() || undefined
     if (meta.displayName === next && !!meta.userRenamed === userRenamed) return
     writeSessionRecord({ ...meta, displayName: next, userRenamed })
+  }
+
+  /** Persist (or clear, with null) a session's attached web view in its
+   *  record. Mirrors setSessionDisplayName — see SessionRecord.view. */
+  setSessionViewRecord(id: string, view: { url: string; title?: string; command?: string; cwd?: string } | null): void {
+    const key = this.recordKeyForSession(id)
+    if (!key) return
+    const meta = readSessionRecord(key)
+    if (!meta) return
+    writeSessionRecord({ ...meta, view: view ?? undefined })
   }
 
   /**

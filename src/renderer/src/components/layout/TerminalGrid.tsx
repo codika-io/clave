@@ -13,6 +13,7 @@ import { FileViewer } from '../files/FileViewer'
 import { DiffViewer } from '../files/DiffViewer'
 import { EmptyState } from '../ui/EmptyState'
 import { GroupViewPanel } from './GroupViewPanel'
+import { SessionViewPanel } from './SessionViewPanel'
 
 function computeGridLayout(count: number): { cols: number; rows: number } {
   if (count <= 1) return { cols: 1, rows: 1 }
@@ -29,6 +30,7 @@ export function TerminalGrid() {
   const groups = useSessionStore((s) => s.groups)
   const displayOrder = useSessionStore((s) => s.displayOrder)
   const activeGroupViewId = useSessionStore((s) => s.activeGroupViewId)
+  const activeSessionViewId = useSessionStore((s) => s.activeSessionViewId)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
 
   // Re-validate the active group view — the id may be stale (group deleted,
@@ -38,6 +40,16 @@ export function TerminalGrid() {
       groups.find(
         (g) =>
           g.id === activeGroupViewId && g.view && inActiveWorkspace(g, activeWorkspaceId)
+      )) ||
+    null
+
+  // Same re-validation for a session's view — the id may be stale (session
+  // closed, view detached, workspace switched); stale falls back to the grid.
+  const viewSession =
+    (activeSessionViewId &&
+      sessions.find(
+        (s) =>
+          s.id === activeSessionViewId && s.view && inActiveWorkspace(s, activeWorkspaceId)
       )) ||
     null
 
@@ -82,7 +94,7 @@ export function TerminalGrid() {
   return (
     <div className="flex-1 relative overflow-hidden">
       {/* "Select a session" overlay when nothing is selected */}
-      {!hasSelection && !viewGroup && (
+      {!hasSelection && !viewGroup && !viewSession && (
         <div className="absolute inset-0 flex items-center justify-center text-text-tertiary text-sm z-10">
           Select a session
         </div>
@@ -93,6 +105,16 @@ export function TerminalGrid() {
       {viewGroup && (
         <div className="absolute inset-0">
           <GroupViewPanel group={viewGroup} />
+        </div>
+      )}
+
+      {/* A session's attached web view replaces its terminal the same way;
+          the grid below stays mounted (hidden) so the terminal keeps running.
+          The two are mutually exclusive: setting either active id clears the
+          other (see session-store). */}
+      {!viewGroup && viewSession && (
+        <div className="absolute inset-0">
+          <SessionViewPanel session={viewSession} />
         </div>
       )}
 

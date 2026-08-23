@@ -26,7 +26,11 @@ export interface ClaveGroupData {
    *  @-token vocabulary as a session prompt, substituted at spawn. */
   prompt?: string
   sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
-  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[]
+  terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string; /** Bind this terminal's `serverUrl` as the group's web view at launch. */ groupView?: boolean }[]
+  /** The group's web view when no command serves it: an http(s) URL, or a path
+   *  to an .html file resolved like `cwd` (relative to the file's root dir).
+   *  A terminal's `groupView` wins over it — that one carries a start action. */
+  view?: string
 }
 
 export type ClaveFileReadResult =
@@ -56,14 +60,22 @@ export function describeElevated(result: ClaveFileReadResult): { autoCommands: s
   return { autoCommands, prompts, dangerous }
 }
 
-/** Strip elevated behavior: downgrade auto→prefill, disable dangerousMode, and
- *  drop auto-submitted prompts (an untrusted file must not drive the agent). */
+/** Strip elevated behavior: downgrade auto→prefill, disable dangerousMode, drop
+ *  auto-submitted prompts (an untrusted file must not drive the agent), and drop
+ *  both view declarations — `groupView` and the group's own `view` — since each
+ *  renders a page inside Clave on the first group click, which an untrusted file
+ *  must not arrange; the terminal itself stays. */
 export function sanitizeElevated(result: ClaveFileReadResult): ClaveFileReadResult {
   const sanitizeGroup = (g: ClaveGroupData): ClaveGroupData => ({
     ...g,
     prompt: undefined,
+    view: undefined,
     sessions: g.sessions.map((s) => ({ ...s, dangerousMode: false, prompt: undefined })),
-    terminals: g.terminals.map((t) => (t.commandMode === 'auto' ? { ...t, commandMode: 'prefill' } : t))
+    terminals: g.terminals.map((t) => ({
+      ...t,
+      ...(t.commandMode === 'auto' ? { commandMode: 'prefill' as const } : {}),
+      ...(t.groupView ? { groupView: undefined } : {})
+    }))
   })
   if (result.type === 'multi') {
     return { type: 'multi', groups: result.groups.map(sanitizeGroup) }
