@@ -79,6 +79,7 @@ Each group has these fields:
 | `logo` | string | No | Small icon shown on the template row. Either a path relative to the root dir (`.png`, `.svg`, `.jpg`, `.gif`, `.webp`, `.ico`) or an inline `data:` URI. Path form is read and inlined as a data URI at load |
 | `toolbar` | boolean | No | If `true`, this group's terminals appear as quick-action buttons in the top toolbar and the group is **hidden from the group picker** |
 | `prompt` | string | No | The group's **default prompt**. Sessions launched from the group's own `+` button in the sidebar start on it, so a whole lane shares one starting brief. A session's own `prompt` still wins for that session. Same path tokens as a session prompt, and elevated the same way (see below). Does **not** apply when the remembered agent is `claude agents` — that subcommand rejects a positional prompt, and the `+` says so rather than promising one |
+| `view` | string | No | The group's **web view**: the page shown in the main pane when the group is clicked, instead of the tiled sessions. An `http(s)` URL, or a path to an `.html` file relative to the root dir — a page that needs no process. A terminal's `groupView` wins over it (see Group views below) |
 | `sessions` | array | Yes | Terminal sessions to spawn (see Sessions below) |
 | `terminals` | array | Yes | Command buttons shown on the group (see Terminals below) |
 
@@ -149,6 +150,7 @@ Terminals are command buttons that appear as colored icons on the group. Clickin
 | `autoLaunchLocalhost` | boolean | Optional. Open the detected `localhost` URL in the browser once the command serves one. Use for dev servers **in sidebar groups** — for toolbar buttons use `serverUrl` instead |
 | `persistent` | boolean | Optional, **toolbar groups only**. Keep the spawned session alive when the toolbar popover closes, and reattach to it next time instead of respawning |
 | `serverUrl` | string | Optional, honored on **toolbar buttons**. Declared server URL (e.g. `"http://localhost:3000"`) — turns the button into a **server button**: click probes the URL and either opens it or starts the command first (see Server buttons below). Implies `persistent` |
+| `groupView` | boolean | Optional, **sidebar groups only**, requires `serverUrl`. Makes this terminal's page the group's **web view**: clicking the group shows the served page in the main pane instead of the tiled sessions, with this terminal as its start action (see Group views below) |
 
 **Tips:**
 - Use `"auto"` for dev servers (`npm run dev`) that should start immediately
@@ -231,6 +233,64 @@ Add `serverUrl` to a toolbar terminal and it stops being a "run this command" bu
 - Session liveness is **not** server liveness: Ctrl-C'ing the server inside the popover leaves the shell alive. The probe is what decides — the next click sees the dead server and restarts it in the same shell, keeping the scrollback.
 - Known residual: if an unrelated process answers on the declared port, the probe can't tell — the button will open it.
 
+## Group views
+
+A sidebar group normally shows its sessions tiled in the main pane. Give one of its
+terminals `"groupView": true` and the group shows **that terminal's page** instead — a
+dashboard, a docs site, a project board — with the sessions one click away in the view's
+header. The terminal keeps working as a terminal; the flag only says "this is the page
+the group is about."
+
+```json
+{
+  "command": "exos board refresh; exos board open --port 4713 --no-browser",
+  "commandMode": "auto",
+  "cwd": "..",
+  "color": "purple",
+  "icon": "bolt",
+  "serverUrl": "http://127.0.0.1:4713",
+  "groupView": true
+}
+```
+
+- **`serverUrl` is required** — a view needs a page, and it must be declared, not
+  detected. Clave scans a terminal's output for a `localhost` URL only while its pane is
+  visible, and the whole point of a group view is that nobody is looking at the terminal.
+  A `groupView` without `serverUrl` is ignored.
+- **Pin the port** and give each project its own, for the same reason server buttons do:
+  the probe cannot tell your server from someone else's on a shared port, and a hijacked
+  port shows the wrong app inside your group.
+- The view **probes** the URL: a server that is down renders a start action wired to this
+  terminal, never a broken frame. `commandMode: "auto"` so that click starts it unattended.
+- An **untrusted** file's `groupView` is stripped by "Open safely" (the terminal itself
+  survives) — see Trust below.
+- An agent can attach the same view at runtime with `clave_set_group_view`, or declare it
+  when it adds the terminal (`clave_add_group_terminal` takes `groupView`).
+
+### A page with no server behind it
+
+Not every view needs a process. A frozen snapshot, a generated report, a published
+status page — those are just a file or a URL, and a group names one directly:
+
+```json
+{
+  "name": "Syndicable",
+  "cwd": "..",
+  "view": "./syndicable-os/knowledge/board/snapshots/2026-08-23.html",
+  "sessions": [ … ]
+}
+```
+
+- A **path** resolves against the root dir exactly like `cwd`, and must end in `.html`
+  or `.htm` — Clave renders it in-app, with no probe and no start action, because there
+  is nothing to start. An **`http(s)` URL** is kept verbatim and probed like any server.
+- Anything else is ignored and the group keeps its sessions: a `.clave` file is
+  hand-written and unvalidated, and a permanently failing pane is worse than no view.
+- **`groupView` wins.** If a terminal in the same group declares one, the served page is
+  what the group shows — it is the live one, and it carries the start action. Declaring
+  both is a mistake, not a fallback chain.
+- Like `groupView`, an untrusted file's `view` is stripped by "Open safely".
+
 ## Trust: elevated files
 
 A `.clave` file can run shell commands and drive an agent on your behalf, so Clave gates that behavior. A file is **elevated** if any of these is true:
@@ -244,7 +304,7 @@ Opening an elevated file that the user has not trusted shows a review dialog lis
 | Choice | Result |
 |---|---|
 | **Trust and run** | Loads as authored. Trusts this exact file content (by SHA-256 hash) |
-| **Open safely** | Loads **sanitized**: `auto` → `prefill`, `dangerousMode` → `false`, and every `prompt` is **dropped** |
+| **Open safely** | Loads **sanitized**: `auto` → `prefill`, `dangerousMode` → `false`, every `prompt` is **dropped**, and both view declarations (`groupView`, `view`) are **dropped** (no page renders itself inside Clave) |
 | **Cancel** | Nothing loads |
 
 A checkbox additionally trusts the whole containing folder as a **workspace root**, so every `.clave` under it skips the dialog from then on. Files Clave itself writes are trusted automatically.
@@ -515,7 +575,7 @@ Two gotchas:
 
 Clave watches loaded `.clave` files and reloads on change, but only refreshes templates that already exist. **Adding or removing groups requires deactivating and reactivating the workspace** (or restarting Clave); editing an existing group applies live.
 
-Exporting a group back out to a `.clave` file (right-click → Export as .clave) is **lossy**: it drops `prompt`, `rootSession`, `logo`, and `autoLaunchLocalhost` (it keeps `cwd`, `persistent`, and `serverUrl`). Hand-edit the dropped fields back in, or keep the source file as the source of truth.
+Exporting a group back out to a `.clave` file (right-click → Export as .clave) is **lossy**: it drops `prompt`, `rootSession`, `logo`, and `autoLaunchLocalhost` (it keeps `cwd`, `persistent`, `serverUrl`, `groupView`, and the group's `view`). Hand-edit the dropped fields back in, or keep the source file as the source of truth.
 
 ## Best practices
 
