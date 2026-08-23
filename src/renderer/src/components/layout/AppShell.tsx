@@ -640,11 +640,13 @@ export function AppShell() {
         sidebarOpen ? 'ml-1' : 'ml-2',
         fileTreeOpen ? 'mr-1' : 'mr-2'
       )}>
-        {/* Toolbar — its own floating card */}
+        {/* Toolbar — its own floating card. Its row height is a token because
+            the sidebar derives from it: --content-top-offset, and with it the
+            launcher panel's top edge, is measured off this bar. */}
         <div className="floating-card flex-shrink-0 !bg-surface-0/70">
           <div
             className={cn(
-              'h-8 flex items-center justify-between px-0.5 flex-shrink-0',
+              'h-[var(--toolbar-row-h)] flex items-center justify-between px-0.5 flex-shrink-0',
               !sidebarOpen && 'pl-[4.75rem]'
             )}
             style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}

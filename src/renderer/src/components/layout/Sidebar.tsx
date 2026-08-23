@@ -22,11 +22,12 @@ import { WhatsNewBanner } from '../help/WhatsNewBanner'
 import { TelemetryNoticeBanner } from '../help/TelemetryNoticeBanner'
 import { FeedbackBanner } from '../help/FeedbackBanner'
 import { SessionLauncher } from './SessionLauncher'
+import { GroupSwitcher, type SwitcherEntry } from './GroupSwitcher'
 import { launchSession } from '../../lib/launch-session'
 import { agentAcceptsPrompt, getLastAgentSetup, useLaunchPrefsStore } from '../../store/launch-prefs'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
-import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName } from '../../store/pinned-store'
+import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, revealGroup, spawnTemplate, exportClaveFile, getExportFileName } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
 import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
@@ -38,7 +39,6 @@ import {
   TrashIcon,
   Squares2X2Icon,
   FolderMinusIcon,
-  SquaresPlusIcon,
   PlusIcon,
   CommandLineIcon,
   XMarkIcon,
@@ -46,6 +46,7 @@ import {
   BookmarkIcon,
   ArrowDownTrayIcon,
   PlayIcon,
+  FolderIcon,
   ShieldExclamationIcon,
   ClipboardDocumentIcon,
   MagnifyingGlassIcon,
@@ -130,6 +131,7 @@ export function Sidebar() {
   const fileTabs = useSessionStore((s) => s.fileTabs)
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
   const searchQuery = useSessionStore((s) => s.searchQuery)
+  const setSearchQuery = useSessionStore((s) => s.setSearchQuery)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null)
@@ -347,6 +349,11 @@ export function Sidebar() {
 
   // Templates launcher popover (anchored to the Sessions header's folder-plus icon)
   const [groupPickerOpen, setGroupPickerOpen] = useState(false)
+  // The group switcher's filter — which group the list is narrowed to, null = All.
+  // Deliberately component state, not store state: it is a way of looking at
+  // the list, not a property of the workspace, and it should not survive a
+  // restart the way a hidden group does.
+  const [groupFilter, setGroupFilter] = useState<string | null>(null)
 
   // Sessions that exist only as the hidden half of something else — a group
   // terminal's shell, a session view's serving process. They must never render
@@ -363,68 +370,143 @@ export function Sidebar() {
     return ids
   }, [groups, sessions])
 
-  const orderedVisibleSessions = useMemo(() => {
-    const order =
-      displayOrder.length > 0
-        ? displayOrder
-        : (() => {
-            const items: string[] = []
-            const placedGroups = new Set<string>()
-            for (const session of sessions) {
-              if (linkedHiddenIds.has(session.id)) continue
-              const group = groups.find((g) => g.sessionIds.includes(session.id))
-              if (group) {
-                if (!placedGroups.has(group.id)) {
-                  placedGroups.add(group.id)
-                  items.push(group.id)
-                }
-              } else {
-                items.push(session.id)
-              }
-            }
-            return items
-          })()
-
-    const ordered: typeof sessions = []
-    for (const id of order) {
-      const group = groups.find((g) => g.id === id)
-      if (group) {
-        if (group.sessionIds.length === 0 || hiddenGroupIds.has(group.id)) continue
-        if (!inActiveWorkspace(group, activeWorkspaceId)) continue
-        for (const sessionId of group.sessionIds) {
-          const session = sessions.find((s) => s.id === sessionId)
-          if (session) ordered.push(session)
-        }
-        continue
-      }
-
-      const session = sessions.find((s) => s.id === id)
-      if (session && inActiveWorkspace(session, activeWorkspaceId)) {
-        ordered.push(session)
-      }
+  // The groups the switcher offers, in list order. Built from the store with the
+  // same predicates the list applies, NOT from displayItems: that goes null the
+  // moment a search is running and empties out under the switcher's own filter,
+  // so deriving from it would blank every chip at exactly the two moments the
+  // switcher is being used.
+  // Every group the workspace KNOWS ABOUT, not the handful currently running.
+  // The pins are the source: a `.clave` workspace declares dozens of groups and
+  // auto-discovers more from the tree, while only a few are ever spawned. Listing
+  // only the live ones — which is what this did at first — makes a switcher that
+  // can take you exactly where you already are, and leaves a declared group
+  // reachable only through the picker dialog. Live groups with no pin are
+  // appended so nothing on screen is missing from the panel.
+  const switcherEntries = useMemo<SwitcherEntry[]>(() => {
+    const entries: SwitcherEntry[] = []
+    const claimed = new Set<string>()
+    for (const pg of pinnedGroups) {
+      if (!inActiveWorkspace(pg, activeWorkspaceId)) continue
+      const live =
+        pg.activeGroupId && groups.some((g) => g.id === pg.activeGroupId)
+          ? pg.activeGroupId
+          : null
+      if (live) claimed.add(live)
+      entries.push({
+        key: `pin:${pg.id}`,
+        name: pg.name,
+        color: pg.color,
+        liveGroupId: live,
+        pinnedId: pg.id
+      })
     }
-
-    const seen = new Set(ordered.map((session) => session.id))
-    for (const session of sessions) {
-      if (linkedHiddenIds.has(session.id)) continue
-      if (!seen.has(session.id) && inActiveWorkspace(session, activeWorkspaceId)) {
-        ordered.push(session)
-      }
+    for (const g of groups) {
+      if (claimed.has(g.id)) continue
+      if (g.sessionIds.length === 0) continue
+      if (!inActiveWorkspace(g, activeWorkspaceId)) continue
+      entries.push({
+        key: `group:${g.id}`,
+        name: g.name,
+        color: g.color ?? null,
+        liveGroupId: g.id,
+        pinnedId: null
+      })
     }
+    return entries
+  }, [pinnedGroups, groups, activeWorkspaceId])
 
-    return ordered
-  }, [displayOrder, groups, hiddenGroupIds, sessions, activeWorkspaceId, linkedHiddenIds])
+  // The same query narrows the chips and the session list below it: one question,
+  // two views of the answer. Running groups sort ahead of idle ones so a match
+  // you can act on now is the one Enter takes.
+  const shownSwitcherEntries = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    // At rest the panel shows only what is RUNNING — the switcher is for moving
+    // between the groups you have going, and every declared group in a workspace
+    // that auto-discovers the tree would bury those few under dozens you are not
+    // using. Searching is the moment you are reaching past them, so that is the
+    // moment the rest appear.
+    if (!q) return switcherEntries.filter((e) => e.liveGroupId)
+    const matched = switcherEntries.filter((e) => e.name.toLowerCase().includes(q))
+    return [...matched].sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1
+      const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1
+      if (aStarts !== bStarts) return aStarts - bStarts
+      const aLive = a.liveGroupId ? 0 : 1
+      const bLive = b.liveGroupId ? 0 : 1
+      return aLive - bLive
+    })
+  }, [switcherEntries, searchQuery])
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery) return null
     const q = searchQuery.toLowerCase()
-    return orderedVisibleSessions.filter(
-      (s) =>
+    // Search deliberately ignores the switcher's filter and looks across every
+    // group. Searching inside the current narrowing would only ever find what is
+    // already on screen — the point of typing is to reach what is NOT.
+    //
+    // Every session in the workspace, taken straight from the store rather than
+    // from the list's own visible set: that set drops the sessions of groups a
+    // pinned toolbar toggle has hidden, so search could only ever find what was
+    // already on screen — the opposite of what typing is for.
+    const searchable = sessions.filter(
+      (s) => !linkedHiddenIds.has(s.id) && inActiveWorkspace(s, activeWorkspaceId)
+    )
+    return searchable.filter((s) => {
+      if (
         s.name.toLowerCase().includes(q) ||
         s.folderName.toLowerCase().includes(q) ||
         s.cwd.toLowerCase().includes(q)
-    )
-  }, [orderedVisibleSessions, searchQuery])
+      ) {
+        return true
+      }
+      // A group's name matches its sessions too, so typing a group's name is a
+      // way to reach it — which is what Enter then acts on.
+      const group = groups.find((g) => g.sessionIds.includes(s.id))
+      return !!group && group.name.toLowerCase().includes(q)
+    })
+  }, [sessions, linkedHiddenIds, activeWorkspaceId, searchQuery, groups])
+
+  // Picking a chip does one of two things. A group that is not running gets
+  // spawned — the same act the picker dialog performs, which is where a declared
+  // group had to be reached from before. A running one filters the list to it,
+  // and back to All on a second click. Either way the query has done its job, so
+  // it clears; leaving it set would keep the list showing matches rather than the
+  // group just picked.
+  const handleSwitcherPick = useCallback(
+    (entry: SwitcherEntry) => {
+      setSearchQuery('')
+      if (!entry.liveGroupId) {
+        if (entry.pinnedId) void spawnTemplate(entry.pinnedId)
+        return
+      }
+      const liveId = entry.liveGroupId
+      // A pinned toolbar toggle may be hiding it; picking a group has to produce
+      // that group rather than an empty list with nothing to say why.
+      revealGroup(liveId)
+      setGroupFilter((current) => (current === liveId ? null : liveId))
+    },
+    [setSearchQuery]
+  )
+
+  const handleSwitcherAll = useCallback(() => {
+    setSearchQuery('')
+    setGroupFilter(null)
+  }, [setSearchQuery])
+
+  // Groups the query matched that are NOT running. They cannot appear among the
+  // session results — they have no sessions yet — so they get a card of their own
+  // below them, with the button that starts them.
+  const idleSearchMatches = useMemo(
+    () => (searchQuery.trim() ? shownSwitcherEntries.filter((e) => !e.liveGroupId) : []),
+    [shownSwitcherEntries, searchQuery]
+  )
+
+  // Enter acts on the first chip the search left standing.
+  const handleSearchSubmit = useCallback(() => {
+    const first = shownSwitcherEntries[0]
+    if (first) handleSwitcherPick(first)
+    else setSearchQuery('')
+  }, [shownSwitcherEntries, handleSwitcherPick, setSearchQuery])
 
   const isSearchMode = searchQuery.trim().length > 0
 
@@ -482,12 +564,31 @@ export function Sidebar() {
       )
   }, [displayOrder, sessions, groups, fileTabs, filteredSessions, hiddenGroupIds, activeWorkspaceId, linkedHiddenIds])
 
+  // A filter pointing at a group that has gone away — closed, emptied, or left
+  // behind by a workspace switch — falls back to All rather than showing an
+  // empty list whose only way out is a chip that is no longer there.
+  const activeGroupFilter =
+    groupFilter && groups.some((g) => g.id === groupFilter && g.sessionIds.length > 0)
+      ? groupFilter
+      : null
+
+  // The switcher's filter, applied last so everything above it still sees the whole
+  // list. Grouped sessions only: filtering to a group means the loose sessions
+  // and the file tabs step aside too.
+  const visibleItems = useMemo(() => {
+    if (!displayItems) return null
+    if (!activeGroupFilter) return displayItems
+    return displayItems.filter(
+      (item) => item.type === 'group' && item.groupId === activeGroupFilter
+    )
+  }, [displayItems, activeGroupFilter])
+
   // Flat ordered list of session/file tab IDs for range selection
   const flatSessionOrder = useMemo(() => {
     if (filteredSessions) return filteredSessions.map((s) => s.id)
-    if (!displayItems) return sessions.map((s) => s.id)
+    if (!visibleItems) return sessions.map((s) => s.id)
     const order: string[] = []
-    for (const item of displayItems) {
+    for (const item of visibleItems) {
       if (item.type === 'session') {
         order.push(item.sessionId)
       } else if (item.type === 'fileTab') {
@@ -498,7 +599,7 @@ export function Sidebar() {
       }
     }
     return order
-  }, [filteredSessions, displayItems, sessions, groups])
+  }, [filteredSessions, visibleItems, sessions, groups])
 
   // Live ref so row-facing handlers can read the current order without listing it
   // as a dependency. Keeping those handlers' identity stable lets the memoized row
@@ -1139,17 +1240,42 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
-      {/* Draggable top spacer — clears the macOS traffic lights */}
+      {/* Draggable top spacer — clears the macOS traffic lights, and carries
+          the exact offset at which the content column's first card below the
+          toolbar begins, so the launcher panel under it lands on the terminal
+          cards' top edge rather than a few pixels below. */}
       <div
-        className="pt-11 pb-1 flex-shrink-0"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        className="flex-shrink-0"
+        style={
+          {
+            height: 'var(--content-top-offset)',
+            WebkitAppRegion: 'drag'
+          } as React.CSSProperties
+        }
       />
 
       {/* Session launcher — pinned above the scroll area so it never scrolls
           away with the session list. (The workspace switcher used to sit here;
           it lives in the toolbar now, behind the workspace name.) */}
-      <div className="px-2 pb-1 flex-shrink-0">
+      <div className="px-2 flex-shrink-0">
         <SessionLauncher onRemoteLaunch={setRemotePickerState} />
+      </div>
+
+      {/* Group switcher — pinned under the launcher for the same reason: the way to
+          get back to All must not scroll away with the list it narrowed. */}
+      <div className="px-2 pt-1 flex-shrink-0">
+        <GroupSwitcher
+          entries={shownSwitcherEntries}
+          totalCount={switcherEntries.length}
+          value={activeGroupFilter}
+          onPick={handleSwitcherPick}
+          onAll={handleSwitcherAll}
+          onAddGroup={() => setGroupPickerOpen(true)}
+          addGroupActive={groupPickerOpen}
+          search={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSearchSubmit={handleSearchSubmit}
+        />
       </div>
 
       {/* Single scrollable area for all sections */}
@@ -1157,61 +1283,107 @@ export function Sidebar() {
         viewportRef={scrollContainerRef}
         className="flex-1 min-h-0"
       >
-        {!isSearchMode && (
+        {
           <>
-            {/* Sessions section — the group picker opens full screen from
-                either action; the inline pinned grid only appears as a drop
-                target while dragging. */}
-            <SectionHeading
-              title="Sessions"
-              actions={
-                <button
-                  onClick={() => setGroupPickerOpen(true)}
-                  data-active={groupPickerOpen ? 'true' : undefined}
-                  className="btn-icon btn-icon-xs"
-                  title="Add a group"
-                  aria-label="Add a group"
-                >
-                  <SquaresPlusIcon className="w-4 h-4" />
-                </button>
-              }
-            />
-            <PinnedSection
-              setContextMenu={setContextMenu}
-              pinnedZoneRef={pinnedZoneRef}
-              isOverPinnedZone={isOverPinnedZone}
-              draggedGroupId={draggedGroupId}
-              isFileDragOver={isFileDragOverWindow}
-              groupPickerOpen={groupPickerOpen}
-              onCloseGroupPicker={() => setGroupPickerOpen(false)}
-            />
+            {/* Sessions section — the group picker opens full screen from the
+                switcher's `+` above (it used to sit here, beside this heading);
+                the inline pinned grid only appears as a drop target while
+                dragging.
+
+                This used to be gated on !isSearchMode, which meant the search
+                branch below it could never render: typing set searchQuery, the
+                gate closed, and the results it had already computed went with
+                it. The gate now hides only the pinned drop zone, which is the
+                one part that has nothing to say about a set of results. */}
+            <SectionHeading title={isSearchMode ? 'Results' : 'Sessions'} />
+            {!isSearchMode && (
+              <PinnedSection
+                setContextMenu={setContextMenu}
+                pinnedZoneRef={pinnedZoneRef}
+                isOverPinnedZone={isOverPinnedZone}
+                draggedGroupId={draggedGroupId}
+                isFileDragOver={isFileDragOverWindow}
+                groupPickerOpen={groupPickerOpen}
+                onCloseGroupPicker={() => setGroupPickerOpen(false)}
+              />
+            )}
             <div>
               <div className="px-2 space-y-0.5">
                 {filteredSessions ? (
-                  filteredSessions.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-xs text-text-tertiary">
-                      No matching sessions
-                    </div>
-                  ) : (
-                    filteredSessions.map((session) => (
-                      <SessionItem
-                        key={session.id}
-                        session={session}
-                        isSelected={selectedSessionIds.includes(session.id)}
-                        onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
-                        onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
-                        forceEditing={renamingId === session.id}
-                        onEditingDone={clearRenaming}
-                        onDelete={() => setDeleteConfirmSessionId(session.id)}
-                      />
-                    ))
-                  )
-                ) : displayItems ? (
                   <>
-                    {displayItems.map((item, index) => {
+                    {filteredSessions.length === 0 && idleSearchMatches.length === 0 ? (
+                      <div className="px-3 py-6 text-center text-xs text-text-tertiary">
+                        No matching sessions
+                      </div>
+                    ) : (
+                      filteredSessions.map((session) => (
+                        <SessionItem
+                          key={session.id}
+                          session={session}
+                          isSelected={selectedSessionIds.includes(session.id)}
+                          onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
+                          onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
+                          forceEditing={renamingId === session.id}
+                          onEditingDone={clearRenaming}
+                          onDelete={() => setDeleteConfirmSessionId(session.id)}
+                        />
+                      ))
+                    )}
+
+                    {/* Groups the query matched that are not running. They have no
+                        sessions to appear among the results, so each gets a card
+                        of its own — a group shown closed, with the button that
+                        starts it. Starting one puts it in the switcher's chips and
+                        its sessions in this list, which is the whole point: a
+                        declared group was previously reachable only by leaving the
+                        sidebar for the picker dialog. */}
+                    {idleSearchMatches.length > 0 && (
+                      <div className={filteredSessions.length > 0 ? 'pt-2' : undefined}>
+                        <div className="idle-group-label">Not running</div>
+                        <div className="space-y-0.5">
+                          {idleSearchMatches.map((entry) => {
+                            const hex = resolveColorHex(entry.color)
+                            return (
+                              <div
+                                key={entry.key}
+                                className="group-scope idle-group-card rounded-xl border"
+                                style={
+                                  hex
+                                    ? ({
+                                        '--group-bg': `${hex}10`,
+                                        '--group-bg-hover': `${hex}24`,
+                                        '--group-border': `${hex}30`,
+                                        '--group-hover-bg': `${hex}2e`
+                                      } as React.CSSProperties)
+                                    : undefined
+                                }
+                              >
+                                <FolderIcon className="sidebar-tab-icon flex-shrink-0" />
+                                <span className="flex-1 min-w-0 truncate text-[13px] font-medium text-text-secondary">
+                                  {entry.name}
+                                </span>
+                                <button
+                                  className="idle-group-start"
+                                  onClick={() => handleSwitcherPick(entry)}
+                                  title={`Start ${entry.name}`}
+                                  aria-label={`Start ${entry.name}`}
+                                >
+                                  <PlayIcon className="w-3 h-3 flex-shrink-0" />
+                                  <span>Start</span>
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : visibleItems ? (
+                  <>
+                    {visibleItems.map((item, index) => {
                       const itemId = getItemId(item)
-                      const prevItemId = index > 0 ? getItemId(displayItems[index - 1]) : null
-                      const isLastItem = index === displayItems.length - 1
+                      const prevItemId = index > 0 ? getItemId(visibleItems[index - 1]) : null
+                      const isLastItem = index === visibleItems.length - 1
                       const gapBefore = isDragging && shouldShowGapBefore(dropIndicator, itemId, prevItemId)
 
                       if (item.type === 'fileTab') {
@@ -1274,21 +1446,30 @@ export function Sidebar() {
                           <div key={group.id}>
                             <DropGap active={gapBefore} />
                             <div
-                              className={cn(
-                                // Same outer width as ungrouped tabs (no bleed). Child-tab
-                                // highlights are inset instead (see grouped children container)
-                                // so they don't feel like they touch the card border.
-                                'relative rounded-xl border transition-colors',
-                                !groupColorHex && (allGroupSelected
-                                  ? 'bg-surface-200/60 border-border shadow-[0_0_0.5px_rgba(0,0,0,0.12)]'
-                                  : 'bg-surface-100/30 border-border-subtle hover:bg-surface-100/60')
-                              )}
-                              style={groupColorHex ? {
-                                backgroundColor: allGroupSelected ? `${groupColorHex}35` : `${groupColorHex}10`,
-                                borderColor: allGroupSelected ? `${groupColorHex}60` : `${groupColorHex}30`
-                              } : undefined}
-                              onMouseEnter={(e) => { if (groupColorHex && !allGroupSelected) e.currentTarget.style.backgroundColor = `${groupColorHex}20` }}
-                              onMouseLeave={(e) => { if (groupColorHex) e.currentTarget.style.backgroundColor = allGroupSelected ? `${groupColorHex}35` : `${groupColorHex}10` }}
+                              // Same outer width as ungrouped tabs (no bleed). Child-tab
+                              // highlights are inset instead (see grouped children container)
+                              // so they don't feel like they touch the card border.
+                              className="group-scope relative rounded-xl border transition-colors"
+                              data-selected={allGroupSelected ? 'true' : undefined}
+                              // The group publishes its colour as a small set of
+                              // finished fills, and .group-scope in main.css draws
+                              // every state from them — the card at rest, the card
+                              // under a header hover, and every hover/selected fill
+                              // of the controls INSIDE it. Publishing beats painting
+                              // from here: hovering the header has to light the whole
+                              // card, which an inline background on this div can only
+                              // do by fighting CSS, and the grey button fills within
+                              // had no way to learn the colour at all. A colourless
+                              // group publishes nothing and the fallbacks hold.
+                              style={groupColorHex ? ({
+                                '--group-bg': `${groupColorHex}10`,
+                                '--group-bg-hover': `${groupColorHex}24`,
+                                '--group-bg-selected': `${groupColorHex}35`,
+                                '--group-border': `${groupColorHex}30`,
+                                '--group-border-selected': `${groupColorHex}60`,
+                                '--group-hover-bg': `${groupColorHex}2e`,
+                                '--group-active-bg': `${groupColorHex}4d`
+                              } as React.CSSProperties) : undefined}
                             >
                               {dropIndicator?.targetId === group.id && dropIndicator?.position === 'inside' && (
                                 <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10 transition-opacity duration-150" />
@@ -1428,7 +1609,7 @@ export function Sidebar() {
               </div>
             </div>
           </>
-        )}
+        }
       </ScrollArea>
 
       {/* Announcements — above the bottom bar */}

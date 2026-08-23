@@ -80,6 +80,10 @@ function describeSetup(setup: AgentSetup, profileLabel?: string): string {
  * Both buttons start at the workspace root. The native folder dialog is no
  * longer on the common path — it is reached deliberately, through the folder
  * button or an Opt+click, rather than being asked on every single launch.
+ *
+ * The four sit in a panel (.launcher-panel) matching the toolbar's height,
+ * border and surface, whose top edge the sidebar aligns with the first content
+ * card. The sidebar's own top spacer owns that alignment, not this component.
  */
 export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -174,187 +178,193 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
 
   return (
     <div className="relative">
-      <div className="launcher-row">
-        <button
-          disabled={busy}
-          className="launcher-btn"
-          title={'New terminal — workspace root (⌥ to choose a folder)'}
-          onClick={(e) => void run({ setup: null, cwd: cwdFor(e) })}
-        >
-          <CommandLineIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-          <span>Terminal</span>
-        </button>
-
-        <div className="launcher-split">
+      <div className="launcher-panel">
+        <div className="launcher-row">
           <button
             disabled={busy}
             className="launcher-btn"
-            title={`${describeSetup(setup, profileLabel)} — workspace root (⌥ to choose a folder)`}
-            onClick={(e) => void run({ setup, cwd: cwdFor(e), remember: true })}
+            title={'New terminal — workspace root (⌥ to choose a folder)'}
+            onClick={(e) => void run({ setup: null, cwd: cwdFor(e) })}
           >
-            <AgentLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-            <span className="truncate">{AGENT_LABELS[setup.kind]}</span>
-            {setup.dangerousMode && (
-              <BoltIcon
-                className="w-3 h-3 flex-shrink-0 text-text-tertiary"
-                title="Permissions skipped"
-              />
-            )}
+            <CommandLineIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+            <span>Terminal</span>
           </button>
-          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                ref={(el) => {
-                  caretRef.current = el
-                }}
-                disabled={busy}
-                className="launcher-caret"
-                title="Start with another agent setup"
-                aria-label="Start with another agent setup"
-              >
-                <ChevronDownIcon className="w-3 h-3" />
-              </button>
-            </DropdownMenuTrigger>
 
-            <DropdownMenuContent
-              animated
-              open={menuOpen}
-              side="right"
-              align="start"
-              sideOffset={16}
-              alignOffset={6}
+          <span className="launcher-sep" aria-hidden="true" />
+
+          <div className="launcher-split">
+            <button
+              disabled={busy}
+              className="launcher-btn"
+              title={`${describeSetup(setup, profileLabel)} — workspace root (⌥ to choose a folder)`}
+              onClick={(e) => void run({ setup, cwd: cwdFor(e), remember: true })}
             >
-              {hasRemoteLocations && <DropdownMenuLabel>This Mac</DropdownMenuLabel>}
-
-              {renderClaudeEntry('claude', 'Claude Code', '⌘N', false)}
-              {renderClaudeEntry('claude', 'Claude Code (skip permissions)', '⌘D', true)}
-              {renderClaudeEntry('claude-agents', 'Claude Agents', '⌘⇧A', false)}
-              <DropdownMenuItem
-                onSelect={() =>
-                  launchAgent(
-                    { kind: 'antigravity', dangerousMode: false },
-                    { kind: 'workspace-root' }
-                  )
-                }
-              >
-                <AntigravityLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                <span className="flex-1">Antigravity CLI</span>
-                <DropdownMenuShortcut>{'⌘I'}</DropdownMenuShortcut>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() =>
-                  launchAgent({ kind: 'codex', dangerousMode: false }, { kind: 'workspace-root' })
-                }
-              >
-                <CodexLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                <span className="flex-1">Codex CLI</span>
-                <DropdownMenuShortcut>{'⌘U'}</DropdownMenuShortcut>
-              </DropdownMenuItem>
-
-              {connectedRemoteLocations.map((loc) => (
-                <div key={loc.id}>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
-                      <span className="truncate">{loc.name}</span>
-                      {loc.host && (
-                        <span className="text-text-tertiary/60 font-normal normal-case">
-                          ({loc.host})
-                        </span>
-                      )}
-                    </span>
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setMenuOpen(false)
-                      onRemoteLaunch({
-                        locationId: loc.id,
-                        locationName: loc.name,
-                        claudeMode: false,
-                        antigravityMode: false,
-                        codexMode: false
-                      })
-                    }}
-                  >
-                    <CommandLineIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                    <span className="flex-1">Terminal</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setMenuOpen(false)
-                      onRemoteLaunch({
-                        locationId: loc.id,
-                        locationName: loc.name,
-                        claudeMode: true,
-                        antigravityMode: false,
-                        codexMode: false
-                      })
-                    }}
-                  >
-                    <ClaudeLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                    <span className="flex-1">Claude Code</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setMenuOpen(false)
-                      onRemoteLaunch({
-                        locationId: loc.id,
-                        locationName: loc.name,
-                        claudeMode: false,
-                        antigravityMode: true,
-                        codexMode: false
-                      })
-                    }}
-                  >
-                    <AntigravityLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                    <span className="flex-1">Antigravity CLI</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setMenuOpen(false)
-                      onRemoteLaunch({
-                        locationId: loc.id,
-                        locationName: loc.name,
-                        claudeMode: false,
-                        antigravityMode: false,
-                        codexMode: true
-                      })
-                    }}
-                  >
-                    <CodexLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                    <span className="flex-1">Codex CLI</span>
-                  </DropdownMenuItem>
-                </div>
-              ))}
-
-              {hasAgentLocations && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setMenuOpen(false)
-                      setAgentPickerOpen(true)
-                    }}
-                  >
-                    <BoltIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                    <span className="flex-1">OpenClaw Agent...</span>
-                  </DropdownMenuItem>
-                </>
+              <AgentLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+              <span className="truncate">{AGENT_LABELS[setup.kind]}</span>
+              {setup.dangerousMode && (
+                <BoltIcon
+                  className="w-3 h-3 flex-shrink-0 text-text-tertiary"
+                  title="Permissions skipped"
+                />
               )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+            </button>
+            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  ref={(el) => {
+                    caretRef.current = el
+                  }}
+                  disabled={busy}
+                  className="launcher-caret"
+                  title="Start with another agent setup"
+                  aria-label="Start with another agent setup"
+                >
+                  <ChevronDownIcon className="w-3 h-3" />
+                </button>
+              </DropdownMenuTrigger>
 
-        <button
-          disabled={busy}
-          className="launcher-icon-btn"
-          title={`${describeSetup(setup, profileLabel)} — in another folder…`}
-          aria-label="New session in another folder"
-          onClick={() => void run({ setup, cwd: { kind: 'ask' }, remember: true })}
-        >
-          <FolderIcon className="w-4 h-4" />
-        </button>
+              <DropdownMenuContent
+                animated
+                open={menuOpen}
+                side="right"
+                align="start"
+                sideOffset={16}
+                alignOffset={6}
+              >
+                {hasRemoteLocations && <DropdownMenuLabel>This Mac</DropdownMenuLabel>}
+
+                {renderClaudeEntry('claude', 'Claude Code', '⌘N', false)}
+                {renderClaudeEntry('claude', 'Claude Code (skip permissions)', '⌘D', true)}
+                {renderClaudeEntry('claude-agents', 'Claude Agents', '⌘⇧A', false)}
+                <DropdownMenuItem
+                  onSelect={() =>
+                    launchAgent(
+                      { kind: 'antigravity', dangerousMode: false },
+                      { kind: 'workspace-root' }
+                    )
+                  }
+                >
+                  <AntigravityLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                  <span className="flex-1">Antigravity CLI</span>
+                  <DropdownMenuShortcut>{'⌘I'}</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    launchAgent({ kind: 'codex', dangerousMode: false }, { kind: 'workspace-root' })
+                  }
+                >
+                  <CodexLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                  <span className="flex-1">Codex CLI</span>
+                  <DropdownMenuShortcut>{'⌘U'}</DropdownMenuShortcut>
+                </DropdownMenuItem>
+
+                {connectedRemoteLocations.map((loc) => (
+                  <div key={loc.id}>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                        <span className="truncate">{loc.name}</span>
+                        {loc.host && (
+                          <span className="text-text-tertiary/60 font-normal normal-case">
+                            ({loc.host})
+                          </span>
+                        )}
+                      </span>
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setMenuOpen(false)
+                        onRemoteLaunch({
+                          locationId: loc.id,
+                          locationName: loc.name,
+                          claudeMode: false,
+                          antigravityMode: false,
+                          codexMode: false
+                        })
+                      }}
+                    >
+                      <CommandLineIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                      <span className="flex-1">Terminal</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setMenuOpen(false)
+                        onRemoteLaunch({
+                          locationId: loc.id,
+                          locationName: loc.name,
+                          claudeMode: true,
+                          antigravityMode: false,
+                          codexMode: false
+                        })
+                      }}
+                    >
+                      <ClaudeLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                      <span className="flex-1">Claude Code</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setMenuOpen(false)
+                        onRemoteLaunch({
+                          locationId: loc.id,
+                          locationName: loc.name,
+                          claudeMode: false,
+                          antigravityMode: true,
+                          codexMode: false
+                        })
+                      }}
+                    >
+                      <AntigravityLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                      <span className="flex-1">Antigravity CLI</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setMenuOpen(false)
+                        onRemoteLaunch({
+                          locationId: loc.id,
+                          locationName: loc.name,
+                          claudeMode: false,
+                          antigravityMode: false,
+                          codexMode: true
+                        })
+                      }}
+                    >
+                      <CodexLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                      <span className="flex-1">Codex CLI</span>
+                    </DropdownMenuItem>
+                  </div>
+                ))}
+
+                {hasAgentLocations && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setMenuOpen(false)
+                        setAgentPickerOpen(true)
+                      }}
+                    >
+                      <BoltIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                      <span className="flex-1">OpenClaw Agent...</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <span className="launcher-sep" aria-hidden="true" />
+
+          <button
+            disabled={busy}
+            className="launcher-icon-btn"
+            title={`${describeSetup(setup, profileLabel)} — in another folder…`}
+            aria-label="New session in another folder"
+            onClick={() => void run({ setup, cwd: { kind: 'ask' }, remember: true })}
+          >
+            <FolderIcon className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {agentPickerOpen && (
