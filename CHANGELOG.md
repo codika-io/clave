@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Added
+- **Software Update in Settings and the menu bar** — a Software Update pane (Settings → Software Update) showing the running version, whether a newer one exists, when Clave last checked, and a Download & Install button with live progress; plus `Check for Updates…` and `Download Latest Version…` in the application menu, and the updater log under Help. The pane's two escape hatches — install the release by hand, open the updater log — are what a user has left when the updater itself cannot deliver.
+
+### Fixed
+- **An available update can no longer go missing** — the update notice was pushed to the renderer once, five seconds after launch and then every 30 minutes, and was lost outright if the window was not listening at that instant (mounting late, a reload, or a check that failed, since check failures were swallowed). Since auto-update is Clave's only distribution channel, that left a stale install with no affordance to upgrade and no way to ask. The updater's state now lives in the main process and is readable on demand, so the answer survives a restart.
+- **A failed download retries itself once** before surfacing an error, instead of asking the user to press Retry for what is usually a dropped connection.
+- **A failed update *check* no longer hides or over-reports** — it is shown in the Software Update pane rather than discarded, and it can no longer raise the full-screen "Update failed" overlay over an app that is working fine.
+
 ## [1.64.0] — 2026-08-09
 
 ### Added

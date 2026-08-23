@@ -17,9 +17,11 @@ const SIDE_PANEL_TABS: Record<string, 'files' | 'git' | 'help'> = {
 export function navigateTo(target: string): boolean {
   const store = useSessionStore.getState()
 
-  // Usage lives inside settings now — keep the old deep-link target working.
-  if (target === 'usage') {
-    store.openSettings('usage')
+  // Settings panes addressed by name. `usage` predates the settings move and
+  // is kept working; `updates` is how the release note points at the new
+  // Software Update pane.
+  if (target === 'usage' || target === 'updates') {
+    store.openSettings(target)
     return true
   }
 
