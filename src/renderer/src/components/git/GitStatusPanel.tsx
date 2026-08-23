@@ -74,7 +74,7 @@ function RangeSection({
   treeBaseIndentPx,
   localPaths,
   refreshTick,
-  onSync,
+  hasUpstream,
   operating
 }: {
   cwd: string
@@ -86,7 +86,8 @@ function RangeSection({
   localPaths: Set<string>
   /** Bump to refetch — tied to ahead/behind so the list follows the fetch cycle. */
   refreshTick: number
-  onSync: () => void
+  /** Names the honest empty state: no upstream means nothing to compare against. */
+  hasUpstream: boolean
   operating: boolean
 }): React.JSX.Element | null {
   const gitViewMode = useSessionStore((s) => s.gitViewMode)
@@ -137,23 +138,34 @@ function RangeSection({
     })
   }, [])
 
-  if (!files || files.length === 0) return null
+  // Still loading — the header lands on the next tick.
+  if (!files) return null
+
   const activeDiffFile =
     diffPreview && diffPreview.cwd === cwd && diffPreview.type === direction
       ? diffPreview.file
       : null
 
+  // View-only surface: no Pull/Push here (a click must never sync — the
+  // toolbar's sync buttons are the action path). An empty result renders an
+  // honest explanation instead of silence.
   return (
     <>
       <SectionHeader
         label={direction === 'incoming' ? 'Incoming' : 'Outgoing'}
         indentPx={sectionIndentPx}
         count={files.length}
-        action={direction === 'incoming' ? 'Pull' : 'Push'}
-        onAction={onSync}
         disabled={operating}
       />
-      {gitViewMode === 'tree' ? (
+      {files.length === 0 ? (
+        <div className="pr-3 py-1 text-[11px] text-text-tertiary" style={{ paddingLeft: fileIndentPx }}>
+          {hasUpstream
+            ? direction === 'incoming'
+              ? 'Nothing incoming — up to date with the remote.'
+              : 'Nothing to push.'
+            : 'This branch has no published counterpart to compare against yet.'}
+        </div>
+      ) : gitViewMode === 'tree' ? (
         <GitTreeSection
           baseIndentPx={treeBaseIndentPx}
           files={files}
@@ -546,7 +558,7 @@ function RepoSection({
           treeBaseIndentPx={treeBaseIndentPx}
           localPaths={localPaths}
           refreshTick={status.behind}
-          onSync={() => runOperation(() => window.electronAPI.gitPull(cwd))}
+          hasUpstream={status.hasUpstream}
           operating={operating}
         />
       )}
@@ -559,7 +571,7 @@ function RepoSection({
           treeBaseIndentPx={treeBaseIndentPx}
           localPaths={localPaths}
           refreshTick={status.ahead}
-          onSync={() => runOperation(() => window.electronAPI.gitPush(cwd))}
+          hasUpstream={status.hasUpstream}
           operating={operating}
         />
       )}
