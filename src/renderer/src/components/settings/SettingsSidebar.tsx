@@ -2,13 +2,16 @@ import {
   ChevronLeftIcon,
   AdjustmentsHorizontalIcon,
   SwatchIcon,
+  ArrowDownTrayIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline'
+import { useUpdaterStore } from '../../store/updater-store'
 import { useSessionStore, type SettingsSection } from '../../store/session-store'
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
   { id: 'general', label: 'General', icon: AdjustmentsHorizontalIcon },
   { id: 'appearance', label: 'Appearance', icon: SwatchIcon },
+  { id: 'updates', label: 'Software Update', icon: ArrowDownTrayIcon },
   { id: 'usage', label: 'Usage', icon: ChartBarIcon }
 ]
 
@@ -17,6 +20,10 @@ export function SettingsSidebar() {
   const settingsSection = useSessionStore((s) => s.settingsSection)
   const setSettingsSection = useSessionStore((s) => s.setSettingsSection)
   const setActiveView = useSessionStore((s) => s.setActiveView)
+  const updatePhase = useUpdaterStore((s) => s.phase)
+  // A waiting update earns a dot on its row — the same signal macOS puts on
+  // System Settings, and the reason a user thinks to look here at all.
+  const updateWaiting = updatePhase === 'available' || updatePhase === 'downloaded'
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
@@ -49,6 +56,9 @@ export function SettingsSidebar() {
           >
             <Icon className="w-4 h-4 flex-shrink-0 opacity-60" />
             <span>{label}</span>
+            {id === 'updates' && updateWaiting && (
+              <span className="ml-auto w-2 h-2 rounded-full bg-accent flex-shrink-0" />
+            )}
           </button>
         ))}
       </nav>

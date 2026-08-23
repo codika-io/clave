@@ -4,6 +4,9 @@ import type {
   MutationScope
 } from '../shared/extensions-types'
 import type { WorkspaceStateFile } from '../shared/workspace-types'
+import type { DownloadProgress, UpdaterState } from '../shared/updater-types'
+
+export type { DownloadProgress, UpdaterState }
 
 /** Endpoint identity stamped on exchange-capture events; mirrors the
  *  contract's EndpointIdentity (src/main/exchange-capture/contract). `model`
@@ -293,12 +296,6 @@ export interface MagicPullResult {
   error: string | null
 }
 
-export interface DownloadProgress {
-  percent: number
-  bytesPerSecond: number
-  transferred: number
-  total: number
-}
 
 export interface ElectronAPI {
   spawnSession: (
@@ -420,6 +417,8 @@ export interface ElectronAPI {
   onUpdateDownloaded: (callback: (version: string) => void) => () => void
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
   onDownloadError: (callback: (message: string) => void) => () => void
+  onUpdaterState: (callback: (state: UpdaterState) => void) => () => void
+  onOpenSettingsSection: (callback: (section: string) => void) => () => void
   onMissionControlEntered: (callback: () => void) => () => void
   onMissionControlExited: (callback: () => void) => () => void
   missionControlGetEnabled: () => Promise<boolean>
@@ -430,7 +429,10 @@ export interface ElectronAPI {
   installUpdate: () => Promise<void>
   startDownload: (attempt?: 'first' | 'retry') => Promise<void>
   openUpdaterLog: () => Promise<string>
+  openReleasesPage: () => Promise<void>
   cancelDownload: () => Promise<void>
+  getUpdaterState: () => Promise<UpdaterState>
+  checkForUpdates: () => Promise<UpdaterState>
   getPathForFile: (file: File) => string
   persistDroppedFile: (sourcePath: string) => Promise<string | null>
   showNotification: (options: {

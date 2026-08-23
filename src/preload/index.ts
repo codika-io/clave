@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { UpdaterState } from '../shared/updater-types'
 
 /** Creates a typed IPC event listener with cleanup function. */
 function createIpcListener<T extends unknown[]>(
@@ -186,6 +187,12 @@ const electronAPI = {
   onDownloadError: (callback: (message: string) => void) =>
     createIpcListener<[string]>('updater:download-error', callback),
 
+  onUpdaterState: (callback: (state: UpdaterState) => void) =>
+    createIpcListener<[UpdaterState]>('updater:state', callback),
+
+  onOpenSettingsSection: (callback: (section: string) => void) =>
+    createIpcListener<[string]>('menu:open-settings-section', callback),
+
   onMissionControlEntered: (callback: () => void) =>
     createIpcListener<[]>('mission-control:entered', callback),
   onMissionControlExited: (callback: () => void) =>
@@ -205,7 +212,10 @@ const electronAPI = {
   startDownload: (attempt?: 'first' | 'retry') =>
     ipcRenderer.invoke('updater:start-download', attempt),
   openUpdaterLog: () => ipcRenderer.invoke('updater:open-log'),
+  openReleasesPage: () => ipcRenderer.invoke('updater:open-releases'),
   cancelDownload: () => ipcRenderer.invoke('updater:cancel-download'),
+  getUpdaterState: () => ipcRenderer.invoke('updater:get-state') as Promise<UpdaterState>,
+  checkForUpdates: () => ipcRenderer.invoke('updater:check') as Promise<UpdaterState>,
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   persistDroppedFile: (sourcePath: string) =>

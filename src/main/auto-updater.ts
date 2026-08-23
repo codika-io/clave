@@ -2,6 +2,9 @@ import { app, shell } from 'electron'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import log from 'electron-log/main'
 import { getMainWindow } from './window-utils'
+import type { DownloadProgress, UpdatePhase, UpdaterState } from '../shared/updater-types'
+
+export type { DownloadProgress, UpdatePhase, UpdaterState }
 
 const CHECK_INTERVAL = 30 * 60 * 1000 // 30 minutes
 const INITIAL_DELAY = 5000
@@ -30,31 +33,119 @@ export interface DownloadStrategy {
  * failed — electron-updater surfaces the download error verbatim, and
  * `net::ERR_FAILED` says only that an HTTP request did not complete — so the
  * retry's job is to remove variables rather than repeat the attempt. A full
- * download talks to one URL and reads nothing off disk. Before this existed,
- * Retry re-issued the identical call and a deterministic failure was
- * unescapable: auto-update is the whole distribution channel, so a user who hit
- * one stayed on their version indefinitely with no way to know.
+ * download talks to one URL and reads nothing off disk.
  *
  * Disabling differential is enough on its own — MacUpdater checks the flag in
  * `canDifferentialDownload()` before it looks at the cached zip, so the retry
  * never touches the cache. We deliberately do NOT delete the cache: it would
  * only cost the *next* update its differential download, and removing a
  * directory in a shipped app is not a trade worth making for no gain.
+ *
+ * Worth knowing what this does NOT cover: `canDifferentialDownload()` also
+ * returns false when the cache holds no `update.zip` at all, which is the case
+ * on any machine whose last update did not complete. There the first attempt
+ * was already a full download and the retry is byte-for-byte the same request.
+ * That is why a failed download now also auto-retries once (see
+ * `handleDownloadError`) and why the error state offers a direct download.
  */
 export function downloadStrategy(attempt: DownloadAttempt): DownloadStrategy {
   return { disableDifferentialDownload: attempt === 'retry' }
 }
 
+/**
+ * The phase transitions, pulled out of the event handlers so they can be
+ * tested. Every one of them exists because a naive assignment was wrong:
+ * updater events arrive on a 30-minute timer underneath whatever the user is
+ * doing, so a handler that simply sets a phase will happily stomp a download
+ * in flight with the result of a background check.
+ */
+
+/** A periodic check must not repaint a download as "checking". */
+export function phaseOnCheckStart(current: UpdatePhase): UpdatePhase {
+  return current === 'idle' || current === 'available' ? 'checking' : current
+}
+
+/**
+ * A check that finds the version we are already downloading must leave the
+ * download alone — otherwise the progress overlay is yanked back to a Download
+ * button every 30 minutes.
+ */
+export function phaseOnAvailable(current: UpdatePhase, downloading: boolean): UpdatePhase {
+  return downloading || current === 'downloaded' || current === 'error' ? current : 'available'
+}
+
+/** Nothing on the server: back to rest, unless something is in flight. */
+export function phaseOnNotAvailable(current: UpdatePhase): UpdatePhase {
+  return current === 'checking' || current === 'available' ? 'idle' : current
+}
+
+/**
+ * A failed *check* is not a failed *update*. It must never reach the `error`
+ * phase, because that phase raises a full-screen overlay over an app that is
+ * working perfectly and merely does not know whether it is current.
+ */
+export function phaseOnCheckError(current: UpdatePhase): UpdatePhase {
+  return current === 'checking' ? 'idle' : current
+}
+
+const initialProgress: DownloadProgress = {
+  percent: 0,
+  bytesPerSecond: 0,
+  transferred: 0,
+  total: 0
+}
+
+let state: UpdaterState = {
+  supported: false,
+  phase: 'idle',
+  // Filled by initAutoUpdater. Kept off the module top level so importing this
+  // file — as the tests do — does not need a live Electron app object.
+  currentVersion: '',
+  availableVersion: null,
+  progress: initialProgress,
+  errorMessage: null,
+  checkErrorMessage: null,
+  lastCheckedAt: null
+}
+
 let cancellationToken: CancellationToken | null = null
 let downloadCancelled = false
 let isDownloading = false
+/** Guards the one automatic retry so a hard failure cannot loop. */
+let autoRetried = false
 let checkInterval: ReturnType<typeof setInterval> | null = null
 
 function sendToRenderer(channel: string, ...args: unknown[]): void {
   getMainWindow()?.webContents.send(channel, ...args)
 }
 
+function setState(patch: Partial<UpdaterState>): void {
+  state = { ...state, ...patch }
+  sendToRenderer('updater:state', state)
+}
+
+export function getUpdaterState(): UpdaterState {
+  return state
+}
+
+function handleDownloadError(message: string): void {
+  // One silent retry, then give up and show the user something actionable.
+  // `net::ERR_FAILED` on a 220 MB download is most often a connection that
+  // dropped rather than anything reproducible, and asking a user to press
+  // Retry for that is asking them to do the machine's job.
+  if (!autoRetried) {
+    autoRetried = true
+    log.warn(`[updater] Download failed (${message}) — retrying once without differential`)
+    startDownload('retry')
+    return
+  }
+  setState({ phase: 'error', errorMessage: message })
+}
+
 export function initAutoUpdater(): void {
+  // Set before the dev bail-out: the Software Update pane still names the
+  // running version in development, it just says updates are unavailable.
+  setState({ currentVersion: app.getVersion(), supported: app.isPackaged })
   if (!app.isPackaged) return
 
   // electron-updater logs the entire download path through this logger — which
@@ -71,42 +162,74 @@ export function initAutoUpdater(): void {
 
   autoUpdater.on('checking-for-update', () => {
     log.info('[updater] Checking for update...')
+    // A check runs on a timer underneath whatever the user is doing. It must
+    // not yank a finished download back to "checking".
+    const phase = phaseOnCheckStart(state.phase)
+    if (phase !== state.phase) setState({ phase, checkErrorMessage: null })
   })
 
   autoUpdater.on('update-available', (info) => {
     log.info(`[updater] Update available: ${info.version}`)
+    setState({
+      availableVersion: info.version,
+      lastCheckedAt: Date.now(),
+      checkErrorMessage: null,
+      // Never demote an in-flight or finished download back to "available".
+      phase: phaseOnAvailable(state.phase, isDownloading)
+    })
     sendToRenderer('updater:update-available', info.version)
   })
 
   autoUpdater.on('update-not-available', () => {
     log.info('[updater] App is up to date')
+    setState({
+      availableVersion: null,
+      lastCheckedAt: Date.now(),
+      checkErrorMessage: null,
+      phase: phaseOnNotAvailable(state.phase)
+    })
   })
 
   autoUpdater.on('download-progress', (progress) => {
     log.info(`[updater] Download: ${Math.round(progress.percent)}%`)
-    sendToRenderer('updater:download-progress', {
+    const next: DownloadProgress = {
       percent: progress.percent,
       bytesPerSecond: progress.bytesPerSecond,
       transferred: progress.transferred,
       total: progress.total
-    })
+    }
+    setState({ phase: 'downloading', progress: next })
+    sendToRenderer('updater:download-progress', next)
   })
 
   autoUpdater.on('update-downloaded', (info) => {
     log.info(`[updater] Update downloaded: ${info.version}`)
     isDownloading = false
+    autoRetried = false
+    setState({ phase: 'downloaded', availableVersion: info.version, errorMessage: null })
     sendToRenderer('updater:update-downloaded', info.version)
   })
 
   autoUpdater.on('error', (err) => {
     log.error('[updater] Error:', err.message)
-    // Only forward errors to renderer if a download was in progress.
-    // checkForUpdates() errors should not trigger the download-error overlay.
-    if (isDownloading && !downloadCancelled) {
-      sendToRenderer('updater:download-error', err.message)
-    }
+    const wasDownloading = isDownloading && !downloadCancelled
     downloadCancelled = false
     isDownloading = false
+
+    if (wasDownloading) {
+      handleDownloadError(err.message)
+      sendToRenderer('updater:download-error', err.message)
+      return
+    }
+
+    // A failed check used to vanish entirely. It still must not raise an
+    // overlay, but it has to be visible somewhere the user can look — the
+    // Updates pane renders it next to Check Again.
+    setState({
+      checkErrorMessage: err.message,
+      lastCheckedAt: Date.now(),
+      phase: phaseOnCheckError(state.phase)
+    })
   })
 
   const check = (): void => {
@@ -124,6 +247,30 @@ export function initAutoUpdater(): void {
   checkInterval = setInterval(check, CHECK_INTERVAL)
 }
 
+/**
+ * A check the user asked for, by pressing a button or picking the menu item.
+ * Resolves with the state once the check has settled so the caller can react,
+ * and never rejects — a failed check is a state, not an exception.
+ */
+export async function checkForUpdatesNow(): Promise<UpdaterState> {
+  if (!state.supported) {
+    return state
+  }
+  setState({ phase: phaseOnCheckStart(state.phase), checkErrorMessage: null })
+  try {
+    await autoUpdater.checkForUpdates()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    log.error('[updater] Manual check failed:', message)
+    setState({
+      checkErrorMessage: message,
+      lastCheckedAt: Date.now(),
+      phase: phaseOnCheckError(state.phase)
+    })
+  }
+  return state
+}
+
 export function startDownload(attempt: DownloadAttempt = 'first'): void {
   const strategy = downloadStrategy(attempt)
   // Set on every attempt, not just the retry: the flag lives on the shared
@@ -134,8 +281,10 @@ export function startDownload(attempt: DownloadAttempt = 'first'): void {
     `[updater] Starting download (attempt=${attempt}, differential=${!strategy.disableDifferentialDownload})`
   )
 
+  if (attempt === 'first') autoRetried = false
   downloadCancelled = false
   isDownloading = true
+  setState({ phase: 'downloading', progress: initialProgress, errorMessage: null })
   cancellationToken = new CancellationToken()
   autoUpdater.downloadUpdate(cancellationToken).catch((err) => {
     if (!downloadCancelled) {
@@ -152,6 +301,12 @@ export function cancelDownload(): void {
     cancellationToken.cancel()
     cancellationToken = null
   }
+  autoRetried = false
+  setState({
+    phase: state.availableVersion ? 'available' : 'idle',
+    progress: initialProgress,
+    errorMessage: null
+  })
 }
 
 export function cleanupAutoUpdater(): void {
@@ -168,6 +323,11 @@ export function cleanupAutoUpdater(): void {
  */
 export function openUpdaterLog(): Promise<string> {
   return shell.openPath(log.transports.file.getFile().path)
+}
+
+/** The releases page — the manual way out when the updater cannot deliver. */
+export function openReleasesPage(): Promise<void> {
+  return shell.openExternal(RELEASES_URL)
 }
 
 export function installUpdate(): void {

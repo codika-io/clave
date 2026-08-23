@@ -9,6 +9,7 @@ import { applyPersistedIcon } from './ipc-handlers/app-handlers'
 import { cleanupDroppedFiles } from './ipc-handlers/dropped-file-handlers'
 import { ptyManager, preloadLoginShellEnv } from './pty-manager'
 import { initAutoUpdater, cleanupAutoUpdater } from './auto-updater'
+import { buildAppMenu } from './app-menu'
 import { initTelemetry, cleanupTelemetry } from './telemetry'
 import { initNotificationManager } from './notification-manager'
 import { sshManager } from './ssh-manager'
@@ -122,6 +123,7 @@ app.whenReady().then(() => {
   initNotificationManager()
   applyPersistedIcon()
   createWindow()
+  buildAppMenu()
   initAutoUpdater()
   initTelemetry()
   initMissionControl()

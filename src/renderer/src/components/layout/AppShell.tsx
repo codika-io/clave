@@ -2,7 +2,7 @@ import { emitTabClosed } from '../../lib/exchange-capture'
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSessionStore, isFileTabId, getVisibleFlatOrder, inActiveWorkspace, enableSidebarPersistence } from '../../store/session-store'
-import type { SessionGroup } from '../../store/session-store'
+import type { SessionGroup, SettingsSection } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
 import { launchSession } from '../../lib/launch-session'
@@ -13,6 +13,7 @@ import { SettingsSidebar } from '../settings/SettingsSidebar'
 import { ExtensionsPanel } from '../extensions/ExtensionsPanel'
 import { ExtensionsSidebar } from '../extensions/ExtensionsSidebar'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
+import { connectUpdaterStore } from '../../store/updater-store'
 import { MissionControlOverlay } from '../ui/MissionControlOverlay'
 import { AgentChatPanel } from '../agents/AgentChatPanel'
 import { useWorkTracker } from '../../store/work-tracker-store'
@@ -472,6 +473,19 @@ export function AppShell() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  // Updater: subscribe to main's state and pull the current truth on mount.
+  // The pull is the point — a push-only updater loses the "an update exists"
+  // fact for 30 minutes if the renderer was not listening when it fired.
+  useEffect(() => connectUpdaterStore(), [])
+
+  // Open Settings → Updates when asked from the native menu.
+  useEffect(() => {
+    if (!window.electronAPI?.onOpenSettingsSection) return
+    return window.electronAPI.onOpenSettingsSection((section) => {
+      useSessionStore.getState().openSettings(section as SettingsSection)
+    })
+  }, [])
 
   // Handle notification click → switch to session
   useEffect(() => {

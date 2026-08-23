@@ -16,6 +16,7 @@ import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import { TrashIcon, PlusIcon, PencilIcon, FolderIcon, ShieldCheckIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { LocationsTab } from './LocationsTab'
+import { UpdatesTab } from './UpdatesTab'
 import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsSection, SettingsCard, SettingsRow, ToggleRow } from './primitives'
 import { cn } from '../../lib/utils'
@@ -142,6 +143,7 @@ export function SettingsPanel() {
       <div className="max-w-xl mx-auto w-full">
         {settingsSection === 'general' && <GeneralSettings />}
         {settingsSection === 'appearance' && <AppearanceSettings />}
+        {settingsSection === 'updates' && <UpdatesTab />}
         {settingsSection === 'usage' && <UsageSettings />}
       </div>
     </div>

@@ -1,36 +1,43 @@
 import { create } from 'zustand'
+import type { DownloadProgress, UpdatePhase, UpdaterState } from '../../../shared/updater-types'
 
-export type UpdatePhase = 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'
-
-export interface DownloadProgress {
-  percent: number
-  bytesPerSecond: number
-  transferred: number
-  total: number
-}
-
-interface UpdaterState {
-  phase: UpdatePhase
-  version: string | null
-  progress: DownloadProgress
-  errorMessage: string | null
-  dismissed: boolean
-
-  setAvailable: (version: string) => void
-  setDownloading: () => void
-  setProgress: (progress: DownloadProgress) => void
-  setDownloaded: () => void
-  setError: (message: string) => void
-  dismiss: () => void
-  undismiss: () => void
-  reset: () => void
-}
+export type { DownloadProgress, UpdatePhase, UpdaterState }
 
 const initialProgress: DownloadProgress = {
   percent: 0,
   bytesPerSecond: 0,
   transferred: 0,
   total: 0
+}
+
+/**
+ * The renderer's view of the updater. Every field except the two local ones
+ * below is a mirror of main-process state — this store never decides anything
+ * about updates, it only reflects and forwards.
+ *
+ * `hydrate()` is why the update affordance can no longer go missing. The old
+ * store learned about an update from a push it had to be listening for at the
+ * exact moment it fired; anything that made it miss that push (mounting late,
+ * a renderer reload, a check that errored) left the UI insisting the app was
+ * current, with the next opportunity 30 minutes out.
+ */
+interface UpdaterStore extends UpdaterState {
+  /** "Later" — per-version, remembered across launches. Renderer-only. */
+  dismissed: boolean
+  /**
+   * The user pressed Back on a failed download. Renderer-only: it hides the
+   * overlay without lying to the main process about the download's outcome.
+   */
+  errorAcknowledged: boolean
+
+  hydrate: () => Promise<void>
+  applyState: (state: UpdaterState) => void
+  check: () => Promise<void>
+  startDownload: (attempt?: 'first' | 'retry') => void
+  cancelDownload: () => void
+  dismiss: () => void
+  undismiss: () => void
+  acknowledgeError: () => void
 }
 
 function getDismissedVersion(): string | null {
@@ -53,34 +60,78 @@ function setDismissedVersion(version: string | null): void {
   }
 }
 
-export const useUpdaterStore = create<UpdaterState>((set) => ({
+const initialState: UpdaterState = {
+  supported: false,
   phase: 'idle',
-  version: null,
+  currentVersion: '',
+  availableVersion: null,
   progress: initialProgress,
   errorMessage: null,
-  dismissed: false,
+  checkErrorMessage: null,
+  lastCheckedAt: null
+}
 
-  setAvailable: (version) =>
+export const useUpdaterStore = create<UpdaterStore>((set, get) => ({
+  ...initialState,
+  dismissed: false,
+  errorAcknowledged: false,
+
+  applyState: (state) =>
     set({
-      phase: 'available',
-      version,
-      dismissed: getDismissedVersion() === version
+      ...state,
+      // A "Later" only silences the version it was given for; a newer one
+      // brings the banner back on its own.
+      dismissed: state.availableVersion !== null && getDismissedVersion() === state.availableVersion,
+      // A fresh download attempt clears a previously acknowledged failure.
+      errorAcknowledged: state.phase === 'error' ? get().errorAcknowledged : false
     }),
-  setDownloading: () => {
-    setDismissedVersion(null)
-    set({ phase: 'downloading', progress: initialProgress, errorMessage: null, dismissed: false })
+
+  hydrate: async () => {
+    const state = await window.electronAPI?.getUpdaterState?.()
+    if (state) get().applyState(state)
   },
-  setProgress: (progress) => set({ progress }),
-  setDownloaded: () => set({ phase: 'downloaded' }),
-  setError: (message) => set({ phase: 'error', errorMessage: message }),
+
+  check: async () => {
+    const state = await window.electronAPI?.checkForUpdates?.()
+    if (state) get().applyState(state)
+  },
+
+  startDownload: (attempt = 'first') => {
+    setDismissedVersion(null)
+    set({
+      phase: 'downloading',
+      progress: initialProgress,
+      errorMessage: null,
+      dismissed: false,
+      errorAcknowledged: false
+    })
+    void window.electronAPI?.startDownload(attempt)
+  },
+
+  cancelDownload: () => {
+    void window.electronAPI?.cancelDownload()
+  },
+
   dismiss: () =>
     set((state) => {
-      if (state.version) setDismissedVersion(state.version)
+      if (state.availableVersion) setDismissedVersion(state.availableVersion)
       return { dismissed: true }
     }),
+
   undismiss: () => {
     setDismissedVersion(null)
     set({ dismissed: false })
   },
-  reset: () => set({ phase: 'available', progress: initialProgress, errorMessage: null })
+
+  acknowledgeError: () => set({ errorAcknowledged: true })
 }))
+
+/**
+ * Subscribe once, from the app shell, and pull the current truth immediately.
+ * Returns the unsubscribe.
+ */
+export function connectUpdaterStore(): () => void {
+  const { hydrate, applyState } = useUpdaterStore.getState()
+  void hydrate()
+  return window.electronAPI?.onUpdaterState?.(applyState) ?? ((): void => {})
+}

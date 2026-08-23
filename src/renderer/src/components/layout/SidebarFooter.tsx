@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Cog6ToothIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { useUserStore } from '../../store/user-store'
@@ -8,23 +7,15 @@ import { UserIconDisplay } from '../ui/UserIconDisplay'
 
 export function UpdateBanner() {
   const phase = useUpdaterStore((s) => s.phase)
-  const version = useUpdaterStore((s) => s.version)
+  const version = useUpdaterStore((s) => s.availableVersion)
   const dismissed = useUpdaterStore((s) => s.dismissed)
-  const setAvailable = useUpdaterStore((s) => s.setAvailable)
-  const setDownloading = useUpdaterStore((s) => s.setDownloading)
+  const startDownload = useUpdaterStore((s) => s.startDownload)
   const dismiss = useUpdaterStore((s) => s.dismiss)
 
-  useEffect(() => {
-    if (!window.electronAPI?.onUpdateAvailable) return
-    return window.electronAPI.onUpdateAvailable((v) => {
-      setAvailable(v)
-    })
-  }, [setAvailable])
-
-  const handleUpdate = () => {
-    setDownloading()
-    window.electronAPI?.startDownload()
-  }
+  // No listener here any more: the shell subscribes once and hydrates from the
+  // main process, so this banner renders whatever the truth is at mount rather
+  // than whatever push it happened to catch.
+  const handleUpdate = () => startDownload()
 
   const showUpdateBanner = phase === 'available' && !dismissed
 
@@ -73,7 +64,7 @@ export function SidebarFooter() {
   const openSettings = useSessionStore((s) => s.openSettings)
 
   const phase = useUpdaterStore((s) => s.phase)
-  const version = useUpdaterStore((s) => s.version)
+  const version = useUpdaterStore((s) => s.availableVersion)
   const dismissed = useUpdaterStore((s) => s.dismissed)
   const undismiss = useUpdaterStore((s) => s.undismiss)
 

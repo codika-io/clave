@@ -16,39 +16,17 @@ function formatSpeed(bytesPerSecond: number): string {
 
 export function UpdateOverlay() {
   const phase = useUpdaterStore((s) => s.phase)
-  const version = useUpdaterStore((s) => s.version)
+  const version = useUpdaterStore((s) => s.availableVersion)
   const progress = useUpdaterStore((s) => s.progress)
   const errorMessage = useUpdaterStore((s) => s.errorMessage)
-  const setProgress = useUpdaterStore((s) => s.setProgress)
-  const setDownloaded = useUpdaterStore((s) => s.setDownloaded)
-  const setDownloading = useUpdaterStore((s) => s.setDownloading)
-  const setError = useUpdaterStore((s) => s.setError)
-  const reset = useUpdaterStore((s) => s.reset)
+  const errorAcknowledged = useUpdaterStore((s) => s.errorAcknowledged)
+  const startDownload = useUpdaterStore((s) => s.startDownload)
+  const cancelDownload = useUpdaterStore((s) => s.cancelDownload)
+  const acknowledgeError = useUpdaterStore((s) => s.acknowledgeError)
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Listen for download progress
-  useEffect(() => {
-    if (!window.electronAPI?.onDownloadProgress) return
-    return window.electronAPI.onDownloadProgress((p) => {
-      setProgress(p)
-    })
-  }, [setProgress])
-
-  // Listen for download complete
-  useEffect(() => {
-    if (!window.electronAPI?.onUpdateDownloaded) return
-    return window.electronAPI.onUpdateDownloaded(() => {
-      setDownloaded()
-    })
-  }, [setDownloaded])
-
-  // Listen for download error
-  useEffect(() => {
-    if (!window.electronAPI?.onDownloadError) return
-    return window.electronAPI.onDownloadError((msg) => {
-      setError(msg)
-    })
-  }, [setError])
+  // Progress, completion and failure all arrive on the single `updater:state`
+  // channel the shell subscribes to — this component just renders the phase.
 
   // Auto-restart when downloaded
   useEffect(() => {
@@ -62,28 +40,25 @@ export function UpdateOverlay() {
     }
   }, [phase])
 
-  const handleCancel = () => {
-    window.electronAPI?.cancelDownload()
-    reset()
-  }
+  const handleCancel = () => cancelDownload()
 
   const handleRetry = () => {
-    setDownloading()
     // 'retry' tells the main process to drop the differential download and
     // fetch the whole file. Retrying the identical request is what made a
     // failed update unescapable — see downloadStrategy() in auto-updater.ts.
-    window.electronAPI?.startDownload('retry')
+    startDownload('retry')
   }
 
   const handleOpenReleases = (): void => {
-    window.electronAPI?.openExternal('https://github.com/codika-io/clave/releases/latest')
+    void window.electronAPI?.openReleasesPage()
   }
 
   const handleOpenLog = (): void => {
     window.electronAPI?.openUpdaterLog()
   }
 
-  const visible = phase === 'downloading' || phase === 'downloaded' || phase === 'error'
+  const visible =
+    phase === 'downloading' || phase === 'downloaded' || (phase === 'error' && !errorAcknowledged)
 
   return (
     <AnimatePresence>
@@ -202,7 +177,7 @@ export function UpdateOverlay() {
               {phase === 'error' && (
                 <>
                   <button
-                    onClick={reset}
+                    onClick={acknowledgeError}
                     className="px-4 py-2 text-[13px] font-medium text-text-secondary hover:text-text-primary rounded-lg border border-border hover:bg-surface-200 transition-colors"
                   >
                     Back
