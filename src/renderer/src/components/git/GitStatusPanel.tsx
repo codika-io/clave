@@ -1036,6 +1036,7 @@ function MultiRepoSection({
               tabIndex={0}
               title="Show what a pull will bring"
               onClick={(e) => toggleRange(e, 'incoming')}
+              onDoubleClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
@@ -1057,6 +1058,7 @@ function MultiRepoSection({
               tabIndex={0}
               title="Show what a push will send"
               onClick={(e) => toggleRange(e, 'outgoing')}
+              onDoubleClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
