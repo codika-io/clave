@@ -114,6 +114,12 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         'Create a new (empty) group in the Clave sidebar. Returns the new groupId. Follow up with clave_open_session to put a tab in it — some interactions prune empty groups.',
       inputSchema: {
         name: z.string().describe('Display name for the group'),
+        prompt: z
+          .string()
+          .optional()
+          .describe(
+            "Default prompt for the group: sessions launched from the group's own + button start on it, so a whole lane shares one starting brief. Agent sessions only."
+          ),
         workspace: z
           .string()
           .optional()

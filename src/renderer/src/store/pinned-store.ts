@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { substituteTokens } from './prompt-tokens'
 import type { PinnedGroup, PinnedGroupSession, PinnedGroupTerminal, GroupTerminalColor } from './session-types'
 import { useSessionStore } from './session-store'
 import { getActiveWorkspaceId } from './workspace-store'
@@ -12,26 +13,12 @@ export function getPinnedState(pg: PinnedGroup): PinnedState {
   return pg.visible ? 'active-visible' : 'active-hidden'
 }
 
-/** Substitute prompt path tokens at spawn time. macOS-only app → absolute paths
- *  use `/`, so this is pure string work (the renderer has no Node `path`).
- *  @root_path → workspace root, @project_path → project dir relative to root
- *  (`.` if equal, absolute if outside root), @project_abs → project dir absolute.
- *  No-op when the prompt contains no tokens. */
-export function substituteTokens(prompt: string, workspaceRoot: string | null, projectAbs: string): string {
-  const root = (workspaceRoot ?? projectAbs).replace(/\/+$/, '')
-  const rel =
-    projectAbs === root ? '.' : projectAbs.startsWith(root + '/') ? projectAbs.slice(root.length + 1) : projectAbs
-  return prompt
-    .replaceAll('@project_abs', projectAbs)
-    .replaceAll('@project_path', rel)
-    .replaceAll('@root_path', root)
-}
-
 export interface PinnedGroupBlueprint {
   id: string
   name: string
   cwd: string | null
   color: GroupTerminalColor | null
+  prompt?: string | null
   sessions: PinnedGroupSession[]
   terminals: PinnedGroupTerminal[]
   createdAt: number
@@ -49,9 +36,11 @@ export interface PinnedGroupBlueprint {
 /** Blueprint snapshot of the current pins — what gets persisted into
  *  workspace-state.json (runtime activeGroupId/visible deliberately excluded,
  *  exactly like the retired localStorage serialization). */
+export { substituteTokens } from './prompt-tokens'
+
 export function serializePinnedGroups(groups: PinnedGroup[]): PinnedGroupBlueprint[] {
-  return groups.map(({ id, name, cwd, color, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy, workspaceId }) => ({
-    id, name, cwd, color, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy, workspaceId
+  return groups.map(({ id, name, cwd, color, prompt, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy, workspaceId }) => ({
+    id, name, cwd, color, prompt, sessions, terminals, createdAt, filePath, rootDir, workspaceRoot, groupIndex, toolbar, logo, category, discoveredBy, workspaceId
   }))
 }
 
@@ -171,6 +160,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
         color: p.color,
         ...(p.toolbar ? { toolbar: true } : {}),
         ...(p.logo ? { logo: p.logo } : {}),
+        ...(p.prompt ? { prompt: p.prompt } : {}),
         sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, antigravityMode: s.antigravityMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode, ...(s.prompt ? { prompt: s.prompt } : {}), ...(s.rootSession ? { rootSession: true } : {}) })),
         terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent, serverUrl: t.serverUrl })),
         ...(p.category ? { category: p.category } : {})
@@ -193,7 +183,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
 // ── Import / Export ──
 
 function createPinnedFromGroup(
-  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[] },
+  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[] },
   filePath: string,
   groupIndex?: number,
   rootDir?: string | null,
@@ -206,6 +196,7 @@ function createPinnedFromGroup(
     name: g.name,
     cwd: g.cwd,
     color: (g.color as GroupTerminalColor) ?? null,
+    prompt: g.prompt ?? null,
     sessions: g.sessions,
     terminals: groupDataToPinnedTerminals(g.terminals),
     createdAt: Date.now(),
@@ -251,7 +242,7 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
   // Normalize to array of groups
   const groups = result.type === 'multi'
     ? result.groups
-    : [{ name: result.name, cwd: result.cwd, color: result.color, toolbar: result.toolbar, category: result.category, logo: result.logo, sessions: result.sessions, terminals: result.terminals }]
+    : [{ name: result.name, cwd: result.cwd, color: result.color, toolbar: result.toolbar, category: result.category, logo: result.logo, prompt: result.prompt, sessions: result.sessions, terminals: result.terminals }]
 
   // Check if already imported — reuse existing pins
   const existingPins = usePinnedStore.getState().pinnedGroups.filter((pg) => pg.filePath === filePath)
@@ -265,6 +256,7 @@ export async function importClaveFile(filePath: string, options?: { autoLaunch?:
           name: g.name,
           cwd: g.cwd,
           color: (g.color as GroupTerminalColor) ?? null,
+          prompt: g.prompt ?? null,
           sessions: g.sessions,
           terminals: groupDataToPinnedTerminals(g.terminals),
           groupIndex: result.type === 'multi' ? i : undefined,
@@ -389,6 +381,7 @@ export async function exportClaveFile(pinnedId: string, folder: string, fileName
     name: pg.name,
     cwd: pg.cwd,
     color: pg.color,
+    ...(pg.prompt ? { prompt: pg.prompt } : {}),
     sessions: pg.sessions.map((s) => ({
       cwd: s.cwd,
       name: s.name,
@@ -445,7 +438,7 @@ export function initClaveFileWatchers(): () => void {
     // Normalize to array of groups
     const groups = result.type === 'multi'
       ? result.groups
-      : [{ name: result.name, cwd: result.cwd, color: result.color, toolbar: result.toolbar, category: result.category, logo: result.logo, sessions: result.sessions, terminals: result.terminals }]
+      : [{ name: result.name, cwd: result.cwd, color: result.color, toolbar: result.toolbar, category: result.category, logo: result.logo, prompt: result.prompt, sessions: result.sessions, terminals: result.terminals }]
 
     for (let i = 0; i < pinsForFile.length && i < groups.length; i++) {
       const pg = pinsForFile.find((p) => p.groupIndex === i) ?? pinsForFile[i]
@@ -463,18 +456,26 @@ export function initClaveFileWatchers(): () => void {
           toolbar: g.toolbar,
           logo: g.logo,
           category: g.category ?? null,
+          // The group's default prompt reloads with the file like every other
+          // field. Without this the watcher parses the edited prompt and throws
+          // it away, so the group's `+` keeps dispatching agents on the brief
+          // the user thinks they just changed — wrong instructions, silently.
+          prompt: g.prompt ?? null,
           sessions: g.sessions,
           terminals: groupDataToPinnedTerminals(g.terminals),
           groupIndex
         })
       } else {
-        // Active — only cosmetic updates, never touch running sessions
+        // Active — only cosmetic updates, never touch running sessions. The
+        // prompt is safe to refresh: it is read at the next `+` press, never
+        // applied to a session that is already running.
         usePinnedStore.getState().updatePinnedGroup(pg.id, {
           name: g.name,
           color: (g.color as GroupTerminalColor) ?? null,
           toolbar: g.toolbar,
           logo: g.logo,
           category: g.category ?? null,
+          prompt: g.prompt ?? null,
           terminals: groupDataToPinnedTerminals(g.terminals),
           groupIndex
         })
@@ -552,6 +553,10 @@ export function pinGroupFromCurrent(groupId: string): void {
     name: group.name,
     cwd: group.cwd,
     color: group.color ?? null,
+    // Round-trips the group's default prompt the same way createPinnedFromGroup
+    // does. Without it the trip is one-way: .clave → pin → group keeps the
+    // prompt, group → pin → .clave silently loses it.
+    prompt: group.prompt ?? null,
     sessions: groupSessions,
     terminals: groupTerminals,
     createdAt: Date.now(),
@@ -695,6 +700,9 @@ async function spawnPinnedGroup(
             ...g,
             cwd: pg.cwd ?? g.cwd,
             color: pg.color,
+            // The group's default prompt travels with it: sessions launched
+            // later from the live group's `+` inherit what the .clave declared.
+            prompt: pg.prompt ?? null,
             terminals: pg.terminals.map((t) => ({
               id: crypto.randomUUID(),
               command: t.command,

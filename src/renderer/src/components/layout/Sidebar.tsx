@@ -7,7 +7,7 @@ import {
   inActiveWorkspace,
   type GroupTerminalColor
 } from '../../store/session-store'
-import { useWorkspaceStore } from '../../store/workspace-store'
+import { useWorkspaceStore, getWorkspaceById } from '../../store/workspace-store'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import ColorPicker from '../ui/ColorPicker'
 import { SessionItem } from '../session/SessionItem'
@@ -22,14 +22,14 @@ import { SectionHeading } from './SidebarSections'
 import { WhatsNewBanner } from '../help/WhatsNewBanner'
 import { TelemetryNoticeBanner } from '../help/TelemetryNoticeBanner'
 import { FeedbackBanner } from '../help/FeedbackBanner'
-import { NewSessionDropdown } from './NewSessionDropdown'
+import { SessionLauncher } from './SessionLauncher'
+import { launchSession } from '../../lib/launch-session'
+import { agentAcceptsPrompt, getLastAgentSetup, useLaunchPrefsStore } from '../../store/launch-prefs'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
-import { useLocationStore } from '../../store/location-store'
-import { useClaudeProfileStore, getClaudeProfile, claudeProfileSpawnFields } from '../../store/claude-profile-store'
-import { usePinnedStore, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName } from '../../store/pinned-store'
+import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, exportClaveFile, getExportFileName } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
-import { TemplatePickerPopover } from '../session/TemplatePickerPopover'
+import { GroupPickerDialog } from '../session/GroupPickerDialog'
 import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
 import { WorkTracker } from '../work-tracker/WorkTracker'
@@ -40,6 +40,7 @@ import {
   Squares2X2Icon,
   FolderMinusIcon,
   SquaresPlusIcon,
+  PlusIcon,
   CommandLineIcon,
   XMarkIcon,
   DocumentDuplicateIcon,
@@ -130,7 +131,6 @@ export function Sidebar() {
   const fileTabs = useSessionStore((s) => s.fileTabs)
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
   const searchQuery = useSessionStore((s) => s.searchQuery)
-  const [loading, setLoading] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null)
@@ -152,7 +152,6 @@ export function Sidebar() {
   const spawnRemoteSession = useCallback(async (
     locationId: string, cwd: string, claudeMode: boolean, antigravityMode?: boolean, codexMode?: boolean
   ) => {
-    setLoading(true)
     try {
       const shellId = await window.electronAPI.sshOpenShell(locationId, cwd)
 
@@ -192,8 +191,6 @@ export function Sidebar() {
       })
     } catch (err) {
       console.error('Failed to create remote session:', err)
-    } finally {
-      setLoading(false)
     }
   }, [addSession])
 
@@ -234,57 +231,6 @@ export function Sidebar() {
     const isGroup = groups.some((g) => g.id === draggedIds[0])
     return isGroup ? draggedIds[0] : null
   }, [isDragging, draggedIds, groups])
-
-  const handleNewSession = useCallback(async (claudeProfileId?: string) => {
-    setLoading(true)
-    try {
-      const folderPath = await window.electronAPI.openFolderDialog()
-      if (!folderPath) return
-
-      const state = useSessionStore.getState()
-      const otherProvider = state.antigravityMode || state.codexMode || state.claudeAgentsMode
-      const effectiveClaudeMode = otherProvider ? false : state.claudeMode
-      // Claude account/profile: applies only to Claude Code + Claude Agents
-      // sessions — never plain terminals, Antigravity, or Codex. Default profile
-      // contributes no configDir (passthrough).
-      const isClaudeSession = effectiveClaudeMode || state.claudeAgentsMode
-      const profile = isClaudeSession
-        ? getClaudeProfile(claudeProfileId ?? useClaudeProfileStore.getState().selectedProfileId)
-        : null
-      const profileFields = profile ? claudeProfileSpawnFields(profile) : {}
-      const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
-        dangerousMode: state.dangerousMode,
-        claudeMode: otherProvider ? false : state.claudeMode,
-        antigravityMode: state.antigravityMode,
-        codexMode: state.codexMode,
-        claudeAgentsMode: state.claudeAgentsMode,
-        ...profileFields
-      })
-      addSession({
-        id: sessionInfo.id,
-        cwd: sessionInfo.cwd,
-        folderName: sessionInfo.folderName,
-        name: sessionInfo.folderName,
-        alive: sessionInfo.alive,
-        activityStatus: 'idle',
-        promptWaiting: null,
-        claudeMode: otherProvider ? false : state.claudeMode,
-        antigravityMode: state.antigravityMode,
-        codexMode: state.codexMode,
-        claudeAgentsMode: state.claudeAgentsMode,
-        dangerousMode: state.dangerousMode,
-        claudeSessionId: sessionInfo.claudeSessionId,
-        claudeProfileId: profile?.id,
-        claudeProfileLabel: profile?.label,
-        claudeConfigDir: profile?.configDir || undefined,
-        sessionType: 'local'
-      })
-    } catch (err) {
-      console.error('Failed to create session:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [addSession])
 
   // Cmd+G to group, Cmd+Alt+G to ungroup, Cmd+Shift+Delete to reset
   useEffect(() => {
@@ -391,10 +337,17 @@ export function Sidebar() {
 
   // Workspace scoping: the sidebar shows only the active workspace's world.
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  // Subscribing to the map (rather than calling the getter) is what re-renders
+  // the group `+` rows when a launch changes the workspace's remembered agent.
+  const launchPrefsByWorkspace = useLaunchPrefsStore((s) => s.byWorkspace)
+  void launchPrefsByWorkspace
+  // Whether a group's `+` will actually seed its prompt. `claude agents` refuses
+  // a positional prompt, so with it remembered the `+` still launches — it just
+  // cannot carry the brief, and the row has to say so rather than promise it.
+  const groupPromptApplies = agentAcceptsPrompt(getLastAgentSetup(activeWorkspaceId))
 
   // Templates launcher popover (anchored to the Sessions header's folder-plus icon)
-  const templateBtnRef = useRef<HTMLButtonElement>(null)
-  const [templatePopoverOpen, setTemplatePopoverOpen] = useState(false)
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false)
 
   const orderedVisibleSessions = useMemo(() => {
     const order =
@@ -550,6 +503,27 @@ export function Sidebar() {
     },
     [removeSession]
   )
+
+  /** The group's own `+`: launch a session INTO this group, with the workspace's
+   *  remembered agent setup and the GROUP's default prompt. The group's cwd wins
+   *  over the workspace root — a group is about one place — and the prompt's
+   *  @-tokens resolve against the workspace root, exactly as a pinned group's
+   *  session prompts do. */
+  const handleGroupNewSession = useCallback(async (groupId: string) => {
+    const group = useSessionStore.getState().groups.find((g) => g.id === groupId)
+    if (!group) return
+    const workspaceId = useWorkspaceStore.getState().activeWorkspaceId
+    const root = getWorkspaceById(workspaceId)?.rootDir ?? null
+    const cwd = group.cwd ? ({ kind: 'path', path: group.cwd } as const) : ({ kind: 'workspace-root' } as const)
+    await launchSession({
+      setup: getLastAgentSetup(workspaceId),
+      cwd,
+      initialPrompt: group.prompt
+        ? substituteTokens(group.prompt, root, group.cwd ?? root ?? '')
+        : undefined,
+      groupId
+    })
+  }, [])
 
   const handleDeleteGroup = useCallback(
     async (groupId: string) => {
@@ -1157,77 +1131,31 @@ export function Sidebar() {
       {/* Workspace switcher — pinned above the scroll area so it never scrolls away */}
       <WorkspaceSwitcher />
 
+      {/* Session launcher — pinned above the scroll area (like the workspace
+          switcher) so it never scrolls away with the session list. */}
+      <div className="px-2 pb-1 flex-shrink-0">
+        <SessionLauncher onRemoteLaunch={setRemotePickerState} />
+      </div>
+
       {/* Single scrollable area for all sections */}
       <ScrollArea
         viewportRef={scrollContainerRef}
         className="flex-1 min-h-0"
       >
-        {/* Permanent tabs — share the same row gap as the session tabs below */}
-        <div className="px-2 space-y-0.5">
-          <NewSessionDropdown
-            onNewSession={({ claudeMode, antigravityMode, codexMode, claudeAgentsMode, dangerousMode, locationId, claudeProfileId }) => {
-              if (locationId) {
-                // Remote: open directory picker (profiles are a local concept)
-                const loc = useLocationStore.getState().locations.find((l) => l.id === locationId)
-                setRemotePickerState({ locationId, locationName: loc?.name ?? '', claudeMode, antigravityMode, codexMode })
-              } else if (claudeAgentsMode) {
-                // Claude Agents: spawn `claude agents` via temporary mode override
-                const store = useSessionStore.getState()
-                const prevAgents = store.claudeAgentsMode
-                const prevClaude = store.claudeMode
-                useSessionStore.setState({ claudeAgentsMode: true, claudeMode: false })
-                handleNewSession(claudeProfileId).finally(() => {
-                  useSessionStore.setState({ claudeAgentsMode: prevAgents, claudeMode: prevClaude })
-                })
-              } else if (antigravityMode) {
-                // Antigravity: spawn directly without mode override
-                const store = useSessionStore.getState()
-                const prevAntigravity = store.antigravityMode
-                const prevClaude = store.claudeMode
-                useSessionStore.setState({ antigravityMode: true, claudeMode: false })
-                handleNewSession().finally(() => {
-                  useSessionStore.setState({ antigravityMode: prevAntigravity, claudeMode: prevClaude })
-                })
-              } else if (codexMode) {
-                // Codex: spawn directly without mode override
-                const store = useSessionStore.getState()
-                const prevCodex = store.codexMode
-                const prevClaude = store.claudeMode
-                useSessionStore.setState({ codexMode: true, claudeMode: false })
-                handleNewSession().finally(() => {
-                  useSessionStore.setState({ codexMode: prevCodex, claudeMode: prevClaude })
-                })
-              } else {
-                // Local: existing flow (temporary mode override -> handleNewSession)
-                const store = useSessionStore.getState()
-                const prevClaude = store.claudeMode
-                const prevDangerous = store.dangerousMode
-                if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode })
-                if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode })
-                handleNewSession(claudeProfileId).finally(() => {
-                  if (claudeMode !== prevClaude) useSessionStore.setState({ claudeMode: prevClaude })
-                  if (dangerousMode !== prevDangerous) useSessionStore.setState({ dangerousMode: prevDangerous })
-                })
-              }
-            }}
-            loading={loading}
-          />
-        </div>
-
         {!isSearchMode && (
           <>
-            {/* Sessions section — templates open from the folder-plus icon; the
-                inline pinned grid only appears as a drop target while dragging. */}
+            {/* Sessions section — the group picker opens full screen from
+                either action; the inline pinned grid only appears as a drop
+                target while dragging. */}
             <SectionHeading
               title="Sessions"
               actions={
                 <button
-                  ref={templateBtnRef}
-                  onClick={() => setTemplatePopoverOpen((v) => !v)}
-                  data-active={templatePopoverOpen ? 'true' : undefined}
+                  onClick={() => setGroupPickerOpen(true)}
+                  data-active={groupPickerOpen ? 'true' : undefined}
                   className="btn-icon btn-icon-xs"
-                  title="Templates"
-                  aria-label="Templates"
+                  title="Add a group"
+                  aria-label="Add a group"
                 >
                   <SquaresPlusIcon className="w-4 h-4" />
                 </button>
@@ -1239,9 +1167,8 @@ export function Sidebar() {
               isOverPinnedZone={isOverPinnedZone}
               draggedGroupId={draggedGroupId}
               isFileDragOver={isFileDragOverWindow}
-              templatePopoverOpen={templatePopoverOpen}
-              templateBtnRef={templateBtnRef}
-              onCloseTemplatePopover={() => setTemplatePopoverOpen(false)}
+              groupPickerOpen={groupPickerOpen}
+              onCloseGroupPicker={() => setGroupPickerOpen(false)}
             />
             <div>
               <div className="px-2 space-y-0.5">
@@ -1372,8 +1299,19 @@ export function Sidebar() {
                                 style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
                               >
                                 <div className="overflow-hidden">
-                                  {/* px-1 narrows the child-tab highlight so it doesn't touch the group border */}
-                                  <div className="px-1 pb-1 space-y-0.5">
+                                  {/* px-1 narrows the child-tab highlight so it doesn't touch the group border.
+                                      The rail carries the group's colour down its
+                                      sessions so the boundary reads at a glance —
+                                      groups are containers, not filters. */}
+                                  <div
+                                    className="px-1 pb-1 space-y-0.5 group-rail"
+                                    data-selected={allGroupSelected ? 'true' : undefined}
+                                    style={
+                                      groupColorHex
+                                        ? ({ '--group-rail-color': groupColorHex } as React.CSSProperties)
+                                        : undefined
+                                    }
+                                  >
                                     {group.sessionIds.map((sid, sIdx) => {
                                       const prevSid = sIdx > 0 ? group.sessionIds[sIdx - 1] : null
                                       const isLastInGroup = sIdx === group.sessionIds.length - 1
@@ -1434,6 +1372,27 @@ export function Sidebar() {
                                         </div>
                                       )
                                     })}
+                                    {/* The group's `+`: a new session inside this
+                                        group, seeded with the group's prompt. */}
+                                    <button
+                                      className="group-add-row"
+                                      title={
+                                        !group.prompt
+                                          ? `New session in ${group.name}`
+                                          : groupPromptApplies
+                                            ? `New session in ${group.name} — starts on the group's prompt`
+                                            : `New session in ${group.name} — Claude Agents can't take the group's prompt`
+                                      }
+                                      aria-label={`New session in ${group.name}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        void handleGroupNewSession(group.id)
+                                      }}
+                                      onPointerDown={(e) => e.stopPropagation()}
+                                    >
+                                      <PlusIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                                      <span className="truncate">New session</span>
+                                    </button>
                                   </div>
                                 </div>
                               </div>
@@ -1603,18 +1562,16 @@ function PinnedSection({
   isOverPinnedZone,
   draggedGroupId,
   isFileDragOver,
-  templatePopoverOpen,
-  templateBtnRef,
-  onCloseTemplatePopover
+  groupPickerOpen,
+  onCloseGroupPicker
 }: {
   setContextMenu: (menu: ContextMenuState | null) => void
   pinnedZoneRef: React.RefObject<HTMLDivElement | null>
   isOverPinnedZone: boolean
   draggedGroupId: string | null
   isFileDragOver: boolean
-  templatePopoverOpen: boolean
-  templateBtnRef: React.RefObject<HTMLButtonElement | null>
-  onCloseTemplatePopover: () => void
+  groupPickerOpen: boolean
+  onCloseGroupPicker: () => void
 }) {
   const [exportDialogPinnedId, setExportDialogPinnedId] = useState<string | null>(null)
 
@@ -1654,7 +1611,7 @@ function PinnedSection({
 
   // The inline grid is now only a drop target — it appears while dragging a
   // group to pin or dragging a .clave file over the sidebar. The full launcher
-  // lives in the TemplatePickerPopover behind the Sessions header icon.
+  // is the GroupPickerDialog behind the Sessions header actions.
   const showDropZone = !!draggedGroupId || isFileDragOver
 
   return (
@@ -1667,12 +1624,8 @@ function PinnedSection({
           isFileDragOver={isFileDragOver}
         />
       )}
-      {templatePopoverOpen && (
-        <TemplatePickerPopover
-          anchorRef={templateBtnRef}
-          onClose={onCloseTemplatePopover}
-          onContextMenu={handleContextMenu}
-        />
+      {groupPickerOpen && (
+        <GroupPickerDialog onClose={onCloseGroupPicker} onContextMenu={handleContextMenu} />
       )}
       <ExportClaveDialog
         isOpen={exportDialogPinnedId !== null}

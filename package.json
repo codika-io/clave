@@ -27,7 +27,8 @@
     "build:mac:test": "bash scripts/build-mac-local-test.sh",
     "build:linux": "electron-vite build && electron-builder --linux",
     "release": "bash scripts/release.sh",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "node tests/e2e/run.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
@@ -86,6 +87,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "playwright-core": "^1.56.1",
     "prettier": "^3.7.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",

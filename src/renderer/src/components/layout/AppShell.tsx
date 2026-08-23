@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useSessionStore, isFileTabId, getVisibleFlatOrder, inActiveWorkspace, enableSidebarPersistence } from '../../store/session-store'
 import type { SessionGroup } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
-import { getSelectedClaudeProfile, claudeProfileSpawnFields } from '../../store/claude-profile-store'
 import { Sidebar } from './Sidebar'
+import { launchSession } from '../../lib/launch-session'
+import { loadLaunchPrefs, type AgentSetup } from '../../store/launch-prefs'
 import { TerminalGrid } from './TerminalGrid'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { SettingsSidebar } from '../settings/SettingsSidebar'
@@ -48,6 +49,16 @@ let tmuxAdoptionStarted = false
  *  per process, or concurrent tool calls would get duplicate responses. */
 let mcpDispatcherStarted = false
 
+/** ⌘-key → what it launches. `null` is a plain terminal (no agent), which is
+ *  why the lookup tests `!== undefined` rather than truthiness. */
+const LAUNCH_SHORTCUTS: Record<string, AgentSetup | null> = {
+  KeyT: null,
+  KeyN: { kind: 'claude', dangerousMode: false },
+  KeyD: { kind: 'claude', dangerousMode: true },
+  KeyI: { kind: 'antigravity', dangerousMode: false },
+  KeyU: { kind: 'codex', dangerousMode: false }
+}
+
 export function AppShell() {
   const sidebarOpen = useSessionStore((s) => s.sidebarOpen)
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
@@ -70,54 +81,6 @@ export function AppShell() {
 
   useWorkTracker()
 
-  const spawnSessionWithOptions = useCallback(
-    async (claudeMode: boolean, dangerousMode: boolean, antigravityMode?: boolean, codexMode?: boolean, claudeAgentsMode?: boolean) => {
-      try {
-        const folderPath = await window.electronAPI.openFolderDialog()
-        if (!folderPath) return
-
-        const otherProvider = antigravityMode || codexMode || claudeAgentsMode
-        const effectiveClaudeMode = otherProvider ? false : claudeMode
-        // Keybinding/toolbar launches use the selected default Claude account.
-        // Profiles apply only to Claude Code + Claude Agents — never plain
-        // terminals (Cmd+T), Antigravity, or Codex.
-        const isClaudeSession = effectiveClaudeMode || claudeAgentsMode
-        const profile = isClaudeSession ? getSelectedClaudeProfile() : null
-        const profileFields = profile ? claudeProfileSpawnFields(profile) : {}
-        const sessionInfo = await window.electronAPI.spawnSession(folderPath, {
-          claudeMode: otherProvider ? false : claudeMode,
-          antigravityMode,
-          codexMode,
-          claudeAgentsMode,
-          dangerousMode,
-          ...profileFields
-        })
-        addSession({
-          id: sessionInfo.id,
-          cwd: sessionInfo.cwd,
-          folderName: sessionInfo.folderName,
-          name: sessionInfo.folderName,
-          alive: sessionInfo.alive,
-          activityStatus: 'idle',
-          promptWaiting: null,
-          claudeMode: otherProvider ? false : claudeMode,
-          antigravityMode: antigravityMode ?? false,
-          codexMode: codexMode ?? false,
-          claudeAgentsMode: claudeAgentsMode ?? false,
-          dangerousMode,
-          claudeSessionId: sessionInfo.claudeSessionId,
-          claudeProfileId: profile?.id,
-          claudeProfileLabel: profile?.label,
-          claudeConfigDir: profile?.configDir || undefined,
-          sessionType: 'local'
-        })
-      } catch (err) {
-        console.error('Failed to create session:', err)
-      }
-    },
-    [addSession]
-  )
-
   // Wire the in-app MCP command dispatcher and the secret-request store to
   // their main-process push channels. The module-level latch makes this run
   // exactly once per process even under React StrictMode's mount/remount, so
@@ -128,6 +91,13 @@ export function AppShell() {
     initMcpDispatcher()
     initSecretStore()
     initCopyOfferStore()
+    // What the agent button relaunches, per workspace. Deliberately NOT in the
+    // session-adoption effect below: that one awaits the "restore sessions?"
+    // prompt, so anything after it waits on the user answering a dialog — and
+    // the launcher would show the wrong remembered agent until they did. The
+    // map is keyed by workspace id and read at render time, so it does not care
+    // whether it lands before or after the workspace registry.
+    void loadLaunchPrefs()
   }, [])
 
   useEffect(() => {
@@ -392,35 +362,30 @@ export function AppShell() {
         }
         return
       }
-      // Cmd+T: New terminal session
-      if (e.metaKey && e.key === 't') {
+      // New-session shortcuts. They start at the WORKSPACE ROOT — the folder
+      // dialog is no longer on the common path — and Option is the escape hatch
+      // that asks where: ⌘N launches at the root, ⌥⌘N opens the picker.
+      //
+      // Matched on e.code, not e.key: Option rewrites e.key on macOS (⌥N is a
+      // dead key producing '˜'), so an e.key match would never fire with Option
+      // held. e.code loses the implicit "Shift makes it uppercase" guard the old
+      // lowercase comparisons had, so !e.shiftKey is now explicit.
+      if (e.metaKey && !e.shiftKey && LAUNCH_SHORTCUTS[e.code] !== undefined) {
         e.preventDefault()
-        spawnSessionWithOptions(false, false)
-      }
-      // Cmd+N: New Claude Code session
-      if (e.metaKey && e.key === 'n') {
-        e.preventDefault()
-        spawnSessionWithOptions(true, false)
-      }
-      // Cmd+D: New Claude Code session with --dangerously-skip-permissions
-      if (e.metaKey && e.key === 'd') {
-        e.preventDefault()
-        spawnSessionWithOptions(true, true)
-      }
-      // Cmd+I: New Antigravity CLI session
-      if (e.metaKey && !e.shiftKey && !e.altKey && e.key === 'i') {
-        e.preventDefault()
-        spawnSessionWithOptions(false, false, true)
-      }
-      // Cmd+U: New Codex CLI session
-      if (e.metaKey && !e.shiftKey && !e.altKey && e.key === 'u') {
-        e.preventDefault()
-        spawnSessionWithOptions(false, false, false, true)
+        void launchSession({
+          setup: LAUNCH_SHORTCUTS[e.code],
+          cwd: e.altKey ? { kind: 'ask' } : { kind: 'workspace-root' },
+          remember: LAUNCH_SHORTCUTS[e.code] !== null
+        })
       }
       // Cmd+Shift+A: New Claude Agents session (`claude agents`)
-      if (e.metaKey && e.shiftKey && !e.altKey && (e.key === 'a' || e.key === 'A')) {
+      if (e.metaKey && e.shiftKey && e.code === 'KeyA') {
         e.preventDefault()
-        spawnSessionWithOptions(false, false, false, false, true)
+        void launchSession({
+          setup: { kind: 'claude-agents', dangerousMode: false },
+          cwd: e.altKey ? { kind: 'ask' } : { kind: 'workspace-root' },
+          remember: true
+        })
       }
       // Cmd+W: Close focused file tab
       if (e.metaKey && e.key === 'w') {
@@ -496,7 +461,7 @@ export function AppShell() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleFilePalette, toggleFileTree, toggleSidebar, spawnSessionWithOptions, removeSession, removeFileTab])
+  }, [toggleFilePalette, toggleFileTree, toggleSidebar, removeSession, removeFileTab])
 
   // Sync data-theme attribute to root element
   useEffect(() => {

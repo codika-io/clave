@@ -1,0 +1,108 @@
+/**
+ * The launcher's memory: the mapping between an `AgentSetup` and the four spawn
+ * booleans, which agents can take a launch prompt, and the validation that
+ * decides what a persisted preference file is allowed to say.
+ *
+ * All pure. The persistence itself (`rememberAgentSetup` / `loadLaunchPrefs`)
+ * talks to the main process and is covered by the Electron specs instead — as is
+ * the thing `agentAcceptsPrompt` exists to prevent: the group `+` row promising
+ * a prompt the launch then drops. No unit test can see both the tooltip and the
+ * spawn, so that guard lives in tests/e2e/group-prompt.spec.mjs where it can.
+ */
+
+import { describe, expect, it } from 'vitest'
+import {
+  agentAcceptsPrompt,
+  agentSetupToModes,
+  parseSetup,
+  DEFAULT_AGENT_SETUP,
+  type AgentKind
+} from './launch-prefs'
+
+const KINDS: AgentKind[] = ['claude', 'claude-agents', 'antigravity', 'codex']
+
+describe('agentSetupToModes', () => {
+  it('sets exactly one boolean, whichever kind it is', () => {
+    for (const kind of KINDS) {
+      const modes = agentSetupToModes({ kind, dangerousMode: false })
+      const on = Object.values(modes).filter(Boolean)
+      expect({ kind, on: on.length }).toEqual({ kind, on: 1 })
+    }
+  })
+
+  it('maps each kind to its own boolean', () => {
+    expect(agentSetupToModes({ kind: 'claude', dangerousMode: false }).claudeMode).toBe(true)
+    expect(
+      agentSetupToModes({ kind: 'claude-agents', dangerousMode: false }).claudeAgentsMode
+    ).toBe(true)
+    expect(agentSetupToModes({ kind: 'antigravity', dangerousMode: false }).antigravityMode).toBe(
+      true
+    )
+    expect(agentSetupToModes({ kind: 'codex', dangerousMode: false }).codexMode).toBe(true)
+  })
+
+  it('never sets claudeMode alongside another provider', () => {
+    for (const kind of KINDS.filter((k) => k !== 'claude')) {
+      expect(agentSetupToModes({ kind, dangerousMode: false }).claudeMode).toBe(false)
+    }
+  })
+})
+
+describe('agentAcceptsPrompt', () => {
+  it('is false for a plain terminal — typed text would run as a shell command', () => {
+    expect(agentAcceptsPrompt(null)).toBe(false)
+  })
+
+  it('is false for claude agents — the subcommand rejects a positional prompt', () => {
+    expect(agentAcceptsPrompt({ kind: 'claude-agents', dangerousMode: false })).toBe(false)
+  })
+
+  it('is true for the agents that take one', () => {
+    for (const kind of ['claude', 'antigravity', 'codex'] as AgentKind[]) {
+      expect(agentAcceptsPrompt({ kind, dangerousMode: false })).toBe(true)
+    }
+  })
+})
+
+describe('DEFAULT_AGENT_SETUP', () => {
+  it('is a safe default — Claude, permissions on', () => {
+    expect(DEFAULT_AGENT_SETUP).toEqual({ kind: 'claude', dangerousMode: false })
+  })
+})
+
+describe('parseSetup — what a persisted preference file is allowed to say', () => {
+  it('accepts a well-formed setup', () => {
+    expect(parseSetup({ kind: 'codex', dangerousMode: true })).toEqual({
+      kind: 'codex',
+      dangerousMode: true
+    })
+  })
+
+  it('rejects an unknown kind rather than launching nothing', () => {
+    // A hand-edited file, or one written by a build that had a kind this one
+    // dropped. Trusting it would leave the agent button unable to launch at all.
+    expect(parseSetup({ kind: 'gemini', dangerousMode: false })).toBeNull()
+  })
+
+  it('rejects anything that is not an object', () => {
+    for (const bad of [null, undefined, 'claude', 42, []]) {
+      expect(parseSetup(bad)).toBeNull()
+    }
+  })
+
+  it('treats a missing or non-true dangerousMode as false', () => {
+    expect(parseSetup({ kind: 'claude' })?.dangerousMode).toBe(false)
+    expect(parseSetup({ kind: 'claude', dangerousMode: 'yes' })?.dangerousMode).toBe(false)
+  })
+
+  it('keeps a Claude account id, and drops one that cannot apply', () => {
+    expect(parseSetup({ kind: 'claude', claudeProfileId: 'work' })?.claudeProfileId).toBe('work')
+    // Antigravity and Codex never take a Claude account; carrying one would be
+    // a value the spawn path silently ignores.
+    expect(parseSetup({ kind: 'codex', claudeProfileId: 'work' })?.claudeProfileId).toBeUndefined()
+  })
+
+  it('ignores a non-string account id', () => {
+    expect(parseSetup({ kind: 'claude', claudeProfileId: 7 })?.claudeProfileId).toBeUndefined()
+  })
+})

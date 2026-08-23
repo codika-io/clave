@@ -10,8 +10,8 @@ interface PinnedGroupsGridProps {
 
 // Pure drop target shown only while dragging a group (to pin it) or dragging a
 // .clave file over the sidebar. It no longer lists existing templates inline —
-// the full launcher lives in the TemplatePickerPopover behind the Sessions
-// header icon, so templates are managed exclusively from the popover.
+// the full launcher is the GroupPickerDialog behind the Sessions header
+// actions, so groups are added exclusively from that picker.
 export const PinnedGroupsGrid = forwardRef<HTMLDivElement, PinnedGroupsGridProps>(
   function PinnedGroupsGrid(
     { isOverPinnedZone, draggedGroupId, isFileDragOver: isFileDragOverParent },

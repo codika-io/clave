@@ -124,6 +124,9 @@ interface SessionState {
   setGroupTerminalSessionId: (groupId: string, terminalId: string, sessionId: string | null) => void
   setGroupCwd: (groupId: string, cwd: string) => void
   setGroupColor: (groupId: string, color: GroupTerminalColor | null) => void
+  /** Set (or clear, with null) the group's default prompt — what sessions
+   *  launched from the group's own `+` start on. */
+  setGroupPrompt: (groupId: string, prompt: string | null) => void
   moveItems: (
     itemIds: string[],
     targetId: string,
@@ -813,6 +816,18 @@ export const useSessionStore = create<SessionState>((set) => ({
         g.id === groupId ? { ...g, cwd } : g
       )
     })),
+
+  setGroupPrompt: (groupId, prompt) =>
+    set((state) => {
+      const target = state.groups.find((g) => g.id === groupId)
+      const next = prompt && prompt.trim() ? prompt : null
+      if (!target || (target.prompt ?? null) === next) return {}
+      const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
+      return {
+        groups: state.groups.map((g) => (g.id === groupId ? { ...g, prompt: next } : g)),
+        sidebarUndoStack
+      }
+    }),
 
   setGroupColor: (groupId, color) =>
     set((state) => {
