@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSessionStore } from '../../store/session-store'
+import { GitSyncActionButton } from './GitPanelControls'
 import type { GitLogEntry, GitCommitFileStatus } from '../../../../preload/index.d'
 
 // ---------------------------------------------------------------------------
@@ -205,14 +206,19 @@ function LogSectionHeader({
   label,
   count,
   color,
+  tone,
   action,
+  actionTitle,
   onAction,
   actionDisabled
 }: {
   label: string
   count: number
   color: string
+  /** Tints the sync button — the changes view spells these out the same way. */
+  tone?: 'incoming' | 'outgoing'
   action?: string
+  actionTitle?: string
   onAction?: () => void
   actionDisabled?: boolean
 }) {
@@ -221,17 +227,16 @@ function LogSectionHeader({
       <span className={`text-[10px] font-semibold uppercase tracking-wider ${color}`}>
         {label} ({count})
       </span>
-      {action && onAction && (
-        <button
-          className={`ml-auto text-[10px] font-medium ${color} hover:brightness-125 transition-all disabled:opacity-40`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onAction()
-          }}
-          disabled={actionDisabled}
-        >
-          {action}
-        </button>
+      {action && onAction && tone && (
+        <span className="ml-auto">
+          <GitSyncActionButton
+            tone={tone}
+            label={action}
+            title={actionTitle ?? action}
+            disabled={actionDisabled}
+            onClick={onAction}
+          />
+        </span>
       )}
     </div>
   )
@@ -384,7 +389,9 @@ export function GitLogView({
               label="Outgoing"
               count={outgoing.length}
               color="text-green-400"
-              action={`\u2191 Push`}
+              tone="outgoing"
+              action="Push"
+              actionTitle="Push these commits to the remote"
               onAction={handlePush}
               actionDisabled={operating}
             />
@@ -420,7 +427,9 @@ export function GitLogView({
               label="Incoming"
               count={incoming.length}
               color="text-orange-400"
-              action={`\u2193 Pull`}
+              tone="incoming"
+              action="Pull (rebase)"
+              actionTitle="Pull these commits — fast-forward if possible, otherwise rebase (autostash)"
               onAction={handlePull}
               actionDisabled={operating}
             />
@@ -477,6 +486,9 @@ export function GitLogView({
             <span className="text-xs text-text-tertiary">No commit history</span>
           </div>
         )}
+        {/* Breathing room under the last commit — the list can be scrolled a
+            little past its end instead of stopping flush on the panel edge. */}
+        <div className="flex-shrink-0 h-12" aria-hidden />
       </div>
     </div>
   )

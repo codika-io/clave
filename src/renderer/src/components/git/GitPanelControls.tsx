@@ -1,8 +1,99 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useSessionStore } from '../../store/session-store'
-import { ListBulletIcon, Bars3BottomLeftIcon, ArrowPathIcon, ArrowDownIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { ListBulletIcon, Bars3BottomLeftIcon, ArrowPathIcon, ArrowDownIcon, PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { IconButton } from '../ui/tooltip'
 import type { MagicSyncStep, MagicPullStep } from '../../../../preload/index.d'
+
+// ---------------------------------------------------------------------------
+// Sync badges — the ↓ / ↑ / + counters that toggle a repo's sections open
+// ---------------------------------------------------------------------------
+
+export type GitSyncTone = 'incoming' | 'outgoing' | 'changes'
+
+/** One text color per tone — the badge derives its border and fill from it. */
+const TONE_TEXT_CLASS: Record<GitSyncTone, string> = {
+  incoming: 'text-orange-400',
+  outgoing: 'text-green-400',
+  changes: 'text-text-secondary'
+}
+
+/**
+ * A counter that opens and closes the matching section of a repo's content.
+ * Rendered as a span with a button role because a repo row is itself a
+ * <button> and buttons cannot nest.
+ */
+export function GitSyncBadge({
+  tone,
+  count,
+  active,
+  onToggle,
+  title
+}: {
+  tone: GitSyncTone
+  count: number
+  active: boolean
+  onToggle: (e: React.MouseEvent) => void
+  title: string
+}): React.JSX.Element {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      title={title}
+      aria-pressed={active}
+      onClick={onToggle}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggle(e as unknown as React.MouseEvent)
+        }
+      }}
+      className={`git-sync-badge ${TONE_TEXT_CLASS[tone]} ${active ? 'git-sync-badge-on' : ''}`}
+    >
+      {tone === 'changes' ? (
+        <PlusIcon className="w-2.5 h-2.5" strokeWidth={2.5} />
+      ) : (
+        <span aria-hidden>{tone === 'incoming' ? '↓' : '↑'}</span>
+      )}
+      {count}
+    </span>
+  )
+}
+
+/**
+ * The Pull / Push button that sits at the right of an Incoming / Outgoing
+ * header. Spelled out rather than an arrow: this one syncs, and a click that
+ * syncs must say so.
+ */
+export function GitSyncActionButton({
+  tone,
+  label,
+  title,
+  disabled,
+  onClick
+}: {
+  tone: 'incoming' | 'outgoing'
+  label: string
+  title: string
+  disabled?: boolean
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <button
+      className={`git-sync-action ${TONE_TEXT_CLASS[tone]}`}
+      title={title}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+    >
+      <span aria-hidden>{tone === 'incoming' ? '↓' : '↑'}</span>
+      {label}
+    </button>
+  )
+}
 
 export function SectionHeader({
   label,
@@ -11,6 +102,7 @@ export function SectionHeader({
   onAction,
   discardAction,
   onDiscardAction,
+  trailing,
   disabled,
   indentPx
 }: {
@@ -20,6 +112,8 @@ export function SectionHeader({
   onAction?: () => void
   discardAction?: string
   onDiscardAction?: () => void
+  /** Rightmost slot — the sync sections put their Pull / Push button here. */
+  trailing?: React.ReactNode
   disabled?: boolean
   /** Left offset in px — lets the header sit at its tree depth (default 12 = px-3). */
   indentPx?: number
@@ -48,6 +142,7 @@ export function SectionHeader({
             {action}
           </button>
         )}
+        {trailing}
       </span>
     </div>
   )

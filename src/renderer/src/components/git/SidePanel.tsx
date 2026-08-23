@@ -5,7 +5,7 @@ import { useLocationStore } from '../../store/location-store'
 import { FileTree } from '../files/FileTree'
 import { RemoteFileTree } from '../files/RemoteFileTree'
 import { GitStatusPanel, MultiRepoGitPanel } from './GitStatusPanel'
-import { MagicPullButton, MagicSyncButton, ViewModeToggle, PanelModeToggle, CollapseAllButton, CommitBarToggle, JourneyButton } from './GitPanelControls'
+import { MagicPullButton, MagicSyncButton, ViewModeToggle, PanelModeToggle, CollapseAllButton, CommitBarToggle, JourneyButton, GitSyncBadge } from './GitPanelControls'
 import { useMultiRepoStatus } from '../../hooks/use-multi-repo-status'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { shortenPath } from '../../lib/utils'
@@ -137,16 +137,22 @@ export function SidePanel() {
   const isSingleRepo = isGitTabActive && multiRepo.result.mode === 'single'
   const singleRepoGit = useGitStatus(isSingleRepo ? cwd : null, isSingleRepo)
 
-  // Single-repo range sections, driven by the toolbar's ↓/↑ badge-buttons.
+  // Single-repo sections, driven by the toolbar's ↓/↑/+ badge-buttons.
   // Per-repo state: a folder switch resets it (guarded adjust-during-render).
   const [showIncomingSingle, setShowIncomingSingle] = useState(false)
   const [showOutgoingSingle, setShowOutgoingSingle] = useState(false)
+  // The local work is what the panel is for, so this one starts on.
+  const [showChangesSingle, setShowChangesSingle] = useState(true)
   const [prevRangeCwd, setPrevRangeCwd] = useState(cwd)
   if (prevRangeCwd !== cwd) {
     setPrevRangeCwd(cwd)
     setShowIncomingSingle(false)
     setShowOutgoingSingle(false)
+    setShowChangesSingle(true)
   }
+
+  // The repo's dirt, driving the toolbar's + badge.
+  const singleRepoChangeCount = singleRepoGit.status?.files.length ?? 0
 
   // Compute repo paths for MagicSync across all git modes
   const allRepoPaths = useMemo(() => {
@@ -428,55 +434,52 @@ export function SidePanel() {
         </div>}
       </div>
 
-      {/* Shared git toolbar — branch on left, controls on right */}
+      {/* Shared git toolbar — branch on left, controls on right. It wraps:
+          three badges plus seven controls do not fit the 240px default width,
+          so the control cluster drops to its own line rather than off the edge. */}
       {isGitTabActive && !isRemoteSession && multiRepo.result.mode !== 'none' && multiRepo.result.mode !== 'loading' && (
-        <div className="flex items-center gap-1.5 px-3 py-1 border-b border-border-subtle flex-shrink-0">
-          {/* Branch name (single-repo only) */}
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-1 border-b border-border-subtle flex-shrink-0">
+          {/* Branch name (single-repo only). The badges sit outside the
+              truncating name so a long branch never clips them away — they are
+              the toolbar's controls, the name is only a label. */}
           {isSingleRepo && singleRepoGit.status?.branch && (
-            <span className="flex items-center gap-1 text-xs text-text-secondary truncate min-w-0">
+            <span className="flex items-center gap-1 text-xs text-text-secondary min-w-0">
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="flex-shrink-0 text-text-tertiary">
                 <circle cx="6" cy="2.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
                 <circle cx="6" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
                 <path d="M6 4v4" stroke="currentColor" strokeWidth="1.2" />
               </svg>
-              <span className="truncate">{singleRepoGit.status.branch}</span>
+              <span className="truncate min-w-0">{singleRepoGit.status.branch}</span>
+            </span>
+          )}
+          {isSingleRepo && singleRepoGit.status && (
+            <span className="flex items-center gap-1 flex-shrink-0">
               {singleRepoGit.status.ahead > 0 && (
-                <span
-                  role="button"
-                  tabIndex={0}
+                <GitSyncBadge
+                  tone="outgoing"
+                  count={singleRepoGit.status.ahead}
+                  active={showOutgoingSingle}
+                  onToggle={() => setShowOutgoingSingle((v) => !v)}
                   title="Show what a push will send"
-                  onClick={() => setShowOutgoingSingle((v) => !v)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      setShowOutgoingSingle((v) => !v)
-                    }
-                  }}
-                  className={`text-green-400 text-[10px] flex-shrink-0 px-1 py-px rounded border cursor-pointer transition-colors ${
-                    showOutgoingSingle
-                      ? 'border-green-400/60 bg-green-400/15'
-                      : 'border-green-400/30 hover:bg-green-400/15 hover:border-green-400/60'
-                  }`}
-                >{'\u2191'}{singleRepoGit.status.ahead}</span>
+                />
               )}
               {singleRepoGit.status.behind > 0 && (
-                <span
-                  role="button"
-                  tabIndex={0}
+                <GitSyncBadge
+                  tone="incoming"
+                  count={singleRepoGit.status.behind}
+                  active={showIncomingSingle}
+                  onToggle={() => setShowIncomingSingle((v) => !v)}
                   title="Show what a pull will bring"
-                  onClick={() => setShowIncomingSingle((v) => !v)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      setShowIncomingSingle((v) => !v)
-                    }
-                  }}
-                  className={`text-orange-400 text-[10px] flex-shrink-0 px-1 py-px rounded border cursor-pointer transition-colors ${
-                    showIncomingSingle
-                      ? 'border-orange-400/60 bg-orange-400/15'
-                      : 'border-orange-400/30 hover:bg-orange-400/15 hover:border-orange-400/60'
-                  }`}
-                >{'\u2193'}{singleRepoGit.status.behind}</span>
+                />
+              )}
+              {singleRepoChangeCount > 0 && (
+                <GitSyncBadge
+                  tone="changes"
+                  count={singleRepoChangeCount}
+                  active={showChangesSingle}
+                  onToggle={() => setShowChangesSingle((v) => !v)}
+                  title={showChangesSingle ? 'Hide local changes' : 'Show local changes'}
+                />
               )}
             </span>
           )}
@@ -500,16 +503,17 @@ export function SidePanel() {
                 </Tooltip>
               </span>
             )}
-          <span className="flex-1" />
-          <MagicPullButton repoPaths={allRepoPaths} onDone={gitRefresh} />
-          <MagicSyncButton repoPaths={allRepoPaths} onDone={gitRefresh} />
-          {isSingleRepo && cwd && (
-            <JourneyButton cwd={cwd} repoName={cwd.split('/').pop() ?? cwd} />
-          )}
-          <CommitBarToggle />
-          <PanelModeToggle />
-          <ViewModeToggle />
-          <CollapseAllButton />
+          <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+            <MagicPullButton repoPaths={allRepoPaths} onDone={gitRefresh} />
+            <MagicSyncButton repoPaths={allRepoPaths} onDone={gitRefresh} />
+            {isSingleRepo && cwd && (
+              <JourneyButton cwd={cwd} repoName={cwd.split('/').pop() ?? cwd} />
+            )}
+            <CommitBarToggle />
+            <PanelModeToggle />
+            <ViewModeToggle />
+            <CollapseAllButton />
+          </div>
         </div>
       )}
 
@@ -559,6 +563,7 @@ export function SidePanel() {
                 externalRefresh={singleRepoGit.refresh}
                 showIncoming={showIncomingSingle}
                 showOutgoing={showOutgoingSingle}
+                showChanges={showChangesSingle}
               />
             )
           )}

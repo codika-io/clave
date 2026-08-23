@@ -16,7 +16,7 @@ import {
 } from '../../lib/git-repo-tree'
 import { GitLogView } from './GitLogView'
 import { FileRow, GitTreeSection } from './GitFileRows'
-import { SectionHeader, ErrorBanner } from './GitPanelControls'
+import { SectionHeader, ErrorBanner, GitSyncBadge, GitSyncActionButton } from './GitPanelControls'
 import { CommitBar } from './GitCommitBar'
 import type { GitFileStatus, GitStatusResult } from '../../../../preload/index.d'
 
@@ -75,6 +75,7 @@ function RangeSection({
   localPaths,
   refreshTick,
   hasUpstream,
+  onSync,
   operating
 }: {
   cwd: string
@@ -88,6 +89,8 @@ function RangeSection({
   refreshTick: number
   /** Names the honest empty state: no upstream means nothing to compare against. */
   hasUpstream: boolean
+  /** Runs the sync this section previews — pull for incoming, push for outgoing. */
+  onSync: () => void
   operating: boolean
 }): React.JSX.Element | null {
   const gitViewMode = useSessionStore((s) => s.gitViewMode)
@@ -146,9 +149,9 @@ function RangeSection({
       ? diffPreview.file
       : null
 
-  // View-only surface: no Pull/Push here (a click must never sync — the
-  // toolbar's sync buttons are the action path). An empty result renders an
-  // honest explanation instead of silence.
+  // The rows themselves stay view-only — clicking a file opens its net diff and
+  // never syncs. The one thing that does sync is the header's spelled-out
+  // Pull / Push button. An empty result explains itself instead of going silent.
   return (
     <>
       <SectionHeader
@@ -156,6 +159,21 @@ function RangeSection({
         indentPx={sectionIndentPx}
         count={files.length}
         disabled={operating}
+        trailing={
+          files.length > 0 ? (
+            <GitSyncActionButton
+              tone={direction}
+              label={direction === 'incoming' ? 'Pull (rebase)' : 'Push'}
+              title={
+                direction === 'incoming'
+                  ? `Pull ${files.length} incoming file${files.length === 1 ? '' : 's'} — fast-forward if possible, otherwise rebase (autostash)`
+                  : `Push ${files.length} outgoing file${files.length === 1 ? '' : 's'} to the remote`
+              }
+              disabled={operating}
+              onClick={onSync}
+            />
+          ) : undefined
+        }
       />
       {files.length === 0 ? (
         <div className="pr-3 py-1 text-[11px] text-text-tertiary" style={{ paddingLeft: fileIndentPx }}>
@@ -203,6 +221,41 @@ function RangeSection({
 
 const EMPTY_PATH_SET = new Set<string>()
 
+// Breathing room under the last row of a scrolling git list: the content can
+// be scrolled a little past its end instead of ending flush on the panel edge.
+const SCROLL_GUTTER_PX = 48
+
+function ScrollGutter(): React.JSX.Element {
+  return <div className="flex-shrink-0" style={{ height: SCROLL_GUTTER_PX }} aria-hidden />
+}
+
+// ---------------------------------------------------------------------------
+// EmptyStateBox — the contained field a repo shows in place of a file list
+// when there is nothing to list. Indented to the section depth so it lines up
+// with the rows it stands in for, and filling the panel when it is the only
+// thing in it.
+// ---------------------------------------------------------------------------
+
+function EmptyStateBox({
+  label,
+  indentPx,
+  fill
+}: {
+  label: string
+  indentPx: number
+  /** Single-repo panel: grow into the height the file list would have had. */
+  fill: boolean
+}): React.JSX.Element {
+  return (
+    <div
+      className={`git-empty-box ${fill ? 'flex-1 min-h-[72px]' : ''} my-2 py-6`}
+      style={{ marginLeft: indentPx, marginRight: 12 }}
+    >
+      <span className="text-xs text-text-tertiary text-center px-3">{label}</span>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // RepoSection — reusable file list + commit bar + diff view for a single repo
 // ---------------------------------------------------------------------------
@@ -215,7 +268,8 @@ function RepoSection({
   fillHeight = true,
   depth = 0,
   showIncoming = false,
-  showOutgoing = false
+  showOutgoing = false,
+  showChanges = true
 }: {
   cwd: string
   status: GitStatusResult
@@ -229,6 +283,9 @@ function RepoSection({
   showIncoming?: boolean
   /** Unfold the aggregate push preview (opened by the ↑ badge-button). */
   showOutgoing?: boolean
+  /** Show the local work — staged, modified, untracked. On by default; the
+   *  + badge-button folds it away so only the sync ranges remain. */
+  showChanges?: boolean
 }) {
   const sectionIndentPx = 12 + depth * TREE_INDENT_PX
   const fileIndentPx = sectionIndentPx + TREE_INDENT_PX
@@ -547,9 +604,11 @@ function RepoSection({
 
   // The sync-range sections (aggregate pull/push previews), opened by the
   // ↓/↑ badge-buttons; rendered in both the clean and the dirty layout.
+  const incomingOpen = showIncoming && status.behind > 0
+  const outgoingOpen = showOutgoing && status.ahead > 0
   const rangeSections = (
     <>
-      {showIncoming && status.behind > 0 && (
+      {incomingOpen && (
         <RangeSection
           cwd={repoRoot}
           direction="incoming"
@@ -559,10 +618,11 @@ function RepoSection({
           localPaths={localPaths}
           refreshTick={status.behind}
           hasUpstream={status.hasUpstream}
+          onSync={() => runOperation(() => window.electronAPI.gitPull(repoRoot, 'auto'))}
           operating={operating}
         />
       )}
-      {showOutgoing && status.ahead > 0 && (
+      {outgoingOpen && (
         <RangeSection
           cwd={repoRoot}
           direction="outgoing"
@@ -572,40 +632,59 @@ function RepoSection({
           localPaths={localPaths}
           refreshTick={status.ahead}
           hasUpstream={status.hasUpstream}
+          onSync={() => runOperation(() => window.electronAPI.gitPush(repoRoot))}
           operating={operating}
         />
       )}
     </>
   )
 
-  // Clean state
-  if (status.files.length === 0 || (relativeFilterPrefix && totalFiltered === 0)) {
+  // Nothing to list: either the repo really is clean, or the + badge folded the
+  // local work away. Both render the same contained field — the label is what
+  // tells them apart, so a folded list never reads as a clean tree.
+  const isClean = status.files.length === 0 || (!!relativeFilterPrefix && totalFiltered === 0)
+  const changesHidden = !isClean && !showChanges
+
+  if (isClean || changesHidden) {
     return (
       <>
         {error && <ErrorBanner message={error} />}
         {/* Scroll container — a long range list must scroll here exactly as
             it does in the dirty layout (verifier round 4, finding 1). */}
         <div className={`${fillHeight ? 'flex-1 overflow-y-auto' : ''} flex flex-col`}>
-          <div className={`${fillHeight ? 'flex-1' : ''} flex items-center justify-center px-3 py-4`}>
-            <span className="text-xs text-text-tertiary text-center">
-              {relativeFilterPrefix ? 'No changes in this folder' : 'Working tree clean'}
-            </span>
-          </div>
-          {rangeSections}
-        </div>
-        {gitShowCommitBar && (status.ahead > 0 || status.behind > 0 || (!status.hasUpstream && !!status.branch)) && (
-          <CommitBar
-            cwd={cwd}
-            stagedCount={0}
-            totalFileCount={0}
-            unstagedFilePaths={[]}
-            ahead={status.ahead}
-            behind={status.behind}
-            hasUpstream={status.hasUpstream}
-            operating={operating}
-            onOperation={runOperation}
+          <EmptyStateBox
+            label={
+              changesHidden
+                ? `${totalFiltered} local change${totalFiltered === 1 ? '' : 's'} hidden`
+                : relativeFilterPrefix
+                  ? 'No changes in this folder'
+                  : 'Working tree clean'
+            }
+            indentPx={sectionIndentPx}
+            fill={fillHeight}
           />
-        )}
+          {rangeSections}
+          {/* Only when something below the box can actually scroll — an
+              unconditional gutter would just push the filling box up. */}
+          {(incomingOpen || outgoingOpen) && <ScrollGutter />}
+        </div>
+        {gitShowCommitBar &&
+          (changesHidden ||
+            status.ahead > 0 ||
+            status.behind > 0 ||
+            (!status.hasUpstream && !!status.branch)) && (
+            <CommitBar
+              cwd={cwd}
+              stagedCount={staged.length}
+              totalFileCount={totalFiltered}
+              unstagedFilePaths={[...unstaged, ...untracked].map((f) => f.path)}
+              ahead={status.ahead}
+              behind={status.behind}
+              hasUpstream={status.hasUpstream}
+              operating={operating}
+              onOperation={runOperation}
+            />
+          )}
       </>
     )
   }
@@ -768,6 +847,7 @@ function RepoSection({
           </>
         )}
         {rangeSections}
+        {fillHeight && <ScrollGutter />}
       </div>
       {gitShowCommitBar && (
         <CommitBar
@@ -812,16 +892,18 @@ export function GitStatusPanel({
   externalStatus,
   externalRefresh,
   showIncoming = false,
-  showOutgoing = false
+  showOutgoing = false,
+  showChanges = true
 }: {
   cwd: string | null
   isActive: boolean
   filterPrefix?: string | null
   externalStatus?: GitStatusResult | null
   externalRefresh?: () => void
-  /** Single-repo mode: the toolbar's ↓/↑ badge-buttons drive these. */
+  /** Single-repo mode: the toolbar's ↓/↑/+ badge-buttons drive these. */
   showIncoming?: boolean
   showOutgoing?: boolean
+  showChanges?: boolean
 }) {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
@@ -876,6 +958,7 @@ export function GitStatusPanel({
           fillHeight
           showIncoming={showIncoming}
           showOutgoing={showOutgoing}
+          showChanges={showChanges}
         />
       )}
     </div>
@@ -923,15 +1006,23 @@ function MultiRepoSection({
   const [expanded, setExpanded] = useState(shouldExpand)
   const [showIncoming, setShowIncoming] = useState(false)
   const [showOutgoing, setShowOutgoing] = useState(false)
+  // The local work is what the panel is for, so this one starts on.
+  const [showChanges, setShowChanges] = useState(true)
   const initializedRef = useRef(false)
 
-  // The ↓/↑ badges are buttons: they unfold the aggregate pull/push preview
-  // inside the repo's content (and open the repo if it was folded).
-  const toggleRange = useCallback(
-    (e: React.MouseEvent, direction: 'incoming' | 'outgoing') => {
+  // The ↓/↑/+ badges are buttons: each unfolds its own section inside the
+  // repo's content (and opens the repo if it was folded).
+  const toggleSection = useCallback(
+    (e: React.MouseEvent, section: 'incoming' | 'outgoing' | 'changes') => {
       e.stopPropagation()
-      const isOpen = direction === 'incoming' ? showIncoming : showOutgoing
-      const setter = direction === 'incoming' ? setShowIncoming : setShowOutgoing
+      const isOpen =
+        section === 'incoming' ? showIncoming : section === 'outgoing' ? showOutgoing : showChanges
+      const setter =
+        section === 'incoming'
+          ? setShowIncoming
+          : section === 'outgoing'
+            ? setShowOutgoing
+            : setShowChanges
       if (!isOpen) {
         setter(true)
         setExpanded(true)
@@ -942,7 +1033,7 @@ function MultiRepoSection({
         setter(false)
       }
     },
-    [showIncoming, showOutgoing, expanded]
+    [showIncoming, showOutgoing, showChanges, expanded]
   )
 
   // Update default expanded state when changes appear/disappear, but only on first load
@@ -1028,56 +1119,34 @@ function MultiRepoSection({
         {/* Branch badge */}
         <span className="text-text-tertiary truncate">{status.branch}</span>
 
-        {/* Badges (right-aligned) — ↓/↑ are buttons opening the range sections */}
+        {/* Badges (right-aligned) — one toggle per section of the repo's content */}
         <span className="ml-auto flex-shrink-0 flex items-center gap-1.5">
           {status.behind > 0 && (
-            <span
-              role="button"
-              tabIndex={0}
+            <GitSyncBadge
+              tone="incoming"
+              count={status.behind}
+              active={showIncoming}
+              onToggle={(e) => toggleSection(e, 'incoming')}
               title="Show what a pull will bring"
-              onClick={(e) => toggleRange(e, 'incoming')}
-              onDoubleClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  toggleRange(e as unknown as React.MouseEvent, 'incoming')
-                }
-              }}
-              className={`text-[10px] font-medium text-orange-400 px-1 py-px rounded border cursor-pointer transition-colors ${
-                showIncoming
-                  ? 'border-orange-400/60 bg-orange-400/15'
-                  : 'border-orange-400/30 hover:bg-orange-400/15 hover:border-orange-400/60'
-              }`}
-            >
-              {'\u2193'}{status.behind}
-            </span>
+            />
           )}
           {status.ahead > 0 && (
-            <span
-              role="button"
-              tabIndex={0}
+            <GitSyncBadge
+              tone="outgoing"
+              count={status.ahead}
+              active={showOutgoing}
+              onToggle={(e) => toggleSection(e, 'outgoing')}
               title="Show what a push will send"
-              onClick={(e) => toggleRange(e, 'outgoing')}
-              onDoubleClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  toggleRange(e as unknown as React.MouseEvent, 'outgoing')
-                }
-              }}
-              className={`text-[10px] font-medium text-green-400 px-1 py-px rounded border cursor-pointer transition-colors ${
-                showOutgoing
-                  ? 'border-green-400/60 bg-green-400/15'
-                  : 'border-green-400/30 hover:bg-green-400/15 hover:border-green-400/60'
-              }`}
-            >
-              {'\u2191'}{status.ahead}
-            </span>
+            />
           )}
           {changeCount > 0 && (
-            <span className="badge bg-surface-200 text-text-secondary min-w-[18px] text-center">
-              {changeCount}
-            </span>
+            <GitSyncBadge
+              tone="changes"
+              count={changeCount}
+              active={showChanges}
+              onToggle={(e) => toggleSection(e, 'changes')}
+              title={showChanges ? 'Hide local changes' : 'Show local changes'}
+            />
           )}
         </span>
       </button>
@@ -1119,6 +1188,7 @@ function MultiRepoSection({
               depth={depth + 1}
               showIncoming={showIncoming}
               showOutgoing={showOutgoing}
+              showChanges={showChanges}
             />
           )}
         </div>
@@ -1423,6 +1493,7 @@ export function MultiRepoGitPanel({
                   selectedRepoPaths={selectedRepoPaths}
                 />
               )))}
+        <ScrollGutter />
       </div>
 
       {/* Bottom dock tab for nested repos */}
