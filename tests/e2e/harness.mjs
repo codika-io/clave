@@ -140,8 +140,26 @@ export async function spyPtySpawn(app) {
   })
   if (!installed) {
     throw new Error(
-      'could not tap pty:spawn — ipcMain._invokeHandlers is Electron-private and may have changed. ' +
-        'Fix the tap; do not skip it, or prompt delivery goes unasserted.'
+      [
+        'spyPtySpawn could not tap pty:spawn.',
+        '',
+        'This DELIBERATELY uses `ipcMain._invokeHandlers`, an undocumented Electron',
+        'internal, verified on Electron 39 (39.5.2) with playwright-core 1.62. If you',
+        'are reading this after an Electron upgrade, the private Map has most likely',
+        'moved or been renamed.',
+        '',
+        'REPAIR IT — do not delete this test. It is the only deterministic point where',
+        'we can assert that a group prompt actually reaches the agent: `pty:spawn` only',
+        'creates the session record, the command runs when the terminal mounts, so a',
+        'background tab has no process and a `ps` check answers on which tab happened',
+        'to be on screen rather than on the code. Deleting it puts prompt delivery back',
+        'to unverifiable, which is where PRDCT-1677 started.',
+        '',
+        'Fallbacks, in order of preference: find where ipcMain now stores invoke',
+        'handlers; failing that, add a dev-only hook at ptyManager.spawn recording the',
+        'resolved shellArgs. See the workstream bundle 2026-08-22-sidebar-launcher for',
+        'the reasoning.'
+      ].join('\n')
     )
   }
   return async () => app.evaluate(() => globalThis.__e2eSpawns ?? [])

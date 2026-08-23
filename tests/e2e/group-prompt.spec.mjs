@@ -113,6 +113,11 @@ export async function run(t) {
       () => document.querySelectorAll('[class*="sidebar-item"]').length
     )
     t.equal('the + launches one session', after, before + 1)
+    t.check(
+      'and puts it inside the group',
+      await win.evaluate(() => (document.querySelector('.group-rail')?.children.length ?? 0) >= 3),
+      await win.evaluate(() => document.querySelector('.group-rail')?.children.length ?? 0)
+    )
 
     const spawns = await readSpawns()
     t.equal('and issues exactly one spawn', spawns.length, 1)
