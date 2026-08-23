@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
+import { ModalScrim, ModalPositioner } from './dialog'
 import { useRestorePromptStore } from '../../store/restore-prompt-store'
 
 /** Launch restore prompt — shown when the previous run left sessions that can
@@ -35,13 +36,7 @@ export function RestorePromptDialog(): React.JSX.Element | null {
       <AnimatePresence>
         <DialogPrimitive.Portal forceMount>
           <DialogPrimitive.Overlay asChild>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.12 }}
-              className="fixed inset-0 bg-white/5 backdrop-blur-sm z-50"
-            />
+            <ModalScrim />
           </DialogPrimitive.Overlay>
           <DialogPrimitive.Content
             asChild
@@ -50,14 +45,8 @@ export function RestorePromptDialog(): React.JSX.Element | null {
             onEscapeKeyDown={(e) => e.preventDefault()}
             onInteractOutside={(e) => e.preventDefault()}
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.97 }}
-              transition={{ duration: 0.12, ease: [0.2, 0, 0, 1] }}
-              className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px]"
-            >
-              <div className="bg-surface-0 rounded-xl border border-border shadow-2xl overflow-hidden">
+            <ModalPositioner className="w-[300px]">
+              <div className="modal-card">
                 <div className="px-4 pt-4 pb-3 text-center">
                   <DialogPrimitive.Title className="text-[13px] font-semibold text-text-primary">
                     Restore previous session?
@@ -85,7 +74,7 @@ export function RestorePromptDialog(): React.JSX.Element | null {
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </ModalPositioner>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </AnimatePresence>

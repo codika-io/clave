@@ -703,13 +703,17 @@ export function AppShell() {
           'flex-1 min-h-0 floating-card',
           activeView === 'terminals' ? 'hidden' : 'flex'
         )}>
-          <div className={activeView === 'settings' ? 'flex-1 flex min-h-0' : 'hidden'}>
+          {/* view-fade-in re-fires each time a hidden panel is shown (display:none
+              kills the animation, re-display restarts it). Terminals stay instant. */}
+          <div className={activeView === 'settings' ? 'flex-1 flex min-h-0 view-fade-in' : 'hidden'}>
             <SettingsPanel />
           </div>
-          <div className={activeView === 'agents' ? 'flex-1 flex min-h-0' : 'hidden'}>
+          <div className={activeView === 'agents' ? 'flex-1 flex min-h-0 view-fade-in' : 'hidden'}>
             <AgentChatPanel />
           </div>
-          <div className={activeView === 'extensions' ? 'flex-1 flex min-h-0' : 'hidden'}>
+          <div
+            className={activeView === 'extensions' ? 'flex-1 flex min-h-0 view-fade-in' : 'hidden'}
+          >
             <ExtensionsPanel />
           </div>
         </div>

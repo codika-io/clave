@@ -98,7 +98,7 @@ export function AgentPickerPopover({ anchorRef, onClose }: AgentPickerPopoverPro
     return createPortal(
       <div
         ref={menuRef}
-        className="fixed z-50 min-w-[220px] py-3 px-3 bg-surface-100 border border-border rounded-lg shadow-xl"
+        className="menu-surface menu-pop-mount fixed z-50 min-w-[220px] py-3 px-3"
         style={{
           top: (anchorRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
           left: anchorRef.current?.getBoundingClientRect().left ?? 0
@@ -117,16 +117,17 @@ export function AgentPickerPopover({ anchorRef, onClose }: AgentPickerPopoverPro
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[220px] max-h-[50vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
+      className="menu-surface menu-pop-mount fixed z-50 min-w-[220px] flex flex-col"
       style={{
         top: (anchorRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
         left: anchorRef.current?.getBoundingClientRect().left ?? 0
       }}
     >
+      <div className="max-h-[50vh] overflow-y-auto p-1">
       {locationGroups.map((group) => {
         return (
           <div key={group.locationId}>
-            <div className="px-3 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wide">
+            <div className="menu-label">
               {group.name}
             </div>
             {group.agents.map((agent) => {
@@ -136,7 +137,7 @@ export function AgentPickerPopover({ anchorRef, onClose }: AgentPickerPopoverPro
                 <button
                   key={agent.id}
                   onClick={() => handleAgentClick(agent, agent.locationId)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] font-medium text-text-primary hover:bg-surface-200 transition-colors"
+                  className="menu-item"
                 >
                   <div
                     className={cn(
@@ -156,6 +157,7 @@ export function AgentPickerPopover({ anchorRef, onClose }: AgentPickerPopoverPro
           </div>
         )
       })}
+      </div>
     </div>,
     document.body
   )

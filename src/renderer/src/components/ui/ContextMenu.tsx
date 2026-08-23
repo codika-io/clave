@@ -52,13 +52,13 @@ export function ContextMenu({ items, x, y, onClose, header }: ContextMenuProps) 
           alignOffset={0}
           avoidCollisions
           collisionPadding={8}
-          className="z-50 min-w-[160px] overflow-hidden rounded-lg border border-border bg-surface-100 py-1 shadow-xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className="menu-surface menu-pop z-50 min-w-[180px] p-1"
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
           {header && (
             <>
-              <div className="px-3 py-1.5">{header}</div>
-              <DropdownMenuPrimitive.Separator className="h-px bg-border-subtle" />
+              <div className="px-2 py-1.5">{header}</div>
+              <DropdownMenuPrimitive.Separator className="menu-sep" />
             </>
           )}
           {items.map((item) => (
@@ -69,13 +69,7 @@ export function ContextMenu({ items, x, y, onClose, header }: ContextMenuProps) 
                 item.onClick()
                 onClose()
               }}
-              className={cn(
-                'relative flex cursor-pointer select-none items-center justify-between px-3 py-1.5 text-sm font-medium outline-none transition-colors',
-                'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
-                item.danger
-                  ? 'text-red-400 hover:text-red-300 focus:bg-surface-200'
-                  : 'text-text-primary hover:bg-surface-200 focus:bg-surface-200'
-              )}
+              className={cn('menu-item justify-between', item.danger && 'menu-item--danger')}
             >
               <span className="flex items-center gap-2">
                 {item.icon && <span className="w-4 h-4 flex items-center justify-center">{item.icon}</span>}

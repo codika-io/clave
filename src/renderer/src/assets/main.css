@@ -143,6 +143,12 @@
   --sidebar-icon-color: rgba(255, 255, 255, 0.6);
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  /* The ONE modal scrim (dialogs, the group picker) and the two overlay shadow
+     levels (menus/popovers, modals). Overlays float above the flat panels, so
+     they are the one place a shadow is depth rather than chrome. */
+  --scrim-color: rgb(0 0 0 / 0.4);
+  --overlay-shadow: 0 8px 24px rgb(0 0 0 / 0.32), 0 2px 8px rgb(0 0 0 / 0.24);
+  --overlay-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.28);
   --danger-toggle-bg: rgba(255, 255, 255, 0.08);
   --danger-toggle-active: rgba(229, 64, 64, 0.18);
   --danger-toggle-glow: rgba(229, 64, 64, 0.25);
@@ -189,6 +195,9 @@
   --sidebar-icon-color: #6c6c65;
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.22);
+  --scrim-color: rgb(27 27 24 / 0.25);
+  --overlay-shadow: 0 8px 24px rgb(0 0 0 / 0.1), 0 2px 8px rgb(0 0 0 / 0.06);
+  --overlay-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.16), 0 4px 12px rgb(0 0 0 / 0.08);
   --danger-toggle-bg: rgba(0, 0, 0, 0.05);
   --danger-toggle-active: rgba(220, 53, 69, 0.14);
   --danger-toggle-glow: rgba(220, 53, 69, 0.17);
@@ -241,6 +250,9 @@
   --sidebar-icon-color: #756e66;
   --scrollbar-thumb: rgba(120, 100, 80, 0.18);
   --scrollbar-thumb-hover: rgba(120, 100, 80, 0.3);
+  --scrim-color: rgb(43 34 24 / 0.25);
+  --overlay-shadow: 0 8px 24px rgb(60 45 30 / 0.12), 0 2px 8px rgb(60 45 30 / 0.07);
+  --overlay-shadow-lg: 0 16px 40px rgb(60 45 30 / 0.18), 0 4px 12px rgb(60 45 30 / 0.09);
   --danger-toggle-bg: rgba(120, 100, 80, 0.08);
   --danger-toggle-active: rgba(220, 53, 69, 0.15);
   --danger-toggle-glow: rgba(220, 53, 69, 0.18);
@@ -499,7 +511,7 @@ body,
   white-space: nowrap;
   color: var(--sidebar-item-text);
   background-color: transparent;
-  transition: color 150ms, background-color 150ms, opacity 150ms;
+  transition: color 150ms, background-color 150ms, opacity 150ms, scale 120ms var(--ease-out-expo);
 }
 .launcher-btn:hover {
   color: var(--text-primary);
@@ -531,7 +543,7 @@ body,
                               when it carried a divider of its own */
   border-radius: var(--radius-lg);
   color: var(--text-tertiary);
-  transition: color 150ms, background-color 150ms;
+  transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
 .launcher-caret:hover,
 .launcher-caret[data-state="open"] {
@@ -551,7 +563,7 @@ body,
   height: var(--control-h-md);
   border-radius: var(--radius-lg);
   color: var(--text-tertiary);
-  transition: color 150ms, background-color 150ms, opacity 150ms;
+  transition: color 150ms, background-color 150ms, opacity 150ms, scale 120ms var(--ease-out-expo);
 }
 .launcher-icon-btn:hover,
 .launcher-icon-btn[data-active="true"] {
@@ -683,7 +695,7 @@ body,
   white-space: nowrap;
   color: var(--text-tertiary);
   background-color: transparent;
-  transition: color 150ms, background-color 150ms;
+  transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
 .group-switcher-chip:hover {
   color: var(--text-primary);
@@ -858,7 +870,7 @@ body,
   font-weight: var(--font-weight-medium);
   color: var(--text-tertiary);
   background-color: transparent;
-  transition: color 150ms, background-color 150ms;
+  transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
 .idle-group-start:hover {
   color: var(--text-primary);
@@ -904,8 +916,9 @@ body,
   align-items: center;
   justify-content: center;
   padding: 3rem 2rem;
-  background-color: rgb(0 0 0 / 0.45);
-  backdrop-filter: blur(6px);
+  background-color: var(--scrim-color);
+  backdrop-filter: blur(4px);
+  animation: scrim-in 140ms ease-out;
 }
 .group-picker-panel {
   display: flex;
@@ -916,8 +929,9 @@ body,
   border-radius: 0.75rem;
   border: 1px solid var(--color-border);
   background-color: var(--surface-50);
-  box-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.35);
+  box-shadow: var(--overlay-shadow-lg);
   overflow: hidden;
+  animation: surface-in 160ms var(--ease-out-expo);
 }
 .group-picker-grid {
   display: grid;
@@ -948,6 +962,207 @@ body,
   border-color: var(--color-accent);
 }
 
+/* ── Overlays: menus, popovers, modals ──
+   One language for every surface that floats above the panels, cut from the
+   same cloth as the launcher/toolbar panels: --radius-xl corners, a 1px
+   --color-border, and — because these float rather than sit in the layout —
+   an --overlay-shadow. Rows inside are inset and rounded like .sidebar-item,
+   never full-bleed: the surface holds the rows, the rows do not become the
+   surface.
+
+   Motion: enter/exit run off Radix's data-state with the app's own curve.
+   These replaced tailwindcss-animate classes (animate-in/fade-in-0/…) that
+   were never installed — every CSS-mode menu and tooltip used to teleport. */
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes overlay-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes scrim-out {
+  to {
+    opacity: 0;
+  }
+}
+/* For surfaces that are centered by flex (the group picker), not by transform. */
+@keyframes surface-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(6px);
+  }
+}
+/* The floating surface for menus, popovers, dropdowns. Look only — pair with
+   .menu-pop for the data-state animation (kept separate because the framer-
+   driven popovers reuse the look but bring their own motion). */
+.menu-surface {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background-color: var(--surface-100);
+  box-shadow: var(--overlay-shadow);
+  overflow: hidden;
+  /* Grow from the trigger's edge: Radix's popper publishes the origin. */
+  transform-origin: var(--radix-popper-transform-origin, 50% 0%);
+}
+.menu-pop[data-state='open'] {
+  animation: overlay-in 140ms var(--ease-out-expo);
+}
+.menu-pop[data-state='closed'] {
+  animation: overlay-out 100ms var(--ease-out-expo) forwards;
+}
+/* For hand-rolled (non-Radix) surfaces that mount conditionally: enter only. */
+.menu-pop-mount {
+  animation: overlay-in 140ms var(--ease-out-expo);
+}
+.scrim-mount {
+  animation: scrim-in 140ms ease-out;
+}
+
+/* A row inside a menu surface. Radix menu items highlight via
+   data-highlighted; plain buttons (popovers) get the same fill from :hover.
+   Color variants are modifier classes, NOT utilities — the design system is
+   unlayered, so a text-* utility cannot override the color set here. */
+.menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: var(--control-h-md);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  text-align: left;
+  outline: none;
+  user-select: none;
+  cursor: pointer;
+  transition: color 150ms, background-color 150ms;
+}
+.menu-item:hover,
+.menu-item[data-highlighted] {
+  background-color: var(--surface-200);
+}
+.menu-item[data-disabled],
+.menu-item:disabled {
+  pointer-events: none;
+  opacity: 0.4;
+}
+/* Secondary rows (the "Add…" / "Manage…" actions under a separator). */
+.menu-item--muted {
+  color: var(--text-secondary);
+}
+.menu-item--muted:hover,
+.menu-item--muted[data-highlighted] {
+  color: var(--text-primary);
+}
+.menu-item--danger {
+  color: #f87171;
+}
+.menu-item--danger:hover,
+.menu-item--danger[data-highlighted] {
+  color: #fca5a5;
+}
+
+/* Section label inside a menu — regular case, like the sidebar's labels; the
+   uppercase-tracked strip read as a title bar from another era. */
+.menu-label {
+  padding: 0.375rem 0.5rem 0.25rem;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+}
+
+/* Hairline between menu sections, inset so it reads as a break in the list
+   rather than a border cutting the surface. */
+.menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background-color: var(--border-subtle-color);
+}
+
+/* Tooltip enter — near-imperceptible on purpose: tooltips fire tens of times a
+   day. Close stays instant. */
+.tooltip-pop {
+  transform-origin: var(--radix-popper-transform-origin, 50% 100%);
+}
+.tooltip-pop[data-state='delayed-open'],
+.tooltip-pop[data-state='instant-open'] {
+  animation: overlay-in 120ms var(--ease-out-expo);
+}
+
+/* The one modal scrim. Data-state animations apply when Radix drives the
+   overlay directly; the framer-driven dialogs fade it themselves. */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  background-color: var(--scrim-color);
+  backdrop-filter: blur(4px);
+}
+.modal-scrim[data-state='open'] {
+  animation: scrim-in 140ms ease-out;
+}
+.modal-scrim[data-state='closed'] {
+  animation: scrim-out 100ms ease-out forwards;
+}
+
+/* The modal card surface — same corners and border as the panels, lifted by
+   the large overlay shadow. */
+.modal-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background-color: var(--surface-0);
+  box-shadow: var(--overlay-shadow-lg);
+  overflow: hidden;
+}
+/* Safe under the translate-utility centering: Tailwind v4 centers via the
+   independent `translate` property, which stays applied while `transform`
+   animates the scale. */
+.modal-pop[data-state='open'] {
+  animation: overlay-in 160ms var(--ease-out-expo);
+}
+.modal-pop[data-state='closed'] {
+  animation: overlay-out 100ms var(--ease-out-expo) forwards;
+}
+
+/* A main-pane view (Settings, Agents, Extensions) coming back on screen. The
+   animation restarts when the panel's `hidden` class is removed — display:none
+   kills it, re-display re-runs it — so this is a zero-JS entrance. Terminals
+   deliberately have NO equivalent: the core loop appears instantly, always. */
+.view-fade-in {
+  animation: scrim-in 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-pop[data-state='open'],
+  .menu-pop-mount,
+  .tooltip-pop[data-state='delayed-open'],
+  .tooltip-pop[data-state='instant-open'],
+  .modal-pop[data-state='open'] {
+    animation: scrim-in 100ms ease-out;
+  }
+  .menu-pop[data-state='closed'],
+  .modal-pop[data-state='closed'] {
+    animation: scrim-out 80ms ease-out forwards;
+  }
+  .group-picker-backdrop,
+  .group-picker-panel {
+    animation: none;
+  }
+}
+
 /* ── Buttons ── */
 
 /* Primary: filled accent background */
@@ -963,7 +1178,7 @@ body,
   font-weight: var(--font-weight-medium);
   color: white;
   background-color: var(--color-accent);
-  transition: background-color 150ms;
+  transition: background-color 150ms, scale 120ms var(--ease-out-expo);
 }
 .btn-primary:hover {
   background-color: color-mix(in oklch, var(--color-accent), transparent 10%);
@@ -986,7 +1201,7 @@ body,
   font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
   background-color: transparent;
-  transition: color 150ms, background-color 150ms;
+  transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
 .btn-secondary:hover {
   color: var(--text-primary);
@@ -1025,7 +1240,7 @@ body,
   flex-shrink: 0;
   border-radius: var(--radius-lg);
   color: var(--text-tertiary);
-  transition: color 150ms, background-color 150ms;
+  transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
 .btn-icon:hover {
   color: var(--text-primary);
@@ -1039,6 +1254,23 @@ body,
 }
 .btn-icon-md {
   padding: 6px;            /* p-1.5 */
+}
+
+/* Press feedback for the button family — a 3% dip the frame the pointer goes
+   down, released on the shared curve. Buttons only, never list rows: a row of
+   text shrinking under the cursor is noise, a button acknowledging the press
+   is feedback. */
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled),
+.btn-icon:active,
+.btn-add:active,
+.launcher-btn:active:not(:disabled),
+.launcher-caret:active,
+.launcher-icon-btn:active:not(:disabled),
+.group-switcher-chip:active,
+.segmented-item:active,
+.idle-group-start:active {
+  scale: 0.97;
 }
 
 /* Segmented control: compact inline mode switcher (e.g. Page/Preview/Source
@@ -1060,7 +1292,7 @@ body,
   font-size: 11px;
   font-weight: var(--font-weight-medium);
   color: var(--text-tertiary);
-  transition: color 150ms, background-color 150ms;
+  transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
 .segmented-item:hover {
   color: var(--text-secondary);
@@ -1084,7 +1316,7 @@ body,
   font-weight: var(--font-weight-medium);
   color: var(--text-tertiary);
   background-color: transparent;
-  transition: color 150ms, border-color 150ms, background-color 150ms;
+  transition: color 150ms, border-color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
 .btn-add:hover {
   color: var(--text-secondary);

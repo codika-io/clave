@@ -8,14 +8,15 @@ const PopoverTrigger = PopoverPrimitive.Trigger
 const PopoverAnchor = PopoverPrimitive.Anchor
 
 const popoverTransition = {
-  duration: 0.15,
+  duration: 0.14,
   ease: [0.2, 0, 0, 1] as const
 }
 
 /**
  * PopoverContent with two animation modes:
  *
- * 1. **Default (CSS):** Tailwind animate-in/out classes, same as before.
+ * 1. **Default (CSS):** `.menu-surface` look + `.menu-pop` data-state
+ *    animations from the design system.
  * 2. **Framer Motion:** Pass `animated` + `open` props for enter/exit
  *    animations driven by Framer Motion (matching the app's panel pattern).
  *    Uses `forceMount` internally so AnimatePresence controls the lifecycle.
@@ -48,10 +49,7 @@ const PopoverContent = React.forwardRef<
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                 transition={popoverTransition}
-                className={cn(
-                  'w-auto overflow-hidden rounded-md border border-border-subtle bg-surface-100 shadow-md shadow-black/5',
-                  className
-                )}
+                className={cn('menu-surface w-auto', className)}
               >
                 {children}
               </motion.div>
@@ -68,13 +66,7 @@ const PopoverContent = React.forwardRef<
         ref={ref}
         align={align}
         sideOffset={sideOffset}
-        className={cn(
-          'z-50 w-auto overflow-hidden rounded-md border border-border-subtle bg-surface-100 shadow-md shadow-black/5 outline-none',
-          'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
-          'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-          className
-        )}
+        className={cn('menu-surface menu-pop z-50 w-auto outline-none', className)}
         {...props}
       >
         {children}

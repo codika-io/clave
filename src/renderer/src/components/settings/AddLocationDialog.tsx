@@ -114,9 +114,9 @@ export function AddLocationDialog({ onClose }: AddLocationDialogProps) {
   // Portal to body so the overlay escapes the main content's z-10 stacking
   // context. Otherwise it cannot cover the z-[45] git side panel.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleRemoveOnCancel}>
+    <div className="modal-scrim scrim-mount z-50 flex items-center justify-center" onClick={handleRemoveOnCancel}>
       <div
-        className="bg-surface-0 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-border-subtle"
+        className="modal-card menu-pop-mount w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
