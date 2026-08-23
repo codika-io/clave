@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.70.0] — 2026-08-23
+
 ### Added
 - **Software Update in Settings and the menu bar** — a Software Update pane (Settings → Software Update) showing the running version, whether a newer one exists, when Clave last checked, and a Download & Install button with live progress; plus `Check for Updates…` and `Download Latest Version…` in the application menu, and the updater log under Help. The pane's two escape hatches — install the release by hand, open the updater log — are what a user has left when the updater itself cannot deliver.
 
