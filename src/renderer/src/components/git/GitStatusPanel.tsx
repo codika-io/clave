@@ -1078,10 +1078,10 @@ function MultiRepoSection({
   )
 
   return (
-    <div className="border-b border-border-subtle">
+    <div>
       {/* Collapsible header */}
       <button
-        className={`w-full flex items-center gap-1.5 pr-3 py-1.5 text-xs transition-colors ${
+        className={`git-tree-row w-full flex items-center gap-1.5 pr-3 text-xs transition-colors ${
           isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
         }`}
         style={{ paddingLeft: 12 + depth * TREE_INDENT_PX }}
@@ -1194,6 +1194,13 @@ function MultiRepoSection({
         </div>
       )}
 
+      {/* Row divider, inset to this row's tree depth. A full-bleed rule cuts
+          across the indentation and costs the reader the sense of the tree —
+          the line has to start where the row does. */}
+      <div
+        className="h-px bg-border-subtle"
+        style={{ marginLeft: 12 + depth * TREE_INDENT_PX, marginRight: 12 }}
+      />
     </div>
   )
 }
@@ -1239,7 +1246,7 @@ function RepoDirRow({
 
   return (
     <button
-      className="w-full flex items-center gap-1.5 pr-3 py-1 text-xs hover:bg-surface-100 transition-colors"
+      className="git-tree-row w-full flex items-center gap-1.5 pr-3 text-xs hover:bg-surface-100 transition-colors"
       style={{ paddingLeft: 12 + depth * TREE_INDENT_PX }}
       onClick={onToggle}
     >

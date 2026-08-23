@@ -348,7 +348,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
 
         <button
           disabled={busy}
-          className="btn-icon btn-icon-sm flex-shrink-0"
+          className="launcher-icon-btn"
           title={`${describeSetup(setup, profileLabel)} — in another folder…`}
           aria-label="New session in another folder"
           onClick={() => void run({ setup, cwd: { kind: 'ask' }, remember: true })}

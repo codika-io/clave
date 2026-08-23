@@ -164,7 +164,7 @@ function SecretRequestCard({
                 if (e.key === 'Enter') void handleSubmit()
               }}
               placeholder="Paste secret value…"
-              className="input-compact w-full pr-7"
+              className="input-compact input-compact-icon-right w-full"
               autoComplete="off"
               spellCheck={false}
               autoFocus

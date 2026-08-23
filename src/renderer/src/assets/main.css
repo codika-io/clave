@@ -60,6 +60,12 @@
   --control-h-md: 1.75rem; /* 28px — default rows, buttons, compact inputs */
   --control-h-lg: 2rem;    /* 32px — inputs */
 
+  /* Height of a row in the git panel's repo tree (a directory or a repo
+     header). Sized to hold the trailing sync badges, which come and go — a
+     folder's roll-up only shows while it is collapsed, and a repo's ↓ clears
+     on pull — so the row is fixed rather than content-sized. */
+  --git-tree-row-h: 1.875rem; /* 30px = 18px badge + 12px of padding */
+
   /* Sidebar tab icon size — single source of truth for the leading icon on
      session/file/group tabs in the sidebar. Change here to resize all of them. */
   --sidebar-tab-icon-size: 0.875rem; /* 14px */
@@ -355,11 +361,14 @@ body,
    ──────────────────────────────────────────────────────── */
 
 /* Reusable floating card style for inset UI boxes */
+/* The app's panel surface — the toolbar, the main view, each terminal pane.
+   Flat on purpose: the 1px border and the gap to the background already
+   separate a panel from what is behind it, and a drop shadow on top of that
+   reads as chrome rather than depth. */
 .floating-card {
   border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
   background-color: var(--color-surface-0);
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   overflow: hidden;
 }
 
@@ -470,7 +479,8 @@ body,
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 0 0.25rem;      /* px-1 */
+  padding: 0 0.375rem;     /* px-1.5 — a 12px chevron needs more than px-1 to
+                              read as a target rather than a sliver */
   border-left: 1px solid var(--color-border);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms;
@@ -479,6 +489,28 @@ body,
 .launcher-caret[data-state="open"] {
   color: var(--text-primary);
   background-color: var(--surface-200);
+}
+
+/* The row's trailing icon button (the folder picker). Carries the row's own
+   height rather than btn-icon's padding-derived one, so its hover fill matches
+   the buttons beside it instead of reading as a smaller control on the line. */
+.launcher-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-h-md);
+  height: var(--control-h-md);
+  border-radius: var(--radius-lg);
+  color: var(--text-tertiary);
+  transition: color 150ms, background-color 150ms, opacity 150ms;
+}
+.launcher-icon-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-200);
+}
+.launcher-icon-btn:disabled {
+  opacity: 0.5;
 }
 
 /* The `+` row at the bottom of a group: launches a session into that group,
@@ -797,6 +829,13 @@ body,
   border-color: var(--color-accent);
   box-shadow: 0 0 0 1px var(--color-accent);
 }
+/* A compact input carrying an affordance on its trailing edge — a search
+   glass, a reveal toggle. The inset has to live here: the design system is
+   unlayered while Tailwind's utilities sit in @layer utilities, so the
+   shorthand `padding` above always beats a `pr-*` utility on the element. */
+.input-compact-icon-right {
+  padding-right: 1.75rem;  /* pr-7 */
+}
 
 /* Extra-thin input for dense settings rows */
 .input-xs {
@@ -834,6 +873,14 @@ body,
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-weight: 600;
+}
+
+/* A row in the git panel's repo tree: a directory, or a repo header. Fixed
+   height so the tree never jumps when a trailing badge appears or disappears
+   — expanding a folder hides its roll-up, and that used to resize the row. */
+.git-tree-row {
+  height: var(--git-tree-row-h);
+  flex-shrink: 0;
 }
 
 /* ── Git sync badges ── */

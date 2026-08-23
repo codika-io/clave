@@ -144,13 +144,15 @@ export function GroupPickerDialog({
           <Squares2X2Icon className="w-5 h-5 flex-shrink-0 text-text-tertiary" />
           <h2 className="text-sm font-medium text-text-primary">Add a group</h2>
           <div className="relative flex-1 min-w-0 ml-2">
-            <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
+            {/* On the trailing edge: the field sits right after the dialog's
+                title, so a leading glass crowds the heading it abuts. */}
+            <MagnifyingGlassIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
             <input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search groups…"
-              className="input-compact w-full pl-7"
+              className="input-compact input-compact-icon-right w-full"
             />
           </div>
           <button className="btn-icon btn-icon-sm" onClick={onClose} aria-label="Close">

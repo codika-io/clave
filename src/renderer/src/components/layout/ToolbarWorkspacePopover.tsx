@@ -114,7 +114,10 @@ export function ToolbarWorkspacePopover(): React.JSX.Element {
     <>
       <span className="truncate">{name}</span>
       {needsAttention && <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />}
-      <ChevronDownIcon className="w-3 h-3 flex-shrink-0 opacity-60" />
+      {/* Optically nudged down a half pixel: flex centring lines the icon box up
+          with the text's line box, which sits above the text's visual centre at
+          this size. */}
+      <ChevronDownIcon className="w-3 h-3 flex-shrink-0 opacity-60 translate-y-[0.5px]" />
     </>
   )
 
