@@ -2,7 +2,7 @@
 
 Mac desktop app for managing multiple coding-agent CLI sessions in parallel. Provider-agnostic: it orchestrates Claude Code (Cmd+N), Antigravity CLI (Cmd+I), and Codex CLI (Cmd+U) sessions side by side, plus plain terminals (Cmd+T) and remote agents over OpenClaw. Electron + React + TypeScript.
 
-Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` for generating `.clave` workspace files) lives in its own repo at [`codika-io/clave-plugin`](https://github.com/codika-io/clave-plugin). Install with `npx plugins add codika-io/clave-plugin`. The Electron app reads installed plugins from `~/.claude/plugins/` at runtime and does not depend on the plugin repo being local.
+Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` and `/clave:recover-sessions`) ships from `plugin/` in this repo — see `plugin/CLAUDE.md`. It is installed with `npx plugins add codika-io/clave`, resolved through `.claude-plugin/marketplace.json` at the root. The Electron app reads installed plugins from `~/.claude/plugins/` at runtime and never reads `plugin/` directly; the folder is here so a `.clave` format change and the skill that describes it land in the same commit (see the schema sync rule below).
 
 ## Commands
 
@@ -24,13 +24,13 @@ Three-process Electron app:
 ## Conventions
 
 - **Icons**: Use Heroicons (`@heroicons/react/24/outline`) for all UI icons. No hand-rolled SVGs for standard icons. Custom SVGs only for file-type icons in `components/files/file-icons.tsx`.
-- **`.clave` schema sync rule**: the schema is mirrored in **five** places that do NOT import each other, plus one separate repo. When you change an enum — or add, rename, or remove ANY `.clave` field — all six move in the same change:
+- **`.clave` schema sync rule**: the schema is mirrored in **six** places that do NOT import each other. When you change an enum — or add, rename, or remove ANY `.clave` field — all six move in the same change:
   1. `src/renderer/src/store/session-types.ts` — the renderer types (`GroupTerminalIcon`, `TERMINAL_COLOR_VALUES`, `PinnedGroup`, `PinnedGroupSession`, `PinnedGroupTerminal`, `SessionGroup`).
   2. `src/main/ipc-handlers/clave-trust.ts` — the file shape (`ClaveGroupData`, `ClaveFileReadResult`) **and the trust boundary**, `describeElevated` / `sanitizeElevated`. Any field that can drive an agent — a prompt, an auto-run command, a permissions flag — must be added to BOTH functions or an untrusted `.clave` gets it past the review dialog with no symptom at all. This is the security-critical mirror; `clave-trust-boundary.test.ts` is the test that must grow with it.
   3. `src/main/ipc-handlers/clave-file-handlers.ts` — the main-process parser and writer (`ClaveFileRaw`, `ClaveFileWriteData`, `resolveGroup`, `serializeGroup`), plus the wiring that decides whether to consult the trust boundary at all (`isUnderTrustedRoot`, the elevated check, the dialog answers).
   4. `src/preload/index.d.ts` — the typed IPC boundary (`ClaveFileGroupData`, `ClaveFileWriteData`). Easy to miss because nothing references it by name, and the read path silently loses the field if it lags.
   5. `src/main/mcp/mcp-server.ts` — the MCP tool schemas agents call.
-  6. The `/clave:create-workspace` skill in the separate [`codika-io/clave-plugin`](https://github.com/codika-io/clave-plugin) repo — the reference agents author `.clave` files from. It needs its own PR, and it must not land after the app: a stale skill fails silently.
+  6. `plugin/skills/create-workspace/SKILL.md` — the reference agents author `.clave` files from. A stale skill fails silently: it keeps writing the field you renamed, and the `.clave` still parses. It used to live in a separate repo and need its own PR; it is in this repo precisely so it can go in the same commit as the other five.
 
   Then check the round-trip, which is where a new field actually goes missing: `resolveGroup` (read), the sync writer and `exportClaveFile` in `pinned-store.ts` (write), `createPinnedFromGroup` AND `pinGroupFromCurrent` (both directions of pin ↔ live group), and **both single-group normalisations in `pinned-store.ts`** — one in `importClaveFile`, one in the file watcher's reload, each rebuilding the object field by field. They are easy to mistake for one another: during PRDCT-1665 the import copy dropped a new field twice, and the watcher copy dropped it in a way that made a `.clave` edit never hot-reload.
 
