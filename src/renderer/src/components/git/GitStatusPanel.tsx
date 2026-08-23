@@ -583,12 +583,16 @@ function RepoSection({
     return (
       <>
         {error && <ErrorBanner message={error} />}
-        <div className={`${fillHeight ? 'flex-1' : ''} flex items-center justify-center px-3 py-4`}>
-          <span className="text-xs text-text-tertiary text-center">
-            {relativeFilterPrefix ? 'No changes in this folder' : 'Working tree clean'}
-          </span>
+        {/* Scroll container — a long range list must scroll here exactly as
+            it does in the dirty layout (verifier round 4, finding 1). */}
+        <div className={`${fillHeight ? 'flex-1 overflow-y-auto' : ''} flex flex-col`}>
+          <div className={`${fillHeight ? 'flex-1' : ''} flex items-center justify-center px-3 py-4`}>
+            <span className="text-xs text-text-tertiary text-center">
+              {relativeFilterPrefix ? 'No changes in this folder' : 'Working tree clean'}
+            </span>
+          </div>
+          {rangeSections}
         </div>
-        {rangeSections}
         {gitShowCommitBar && (status.ahead > 0 || status.behind > 0 || (!status.hasUpstream && !!status.branch)) && (
           <CommitBar
             cwd={cwd}
@@ -926,13 +930,19 @@ function MultiRepoSection({
   const toggleRange = useCallback(
     (e: React.MouseEvent, direction: 'incoming' | 'outgoing') => {
       e.stopPropagation()
+      const isOpen = direction === 'incoming' ? showIncoming : showOutgoing
       const setter = direction === 'incoming' ? setShowIncoming : setShowOutgoing
-      setter((prev) => {
-        if (!prev) setExpanded(true)
-        return !prev
-      })
+      if (!isOpen) {
+        setter(true)
+        setExpanded(true)
+      } else if (!expanded) {
+        // Section already on but the repo is folded: reveal, don't toggle off.
+        setExpanded(true)
+      } else {
+        setter(false)
+      }
     },
-    []
+    [showIncoming, showOutgoing, expanded]
   )
 
   // Update default expanded state when changes appear/disappear, but only on first load
@@ -1023,8 +1033,15 @@ function MultiRepoSection({
           {status.behind > 0 && (
             <span
               role="button"
+              tabIndex={0}
               title="Show what a pull will bring"
               onClick={(e) => toggleRange(e, 'incoming')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggleRange(e as unknown as React.MouseEvent, 'incoming')
+                }
+              }}
               className={`text-[10px] font-medium text-orange-400 px-1 py-px rounded border cursor-pointer transition-colors ${
                 showIncoming
                   ? 'border-orange-400/60 bg-orange-400/15'
@@ -1037,8 +1054,15 @@ function MultiRepoSection({
           {status.ahead > 0 && (
             <span
               role="button"
+              tabIndex={0}
               title="Show what a push will send"
               onClick={(e) => toggleRange(e, 'outgoing')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggleRange(e as unknown as React.MouseEvent, 'outgoing')
+                }
+              }}
               className={`text-[10px] font-medium text-green-400 px-1 py-px rounded border cursor-pointer transition-colors ${
                 showOutgoing
                   ? 'border-green-400/60 bg-green-400/15'

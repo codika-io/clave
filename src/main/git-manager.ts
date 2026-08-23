@@ -387,9 +387,12 @@ class GitManager {
   async getRangeFiles(cwd: string, direction: 'incoming' | 'outgoing'): Promise<GitCommitFileStatus[]> {
     try {
       const git = simpleGit(cwd)
-      const branch = (await git.status()).current
-      if (!branch) return []
-      const spec = direction === 'incoming' ? `HEAD...origin/${branch}` : `origin/${branch}...HEAD`
+      // The REAL tracking ref, not a guessed origin/<branch>: a branch can
+      // track a differently-named upstream, and the ahead/behind badges come
+      // from that tracking info — the range must agree with them.
+      const tracking = (await git.status()).tracking
+      if (!tracking) return []
+      const spec = direction === 'incoming' ? `HEAD...${tracking}` : `${tracking}...HEAD`
       const numRaw = await git.raw(['diff', '--numstat', '--diff-filter=AMDRTC', spec])
       const nameRaw = await git.raw(['diff', '--name-status', '--diff-filter=AMDRTC', spec])
 
@@ -423,9 +426,9 @@ class GitManager {
   async getRangeDiff(cwd: string, direction: 'incoming' | 'outgoing', filePath: string): Promise<string> {
     try {
       const git = simpleGit(cwd)
-      const branch = (await git.status()).current
-      if (!branch) return ''
-      const spec = direction === 'incoming' ? `HEAD...origin/${branch}` : `origin/${branch}...HEAD`
+      const tracking = (await git.status()).tracking
+      if (!tracking) return ''
+      const spec = direction === 'incoming' ? `HEAD...${tracking}` : `${tracking}...HEAD`
       return await git.raw(['diff', spec, '--', filePath])
     } catch (err) {
       console.warn('[git] getRangeDiff failed:', direction, filePath, (err as Error).message)

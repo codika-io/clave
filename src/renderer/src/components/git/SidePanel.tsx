@@ -137,9 +137,16 @@ export function SidePanel() {
   const isSingleRepo = isGitTabActive && multiRepo.result.mode === 'single'
   const singleRepoGit = useGitStatus(isSingleRepo ? cwd : null, isSingleRepo)
 
-  // Single-repo range sections, driven by the toolbar's ↓/↑ badge-buttons
+  // Single-repo range sections, driven by the toolbar's ↓/↑ badge-buttons.
+  // Per-repo state: a folder switch resets it (guarded adjust-during-render).
   const [showIncomingSingle, setShowIncomingSingle] = useState(false)
   const [showOutgoingSingle, setShowOutgoingSingle] = useState(false)
+  const [prevRangeCwd, setPrevRangeCwd] = useState(cwd)
+  if (prevRangeCwd !== cwd) {
+    setPrevRangeCwd(cwd)
+    setShowIncomingSingle(false)
+    setShowOutgoingSingle(false)
+  }
 
   // Compute repo paths for MagicSync across all git modes
   const allRepoPaths = useMemo(() => {
@@ -436,8 +443,15 @@ export function SidePanel() {
               {singleRepoGit.status.ahead > 0 && (
                 <span
                   role="button"
+                  tabIndex={0}
                   title="Show what a push will send"
                   onClick={() => setShowOutgoingSingle((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setShowOutgoingSingle((v) => !v)
+                    }
+                  }}
                   className={`text-green-400 text-[10px] flex-shrink-0 px-1 py-px rounded border cursor-pointer transition-colors ${
                     showOutgoingSingle
                       ? 'border-green-400/60 bg-green-400/15'
@@ -448,8 +462,15 @@ export function SidePanel() {
               {singleRepoGit.status.behind > 0 && (
                 <span
                   role="button"
+                  tabIndex={0}
                   title="Show what a pull will bring"
                   onClick={() => setShowIncomingSingle((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setShowIncomingSingle((v) => !v)
+                    }
+                  }}
                   className={`text-orange-400 text-[10px] flex-shrink-0 px-1 py-px rounded border cursor-pointer transition-colors ${
                     showIncomingSingle
                       ? 'border-orange-400/60 bg-orange-400/15'
