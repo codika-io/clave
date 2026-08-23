@@ -39,8 +39,17 @@ interface LegacyWorkspaceEntry {
   rootDir?: string | null
 }
 
+function withLastActive(
+  base: Omit<WorkspaceStateFile, 'lastActiveWorkspaceId' | 'activeWorkspaceId'>,
+  lastActive: string | null
+): WorkspaceStateFile {
+  // Both keys carry the same value: the new one is what this build reads,
+  // the old one is what the previous release reads after a downgrade.
+  return { ...base, lastActiveWorkspaceId: lastActive, activeWorkspaceId: lastActive }
+}
+
 function emptyState(): WorkspaceStateFile {
-  return { version: 1, workspaces: [], activeWorkspaceId: null, pins: [], pinsMigrated: true }
+  return withLastActive({ version: 1, workspaces: [], pins: [], pinsMigrated: true }, null)
 }
 
 /** One-time Phase A migration: collapse the retired per-file registry into
@@ -95,13 +104,31 @@ function migrateLegacyRegistry(): WorkspaceStateFile {
   if (!activeWorkspaceId && workspaces.length > 0) activeWorkspaceId = workspaces[0].id
 
   // pinsMigrated: false → the renderer still has to import localStorage pins.
-  return { version: 1, workspaces, activeWorkspaceId, pins: [], pinsMigrated: false }
+  return withLastActive(
+    { version: 1, workspaces, pins: [], pinsMigrated: false },
+    activeWorkspaceId
+  )
 }
 
-/** Persisted workspace registry + pins. Same philosophy as sidebar-layout:
- *  synchronous write-then-rename on every change (survives a hard kill), the
- *  renderer as source of truth during a run, and an in-memory cache so the
- *  PTY layer can stamp spawns synchronously. */
+/** The pins partition a blueprint belongs to: its workspace, or the null
+ *  (unstamped) partition. The renderer's pinned-store owns the shape; main
+ *  only ever looks at this one key. */
+function pinPartition(pin: unknown): string | null {
+  const ws = (pin as { workspaceId?: unknown } | null)?.workspaceId
+  return typeof ws === 'string' ? ws : null
+}
+
+/** Persisted workspace registry + pins. Same philosophy as the sidebar
+ *  layouts: synchronous write-then-rename on every change (survives a hard
+ *  kill), the renderer as source of truth during a run, and an in-memory
+ *  cache so the PTY layer can stamp spawns synchronously.
+ *
+ *  Since multi-window (PRDCT-1703) the file is written FIELD BY FIELD from
+ *  main — `updateRegistry`, `updatePins`, `setLastActive` — instead of being
+ *  replaced whole by whichever window saved last: the registry and the pins
+ *  are global, each window only ever rewrites the pins of workspaces it
+ *  hosts, and the old global "active workspace" survives only as the
+ *  last-active default for the first window of the next run. */
 class WorkspaceManager {
   private filePath: string
   private cache: WorkspaceStateFile | null = null
@@ -113,33 +140,32 @@ class WorkspaceManager {
   load(): WorkspaceStateFile {
     if (this.cache) return this.cache
     try {
-      const data = JSON.parse(fs.readFileSync(this.filePath, 'utf-8')) as WorkspaceStateFile
-      this.cache = {
-        version: 1,
-        workspaces: Array.isArray(data.workspaces) ? data.workspaces : [],
-        activeWorkspaceId:
-          typeof data.activeWorkspaceId === 'string' ? data.activeWorkspaceId : null,
-        pins: Array.isArray(data.pins) ? data.pins : [],
-        pinsMigrated: data.pinsMigrated !== false
-      }
+      const data = JSON.parse(
+        fs.readFileSync(this.filePath, 'utf-8')
+      ) as Partial<WorkspaceStateFile>
+      // New key first, old key as the fallback for a file written by the
+      // previous release.
+      const lastActive =
+        typeof data.lastActiveWorkspaceId === 'string'
+          ? data.lastActiveWorkspaceId
+          : typeof data.activeWorkspaceId === 'string'
+            ? data.activeWorkspaceId
+            : null
+      this.cache = withLastActive(
+        {
+          version: 1,
+          workspaces: Array.isArray(data.workspaces) ? data.workspaces : [],
+          pins: Array.isArray(data.pins) ? data.pins : [],
+          pinsMigrated: data.pinsMigrated !== false
+        },
+        lastActive
+      )
     } catch {
       // First boot of the workspace model — migrate the retired registry.
       this.cache = migrateLegacyRegistry()
       this.persist()
     }
     return this.cache
-  }
-
-  save(data: WorkspaceStateFile): void {
-    this.cache = {
-      version: 1,
-      workspaces: Array.isArray(data?.workspaces) ? data.workspaces : [],
-      activeWorkspaceId:
-        typeof data?.activeWorkspaceId === 'string' ? data.activeWorkspaceId : null,
-      pins: Array.isArray(data?.pins) ? data.pins : [],
-      pinsMigrated: data?.pinsMigrated !== false
-    }
-    this.persist()
   }
 
   private persist(): void {
@@ -155,23 +181,69 @@ class WorkspaceManager {
     }
   }
 
-  getActiveWorkspaceId(): string | null {
-    return this.load().activeWorkspaceId
+  /** Replace the registry (the list of workspaces). Global: any window. */
+  updateRegistry(workspaces: Workspace[]): void {
+    const state = this.load()
+    this.cache = { ...state, workspaces: Array.isArray(workspaces) ? workspaces : [] }
+    this.persist()
+  }
+
+  /** Replace ONE partition of the pins — the blueprints stamped with
+   *  `workspaceId` (null = the unstamped ones) — leaving every other
+   *  workspace's pins untouched. `'all'` replaces the whole list: the one-time
+   *  localStorage import (Phase B) is its only caller. Either way the pins
+   *  are now migrated. */
+  updatePins(scope: string | null | 'all', pins: unknown[]): void {
+    const state = this.load()
+    const incoming = Array.isArray(pins) ? pins : []
+    const kept = scope === 'all' ? [] : state.pins.filter((p) => pinPartition(p) !== scope)
+    this.cache = { ...state, pins: [...kept, ...incoming], pinsMigrated: true }
+    this.persist()
+  }
+
+  setLastActive(workspaceId: string | null): void {
+    const state = this.load()
+    if (state.lastActiveWorkspaceId === workspaceId) return
+    this.cache = withLastActive(state, workspaceId)
+    this.persist()
+  }
+
+  getLastActiveWorkspaceId(): string | null {
+    return this.load().lastActiveWorkspaceId
+  }
+
+  /** What the first window of a run opens on: the last-active workspace when
+   *  it is still registered, else the first registered one, else null (the
+   *  no-workspace onboarding state). */
+  resolveInitialWorkspaceId(): string | null {
+    const { workspaces, lastActiveWorkspaceId } = this.load()
+    if (lastActiveWorkspaceId && workspaces.some((w) => w.id === lastActiveWorkspaceId)) {
+      return lastActiveWorkspaceId
+    }
+    return workspaces[0]?.id ?? null
   }
 
   getWorkspaces(): Workspace[] {
     return this.load().workspaces
   }
 
+  isRegistered(workspaceId: string): boolean {
+    return this.load().workspaces.some((w) => w.id === workspaceId)
+  }
+
   /** Workspace whose rootDir contains cwd (longest prefix wins — defense for
    *  nested roots even though registration rejects them). Null when outside
-   *  every registered root. Used to place legacy, unstamped session records. */
+   *  every registered root. Used to place legacy, unstamped session records
+   *  and, in the sidebar-layout migration, unstamped groups. Both sides are
+   *  realpath-normalized: a root registered through a symlink (`/tmp` is one
+   *  on macOS) must still contain the realpath'd cwd of its sessions. */
   resolveWorkspaceForCwd(cwd: string): string | null {
     const real = normalizeDir(cwd)
     let best: { id: string; len: number } | null = null
     for (const ws of this.load().workspaces) {
-      if (isInside(ws.rootDir, real) && (!best || ws.rootDir.length > best.len)) {
-        best = { id: ws.id, len: ws.rootDir.length }
+      const root = normalizeDir(ws.rootDir)
+      if (isInside(root, real) && (!best || root.length > best.len)) {
+        best = { id: ws.id, len: root.length }
       }
     }
     return best?.id ?? null

@@ -60,9 +60,15 @@ const electronAPI = {
 
   tmuxAvailable: () => ipcRenderer.invoke('tmux:available'),
 
-  listSessionRecords: () => ipcRenderer.invoke('records:list-adoptable'),
+  listSessionRecords: (workspaceId?: string) =>
+    ipcRenderer.invoke('records:list-adoptable', workspaceId),
 
   discardSessionRecord: (key: string) => ipcRenderer.invoke('records:discard', key),
+
+  // Sessions a closing window hosted, handed to this window to re-adopt
+  // (their ids; the records carry the rest).
+  onSessionRehome: (callback: (sessionIds: string[]) => void) =>
+    createIpcListener<[string[]]>('session:rehome', callback),
 
   onSessionData: (id: string, callback: (data: string) => void) =>
     createIpcListener<[string]>(`pty:data:${id}`, callback),
@@ -244,16 +250,49 @@ const electronAPI = {
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) =>
     createIpcListener<[string, string[]]>('fs:changed', callback),
 
-  // Sidebar layout (session groups + display order) — persisted from the main
-  // process so it survives a hard kill that drops lazily-flushed localStorage.
-  sidebarLayoutLoad: () => ipcRenderer.invoke('sidebar-layout:load'),
-  sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) =>
-    ipcRenderer.invoke('sidebar-layout:save', data),
+  // Sidebar layouts (session groups + display order), one file per workspace,
+  // persisted from the main process so they survive a hard kill that drops
+  // lazily-flushed localStorage. `load` takes the keys this window hosts
+  // (null = the unscoped, no-workspace layout) and returns them concatenated;
+  // `save` writes ONE workspace's partition and is refused by main when this
+  // window does not host that workspace.
+  sidebarLayoutLoad: (workspaceIds: (string | null)[]) =>
+    ipcRenderer.invoke('sidebar-layout:load', workspaceIds),
+  sidebarLayoutSave: (
+    workspaceId: string | null,
+    data: { groups: unknown[]; displayOrder: string[] }
+  ) => ipcRenderer.invoke('sidebar-layout:save', workspaceId, data),
 
   // Workspace registry + pins — main-process JSON storage, same crash-safety
-  // rationale as the sidebar layout.
+  // rationale as the sidebar layouts, written FIELD BY FIELD: several windows
+  // share the file, and a whole-file save was last-writer-wins.
   workspaceLoad: () => ipcRenderer.invoke('workspace:load'),
-  workspaceSave: (data: unknown) => ipcRenderer.invoke('workspace:save', data),
+  workspaceUpdateRegistry: (workspaces: unknown[]) =>
+    ipcRenderer.invoke('workspace:update-registry', workspaces),
+  workspaceUpdatePins: (scope: string | null | 'all', pins: unknown[]) =>
+    ipcRenderer.invoke('workspace:update-pins', scope, pins),
+  workspaceSetLastActive: (workspaceId: string | null) =>
+    ipcRenderer.invoke('workspace:set-last-active', workspaceId),
+  onWorkspaceStateChanged: (
+    callback: (state: { workspaces: unknown[]; pins: unknown[] }) => void
+  ) =>
+    createIpcListener<[{ workspaces: unknown[]; pins: unknown[] }]>(
+      'workspace:state-changed',
+      callback
+    ),
+
+  // This window's identity — which workspace it shows, whether it is the
+  // primary, which workspaces it hosts. A renderer only ever learns its own;
+  // main pushes it again whenever hosting moves.
+  windowIdentity: () => ipcRenderer.invoke('window:identity'),
+  onWindowWorkspaceChanged: (callback: (identity: unknown) => void) =>
+    createIpcListener<[unknown]>('window:workspace-changed', callback),
+  // Ask main to show a workspace in THIS window; refused (and the other
+  // window brought forward) when another window already shows it.
+  windowSetWorkspace: (workspaceId: string | null) =>
+    ipcRenderer.invoke('window:set-workspace', workspaceId),
+  // Show a workspace in a window of its own (focuses an existing one).
+  windowOpen: (workspaceId: string) => ipcRenderer.invoke('window:open', workspaceId),
 
   // Usage
   getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),

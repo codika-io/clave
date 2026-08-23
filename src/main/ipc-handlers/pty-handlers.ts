@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { ptyManager, isTmuxAvailable, type PtySpawnOptions } from '../pty-manager'
 import { getPreference } from './clave-file-handlers'
 import { workspaceManager } from '../workspace-manager'
+import { windowRegistry } from '../window-registry'
 import * as titleGenerator from '../title-generator'
 import { startWatching as startAgentStateWatching, clearState as clearAgentState } from '../agent-state-manager'
 
@@ -17,16 +18,26 @@ export function registerPtyHandlers(): void {
   })
 
   ipcMain.handle('pty:spawn', (_event, cwd: string, options?: PtySpawnOptions) => {
+    const win = BrowserWindow.fromWebContents(_event.sender)
     // tmux mode is a global app setting, ON by default. Honour it unless a
     // caller overrides per-spawn or the user explicitly turned it off. (When
     // tmux isn't installed the spawn transparently falls back to a plain shell.)
     const tmuxMode = options?.tmuxMode ?? getPreference('tmuxMode') !== false
-    // Central workspace stamp: every spawn defaults to the active workspace so
-    // renderer call sites don't have to thread it through. Explicit values win
-    // (pin launches into a hidden workspace, MCP caller inheritance, adoption).
-    const workspaceId = options?.workspaceId ?? workspaceManager.getActiveWorkspaceId() ?? undefined
+    // Central workspace stamp: every spawn defaults to the workspace of the
+    // WINDOW that asked (the registry's truth, never the state file — another
+    // window may have switched or written last). Explicit values win (pin
+    // launches into a hidden workspace, MCP caller inheritance, adoption); the
+    // persisted last-active workspace survives only for a windowless caller.
+    const workspaceId =
+      options?.workspaceId ??
+      (win ? windowRegistry.getWorkspaceForWindow(win.id) : null) ??
+      workspaceManager.getLastActiveWorkspaceId() ??
+      undefined
     const session = ptyManager.spawn(cwd, { ...options, tmuxMode, workspaceId })
-    const win = BrowserWindow.fromWebContents(_event.sender)
+    // The sender hosts the session from now on: its renderer holds the xterm
+    // and receives pty:data. Adoption and re-homing rebind through this same
+    // path (the adopting window is the sender).
+    if (win) windowRegistry.bindSession(session.id, win.id)
     const isClaudeMode = options?.claudeMode !== false && !options?.antigravityMode && !options?.codexMode && !options?.claudeAgentsMode
     const isResumed = !!options?.resumeSessionId
 
@@ -48,6 +59,7 @@ export function registerPtyHandlers(): void {
         titleGenerator.cleanup(session.id)
         inputBuffers.delete(session.id)
         clearAgentState(session.id)
+        windowRegistry.unbindSession(session.id)
         if (win && !win.isDestroyed()) {
           win.webContents.send(`pty:exit:${session.id}`, exitCode)
         }
@@ -105,6 +117,8 @@ export function registerPtyHandlers(): void {
 
   ipcMain.handle('pty:kill', (_event, id: string) => {
     ptyManager.kill(id)
+    // A session that never started has no exit event to unbind it.
+    windowRegistry.unbindSession(id)
   })
 
   ipcMain.handle('pty:list', () => {
@@ -154,8 +168,13 @@ export function registerPtyHandlers(): void {
   // On launch the renderer asks which sessions survived a previous run — live
   // tmux survivors to reattach silently, dead records (plain or post-reboot
   // tmux) to offer behind the restore prompt. Also prunes stale records.
-  ipcMain.handle('records:list-adoptable', () => {
-    return ptyManager.listAdoptableSessions()
+  // With a workspaceId only that workspace's records come back: a secondary
+  // window adopts and prompts for its own workspace, never for everyone's.
+  // Unfiltered (the primary at boot) is today's behavior.
+  ipcMain.handle('records:list-adoptable', (_event, workspaceId?: unknown) => {
+    const all = ptyManager.listAdoptableSessions()
+    if (typeof workspaceId !== 'string') return all
+    return all.filter((r) => r.workspaceId === workspaceId)
   })
 
   // User declined to bring a survivor back → destroy it (record + tmux session).

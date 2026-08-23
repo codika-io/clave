@@ -112,19 +112,35 @@ export function AppShell() {
         // the active workspace. (This is the single sequential boot owner —
         // the old lazy loadWorkspaces() in Sidebar raced this effect.)
         await bootWorkspaces()
-        const activeWorkspaceId = useWorkspaceStore.getState().activeWorkspaceId
+        const wsState = useWorkspaceStore.getState()
+        const activeWorkspaceId = wsState.activeWorkspaceId
 
         // Read the previous run's saved groups BEFORE any session is adopted
         // (re-adoption mutates the layout). Then rebuild groups around the
-        // survivors and only then turn persistence on, so the saved file is
-        // never overwritten before we've loaded it.
-        const savedLayout = await window.electronAPI?.sidebarLayoutLoad?.().catch(() => null)
+        // survivors and only then turn persistence on, so the saved files are
+        // never overwritten before we've loaded them. Layouts are one file per
+        // workspace: this window loads the ones it HOSTS — the primary at boot
+        // hosts every workspace, a secondary window its own (null = the
+        // unscoped layout of no-workspace mode).
+        const layoutKeys: (string | null)[] =
+          activeWorkspaceId === null ? [null] : wsState.hostedWorkspaceIds
+        const savedLayout = await window.electronAPI
+          ?.sidebarLayoutLoad?.(layoutKeys)
+          .catch(() => null)
         const persisted = {
           groups: (savedLayout?.groups ?? []) as SessionGroup[],
           displayOrder: savedLayout?.displayOrder ?? []
         }
 
-        const survivors = (await window.electronAPI?.listSessionRecords?.()) ?? []
+        // The primary adopts every survivor (hidden where not its workspace),
+        // so cross-workspace messaging and clave_list never regress. A
+        // SECONDARY window only ever adopts — and prompts for — its own
+        // workspace's records; the live ones another window hosts are already
+        // filtered out by main (alreadyAdopted).
+        const survivors =
+          (await window.electronAPI?.listSessionRecords?.(
+            wsState.isPrimary ? undefined : (activeWorkspaceId ?? undefined)
+          )) ?? []
 
         /** Bring one record back as a tab. Live tmux survivors reattach; dead
          *  ones (plain, or tmux killed by a reboot) relaunch fresh in the same

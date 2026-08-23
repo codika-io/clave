@@ -219,14 +219,71 @@ let groupCounter = 0
 let sidebarPersistEnabled = false
 let lastPersistedGroups: SessionGroup[] | null = null
 let lastPersistedOrder: string[] | null = null
+/** Per layout key, the JSON last handed to main: a partition is re-sent only
+ *  when IT changed, so a group edit in one workspace never rewrites the
+ *  others' files. */
+const lastPersistedPartitions = new Map<string | null, string>()
 
-function persistSidebarLayout(groups: SessionGroup[], displayOrder: string[]): void {
+/** Split the in-memory sidebar into one layout per workspace (multi-window:
+ *  a window shows one workspace, and each workspace's layout is its own file).
+ *  A group goes by its own stamp; a display-order id goes by the group or
+ *  session it names; anything unstamped or unknown goes to `fallback` — this
+ *  window's workspace (null in no-workspace mode, the unscoped layout). */
+export function partitionSidebarLayout(
+  groups: SessionGroup[],
+  displayOrder: string[],
+  sessions: Session[],
+  fallback: string | null
+): Map<string | null, { groups: SessionGroup[]; displayOrder: string[] }> {
+  const out = new Map<string | null, { groups: SessionGroup[]; displayOrder: string[] }>()
+  const bucket = (key: string | null): { groups: SessionGroup[]; displayOrder: string[] } => {
+    let b = out.get(key)
+    if (!b) {
+      b = { groups: [], displayOrder: [] }
+      out.set(key, b)
+    }
+    return b
+  }
+  const groupKey = new Map<string, string | null>()
+  for (const g of groups) {
+    const key = g.workspaceId ?? fallback
+    groupKey.set(g.id, key)
+    bucket(key).groups.push(g)
+  }
+  const sessionKey = new Map<string, string | null>()
+  for (const s of sessions) sessionKey.set(s.id, s.workspaceId ?? fallback)
+  for (const id of displayOrder) {
+    const key = groupKey.has(id) ? groupKey.get(id)! : (sessionKey.get(id) ?? fallback)
+    bucket(key).displayOrder.push(id)
+  }
+  return out
+}
+
+function persistSidebarLayout(state: {
+  groups: SessionGroup[]
+  displayOrder: string[]
+  sessions: Session[]
+}): void {
+  const { groups, displayOrder, sessions } = state
   if (groups === lastPersistedGroups && displayOrder === lastPersistedOrder) return
   lastPersistedGroups = groups
   lastPersistedOrder = displayOrder
-  window.electronAPI?.sidebarLayoutSave?.({ groups, displayOrder }).catch(() => {
-    // Persistence failures are non-fatal — groups stay in memory for this run.
-  })
+  const ws = useWorkspaceStore.getState()
+  const parts = partitionSidebarLayout(groups, displayOrder, sessions, ws.activeWorkspaceId)
+  // Only the workspaces THIS window hosts are written (the hosting rule; main
+  // refuses the rest loudly). Hosted keys with no items still get written, so
+  // deleting the last group of a workspace reaches its file.
+  const hosted: (string | null)[] = ws.activeWorkspaceId === null ? [null] : ws.hostedWorkspaceIds
+  for (const key of new Set<string | null>([...hosted, ...parts.keys()])) {
+    if (!hosted.includes(key)) continue
+    const part = parts.get(key) ?? { groups: [], displayOrder: [] }
+    const json = JSON.stringify(part)
+    if (lastPersistedPartitions.get(key) === json) continue
+    lastPersistedPartitions.set(key, json)
+    window.electronAPI?.sidebarLayoutSave?.(key, part).catch(() => {
+      // Persistence failures are non-fatal — groups stay in memory for this run.
+    })
+  }
 }
 
 /** Mirror a session's tab name into its tmux sidecar (main process), so the
@@ -254,8 +311,7 @@ function persistSessionName(
  *  overwrite the saved file before we read it. */
 export function enableSidebarPersistence(): void {
   sidebarPersistEnabled = true
-  const { groups, displayOrder } = useSessionStore.getState()
-  persistSidebarLayout(groups, displayOrder)
+  persistSidebarLayout(useSessionStore.getState())
 }
 
 type SidebarSnapshot = {
@@ -1414,6 +1470,6 @@ export const useSessionStore = create<SessionState>((set) => ({
 useSessionStore.subscribe((state) => {
   if (!sidebarPersistEnabled) return
   if (state.groups !== lastPersistedGroups || state.displayOrder !== lastPersistedOrder) {
-    persistSidebarLayout(state.groups, state.displayOrder)
+    persistSidebarLayout(state)
   }
 })

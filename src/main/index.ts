@@ -7,6 +7,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
 import { applyPersistedIcon } from './ipc-handlers/app-handlers'
 import { cleanupDroppedFiles } from './ipc-handlers/dropped-file-handlers'
+import { registerWindowHandlers, broadcastIdentities } from './ipc-handlers/window-handlers'
 import { ptyManager, preloadLoginShellEnv } from './pty-manager'
 import { initAutoUpdater, cleanupAutoUpdater } from './auto-updater'
 import { buildAppMenu } from './app-menu'
@@ -16,6 +17,8 @@ import { sshManager } from './ssh-manager'
 import { locationManager } from './location-manager'
 import { openclawClient, buildOpenclawWsUrl } from './openclaw-client'
 import { preferencesManager } from './preferences-manager'
+import { workspaceManager } from './workspace-manager'
+import { windowRegistry } from './window-registry'
 import {
   initMissionControl,
   cleanupMissionControl,
@@ -29,11 +32,45 @@ import { registerPreviewScheme, installPreviewProtocol } from './preview-protoco
 // Scheme privileges must be declared before app ready.
 registerPreviewScheme()
 
-function createWindow(): void {
+/**
+ * The teardown ladder (PRDCT-1703). One window closing used to run the whole
+ * app's shutdown — every session in every window received pty:exit and went
+ * dead. Now:
+ *
+ *  - a NON-LAST window closing touches only the sessions IT hosts: each is
+ *    detached (`kill(id, false)` — a tmux-backed session keeps running in the
+ *    tmux server with its record intact; a plain one dies exactly as it did
+ *    on close before, its record stays restorable), its binding dropped, the
+ *    window forgotten, the primary re-elected if it was the primary, and the
+ *    new host told which sessions to re-home (`session:rehome`, the record
+ *    ids — the renderer's adoption of them is the re-homing half). Sessions
+ *    hosted by OTHER windows are never touched; ssh and OpenClaw stay up.
+ *  - the LAST window closing is today's behavior verbatim.
+ */
+function onWindowClosed(windowId: number): void {
+  const remaining = BrowserWindow.getAllWindows().filter(
+    (w) => !w.isDestroyed() && w.id !== windowId
+  )
+  if (remaining.length === 0) {
+    ptyManager.killAll()
+    sshManager.disconnectAll()
+    openclawClient.disconnectAll()
+    windowRegistry.unregisterWindow(windowId)
+    return
+  }
+  const hosted = windowRegistry.getSessionsForWindow(windowId)
+  for (const id of hosted) ptyManager.kill(id, false)
+  windowRegistry.unregisterWindow(windowId)
+  const host = windowRegistry.getPrimaryWindow()
+  if (host && hosted.length > 0) host.webContents.send('session:rehome', hosted)
+  broadcastIdentities()
+}
+
+function createWindow(workspaceId: string | null): BrowserWindow {
   const savedIcon = preferencesManager.get('appIcon')
   const icon = nativeImage.createFromPath(join(__dirname, `../../resources/icon-${savedIcon}.png`))
 
-  const mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
@@ -53,6 +90,10 @@ function createWindow(): void {
     }
   })
 
+  // Registered before load so the renderer's very first `window:identity`
+  // finds it. The registry, not the state file, is what the window shows.
+  windowRegistry.registerWindow(win, workspaceId)
+
   // In dev mode, set dock icon from PNG. In packaged mode, let macOS
   // render from the .icon bundle (which supports Tahoe glass effect).
   // applyPersistedIcon() handles copying the right .icon bundle on startup.
@@ -60,19 +101,16 @@ function createWindow(): void {
     app.dock?.setIcon(icon)
   }
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  win.on('ready-to-show', () => {
+    win.show()
   })
 
-  attachMissionControlWindow(mainWindow)
+  attachMissionControlWindow(win)
 
-  mainWindow.on('closed', () => {
-    ptyManager.killAll()
-    sshManager.disconnectAll()
-    openclawClient.disconnectAll()
-  })
+  const windowId = win.id
+  win.on('closed', () => onWindowClosed(windowId))
 
-  mainWindow.webContents.on('will-navigate', (event, url) => {
+  win.webContents.on('will-navigate', (event, url) => {
     if (url.startsWith('clave://')) {
       event.preventDefault()
       return
@@ -86,7 +124,7 @@ function createWindow(): void {
     event.preventDefault()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  win.webContents.setWindowOpenHandler((details) => {
     if (details.url.startsWith('clave://')) {
       return { action: 'deny' }
     }
@@ -98,10 +136,34 @@ function createWindow(): void {
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  return win
+}
+
+/** Show a workspace in a window of its own. A workspace already shown in a
+ *  window is never duplicated (mirroring is out of scope): that window is
+ *  brought forward instead. Otherwise a new window opens on it, and it
+ *  becomes the last-active workspace — what the first window of the next
+ *  run opens on. */
+export function openWorkspaceWindow(workspaceId: string): {
+  windowId: number
+  focusedExisting: boolean
+} {
+  const shown = windowRegistry.getWindowForWorkspace(workspaceId)
+  if (shown) {
+    if (shown.isMinimized()) shown.restore()
+    shown.show()
+    shown.focus()
+    return { windowId: shown.id, focusedExisting: true }
+  }
+  const win = createWindow(workspaceId)
+  workspaceManager.setLastActive(workspaceId)
+  // The primary's hosted set just shrank by this workspace.
+  broadcastIdentities()
+  return { windowId: win.id, focusedExisting: false }
 }
 
 app.whenReady().then(() => {
@@ -115,6 +177,7 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
+  registerWindowHandlers({ openWorkspaceWindow })
   installPreviewProtocol()
   // MCP failure must not break the app — spawns just omit the --mcp-config flag.
   void startMcpServer().catch((err) => console.error('[mcp] failed to start', err))
@@ -122,7 +185,9 @@ app.whenReady().then(() => {
   cleanupDroppedFiles()
   initNotificationManager()
   applyPersistedIcon()
-  createWindow()
+  // The first window opens on the last-active workspace (else the first
+  // registered one, else the no-workspace onboarding state).
+  createWindow(workspaceManager.resolveInitialWorkspaceId())
   buildAppMenu()
   initAutoUpdater()
   initTelemetry()
@@ -149,7 +214,9 @@ app.whenReady().then(() => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow(workspaceManager.resolveInitialWorkspaceId())
+    }
   })
 })
 
@@ -166,4 +233,3 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
-
