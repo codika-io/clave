@@ -137,6 +137,10 @@ export function SidePanel() {
   const isSingleRepo = isGitTabActive && multiRepo.result.mode === 'single'
   const singleRepoGit = useGitStatus(isSingleRepo ? cwd : null, isSingleRepo)
 
+  // Single-repo range sections, driven by the toolbar's ↓/↑ badge-buttons
+  const [showIncomingSingle, setShowIncomingSingle] = useState(false)
+  const [showOutgoingSingle, setShowOutgoingSingle] = useState(false)
+
   // Compute repo paths for MagicSync across all git modes
   const allRepoPaths = useMemo(() => {
     if (multiRepo.result.mode === 'multi') return multiRepo.result.repos.map((r) => r.path)
@@ -430,10 +434,28 @@ export function SidePanel() {
               </svg>
               <span className="truncate">{singleRepoGit.status.branch}</span>
               {singleRepoGit.status.ahead > 0 && (
-                <span className="text-green-400 text-[10px] flex-shrink-0">{'\u2191'}{singleRepoGit.status.ahead}</span>
+                <span
+                  role="button"
+                  title="Show what a push will send"
+                  onClick={() => setShowOutgoingSingle((v) => !v)}
+                  className={`text-green-400 text-[10px] flex-shrink-0 px-1 py-px rounded border cursor-pointer transition-colors ${
+                    showOutgoingSingle
+                      ? 'border-green-400/60 bg-green-400/15'
+                      : 'border-green-400/30 hover:bg-green-400/15 hover:border-green-400/60'
+                  }`}
+                >{'\u2191'}{singleRepoGit.status.ahead}</span>
               )}
               {singleRepoGit.status.behind > 0 && (
-                <span className="text-orange-400 text-[10px] flex-shrink-0">{'\u2193'}{singleRepoGit.status.behind}</span>
+                <span
+                  role="button"
+                  title="Show what a pull will bring"
+                  onClick={() => setShowIncomingSingle((v) => !v)}
+                  className={`text-orange-400 text-[10px] flex-shrink-0 px-1 py-px rounded border cursor-pointer transition-colors ${
+                    showIncomingSingle
+                      ? 'border-orange-400/60 bg-orange-400/15'
+                      : 'border-orange-400/30 hover:bg-orange-400/15 hover:border-orange-400/60'
+                  }`}
+                >{'\u2193'}{singleRepoGit.status.behind}</span>
               )}
             </span>
           )}
@@ -514,6 +536,8 @@ export function SidePanel() {
                 filterPrefix={isNavigatedSubfolder ? cwd : null}
                 externalStatus={singleRepoGit.status}
                 externalRefresh={singleRepoGit.refresh}
+                showIncoming={showIncomingSingle}
+                showOutgoing={showOutgoingSingle}
               />
             )
           )}

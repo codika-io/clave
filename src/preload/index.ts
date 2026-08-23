@@ -267,6 +267,10 @@ const electronAPI = {
   gitLog: (cwd: string, maxCount?: number) => ipcRenderer.invoke('git:log', cwd, maxCount),
   gitOutgoingCommits: (cwd: string) => ipcRenderer.invoke('git:outgoing-commits', cwd),
   gitIncomingCommits: (cwd: string) => ipcRenderer.invoke('git:incoming-commits', cwd),
+  gitRangeFiles: (cwd: string, direction: 'incoming' | 'outgoing') =>
+    ipcRenderer.invoke('git:range-files', cwd, direction),
+  gitRangeDiff: (cwd: string, direction: 'incoming' | 'outgoing', filePath: string) =>
+    ipcRenderer.invoke('git:range-diff', cwd, direction, filePath),
   gitCommitFiles: (cwd: string, hash: string) => ipcRenderer.invoke('git:commit-files', cwd, hash),
   gitCommitDiff: (cwd: string, hash: string, filePath: string) =>
     ipcRenderer.invoke('git:commit-diff', cwd, hash, filePath),

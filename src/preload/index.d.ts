@@ -466,6 +466,8 @@ export interface ElectronAPI {
   gitLog: (cwd: string, maxCount?: number) => Promise<GitLogEntry[]>
   gitOutgoingCommits: (cwd: string) => Promise<GitLogEntry[]>
   gitIncomingCommits: (cwd: string) => Promise<GitLogEntry[]>
+  gitRangeFiles: (cwd: string, direction: 'incoming' | 'outgoing') => Promise<GitCommitFileStatus[]>
+  gitRangeDiff: (cwd: string, direction: 'incoming' | 'outgoing', filePath: string) => Promise<string>
   gitCommitFiles: (cwd: string, hash: string) => Promise<GitCommitFileStatus[]>
   gitCommitDiff: (cwd: string, hash: string, filePath: string) => Promise<string>
   gitGenerateCommitMessage: (cwd: string) => Promise<string>
