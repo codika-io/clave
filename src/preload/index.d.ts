@@ -428,7 +428,8 @@ export interface ElectronAPI {
   getUsername: () => Promise<string | null>
   getAppVersion: () => Promise<string>
   installUpdate: () => Promise<void>
-  startDownload: () => Promise<void>
+  startDownload: (attempt?: 'first' | 'retry') => Promise<void>
+  openUpdaterLog: () => Promise<string>
   cancelDownload: () => Promise<void>
   getPathForFile: (file: File) => string
   persistDroppedFile: (sourcePath: string) => Promise<string | null>

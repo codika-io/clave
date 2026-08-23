@@ -202,7 +202,9 @@ const electronAPI = {
   getAppVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
 
   installUpdate: () => ipcRenderer.invoke('updater:install'),
-  startDownload: () => ipcRenderer.invoke('updater:start-download'),
+  startDownload: (attempt?: 'first' | 'retry') =>
+    ipcRenderer.invoke('updater:start-download', attempt),
+  openUpdaterLog: () => ipcRenderer.invoke('updater:open-log'),
   cancelDownload: () => ipcRenderer.invoke('updater:cancel-download'),
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
