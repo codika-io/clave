@@ -32,6 +32,7 @@ import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
 import { initSecretStore } from '../../store/secret-store'
 import { initCopyOfferStore } from '../../store/copy-offer-store'
 import { ToolbarSecretPopover } from './ToolbarSecretPopover'
+import { ToolbarWorkspacePopover } from './ToolbarWorkspacePopover'
 import { resolveColorHex } from '../../store/session-types'
 import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
 import { ToolbarTerminalPopover } from './ToolbarTerminalPopover'
@@ -644,8 +645,8 @@ export function AppShell() {
               </button>
             </div>
 
-            {/* Center — active workspace name */}
-            <ToolbarWorkspaceTitle />
+            {/* Center — active workspace, and the switcher behind it */}
+            <ToolbarWorkspacePopover />
 
             {/* Right — quick actions + divider + search + file tree */}
             <div
@@ -833,13 +834,3 @@ function ToolbarQuickActions() {
   )
 }
 
-function ToolbarWorkspaceTitle() {
-  const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const name = workspaces.find((w) => w.id === activeWorkspaceId)?.name ?? 'Clave'
-  return (
-    <span className="text-[11px] font-medium text-text-tertiary tracking-wide select-none flex-shrink-0 whitespace-nowrap">
-      {name}
-    </span>
-  )
-}

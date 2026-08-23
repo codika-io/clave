@@ -8,7 +8,6 @@ import {
   type GroupTerminalColor
 } from '../../store/session-store'
 import { useWorkspaceStore, getWorkspaceById } from '../../store/workspace-store'
-import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import ColorPicker from '../ui/ColorPicker'
 import { SessionItem } from '../session/SessionItem'
 import { FileTabItem } from '../session/FileTabItem'
@@ -1128,11 +1127,9 @@ export function Sidebar() {
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
 
-      {/* Workspace switcher — pinned above the scroll area so it never scrolls away */}
-      <WorkspaceSwitcher />
-
-      {/* Session launcher — pinned above the scroll area (like the workspace
-          switcher) so it never scrolls away with the session list. */}
+      {/* Session launcher — pinned above the scroll area so it never scrolls
+          away with the session list. (The workspace switcher used to sit here;
+          it lives in the toolbar now, behind the workspace name.) */}
       <div className="px-2 pb-1 flex-shrink-0">
         <SessionLauncher onRemoteLaunch={setRemotePickerState} />
       </div>
