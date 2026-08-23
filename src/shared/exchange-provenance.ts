@@ -33,6 +33,24 @@ export function buildProvenanceHeader(sender: ProvenanceSender | undefined): str
   return `${NAMED_PROVENANCE_PREFIX}${sender.name}" — reply with clave_send_to_session sessionId="${sender.id}"]`
 }
 
+/** The invariant opening of a checkpoint header — a self-addressed send,
+ *  logged into the transport record, never delivered anywhere. */
+export const CHECKPOINT_PROVENANCE_PREFIX = '[Checkpoint by Clave tab "'
+
+/** Header used when the checkpointing side has no tab identity. */
+export const ANONYMOUS_CHECKPOINT_HEADER = '[Checkpoint by a Clave agent — logged, not delivered]'
+
+/**
+ * Build the provenance stamped on a CHECKPOINT: a self-addressed send that is
+ * logged, never delivered (the solo lane's internal note). Deliberately NOT
+ * matched by `hasProvenanceHeader`: a checkpoint never appears in any
+ * transcript, and the matcher's delivered-message semantics must stay exact.
+ */
+export function buildCheckpointProvenance(sender: ProvenanceSender | undefined): string {
+  if (!sender) return ANONYMOUS_CHECKPOINT_HEADER
+  return `${CHECKPOINT_PROVENANCE_PREFIX}${sender.name}" — logged, not delivered]`
+}
+
 /**
  * True when `text` arrived through clave_send_to_session — i.e. it is a
  * sibling agent's message that the transcript happens to store on the user

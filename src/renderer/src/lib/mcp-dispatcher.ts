@@ -13,7 +13,10 @@ import { useWorkspaceStore, type Workspace } from '../store/workspace-store'
 import { setActiveWorkspace } from './workspace-actions'
 import { getRegisteredTerminal } from './terminal-registry'
 import { getDraftShadow, type DraftStash } from './draft-shadow'
-import { buildProvenanceHeader } from '../../../shared/exchange-provenance'
+import {
+  buildCheckpointProvenance,
+  buildProvenanceHeader
+} from '../../../shared/exchange-provenance'
 
 /**
  * Renderer-side executor for the in-app MCP server. The sidebar state (groups,
@@ -919,14 +922,57 @@ function sanitizeForPaste(s: string): string {
 // turn). Keyed by target session id; each send appends to the target's chain.
 const sendChains = new Map<string, Promise<unknown>>()
 
+/**
+ * A self-addressed send is a CHECKPOINT: the session's internal note, logged
+ * into the transport record, never delivered. The entire delivery machinery
+ * is deliberately unreachable from here — no paste envelope, no submit, no
+ * draft stash, no send chain, no sidebar markers — so nothing can ever be
+ * typed into any tab; the only effect is one ordinary message event with
+ * sender = target in the store, which the exos watcher captures like any
+ * other message (a solo lane's narrative, the phases deriving from
+ * headline-first checkpoints). `delivered` stays false — nothing was
+ * delivered, and the self-pair is what tells a checkpoint from a failed
+ * delivery. The text is sanitized exactly like a real delivery so the store
+ * holds one consistent form.
+ */
+function handleSelfCheckpoint(sessionId: string, message: string): unknown {
+  const state = useSessionStore.getState()
+  const self = state.sessions.find((s) => s.id === sessionId)
+  if (!self) throw new Error('Calling session not found')
+  const text = sanitizeForPaste(message)
+  const endpoint = captureEndpointOf(self, state.groups)
+  window.electronAPI.captureExchangeMessage({
+    ts: new Date().toISOString(),
+    sender: endpoint,
+    target: endpoint,
+    text,
+    provenance: buildCheckpointProvenance({ id: self.id, name: self.name }),
+    delivered: false
+  })
+  return {
+    checkpoint: true,
+    logged: true,
+    delivered: false,
+    sessionId: self.id,
+    name: self.name,
+    note: 'Checkpoint logged to the transport record; nothing was typed into any tab.'
+  }
+}
+
 async function handleSendToSession(payload: {
   sessionId: string
   message: string
   callerSessionId?: string
 }): Promise<unknown> {
+  // "mine", the caller's own id, or the caller's own tab name all mean the
+  // checkpoint path — resolved BEFORE the reach gate, which has nothing to
+  // gate on a message that never leaves the session.
+  if (payload.callerSessionId && payload.sessionId === 'mine') {
+    return handleSelfCheckpoint(payload.callerSessionId, payload.message)
+  }
   const target = resolveTargetSession(payload.sessionId, payload.callerSessionId)
   if (payload.callerSessionId && target.id === payload.callerSessionId) {
-    throw new Error('Refusing to send a message to your own session')
+    return handleSelfCheckpoint(payload.callerSessionId, payload.message)
   }
   assertCanReach(payload.callerSessionId, target, 'message')
   if (!target.alive) throw new Error(`Session "${target.name}" has ended`)
