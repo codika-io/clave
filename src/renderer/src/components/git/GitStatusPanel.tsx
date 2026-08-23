@@ -50,6 +50,160 @@ function formatUpdatedAt(ts: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// RangeSection — the aggregate file list of a sync range (PRDCT-1539/1679):
+// incoming = what a pull will bring, outgoing = what a push will send.
+// Rendered like the other sections (same indentation, list|tree toggle),
+// read-only rows, ⚠ on files that also have local changes.
+// ---------------------------------------------------------------------------
+
+// Range diffs report letter statuses; the row components speak the word union.
+const RANGE_STATUS_WORD: Record<string, GitFileStatus['status']> = {
+  A: 'staged',
+  M: 'modified',
+  D: 'deleted',
+  R: 'renamed',
+  T: 'modified',
+  C: 'staged'
+}
+
+function RangeSection({
+  cwd,
+  direction,
+  sectionIndentPx,
+  fileIndentPx,
+  treeBaseIndentPx,
+  localPaths,
+  refreshTick,
+  hasUpstream,
+  operating
+}: {
+  cwd: string
+  direction: 'incoming' | 'outgoing'
+  sectionIndentPx: number
+  fileIndentPx: number
+  treeBaseIndentPx: number
+  /** Paths with local changes — flagged on overlapping range rows. */
+  localPaths: Set<string>
+  /** Bump to refetch — tied to ahead/behind so the list follows the fetch cycle. */
+  refreshTick: number
+  /** Names the honest empty state: no upstream means nothing to compare against. */
+  hasUpstream: boolean
+  operating: boolean
+}): React.JSX.Element | null {
+  const gitViewMode = useSessionStore((s) => s.gitViewMode)
+  const setDiffPreview = useSessionStore((s) => s.setDiffPreview)
+  const diffPreview = useSessionStore((s) => s.diffPreview)
+  const [files, setFiles] = useState<GitFileStatus[] | null>(null)
+  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    let cancelled = false
+    window.electronAPI.gitRangeFiles(cwd, direction).then((raw) => {
+      if (cancelled) return
+      const mapped: GitFileStatus[] = raw.map((f) => ({
+        path: f.path,
+        status: RANGE_STATUS_WORD[f.status] ?? 'modified',
+        staged: false
+      }))
+      setFiles(mapped)
+      setTreeExpanded(collectAllDirPaths(compactTree(buildGitTree(mapped))))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [cwd, direction, refreshTick])
+
+  const openRangeDiff = useCallback(
+    (file: GitFileStatus, clickY?: number) => {
+      setDiffPreview({
+        file: file.path,
+        cwd,
+        type: direction,
+        staged: false,
+        fileStatus: file.status,
+        hash: null,
+        siblings: (files ?? []).map((f) => ({ file: f.path, staged: false, fileStatus: f.status })),
+        clickY
+      })
+    },
+    [setDiffPreview, cwd, direction, files]
+  )
+
+  const toggleTreeDir = useCallback((path: string) => {
+    setTreeExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }, [])
+
+  // Still loading — the header lands on the next tick.
+  if (!files) return null
+
+  const activeDiffFile =
+    diffPreview && diffPreview.cwd === cwd && diffPreview.type === direction
+      ? diffPreview.file
+      : null
+
+  // View-only surface: no Pull/Push here (a click must never sync — the
+  // toolbar's sync buttons are the action path). An empty result renders an
+  // honest explanation instead of silence.
+  return (
+    <>
+      <SectionHeader
+        label={direction === 'incoming' ? 'Incoming' : 'Outgoing'}
+        indentPx={sectionIndentPx}
+        count={files.length}
+        disabled={operating}
+      />
+      {files.length === 0 ? (
+        <div className="pr-3 py-1 text-[11px] text-text-tertiary" style={{ paddingLeft: fileIndentPx }}>
+          {hasUpstream
+            ? direction === 'incoming'
+              ? 'Nothing incoming — up to date with the remote.'
+              : 'Nothing to push.'
+            : 'This branch has no published counterpart to compare against yet.'}
+        </div>
+      ) : gitViewMode === 'tree' ? (
+        <GitTreeSection
+          baseIndentPx={treeBaseIndentPx}
+          files={files}
+          cwd={cwd}
+          selectedPaths={EMPTY_PATH_SET}
+          expandedPaths={treeExpanded}
+          activeDiffFile={activeDiffFile}
+          onToggleExpanded={toggleTreeDir}
+          onClickFile={openRangeDiff}
+          onSelect={() => {}}
+          onStageToggle={() => {}}
+          onDiscard={() => {}}
+          disabled={operating}
+          readOnly
+          overlapPaths={localPaths}
+        />
+      ) : (
+        files.map((f) => (
+          <FileRow
+            key={`${direction}-${f.path}`}
+            indentPx={fileIndentPx}
+            file={f}
+            cwd={cwd}
+            isActiveDiff={activeDiffFile === f.path}
+            onClickName={(clickY) => openRangeDiff(f, clickY)}
+            disabled={operating}
+            readOnly
+            overlap={localPaths.has(f.path)}
+          />
+        ))
+      )}
+    </>
+  )
+}
+
+const EMPTY_PATH_SET = new Set<string>()
+
+// ---------------------------------------------------------------------------
 // RepoSection — reusable file list + commit bar + diff view for a single repo
 // ---------------------------------------------------------------------------
 
@@ -58,14 +212,27 @@ function RepoSection({
   status,
   filterPrefix,
   refresh,
-  fillHeight = true
+  fillHeight = true,
+  depth = 0,
+  showIncoming = false,
+  showOutgoing = false
 }: {
   cwd: string
   status: GitStatusResult
   filterPrefix?: string | null
   refresh: () => void
   fillHeight?: boolean
+  /** Tree level of the section headers — files sit one level deeper, so the
+   *  repo's content continues the spatial tree's indentation. */
+  depth?: number
+  /** Unfold the aggregate pull preview (opened by the ↓ badge-button). */
+  showIncoming?: boolean
+  /** Unfold the aggregate push preview (opened by the ↑ badge-button). */
+  showOutgoing?: boolean
 }) {
+  const sectionIndentPx = 12 + depth * TREE_INDENT_PX
+  const fileIndentPx = sectionIndentPx + TREE_INDENT_PX
+  const treeBaseIndentPx = (depth + 1) * TREE_INDENT_PX
   const gitViewMode = useSessionStore((s) => s.gitViewMode)
   const gitShowCommitBar = useSessionStore((s) => s.gitShowCommitBar)
   const setDiffPreview = useSessionStore((s) => s.setDiffPreview)
@@ -376,15 +543,55 @@ function RepoSection({
 
   const totalFiltered = staged.length + unstaged.length + untracked.length
 
+  const localPaths = useMemo(() => new Set(status.files.map((f) => f.path)), [status.files])
+
+  // The sync-range sections (aggregate pull/push previews), opened by the
+  // ↓/↑ badge-buttons; rendered in both the clean and the dirty layout.
+  const rangeSections = (
+    <>
+      {showIncoming && status.behind > 0 && (
+        <RangeSection
+          cwd={repoRoot}
+          direction="incoming"
+          sectionIndentPx={sectionIndentPx}
+          fileIndentPx={fileIndentPx}
+          treeBaseIndentPx={treeBaseIndentPx}
+          localPaths={localPaths}
+          refreshTick={status.behind}
+          hasUpstream={status.hasUpstream}
+          operating={operating}
+        />
+      )}
+      {showOutgoing && status.ahead > 0 && (
+        <RangeSection
+          cwd={repoRoot}
+          direction="outgoing"
+          sectionIndentPx={sectionIndentPx}
+          fileIndentPx={fileIndentPx}
+          treeBaseIndentPx={treeBaseIndentPx}
+          localPaths={localPaths}
+          refreshTick={status.ahead}
+          hasUpstream={status.hasUpstream}
+          operating={operating}
+        />
+      )}
+    </>
+  )
+
   // Clean state
   if (status.files.length === 0 || (relativeFilterPrefix && totalFiltered === 0)) {
     return (
       <>
         {error && <ErrorBanner message={error} />}
-        <div className={`${fillHeight ? 'flex-1' : ''} flex items-center justify-center px-3 py-4`}>
-          <span className="text-xs text-text-tertiary text-center">
-            {relativeFilterPrefix ? 'No changes in this folder' : 'Working tree clean'}
-          </span>
+        {/* Scroll container — a long range list must scroll here exactly as
+            it does in the dirty layout (verifier round 4, finding 1). */}
+        <div className={`${fillHeight ? 'flex-1 overflow-y-auto' : ''} flex flex-col`}>
+          <div className={`${fillHeight ? 'flex-1' : ''} flex items-center justify-center px-3 py-4`}>
+            <span className="text-xs text-text-tertiary text-center">
+              {relativeFilterPrefix ? 'No changes in this folder' : 'Working tree clean'}
+            </span>
+          </div>
+          {rangeSections}
         </div>
         {gitShowCommitBar && (status.ahead > 0 || status.behind > 0 || (!status.hasUpstream && !!status.branch)) && (
           <CommitBar
@@ -417,6 +624,7 @@ function RepoSection({
           <>
             <SectionHeader
               label="Staged"
+              indentPx={sectionIndentPx}
               count={staged.length}
               action="Unstage All"
               onAction={unstageAll}
@@ -426,6 +634,7 @@ function RepoSection({
             />
             {gitViewMode === 'tree' ? (
               <GitTreeSection
+                baseIndentPx={treeBaseIndentPx}
                 files={staged}
                 cwd={repoRoot}
                 selectedPaths={selectedPaths}
@@ -443,6 +652,7 @@ function RepoSection({
               staged.map((f) => (
                 <FileRow
                   key={`s-${f.path}`}
+                  indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}
                   isSelected={selectedPaths.has(f.path)}
@@ -463,6 +673,7 @@ function RepoSection({
           <>
             <SectionHeader
               label="Modified"
+              indentPx={sectionIndentPx}
               count={unstaged.length}
               action="Stage All"
               onAction={() => stageAll(unstaged)}
@@ -472,6 +683,7 @@ function RepoSection({
             />
             {gitViewMode === 'tree' ? (
               <GitTreeSection
+                baseIndentPx={treeBaseIndentPx}
                 files={unstaged}
                 cwd={repoRoot}
                 selectedPaths={selectedPaths}
@@ -489,6 +701,7 @@ function RepoSection({
               unstaged.map((f) => (
                 <FileRow
                   key={`u-${f.path}`}
+                  indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}
                   isSelected={selectedPaths.has(f.path)}
@@ -509,6 +722,7 @@ function RepoSection({
           <>
             <SectionHeader
               label="Untracked"
+              indentPx={sectionIndentPx}
               count={untracked.length}
               action="Stage All"
               onAction={() => stageAll(untracked)}
@@ -518,6 +732,7 @@ function RepoSection({
             />
             {gitViewMode === 'tree' ? (
               <GitTreeSection
+                baseIndentPx={treeBaseIndentPx}
                 files={untracked}
                 cwd={repoRoot}
                 selectedPaths={selectedPaths}
@@ -535,6 +750,7 @@ function RepoSection({
               untracked.map((f) => (
                 <FileRow
                   key={`t-${f.path}`}
+                  indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}
                   isSelected={selectedPaths.has(f.path)}
@@ -551,6 +767,7 @@ function RepoSection({
             )}
           </>
         )}
+        {rangeSections}
       </div>
       {gitShowCommitBar && (
         <CommitBar
@@ -593,13 +810,18 @@ export function GitStatusPanel({
   isActive,
   filterPrefix,
   externalStatus,
-  externalRefresh
+  externalRefresh,
+  showIncoming = false,
+  showOutgoing = false
 }: {
   cwd: string | null
   isActive: boolean
   filterPrefix?: string | null
   externalStatus?: GitStatusResult | null
   externalRefresh?: () => void
+  /** Single-repo mode: the toolbar's ↓/↑ badge-buttons drive these. */
+  showIncoming?: boolean
+  showOutgoing?: boolean
 }) {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
@@ -646,7 +868,15 @@ export function GitStatusPanel({
           behind={status.behind}
         />
       ) : (
-        <RepoSection cwd={cwd} status={status} filterPrefix={filterPrefix} refresh={refresh} fillHeight />
+        <RepoSection
+          cwd={cwd}
+          status={status}
+          filterPrefix={filterPrefix}
+          refresh={refresh}
+          fillHeight
+          showIncoming={showIncoming}
+          showOutgoing={showOutgoing}
+        />
       )}
     </div>
   )
@@ -691,7 +921,29 @@ function MultiRepoSection({
   const parentRepoName = isParentRepo ? status.repoRoot.split(/[\\/]/).pop() || status.repoRoot : ''
   const shouldExpand = hasChanges || hasRemoteChanges
   const [expanded, setExpanded] = useState(shouldExpand)
+  const [showIncoming, setShowIncoming] = useState(false)
+  const [showOutgoing, setShowOutgoing] = useState(false)
   const initializedRef = useRef(false)
+
+  // The ↓/↑ badges are buttons: they unfold the aggregate pull/push preview
+  // inside the repo's content (and open the repo if it was folded).
+  const toggleRange = useCallback(
+    (e: React.MouseEvent, direction: 'incoming' | 'outgoing') => {
+      e.stopPropagation()
+      const isOpen = direction === 'incoming' ? showIncoming : showOutgoing
+      const setter = direction === 'incoming' ? setShowIncoming : setShowOutgoing
+      if (!isOpen) {
+        setter(true)
+        setExpanded(true)
+      } else if (!expanded) {
+        // Section already on but the repo is folded: reveal, don't toggle off.
+        setExpanded(true)
+      } else {
+        setter(false)
+      }
+    },
+    [showIncoming, showOutgoing, expanded]
+  )
 
   // Update default expanded state when changes appear/disappear, but only on first load
   useEffect(() => {
@@ -776,15 +1028,49 @@ function MultiRepoSection({
         {/* Branch badge */}
         <span className="text-text-tertiary truncate">{status.branch}</span>
 
-        {/* Badges (right-aligned) */}
+        {/* Badges (right-aligned) — ↓/↑ are buttons opening the range sections */}
         <span className="ml-auto flex-shrink-0 flex items-center gap-1.5">
           {status.behind > 0 && (
-            <span className="text-[10px] font-medium text-orange-400">
+            <span
+              role="button"
+              tabIndex={0}
+              title="Show what a pull will bring"
+              onClick={(e) => toggleRange(e, 'incoming')}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggleRange(e as unknown as React.MouseEvent, 'incoming')
+                }
+              }}
+              className={`text-[10px] font-medium text-orange-400 px-1 py-px rounded border cursor-pointer transition-colors ${
+                showIncoming
+                  ? 'border-orange-400/60 bg-orange-400/15'
+                  : 'border-orange-400/30 hover:bg-orange-400/15 hover:border-orange-400/60'
+              }`}
+            >
               {'\u2193'}{status.behind}
             </span>
           )}
           {status.ahead > 0 && (
-            <span className="text-[10px] font-medium text-green-400">
+            <span
+              role="button"
+              tabIndex={0}
+              title="Show what a push will send"
+              onClick={(e) => toggleRange(e, 'outgoing')}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggleRange(e as unknown as React.MouseEvent, 'outgoing')
+                }
+              }}
+              className={`text-[10px] font-medium text-green-400 px-1 py-px rounded border cursor-pointer transition-colors ${
+                showOutgoing
+                  ? 'border-green-400/60 bg-green-400/15'
+                  : 'border-green-400/30 hover:bg-green-400/15 hover:border-green-400/60'
+              }`}
+            >
               {'\u2191'}{status.ahead}
             </span>
           )}
@@ -830,6 +1116,9 @@ function MultiRepoSection({
               status={status}
               refresh={refresh}
               fillHeight={false}
+              depth={depth + 1}
+              showIncoming={showIncoming}
+              showOutgoing={showOutgoing}
             />
           )}
         </div>

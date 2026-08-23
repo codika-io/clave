@@ -49,6 +49,12 @@ export function registerGitHandlers(): void {
   ipcMain.handle('git:incoming-commits', (_event, cwd: string) =>
     gitManager.getIncomingCommits(cwd)
   )
+  ipcMain.handle('git:range-files', (_event, cwd: string, direction: 'incoming' | 'outgoing') =>
+    gitManager.getRangeFiles(cwd, direction)
+  )
+  ipcMain.handle('git:range-diff', (_event, cwd: string, direction: 'incoming' | 'outgoing', filePath: string) =>
+    gitManager.getRangeDiff(cwd, direction, filePath)
+  )
   ipcMain.handle('git:commit-files', (_event, cwd: string, hash: string) =>
     gitManager.getCommitFiles(cwd, hash)
   )

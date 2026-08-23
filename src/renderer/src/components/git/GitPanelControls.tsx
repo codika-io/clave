@@ -11,7 +11,8 @@ export function SectionHeader({
   onAction,
   discardAction,
   onDiscardAction,
-  disabled
+  disabled,
+  indentPx
 }: {
   label: string
   count: number
@@ -20,9 +21,11 @@ export function SectionHeader({
   discardAction?: string
   onDiscardAction?: () => void
   disabled?: boolean
+  /** Left offset in px — lets the header sit at its tree depth (default 12 = px-3). */
+  indentPx?: number
 }) {
   return (
-    <div className="flex items-center px-3 py-1.5">
+    <div className="flex items-center pr-3 py-1.5" style={{ paddingLeft: indentPx ?? 12 }}>
       <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
         {label} ({count})
       </span>

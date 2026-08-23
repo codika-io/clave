@@ -2,7 +2,7 @@
   {
     "version": "1.68.0",
     "title": "The git panel is your real folder tree",
-    "description": "Repos now sit exactly where they live on disk — nested under their real parent folders, single-child chains merged into one row, folders foldable with rolled-up change counts and ahead/behind badges so nothing hides while folded. And the commit bar is tucked away by default (agents do the committing) — the pencil icon in the git toolbar brings it back.",
+    "description": "Repos now sit exactly where they live on disk — nested under their real parent folders, single-child chains merged into one row, folders foldable with rolled-up change counts and ahead/behind badges. The ↓ and ↑ counters are buttons: they unfold Incoming and Outgoing sections — every file a pull will bring or a push will send, rolled into one read-only list with net diffs and a ⚠ on files you also changed locally. And the commit bar is tucked away by default (agents do the committing) — the pencil icon brings it back.",
     "action": {
       "type": "navigate",
       "target": "side:git"

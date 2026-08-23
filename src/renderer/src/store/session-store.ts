@@ -68,7 +68,7 @@ interface SessionState {
   previewCwd: string | null
   previewSource: 'palette' | 'tree' | null
   previewLocationId: string | null
-  diffPreview: { file: string, cwd: string, type: 'working' | 'commit', staged: boolean, fileStatus: string, hash: string | null, siblings?: Array<{ file: string; staged: boolean; fileStatus: string }>, clickY?: number } | null
+  diffPreview: { file: string, cwd: string, type: 'working' | 'commit' | 'incoming' | 'outgoing', staged: boolean, fileStatus: string, hash: string | null, siblings?: Array<{ file: string; staged: boolean; fileStatus: string }>, clickY?: number } | null
   gitRefreshTrigger: number
   collapseAllTrigger: number
   activeView: ActiveView

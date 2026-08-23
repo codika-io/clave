@@ -377,6 +377,65 @@ class GitManager {
     }
   }
 
+  /**
+   * Aggregate file list of a sync range (PRDCT-1539 / PRDCT-1679):
+   * incoming = what a pull will bring (`HEAD...origin/<branch>`, merge-base →
+   * remote), outgoing = what a push will send (`origin/<branch>...HEAD`).
+   * Fails soft (empty list) when there is no branch or no remote ref, like
+   * getIncomingCommits.
+   */
+  async getRangeFiles(cwd: string, direction: 'incoming' | 'outgoing'): Promise<GitCommitFileStatus[]> {
+    try {
+      const git = simpleGit(cwd)
+      // The REAL tracking ref, not a guessed origin/<branch>: a branch can
+      // track a differently-named upstream, and the ahead/behind badges come
+      // from that tracking info — the range must agree with them.
+      const tracking = (await git.status()).tracking
+      if (!tracking) return []
+      const spec = direction === 'incoming' ? `HEAD...${tracking}` : `${tracking}...HEAD`
+      const numRaw = await git.raw(['diff', '--numstat', '--diff-filter=AMDRTC', spec])
+      const nameRaw = await git.raw(['diff', '--name-status', '--diff-filter=AMDRTC', spec])
+
+      const numLines = numRaw.trim().split('\n').filter(Boolean)
+      const nameLines = nameRaw.trim().split('\n').filter(Boolean)
+
+      const files: GitCommitFileStatus[] = []
+      for (let i = 0; i < nameLines.length; i++) {
+        const nameParts = nameLines[i].split('\t')
+        const statusChar = nameParts[0].charAt(0) as GitCommitFileStatus['status']
+        const filePath = nameParts[nameParts.length - 1]
+
+        let insertions = 0
+        let deletions = 0
+        if (numLines[i]) {
+          const numParts = numLines[i].split('\t')
+          insertions = numParts[0] === '-' ? 0 : parseInt(numParts[0], 10) || 0
+          deletions = numParts[1] === '-' ? 0 : parseInt(numParts[1], 10) || 0
+        }
+
+        files.push({ path: filePath, status: statusChar, insertions, deletions })
+      }
+      return files
+    } catch {
+      // Expected: no remote tracking branch
+      return []
+    }
+  }
+
+  /** Aggregate per-file diff of a sync range — the net effect, not per-commit. */
+  async getRangeDiff(cwd: string, direction: 'incoming' | 'outgoing', filePath: string): Promise<string> {
+    try {
+      const git = simpleGit(cwd)
+      const tracking = (await git.status()).tracking
+      if (!tracking) return ''
+      const spec = direction === 'incoming' ? `HEAD...${tracking}` : `${tracking}...HEAD`
+      return await git.raw(['diff', spec, '--', filePath])
+    } catch (err) {
+      console.warn('[git] getRangeDiff failed:', direction, filePath, (err as Error).message)
+      return ''
+    }
+  }
+
   async getCommitFiles(cwd: string, hash: string): Promise<GitCommitFileStatus[]> {
     try {
       const git = simpleGit(cwd)

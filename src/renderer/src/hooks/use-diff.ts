@@ -4,7 +4,7 @@ import { parseDiffLines, type DiffLine } from '../lib/diff-utils'
 export interface UseDiffArgs {
   cwd: string
   file: string
-  type: 'working' | 'commit'
+  type: 'working' | 'commit' | 'incoming' | 'outgoing'
   staged: boolean
   fileStatus: string
   hash: string | null
@@ -46,7 +46,9 @@ export function useDiff({
     const fetch = async (): Promise<void> => {
       try {
         let result: string
-        if (type === 'commit' && hash) {
+        if (type === 'incoming' || type === 'outgoing') {
+          result = await window.electronAPI.gitRangeDiff(cwd, type, file)
+        } else if (type === 'commit' && hash) {
           result = await window.electronAPI.gitCommitDiff(cwd, hash, file)
         } else {
           const isUntracked = fileStatus === 'untracked'

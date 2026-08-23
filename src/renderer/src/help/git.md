@@ -37,6 +37,10 @@ Click the sparkle icon next to the commit input to generate a commit message bas
 
 Click any file in the git panel to see a side-by-side diff with syntax highlighting.
 
+## Incoming and Outgoing
+
+The ↓ and ↑ counters on a repo are buttons: ↓ unfolds an **Incoming** section showing every file a pull will bring (all remote commits rolled into one list), ↑ an **Outgoing** section with what a push will send. Rows are read-only — click one to see the net diff — and a ⚠ marks files you also changed locally, your conflict heads-up before pulling. The sections are a pure viewing surface: syncing stays in the toolbar's pull and sync buttons.
+
 ## Push and Pull
 
 - **Push**: Send your commits to the remote
