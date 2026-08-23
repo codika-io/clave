@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.69.0",
+    "title": "Views you declare, workspaces in the toolbar",
+    "description": "A group's page can now be declared in its .clave file rather than set by hand: a quick-launch terminal marked \"groupView\": true binds its server as the group's web view at launch, and a group-level \"view\" names a page that needs no process at all. Single sessions get the same thing without a group \u2014 an agent can attach a live dashboard to its own tab, which persists across restarts and starts again in one click. An untrusted .clave file never renders a page.\n\nThe workspace switcher moved to the toolbar: click the workspace name to see every workspace on this machine and switch with one click, and add one straight from the folder picker instead of a detour through Settings. The sidebar's pill row is gone.\n\nIn the git panel the change count is now a button like the sync arrows \u2014 click it to fold the local file list away and leave just what a pull or push would carry. Those sections get a spelled-out Pull (rebase) and Push back in their headers, a clean repo says so inside a contained field, and every list scrolls a little past its last row instead of ending flush.\n\nPlus a pass over the things that shifted under you: tree rows no longer resize when a badge appears, dividers follow the tree's indentation, panels lost their drop shadow, and several buttons that were a few pixels off now line up.",
+    "action": {
+      "type": "navigate",
+      "target": "side:git"
+    }
+  },
+  {
     "version": "1.68.0",
     "title": "A new git panel, a new launcher, less chrome",
     "description": "The git panel is now your real folder tree: repos sit where they live on disk, single-child chains merge into one row, and folders fold with rolled-up change counts. The \u2193 and \u2191 badges are buttons \u2014 they unfold Incoming and Outgoing sections listing every file a pull will bring or a push will send, with a \u26a0 on files you also changed locally. The commit bar is tucked behind the pencil icon.\n\nStarting a session no longer asks where: the launcher is split into a terminal button and an agent button that remembers the agent you last used in that workspace, opens at the workspace root, and keeps a folder button for anywhere else. Groups carry their own prompt, so a group's + starts a session already briefed. And the launcher stays pinned instead of scrolling away.\n\nGroups can also open as live pages \u2014 attach a dev server, a dashboard or an HTML file and clicking the group renders it instead of the terminals. HTML files render in their own tabs too, with a Rendered \u21c4 Source toggle. Gone, because nobody used them: the Extensions entry and the toolbar's detected-URL tags. Terminals now reach the edges of their panes.",
