@@ -82,9 +82,17 @@ function SessionGroupItemImpl({
     [onClick]
   )
 
-  // Header fades a touch more than its tabs (0.45 vs 0.55) so a dimmed group
-  // header reads differently from a dimmed tab. Dragging still wins.
-  const headerOpacity = isDragging ? 0.3 : dimmed ? 0.45 : undefined
+  // Two different fades, deliberately not the same element. Dragging fades the
+  // whole row. "Not the active selection" fades only the header's own folder and
+  // name (0.45, a touch more than its tabs' 0.55, so a dimmed header reads
+  // differently from a dimmed tab) — and NOT the terminal icons beside them.
+  // Those icons are the one thing worth reading in a group you are not looking
+  // at, and stacking this dim on a stopped terminal's own fade took them to
+  // ~0.16 of full strength: present, invisible, and no way to tell what is
+  // running without clicking the group first.
+  const dragOpacity = isDragging ? 0.3 : undefined
+  const labelOpacity = dimmed ? 0.45 : undefined
+  const labelStyle = labelOpacity !== undefined ? { opacity: labelOpacity } : undefined
 
   return (
     <div
@@ -98,15 +106,16 @@ function SessionGroupItemImpl({
         onContextMenu={onContextMenu}
         onKeyDown={handleButtonKeyDown}
         className={cn(
-          'group w-full flex items-center gap-2 px-[var(--sidebar-row-px)] h-[var(--control-h-md)] rounded-lg text-left transition-[color,opacity] outline-none',
+          'group group-header w-full flex items-center gap-2 px-[var(--sidebar-row-px)] h-[var(--sidebar-row-h)] rounded-lg text-left transition-[color,opacity] outline-none',
           allSelected ? 'text-text-primary' : 'text-text-secondary'
         )}
-        style={headerOpacity !== undefined ? { opacity: headerOpacity } : undefined}
+        style={dragOpacity !== undefined ? { opacity: dragOpacity } : undefined}
       >
         {/* Folder disclosure — open when expanded, closed when collapsed */}
         <span
           onClick={handleToggleCollapse}
           className="sidebar-tab-icon flex-shrink-0 flex items-center justify-center cursor-pointer"
+          style={labelStyle}
         >
           {group.collapsed ? (
             <FolderIcon />
@@ -129,6 +138,7 @@ function SessionGroupItemImpl({
         ) : (
           <span
             className="flex-1 min-w-0 text-[13px] font-medium truncate"
+            style={labelStyle}
           >
             {group.name}
           </span>
@@ -179,10 +189,10 @@ function SessionGroupItemImpl({
                     onTerminalIconContextMenu(t.id, e)
                   }}
                   className={cn(
-                    'btn-icon btn-icon-xs',
-                    focused && 'bg-surface-200/80'
+                    'btn-icon btn-icon-xs terminal-icon',
+                    focused && 'terminal-icon--focused'
                   )}
-                  style={{ color: colorHex, opacity: alive ? 1 : 0.35 }}
+                  style={{ color: colorHex, opacity: alive ? 1 : 0.5 }}
                   title={`${t.command || 'Shell'}${alive ? ' (running)' : ''}`}
                 >
                   <IconComp className="w-4 h-4" />

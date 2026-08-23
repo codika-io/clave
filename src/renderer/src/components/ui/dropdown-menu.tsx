@@ -8,7 +8,7 @@ const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 const DropdownMenuGroup = DropdownMenuPrimitive.Group
 
 const dropdownTransition = {
-  duration: 0.15,
+  duration: 0.14,
   ease: [0.2, 0, 0, 1] as const
 }
 
@@ -37,10 +37,7 @@ const DropdownMenuContent = React.forwardRef<
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                 transition={dropdownTransition}
-                className={cn(
-                  'min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface-100 py-1 shadow-xl',
-                  className
-                )}
+                className={cn('menu-surface min-w-[220px] p-1', className)}
               >
                 {children}
               </motion.div>
@@ -56,13 +53,7 @@ const DropdownMenuContent = React.forwardRef<
       <DropdownMenuPrimitive.Content
         ref={ref}
         sideOffset={sideOffset}
-        className={cn(
-          'z-50 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface-100 py-1 shadow-xl',
-          'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
-          'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-          className
-        )}
+        className={cn('menu-surface menu-pop z-50 min-w-[220px] p-1', className)}
         {...props}
       >
         {children}
@@ -78,14 +69,7 @@ const DropdownMenuItem = React.forwardRef<
 >(({ className, danger, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
-    className={cn(
-      'relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-[13px] font-medium outline-none transition-colors',
-      'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
-      danger
-        ? 'text-red-400 hover:text-red-300 focus:bg-surface-200'
-        : 'text-text-primary hover:bg-surface-200 focus:bg-surface-200',
-      className
-    )}
+    className={cn('menu-item', danger && 'menu-item--danger', className)}
     {...props}
   />
 ))
@@ -95,14 +79,7 @@ const DropdownMenuLabel = React.forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Label>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label>
 >(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.Label
-    ref={ref}
-    className={cn(
-      'px-3 py-1 text-[11px] font-medium text-text-tertiary uppercase tracking-wide',
-      className
-    )}
-    {...props}
-  />
+  <DropdownMenuPrimitive.Label ref={ref} className={cn('menu-label', className)} {...props} />
 ))
 DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName
 
@@ -110,11 +87,7 @@ const DropdownMenuSeparator = React.forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.Separator
-    ref={ref}
-    className={cn('my-1 h-px bg-border-subtle', className)}
-    {...props}
-  />
+  <DropdownMenuPrimitive.Separator ref={ref} className={cn('menu-sep', className)} {...props} />
 ))
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName
 
@@ -130,12 +103,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
-    className={cn(
-      'relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-[13px] font-medium outline-none transition-colors',
-      'text-text-primary hover:bg-surface-200 focus:bg-surface-200 data-[state=open]:bg-surface-200',
-      'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
-      className
-    )}
+    className={cn('menu-item data-[state=open]:bg-surface-200', className)}
     {...props}
   />
 ))
@@ -148,12 +116,7 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.SubContent
       ref={ref}
-      className={cn(
-        'z-50 min-w-[200px] overflow-hidden rounded-lg border border-border bg-surface-100 py-1 shadow-xl',
-        'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-        'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
-        className
-      )}
+      className={cn('menu-surface menu-pop z-50 min-w-[200px] p-1', className)}
       {...props}
     />
   </DropdownMenuPrimitive.Portal>

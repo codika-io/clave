@@ -151,7 +151,7 @@ export function ToolbarWorkspacePopover(): React.JSX.Element {
           side="bottom"
           align="center"
           sideOffset={8}
-          className="w-[280px] py-1"
+          className="w-[300px] p-1"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           {pendingAdd ? (
@@ -163,51 +163,40 @@ export function ToolbarWorkspacePopover(): React.JSX.Element {
             />
           ) : (
             <>
-              <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
-                Workspaces
-              </div>
+              <div className="menu-label">Workspaces</div>
               <div className="max-h-[320px] overflow-y-auto">
                 {workspaces.map((ws) => {
                   const isActive = ws.id === activeWorkspaceId
                   return (
                     <button
                       key={ws.id}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors',
-                        isActive ? 'bg-surface-200' : 'hover:bg-surface-200'
-                      )}
+                      className={cn('menu-item', isActive && 'bg-surface-200')}
                       onClick={() => {
                         if (!isActive) void setActiveWorkspace(ws.id)
                         handleOpenChange(false)
                       }}
                       title={shortenPath(ws.rootDir)}
                     >
-                      <span className="w-3.5 flex-shrink-0 flex items-center justify-center">
-                        {isActive && <CheckIcon className="w-3.5 h-3.5 text-accent" />}
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-xs font-medium text-text-primary truncate">
+                      <span className="flex-1 min-w-0 py-0.5">
+                        <span className="block text-[13px] leading-tight text-text-primary truncate">
                           {ws.name}
                         </span>
-                        <span className="block text-[10px] text-text-tertiary truncate">
+                        <span className="block text-[11px] leading-tight text-text-tertiary truncate mt-0.5">
                           {shortenPath(ws.rootDir)}
                         </span>
                       </span>
                       {attention.has(ws.id) && (
                         <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />
                       )}
+                      {isActive && <CheckIcon className="w-3.5 h-3.5 text-accent flex-shrink-0" />}
                     </button>
                   )
                 })}
               </div>
-              {error && (
-                <div className="px-3 py-1.5 text-[10px] text-red-400 border-t border-border-subtle">
-                  {error}
-                </div>
-              )}
-              <div className="h-px bg-border-subtle my-1" />
+              {error && <div className="px-2 py-1.5 text-[11px] text-red-400">{error}</div>}
+              <div className="menu-sep" />
               <button
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-200 transition-colors disabled:opacity-50"
+                className="menu-item menu-item--muted"
                 onClick={() => void handleAdd()}
                 disabled={busy}
               >
@@ -215,7 +204,7 @@ export function ToolbarWorkspacePopover(): React.JSX.Element {
                 Add workspace…
               </button>
               <button
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-200 transition-colors"
+                className="menu-item menu-item--muted"
                 onClick={() => {
                   handleOpenChange(false)
                   openSettings('general')
@@ -247,44 +236,30 @@ function ProfilePicker({
 }): React.JSX.Element {
   return (
     <>
-      <div className="px-3 pt-1 pb-1.5">
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
-          <FolderOpenIcon className="w-3 h-3" />
-          Pick a profile
-        </div>
-        <div className="text-[10px] text-text-tertiary truncate mt-0.5">
-          {shortenPath(pending.rootDir)}
-        </div>
+      <div className="menu-label flex items-center gap-1.5">
+        <FolderOpenIcon className="w-3 h-3 flex-shrink-0" />
+        <span className="truncate">Pick a profile — {shortenPath(pending.rootDir)}</span>
       </div>
       <div className="max-h-[240px] overflow-y-auto">
         {pending.candidates.map((c) => (
           <button
             key={c.path}
-            className={cn(
-              'w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors',
-              c.path === pending.selected ? 'bg-surface-200' : 'hover:bg-surface-200'
-            )}
+            className={cn('menu-item', c.path === pending.selected && 'bg-surface-200')}
             onClick={() => onSelect(c.path)}
           >
-            <span className="w-3.5 flex-shrink-0 flex items-center justify-center">
-              {c.path === pending.selected && <CheckIcon className="w-3.5 h-3.5 text-accent" />}
-            </span>
-            <span className="text-xs text-text-primary truncate">{c.name}</span>
+            <span className="flex-1 min-w-0 truncate">{c.name}</span>
+            {c.path === pending.selected && (
+              <CheckIcon className="w-3.5 h-3.5 text-accent flex-shrink-0" />
+            )}
           </button>
         ))}
       </div>
-      <div className="h-px bg-border-subtle my-1" />
-      <div className="flex items-center gap-1.5 px-3 py-1">
-        <button
-          className="flex-1 text-xs font-medium px-2 py-1 rounded bg-accent text-white transition-opacity hover:opacity-90"
-          onClick={onConfirm}
-        >
+      <div className="menu-sep" />
+      <div className="flex items-center gap-1.5 px-1 py-1">
+        <button className="btn-primary btn-compact flex-1" onClick={onConfirm}>
           Add workspace
         </button>
-        <button
-          className="text-xs px-2 py-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors"
-          onClick={onCancel}
-        >
+        <button className="btn-secondary btn-compact" onClick={onCancel}>
           Cancel
         </button>
       </div>

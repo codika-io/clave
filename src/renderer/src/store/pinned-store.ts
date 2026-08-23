@@ -769,6 +769,17 @@ function showPinnedGroup(pinnedId: string, pg: PinnedGroup): void {
   }
 }
 
+/** Reveal a live group that a pinned toggle is currently hiding. No-op when
+ *  nothing is hiding it. The group switcher calls this before filtering to a
+ *  group: picking a group has to produce that group, and the toolbar's pinned
+ *  toggle would otherwise leave the list empty with no hint as to why. */
+export function revealGroup(groupId: string): void {
+  const pinned = usePinnedStore
+    .getState()
+    .pinnedGroups.find((pg) => pg.activeGroupId === groupId && !pg.visible)
+  if (pinned) usePinnedStore.getState().setVisible(pinned.id, true)
+}
+
 /** Returns the set of group IDs that are hidden by pinned toggle (active but not visible) */
 export function getHiddenGroupIds(): Set<string> {
   const ids = new Set<string>()

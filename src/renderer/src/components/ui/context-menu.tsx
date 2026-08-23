@@ -7,7 +7,7 @@ const ContextMenuRoot = ContextMenuPrimitive.Root
 const ContextMenuTrigger = ContextMenuPrimitive.Trigger
 
 const contextMenuTransition = {
-  duration: 0.15,
+  duration: 0.14,
   ease: [0.2, 0, 0, 1] as const
 }
 
@@ -35,10 +35,7 @@ const ContextMenuContent = React.forwardRef<
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={contextMenuTransition}
-                className={cn(
-                  'min-w-[160px] overflow-hidden rounded-lg border border-border bg-surface-100 py-1 shadow-xl',
-                  className
-                )}
+                className={cn('menu-surface min-w-[160px] p-1', className)}
               >
                 {children}
               </motion.div>
@@ -53,12 +50,7 @@ const ContextMenuContent = React.forwardRef<
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
         ref={ref}
-        className={cn(
-          'z-50 min-w-[160px] overflow-hidden rounded-lg border border-border bg-surface-100 py-1 shadow-xl',
-          'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
-          className
-        )}
+        className={cn('menu-surface menu-pop z-50 min-w-[160px] p-1', className)}
         {...props}
       >
         {children}
@@ -74,14 +66,7 @@ const ContextMenuItem = React.forwardRef<
 >(({ className, danger, ...props }, ref) => (
   <ContextMenuPrimitive.Item
     ref={ref}
-    className={cn(
-      'relative flex cursor-pointer select-none items-center justify-between px-3 py-1.5 text-sm font-medium outline-none transition-colors',
-      'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
-      danger
-        ? 'text-red-400 hover:text-red-300 focus:bg-surface-200'
-        : 'text-text-primary hover:bg-surface-200 focus:bg-surface-200',
-      className
-    )}
+    className={cn('menu-item justify-between', danger && 'menu-item--danger', className)}
     {...props}
   />
 ))
@@ -91,11 +76,7 @@ const ContextMenuSeparator = React.forwardRef<
   React.ComponentRef<typeof ContextMenuPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <ContextMenuPrimitive.Separator
-    ref={ref}
-    className={cn('my-1 h-px bg-border-subtle', className)}
-    {...props}
-  />
+  <ContextMenuPrimitive.Separator ref={ref} className={cn('menu-sep', className)} {...props} />
 ))
 ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName
 
