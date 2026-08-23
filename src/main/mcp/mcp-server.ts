@@ -392,7 +392,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         sessionId: z
           .string()
           .describe(
-            'Target: a session id, an exact tab name, "parent" (the tab whose agent opened yours via clave_open_session), or "mine" / your own id to log a checkpoint instead of delivering'
+            'Target: a session id, an exact tab name, "parent" (the tab whose agent opened yours via clave_open_session), or "mine" / your own id to log a checkpoint instead of delivering. "mine" always means the caller: a tab literally named "mine" is reachable by id only.'
           ),
         message: z
           .string()

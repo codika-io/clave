@@ -937,7 +937,9 @@ const sendChains = new Map<string, Promise<unknown>>()
  */
 function handleSelfCheckpoint(sessionId: string, message: string): unknown {
   const state = useSessionStore.getState()
-  const self = state.sessions.find((s) => s.id === sessionId)
+  // Same notion of "a session" as resolveTargetSession: local tabs only, so
+  // the two paths cannot quietly diverge on what may enter the record.
+  const self = state.sessions.find((s) => s.sessionType === 'local' && s.id === sessionId)
   if (!self) throw new Error('Calling session not found')
   const text = sanitizeForPaste(message)
   const endpoint = captureEndpointOf(self, state.groups)

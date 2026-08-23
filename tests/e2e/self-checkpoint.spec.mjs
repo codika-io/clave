@@ -12,8 +12,31 @@
  * positive control that non-self dispatch still errors.
  */
 import { launchApp, seedWorkspaces, userDataDir } from './harness.mjs'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+
+/**
+ * The PTYs live on the SHARED tmux socket ('clave', a fixed constant), so
+ * `--user-data-dir` isolation stops at userData: a spawned tab's tmux session
+ * and its live agent process survive `app.close()`. Kill ONLY sessions named
+ * for e2e fixture roots ('clave-e2e' is the harness's own prefix) — never
+ * anything of the user's, and never with pkill.
+ */
+function killLeakedE2eTmux() {
+  try {
+    const names = execFileSync('tmux', ['-L', 'clave', 'list-sessions', '-F', '#{session_name}'], {
+      encoding: 'utf-8'
+    })
+      .split('\n')
+      .filter(Boolean)
+    for (const n of names) {
+      if (n.includes('clave-e2e')) execFileSync('tmux', ['-L', 'clave', 'kill-session', '-t', n])
+    }
+  } catch {
+    // No tmux server = nothing leaked.
+  }
+}
 
 const DIR = userDataDir('self-checkpoint')
 const ROOT = '/tmp/clave-e2e-root-checkpoint'
@@ -104,6 +127,7 @@ function toolPayload(rpc) {
 }
 
 export async function run(t) {
+  killLeakedE2eTmux()
   mkdirSync(ROOT, { recursive: true })
   seedWorkspaces(DIR, { workspaces: [WS], activeWorkspaceId: WS.id, fresh: true })
 
@@ -201,7 +225,36 @@ export async function run(t) {
     })
     const bogusFailed = bogus?.error !== undefined || bogus?.result?.isError === true
     t.check('a nonexistent target still errors', bogusFailed, bogus)
+
+    // ── an identity-less caller (the shared discovery token) can neither
+    //    checkpoint nor forge one for a tab it does not own (C7) ──
+    const discovery = JSON.parse(readFileSync(path.join(DIR, 'mcp-server.json'), 'utf-8')).token
+    const anon = mcpClient(url, discovery)
+    await anon.init()
+    const anonMine = await anon.call('clave_send_to_session', {
+      sessionId: 'mine',
+      message: 'STATUS · forged checkpoint?'
+    })
+    const anonById = await anon.call('clave_send_to_session', {
+      sessionId: cfg.claveId,
+      message: 'STATUS · forged checkpoint?'
+    })
+    const refused = (r) => r?.error !== undefined || r?.result?.isError === true
+    t.check('an anonymous "mine" is refused', refused(anonMine), anonMine)
+    t.check('an anonymous send naming a real tab is refused', refused(anonById), anonById)
+    const storeAfter = readFileSync(path.join(DIR, 'exchange-capture', 'events.jsonl'), 'utf-8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l))
+      .filter((e) => e.kind === 'message')
+    t.equal('the anonymous attempts wrote nothing to the store', storeAfter.length, 2)
+
+    // ── cleanup: close the tab this spec spawned (kills its PTY and its tmux
+    //    session), so no live agent process outlives the run ──
+    const closed = await mcp.call('clave_close_session', { sessionId: cfg.claveId })
+    t.check('the spawned tab was closed', !refused(closed), closed)
   } finally {
     await app.close()
+    killLeakedE2eTmux()
   }
 }
