@@ -88,11 +88,17 @@ export async function run(t) {
     t.equal('and still no folder dialog', await dialogCalls(), 0)
 
     // ── the memory is PER WORKSPACE ──
-    await win.click('.segmented-item:has-text("Beta")')
-    await win.waitForTimeout(1500)
+    // Switching goes through the toolbar's workspace popover — the sidebar's
+    // pill row was retired when the switcher moved up there.
+    const switchTo = async (name) => {
+      await win.click('button[aria-label="Switch workspace"]')
+      await win.waitForTimeout(600)
+      await win.click(`[data-radix-popper-content-wrapper] button:has-text("${name}")`)
+      await win.waitForTimeout(1500)
+    }
+    await switchTo('Beta')
     t.equal('a different workspace keeps its own agent', await agentButtonLabel(win), 'Claude')
-    await win.click('.segmented-item:has-text("Alpha")')
-    await win.waitForTimeout(1500)
+    await switchTo('Alpha')
     t.equal('switching back restores Alpha’s', await agentButtonLabel(win), 'Codex')
   } finally {
     await app.close()
