@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "clave",
+  "description": "Clave agent skills",
+  "owner": { "name": "Codika", "email": "team@codika.io", "url": "https://github.com/codika-io" },
+  "plugins": [
+    { "name": "clave", "source": "./plugin", "description": "The Clave agent skills: create-workspace (author a .clave workspace file — groups, sessions, terminals, views, toolbar actions) and recover-sessions (rebuild a lost workspace from the Claude Code transcripts already on disk)", "license": "MIT" }
+  ]
+}

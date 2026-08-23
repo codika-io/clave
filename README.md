@@ -34,34 +34,36 @@ Quit Clave and drag it from `/Applications` to the Trash. To also remove local s
 
 ## Agent plugin
 
-Clave ships a companion agent plugin ([`codika-io/clave-plugin`](https://github.com/codika-io/clave-plugin)) that lets any Claude Code, Cursor, or other [Open-Plugin-compatible](https://github.com/vercel-labs/open-plugin-spec) coding agent generate `.clave` workspace files for you.
+Clave ships a companion agent plugin, in [`plugin/`](plugin/) in this repo, that lets any Claude Code, Cursor, or other [Open-Plugin-compatible](https://github.com/vercel-labs/open-plugin-spec) coding agent generate `.clave` workspace files for you. It lives here rather than in a repo of its own so the skill and the `.clave` format it describes always ship together.
 
 **Install (any Open-Plugin-compatible host — auto-detects Claude Code, Cursor, …):**
 
 ```bash
-npx plugins add codika-io/clave-plugin
+npx plugins add codika-io/clave
 ```
 
 **Claude Code native alternative:**
 
 ```
-/plugin marketplace add codika-io/clave-plugin
-/plugin install clave@clave-plugin
+/plugin marketplace add codika-io/clave
+/plugin install clave@clave
 ```
 
-Both paths produce the same `/clave:create-workspace` skill.
+Both paths install the same two skills: `/clave:create-workspace` and `/clave:recover-sessions`.
 
-**Usage:** ask your agent something like *"create a clave workspace for this repo with 3 sessions"*. It writes a valid `.clave` file to your chosen path; open it in Clave.
+**Usage:** ask your agent something like *"create a clave workspace for this repo with 3 sessions"*. It writes a valid `.clave` file to your chosen path; open it in Clave. Or, after a crash, *"recover the sessions I lost"* — it rebuilds your groups from the transcripts Claude Code already stores on disk.
 
 **Updating:**
 
 ```bash
-npx plugins add codika-io/clave-plugin   # re-run to pull latest
+npx plugins add codika-io/clave   # re-run to pull latest
 ```
 
-(Or `/plugin update clave@clave-plugin` in Claude Code native.)
+(Or `/plugin update clave@clave` in Claude Code native.)
 
-**Uninstalling:** `/plugin uninstall clave@clave-plugin` in Claude Code, or the equivalent in your host.
+**Uninstalling:** `/plugin uninstall clave@clave` in Claude Code, or the equivalent in your host.
+
+> Previously distributed as `codika-io/clave-plugin` and installed as `clave@clave-plugin`. That repo is archived; if you installed from it, uninstall and re-run the command above.
 
 ## Features
 
