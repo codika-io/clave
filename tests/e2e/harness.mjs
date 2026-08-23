@@ -90,6 +90,42 @@ export async function stubReviewDialog(app, { response, checkboxChecked = false 
   return async () => app.evaluate(() => globalThis.__e2eReviewCalls ?? [])
 }
 
+/** Run one MCP command through the renderer's dispatcher.
+ *
+ *  This is the SAME channel the MCP server uses: `mcp-bridge.ts` sends
+ *  `mcp:command` to the window and waits on `mcp:response`, because every tool
+ *  a `clave_*` call touches (sessions, groups, views) lives in the renderer's
+ *  Zustand store. Driving that channel gives a spec the real handler — the real
+ *  `handleSetSessionView`, the real store write — without standing up the HTTP
+ *  server and its per-session bearer token, which belong to specs about the
+ *  transport itself (see self-checkpoint.spec.mjs). Rejects on the handler's
+ *  own error so a spec fails on a bad call instead of asserting on undefined. */
+export async function callMcp(app, command, payload, timeoutMs = 10_000) {
+  const res = await app.evaluate(
+    async ({ BrowserWindow, ipcMain }, { command, payload, timeoutMs }) => {
+      const win = BrowserWindow.getAllWindows()[0]
+      if (!win) return { ok: false, error: 'no window' }
+      const requestId = `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      return await new Promise((resolve) => {
+        const onResponse = (_e, res) => {
+          if (res?.requestId !== requestId) return
+          ipcMain.removeListener('mcp:response', onResponse)
+          resolve(res)
+        }
+        ipcMain.on('mcp:response', onResponse)
+        win.webContents.send('mcp:command', { requestId, command, payload })
+        setTimeout(() => {
+          ipcMain.removeListener('mcp:response', onResponse)
+          resolve({ ok: false, error: `no reply to "${command}" in ${timeoutMs}ms` })
+        }, timeoutMs)
+      })
+    },
+    { command, payload, timeoutMs }
+  )
+  if (!res?.ok) throw new Error(`MCP "${command}" failed: ${res?.error ?? 'unknown'}`)
+  return res.result
+}
+
 /** The labels of the sidebar's session rows. */
 export function sidebarRows(win) {
   return win.evaluate(() =>

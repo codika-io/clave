@@ -124,7 +124,18 @@ export function TerminalGrid() {
         style={{
           gridTemplateColumns: `repeat(${cols}, 1fr)`,
           gridTemplateRows: `repeat(${rows}, 1fr)`,
-          ...(viewGroup ? { visibility: 'hidden' as const } : {})
+          // EITHER view hides the mosaic, and `visibility` (not `display`) is
+          // what keeps every terminal mounted and sized behind it.
+          //
+          // A session view without this looked broken in a way the DOM denied:
+          // the panel rendered, its header showed, and the terminal still
+          // covered the page. The panel is `absolute` with z-index auto, so it
+          // paints in the positioned layer — but so does xterm, whose own
+          // wrappers are `position: relative`, and among z-index-auto siblings
+          // DOM order wins. The grid comes second, so the terminal painted over
+          // the view's body while leaving its header visible. The group-view
+          // path never showed it because it has always hidden the grid.
+          ...(viewGroup || viewSession ? { visibility: 'hidden' as const } : {})
         }}
       >
         {orderedSessions.map((session) => {
