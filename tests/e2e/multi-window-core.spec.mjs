@@ -199,7 +199,27 @@ export async function run(t) {
       WS_B.id
     )
 
-    // ...yet a spawn from A, with no workspace named, is stamped A (invariant 4).
+    // ...yet a RAW pty:spawn from A's renderer with no workspace at all is
+    // stamped by main from A's window, not from the file (invariant 4 at
+    // main's own layer; every renderer path stamps explicitly, this is the
+    // fallback a windowed caller gets).
+    const rawId = await winA.evaluate(
+      (cwd) =>
+        window.electronAPI
+          .spawnSession(cwd, { claudeMode: false, tmuxMode: false })
+          .then((info) => info.id),
+      ROOT_A
+    )
+    await sleep(800)
+    const rawRec = sessionRecords().find((r) => r.id === rawId)
+    t.equal(
+      'a raw spawn from window A is stamped by main with A, not the last-active B',
+      rawRec?.workspaceId,
+      WS_A.id
+    )
+    await winA.evaluate((id) => window.electronAPI.killSession(id), rawId)
+
+    // ...and a spawn from A through the dispatcher, with no workspace named, is stamped A too.
     const openedA2 = await callMcpIn(app, idA.windowId, 'openSession', {
       cwd: ROOT_A,
       mode: 'terminal',
@@ -244,6 +264,33 @@ export async function run(t) {
     t.check(
       'the legacy single layout file never appears',
       !existsSync(path.join(DIR, 'sidebar-layout.json'))
+    )
+
+    // A cross-workspace write is refused by main, loudly, and writes nothing:
+    // B's renderer tries to overwrite A's layout file.
+    const rogue = await b.page.evaluate(
+      (ws) =>
+        window.electronAPI.sidebarLayoutSave(ws, {
+          groups: [
+            {
+              id: 'rogue',
+              name: 'Rogue',
+              sessionIds: [],
+              collapsed: false,
+              cwd: null,
+              terminals: []
+            }
+          ],
+          displayOrder: ['rogue']
+        }),
+      WS_A.id
+    )
+    t.equal("a write to another window's workspace is refused", rogue?.ok, false)
+    t.equal('the refusal names the reason', rogue?.reason, 'not-host')
+    t.check(
+      "and A's file is untouched",
+      !groupNames(readLayout(WS_A.id)).includes('Rogue'),
+      groupNames(readLayout(WS_A.id))
     )
 
     // ── close B: A keeps streaming, B's session is detached not killed ──
