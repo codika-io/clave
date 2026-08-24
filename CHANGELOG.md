@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.73.0] — 2026-08-24
+
 
 ### Added
 - **A trackpad tick when the drop line moves** — while dragging a session in the sidebar, each time the line snaps to a new row the trackpad gives the subtle "alignment" haptic Finder uses, so the hand feels the target change without watching the line. The tick is bound to the line itself — it fires when the rendered bar moves, never on an internal target change the eye cannot see. Powered by a tiny resident Swift helper (`resources/native/haptic-helper`, built beside the Mission Control one); silent on machines without a Force Touch trackpad.
