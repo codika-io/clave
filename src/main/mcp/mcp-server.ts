@@ -7,7 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { callRenderer, callRendererAll, registerMcpBridge } from './mcp-bridge'
 import { windowRegistry } from '../window-registry'
-import { focusedOrPrimaryWindow } from '../window-routing'
+import { focusedOrPrimaryWindow, bringForward } from '../window-routing'
 import { workspaceManager } from '../workspace-manager'
 import { moveSessionsToWindow, awaitRehomed } from '../ipc-handlers/window-handlers'
 import {
@@ -324,6 +324,9 @@ async function runCommand(command: string, payload: unknown, caller?: string): P
         }
       }
       result = await callRenderer<unknown>(command, payload, win)
+      // Focusing a tab that lives in another window means the user should
+      // SEE it: bring that window forward (inert under --test-no-activate).
+      if (command === 'focus' && win) bringForward(win)
     }
     return { content: [{ type: 'text', text: JSON.stringify(result ?? { ok: true }) }] }
   } catch (err) {

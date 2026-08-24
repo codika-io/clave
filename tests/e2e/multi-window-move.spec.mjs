@@ -183,6 +183,7 @@ export async function run(t) {
     t.check('its scrollback survived the move (tmux repaint, read through window 2)', await until(() => readMarker(app, id2.windowId).then((ok) => (ok ? true : null))), 'marker in 2')
     t.check('the SAME id was preserved (addressing survives)', idsIn(await callMcpIn(app, id2.windowId, 'list', {})).includes(SESS.id))
     const after2 = await callMcpIn(app, id2.windowId, 'list', {})
+    t.equal('a deliberate move takes focus in its new window (it shows the workspace)', after2.focusedSessionId, SESS.id)
     t.check(
       "it was NOT swallowed by window 2's selected group (the trap)",
       !after2.groups.some((x) => x.sessionIds.includes(SESS.id)),
@@ -237,6 +238,9 @@ export async function run(t) {
     const movedGroup1 = back1?.groups.find((x) => x.id === g.groupId)
     t.check('its quick-launch terminal came along, linked and alive', movedGroup1?.terminals.some((x) => x.sessionId === term.sessionId) && back1?.sessions.find((x) => x.id === term.sessionId)?.alive === true, { terminals: movedGroup1?.terminals, session: back1?.sessions.find((x) => x.id === term.sessionId) })
     t.check('and the terminal left window 2', !!(await untilListed(app, id2.windowId, term.sessionId, false)))
+    // Window 1 shows A and the group is workspace B: hidden there, so the
+    // move must not touch window 1's focus — and never land on the terminal.
+    t.check('a move into a window that does not show the workspace leaves its focus alone, never on the terminal', back1?.focusedSessionId !== term.sessionId && back1?.focusedSessionId !== SESS.id, back1?.focusedSessionId)
     const file1 = await until(() => {
       const l = windowLayout(DIR, id1.windowKey)
       return l && l.displayOrder.includes(g.groupId) ? l : null
@@ -252,6 +256,36 @@ export async function run(t) {
     // Window 1 shows workspace A; the workspace-B tab is hidden there (no
     // mounted xterm), so the scrollback is asserted at the tmux boundary.
     t.check('its scrollback survived the group move (tmux boundary — hidden in window 1)', markerInTmux(), 'marker in tmux')
+
+    // ── the same group back to window 2 (which shows B): the member takes
+    //    the focus, never the quick-launch terminal riding along ──
+    const list1 = await callMcpIn(app, id1.windowId, 'list', {})
+    const groupNow = list1.groups.find((x) => x.id === g.groupId)
+    await callMcpIn(app, id2.windowId, 'focus', { sessionId: bait.sessionId })
+    const backMove = await win1.evaluate(
+      ({ group, target }) => window.electronAPI.windowMoveGroup(group, target),
+      {
+        group: {
+          id: groupNow.id,
+          name: groupNow.name,
+          sessionIds: groupNow.sessionIds,
+          collapsed: false,
+          cwd: groupNow.cwd,
+          terminals: groupNow.terminals.map((x) => ({ id: x.id, command: x.command, commandMode: x.commandMode, color: x.color, icon: x.icon, serverUrl: x.serverUrl, sessionId: x.sessionId })),
+          workspaceId: groupNow.workspaceId,
+          color: groupNow.color
+        },
+        target: id2.windowId
+      }
+    )
+    t.check('the group moved back to window 2 with member and terminal', backMove?.ok && backMove.moved.includes(SESS.id) && backMove.moved.includes(term.sessionId), backMove)
+    const in2 = await until(async () => {
+      const l = await callMcpIn(app, id2.windowId, 'list', {})
+      const grp = l.groups.find((x) => x.id === g.groupId)
+      return grp && grp.sessionIds.includes(SESS.id) && grp.terminals.some((x) => x.sessionId === term.sessionId) && l.sessions.some((x) => x.id === term.sessionId) ? l : null
+    })
+    t.check('window 2 has the group, its member and its terminal again', !!in2, in2?.groups)
+    t.equal('and the move focused the MEMBER, not the dev-server terminal', in2?.focusedSessionId, SESS.id)
 
     // ── a group whose only member is dead cannot move: ok:false, nothing changes ──
     const gd = await callMcpIn(app, id2.windowId, 'createGroup', { name: 'Dead group' })
@@ -277,6 +311,11 @@ export async function run(t) {
       return name && tmuxSessionAlive(name) ? name : null
     })
     await sleep(1500)
+    // Window 1's selection must survive the hand-over: a close is neutral.
+    await callMcpIn(app, id1.windowId, 'focus', { sessionId: DEAD.id })
+    await sleep(500)
+    const focusBefore = (await callMcpIn(app, id1.windowId, 'list', {})).focusedSessionId
+    t.equal('control: window 1 focuses a tab of its own before the close', focusBefore, DEAD.id)
     await closeWindow(app, w2.page)
     t.equal('window 2 is gone', (await windows(app)).length, 1)
     const took = await until(async () => {
@@ -286,6 +325,7 @@ export async function run(t) {
     })
     t.check("window 1 took in window 2's group with its session, alive", !!took, groupNamesIn(await callMcpIn(app, id1.windowId, 'list', {})))
     t.check('the handed-over member is in exactly one group in window 1', took?.groups.filter((x) => x.sessionIds.includes(s2.sessionId)).length === 1, took?.groups.map((x) => [x.name, x.sessionIds]))
+    t.equal("a close hand-over is neutral: window 1's focus is unchanged", took?.focusedSessionId, DEAD.id)
     t.equal("and the record follows to window 1", recordOf(s2.sessionId)?.windowKey, id1.windowKey)
     t.check("window 2's layout file is gone", windowLayout(DIR, id2.windowKey) === null)
     t.check('the marker session survived the whole journey', tmuxSessionAlive(SESS.tmux))

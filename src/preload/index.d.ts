@@ -501,7 +501,6 @@ export interface ElectronAPI {
   windowSetWorkspace: (workspaceId: string | null) => Promise<SetWorkspaceResult>
   windowList: () => Promise<WindowIdentity[]>
   windowOpen: (workspaceId?: string) => Promise<{ windowId: number }>
-  windowFocus: (windowId: number) => Promise<{ ok: boolean }>
   windowMoveSessions: (sessionIds: string[], targetWindowId: number) => Promise<MoveResult>
   windowMoveGroup: (group: unknown, targetWindowId: number) => Promise<MoveResult & { ok: boolean }>
   getUsageLimits: () => Promise<UsageLimits | UsageError>

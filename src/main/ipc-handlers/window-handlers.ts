@@ -5,7 +5,6 @@ import { windowState } from '../window-state'
 import { ptyManager } from '../pty-manager'
 import { sidebarLayoutManager, type SidebarLayout } from '../sidebar-layout-manager'
 import { rehomeAck } from '../rehome-ack'
-import { bringForward } from '../window-routing'
 
 /** What a renderer learns about itself, and only itself: its window id, its
  *  persisted key, the workspace it shows, whether it is the primary. Pushed
@@ -155,13 +154,6 @@ export function registerWindowHandlers(deps: WindowHandlerDeps): void {
         workspaceManager.resolveInitialWorkspaceId()
     }
     return deps.openWindow(target)
-  })
-
-  ipcMain.handle('window:focus', (_event, windowId: unknown) => {
-    const win = typeof windowId === 'number' ? windowRegistry.getWindow(windowId) : null
-    if (!win) return { ok: false as const }
-    bringForward(win)
-    return { ok: true as const }
   })
 
   ipcMain.handle(

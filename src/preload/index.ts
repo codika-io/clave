@@ -309,7 +309,6 @@ const electronAPI = {
   windowList: () => ipcRenderer.invoke('window:list'),
   // A new window — the app once more — on a workspace (default: this one's).
   windowOpen: (workspaceId?: string) => ipcRenderer.invoke('window:open', workspaceId),
-  windowFocus: (windowId: number) => ipcRenderer.invoke('window:focus', windowId),
   // Move live tabs (tmux-backed) to another window, id and scrollback kept.
   windowMoveSessions: (sessionIds: string[], targetWindowId: number) =>
     ipcRenderer.invoke('window:move-sessions', sessionIds, targetWindowId),

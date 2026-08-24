@@ -105,13 +105,24 @@ export async function adoptRehomed(
   const already = new Set(useSessionStore.getState().sessions.map((s) => s.id))
   const records =
     (await window.electronAPI?.listSessionRecords?.({ ids }).catch(() => [])) ?? []
-  // A deliberate move focuses the FIRST tab that lands (a group's first
-  // member, a single moved tab); the rest arrive quietly beside it.
+  // A deliberate move focuses ONE tab that lands: a group member or a
+  // single moved tab, never a quick-launch terminal riding along (the
+  // records come back in directory order, which would otherwise put the
+  // user on a `sleep 900` pane as often as on the agent). The rest arrive
+  // quietly beside it.
+  const terminalIds = new Set<string>()
+  for (const g of useSessionStore.getState().groups) {
+    for (const t of g.terminals) if (t.sessionId) terminalIds.add(t.sessionId)
+  }
+  const ordered = [...records].sort(
+    (a, b) => Number(terminalIds.has(a.id)) - Number(terminalIds.has(b.id))
+  )
   let first = true
-  for (const r of records) {
+  for (const r of ordered) {
     if (already.has(r.id)) continue
-    const id = await adoptRecord(r, activeWorkspaceId, { focus: focus && first })
-    if (id) first = false
+    const takeFocus = focus && first && !terminalIds.has(r.id)
+    const id = await adoptRecord(r, activeWorkspaceId, { focus: takeFocus })
+    if (id && takeFocus) first = false
   }
   window.electronAPI?.ackRehomed?.(ids)
 }
