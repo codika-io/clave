@@ -28,3 +28,12 @@ Clave is a desktop app for managing multiple Claude Code terminal sessions side 
 - **Cmd+P**: Quick file search
 - **Cmd+B**: Toggle left sidebar
 - **Cmd+,**: Settings (theme, profile, workspaces, templates)
+
+## Credits
+
+The interface is set in **Geist**. The **Clave** wordmark beside the traffic
+lights is set in **Sentient**, designed by the **Indian Type Foundry** —
+Sentient is © 2019–2021 Indian Type Foundry, all rights reserved, used here
+under the ITF Free Font Licence. The wordmark ships as outlined artwork, not as
+a font file: the licence permits use, including in a logo, but not
+redistribution of the font itself.
