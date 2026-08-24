@@ -45,11 +45,16 @@ export function seedTrustedRoots(dir, roots) {
   writeFileSync(path.join(dir, 'clave-trusted-roots.json'), JSON.stringify(roots))
 }
 
-/** Launch the built app. Run `npx electron-vite build` first — these read `out/`. */
+/** Launch the built app. Run `npx electron-vite build` first — these read `out/`.
+ *
+ *  `--test-no-activate` is always passed: the run must not steal the machine's
+ *  focus from whoever is working while it goes. Its cost is that OS focus is
+ *  gone — `BrowserWindow.getFocusedWindow()` can be null and `win.isFocused()`
+ *  false all run — so assert Clave-internal focus, never the window manager's. */
 export async function launchApp(dir, { settleMs = 4000 } = {}) {
   const app = await electron.launch({
     executablePath: ELECTRON_BIN,
-    args: ['.', `--user-data-dir=${dir}`],
+    args: ['.', `--user-data-dir=${dir}`, '--test-no-activate'],
     cwd: REPO
   })
   const win = await app.firstWindow()
