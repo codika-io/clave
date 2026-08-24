@@ -1,11 +1,13 @@
 /**
- * The one-time migration off the single `sidebar-layout.json` (PRDCT-1703).
+ * The pure half of the sidebar-layout migrations (PRDCT-1703).
  *
  * Pure: no filesystem, no Electron, so vitest pins every partition rule in
- * node. The manager (sidebar-layout-manager.ts) reads the legacy file, calls
- * `partitionLegacyLayout`, merges each partition into any per-workspace file
- * that already exists (`mergeLayouts`), writes them, and RENAMES the legacy
- * file to `sidebar-layout.json.migrated-backup` — never deletes it.
+ * node. The manager (sidebar-layout-manager.ts) reads the legacy single
+ * `sidebar-layout.json`, calls `partitionLegacyLayout` to stamp each group
+ * with a workspace, concatenates the partitions (`concatLayouts`) with any
+ * per-workspace files the halted one-workspace-per-window build wrote, and
+ * writes the result as the FIRST WINDOW's layout, RENAMING every source to
+ * `.migrated-backup` — never deleting it.
  *
  * A mis-partitioned layout is the classic silent defect: nothing errors, a
  * group just shows up in the wrong workspace, or in none, days later. That

@@ -50,6 +50,8 @@ import {
   ShieldExclamationIcon,
   ClipboardDocumentIcon,
   MagnifyingGlassIcon,
+  WindowIcon,
+  ArrowTopRightOnSquareIcon,
   GlobeAltIcon
 } from '@heroicons/react/24/outline'
 
@@ -942,6 +944,61 @@ export function Sidebar() {
     [addSession]
   )
 
+  /** "Move to window …" entries for a session or a group: one per OTHER open
+   *  window (named by the workspace it shows), plus a new window on this
+   *  workspace. A move keeps the tab's id and scrollback (tmux-backed tabs
+   *  only — main refuses the rest, and the tab simply stays). */
+  const moveToWindowItems = useCallback(
+    async (move: (targetWindowId: number) => Promise<unknown>): Promise<ContextMenuState['items']> => {
+      const api = window.electronAPI
+      if (!api?.windowList) return []
+      const { windowId: mine, workspaces } = useWorkspaceStore.getState()
+      const list = await api.windowList().catch(() => [])
+      const nameOf = (wsId: string | null): string =>
+        workspaces.find((w) => w.id === wsId)?.name ?? 'No workspace'
+      const items: ContextMenuState['items'] = list
+        .filter((w) => w.windowId !== mine)
+        .map((w) => ({
+          label: `Move to window ${w.windowId} · ${nameOf(w.workspaceId)}`,
+          icon: <WindowIcon className="w-3.5 h-3.5" />,
+          onClick: () => {
+            void move(w.windowId)
+          }
+        }))
+      items.push({
+        label: 'Move to new window',
+        icon: <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />,
+        onClick: () => {
+          void api.windowOpen?.().then((res) => {
+            if (res?.windowId !== undefined) {
+              // The new renderer needs a moment to boot before it can adopt.
+              setTimeout(() => void move(res.windowId), 2500)
+            }
+          })
+        }
+      })
+      return items
+    },
+    []
+  )
+
+  const moveSessionToWindow = useCallback((sessionId: string, targetWindowId: number) => {
+    return window.electronAPI?.windowMoveSessions?.([sessionId], targetWindowId) ?? Promise.resolve()
+  }, [])
+
+  const moveGroupToWindow = useCallback((groupId: string, targetWindowId: number) => {
+    const group = useSessionStore.getState().groups.find((g) => g.id === groupId)
+    if (!group) return Promise.resolve()
+    // Hand main a plain copy: the store object carries nothing main needs
+    // beyond its fields, and the target window re-creates it from these.
+    const plain = {
+      ...group,
+      sessionIds: [...group.sessionIds],
+      terminals: group.terminals.map((t) => ({ ...t, sessionId: null }))
+    }
+    return window.electronAPI?.windowMoveGroup?.(plain, targetWindowId) ?? Promise.resolve()
+  }, [])
+
   const handleSessionContextMenu = useCallback(
     (e: React.MouseEvent, sessionId: string) => {
       e.preventDefault()
@@ -1013,9 +1070,22 @@ export function Sidebar() {
         danger: true,
         onClick: () => handleDeleteSession(sessionId)
       })
-      setContextMenu({ x: e.clientX, y: e.clientY, items })
+      const { clientX: x, clientY: y } = e
+      setContextMenu({ x, y, items })
+      // The window entries arrive a beat later (main is asked which windows
+      // exist); the menu re-renders in place with them appended.
+      if (session?.alive) {
+        void moveToWindowItems((target) => moveSessionToWindow(sessionId, target)).then((extra) => {
+          if (extra.length === 0) return
+          setContextMenu((current) =>
+            current && current.x === x && current.y === y
+              ? { ...current, items: [...items.slice(0, -1), ...extra, items[items.length - 1]] }
+              : current
+          )
+        })
+      }
     },
-    [createGroup, handleDeleteSession, handleDuplicateSession, handleResumeSession, hideAgentSession]
+    [createGroup, handleDeleteSession, handleDuplicateSession, handleResumeSession, hideAgentSession, moveToWindowItems, moveSessionToWindow]
   )
 
   const handleGroupContextMenu = useCallback(
@@ -1084,8 +1154,20 @@ export function Sidebar() {
           }
         ].filter((item): item is NonNullable<typeof item> => item !== null)
       })
+      const { clientX: x, clientY: y } = e
+      void moveToWindowItems((target) => moveGroupToWindow(groupId, target)).then((extra) => {
+        if (extra.length === 0) return
+        setContextMenu((current) =>
+          current && current.x === x && current.y === y
+            ? {
+                ...current,
+                items: [...current.items.slice(0, -1), ...extra, current.items[current.items.length - 1]]
+              }
+            : current
+        )
+      })
     },
-    [ungroupSessions, handleDeleteGroup, setGroupColor, setGroupView, setActiveGroupView]
+    [ungroupSessions, handleDeleteGroup, setGroupColor, setGroupView, setActiveGroupView, moveToWindowItems, moveGroupToWindow]
   )
 
   const handleFileTabContextMenu = useCallback(

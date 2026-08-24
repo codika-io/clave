@@ -1,26 +1,22 @@
 /**
- * `--test-no-activate`: the app under automated test must not steal the focus.
+ * `--test-no-activate`: the app under automated test must not steal the focus
+ * — nor the screen.
  *
  * An E2E run launches a second Electron instance on the same desktop a human is
  * working on. Without this flag every `ready-to-show` yanked the keyboard away
- * mid-sentence and dropped a second Clave icon in the Dock. The flag makes the
- * instance a macOS accessory that shows its windows with `showInactive()`.
+ * mid-sentence and dropped a second Clave icon in the Dock; with the first
+ * version of the flag (`showInactive()`) the keyboard stayed put but every new
+ * window still landed at the FRONT of the desktop, over the human's work. The
+ * flag now makes the instance a macOS accessory whose windows are never shown
+ * at all, with background throttling off so the hidden renderer keeps running.
  * `harness.mjs` passes it on every launch, so this spec asserts the harness's
  * own default rather than a special launch of its own.
  *
- * The load-bearing claim is: the window is ON SCREEN and was never made key.
- * That pair is exactly the difference between `showInactive()` and `show()` —
- * measured: with `show()` under the accessory policy the window is key ~600ms
- * after launch, with `showInactive()` it is not.
- *
- * WHY the second window, and why the state is captured at the `show` EVENT
- * rather than polled later: OS focus is not ours alone. Any other app on the
- * machine quitting can hand activation to this accessory instance seconds after
- * boot — observed on this host, focus arriving at +4.2s of a run that showed
- * inactive correctly. Polling `isFocused()` late therefore measures the desktop,
- * not the code. Reading it inside the window's own `show` handler measures the
- * one instant the code decides, and a second window opened AFTER the recorder is
- * installed removes the launch race entirely.
+ * The load-bearing claims: no window is ever on screen, none is ever key, and
+ * the driver can still work the app end to end (Playwright drives the renderer
+ * over the debugger protocol; a hidden page with throttling off answers).
+ * The `show` event is recorded on a second window opened AFTER the recorder is
+ * installed: it must never fire.
  */
 import {
   launchApp,
@@ -77,17 +73,15 @@ export async function run(t) {
       }
     })
     t.equal('exactly one window opened', first.windows, 1)
-    t.equal('the window IS on screen', first.visible, true)
-    // A smoke read, not the proof: the first window shows before a recorder can
-    // be installed, so this samples focus rather than catching the instant. The
-    // mutation detector is the show-event capture below.
-    t.equal('and it is not key at the first read', first.focused, false)
+    t.equal('the window is NOT on screen', first.visible, false)
+    t.equal('and it is not key', first.focused, false)
     t.equal('no Dock icon: the instance runs as an accessory', first.dockVisible, false)
 
-    // ── the race-free measurement: was the window key AT its own show? ──
+    // ── the race-free measurement: a window opened after the recorder is
+    //    installed must never reach a show event, yet must boot and answer ──
     await app.evaluate(({ app }) => {
       globalThis.__showStates = []
-      globalThis.__readyStates = [] // diagnostic: how far window creation got
+      globalThis.__readyStates = []
       app.on('browser-window-created', (_e, w) => {
         w.once('ready-to-show', () => globalThis.__readyStates.push({ id: w.id }))
         w.once('show', () =>
@@ -96,27 +90,30 @@ export async function run(t) {
       })
     })
     const opened = await openWindow(app, win, WS_B.id, { settleMs: 1500 })
-    t.equal('opening workspace B made a NEW window', opened.focusedExisting, false)
-    // Bounded wait, never a fixed settle: under host load a new window can take
-    // longer than any fixed delay to reach ready-to-show → showInactive(), and
-    // reading the recorder early returns [] — that mechanism turned this block
-    // red (3 assertions) on a host at load average ~11 while the same build ran
-    // 4/4 green on a quiet one. Baseline: show fires well inside 1500ms solo.
-    // Ceiling 30s (the contention-ledger convention); what is ASSERTED — the
-    // state captured inside the show handler itself — is unchanged.
-    const shown =
+    t.check('opening workspace B made a NEW window', typeof opened.windowId === 'number', opened)
+    // Bounded wait: under host load a new window can take longer than any
+    // fixed delay to reach ready-to-show (ceiling 30s, the contention-ledger
+    // convention). What is asserted is that it got there — and no further.
+    const ready =
       (await until(
         async () => {
-          const s = await app.evaluate(() => globalThis.__showStates)
-          return s.length >= 1 ? s : null
+          const r = await app.evaluate(() => globalThis.__readyStates)
+          return r.length >= 1 ? r : null
         },
         { tries: 120, gapMs: 250 }
-      )) ?? (await app.evaluate(() => globalThis.__showStates))
-    const ready = await app.evaluate(() => globalThis.__readyStates)
-    t.check('the new window reached its show handler', shown.length === 1, { shown, ready })
-    t.equal('it was put on screen', shown[0]?.visible, true)
-    t.equal('showInactive(), not show(): it was NOT key at that instant', shown[0]?.focused, false)
+      )) ?? (await app.evaluate(() => globalThis.__readyStates))
+    t.check('the new window reached ready-to-show (it booted)', ready.length === 1, ready)
+    const shown = await app.evaluate(() => globalThis.__showStates)
+    t.check('and was never shown: no show event at all', shown.length === 0, shown)
+    const second = await app.evaluate(({ BrowserWindow }, id) => {
+      const w = BrowserWindow.fromId(id)
+      return w ? { visible: w.isVisible(), focused: w.isFocused() } : null
+    }, opened.windowId)
+    t.equal('the second window is not on screen', second?.visible, false)
+    t.equal('nor key', second?.focused, false)
     t.equal('both windows are open', (await allWindows(app)).length, 2)
+    const answered = await opened.page.evaluate(() => window.electronAPI.windowIdentity())
+    t.equal('and the hidden second window answers over the driver', answered?.windowId, opened.windowId)
 
     // ── the driver can still work the app without OS focus ──
     // Focus is an OS concept; Playwright drives the renderer over CDP and does

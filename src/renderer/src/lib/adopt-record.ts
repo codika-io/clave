@@ -4,10 +4,10 @@ import { useSessionStore } from '../store/session-store'
 /**
  * Bring one persisted session record back as a live tab in THIS window's
  * store (PRDCT-1703). Shared by two callers:
- *  - boot restore (AppShell): survivors of a previous run;
- *  - re-homing (slice 2): a session detached from another window that this
- *    window now hosts — a closing window's sessions handed to the primary, or
- *    a workspace's sessions pulled to the window that opened it.
+ *  - boot restore (AppShell): this window's survivors of a previous run;
+ *  - re-homing: a session detached from another window that this window
+ *    now holds — a closing window's sessions handed to the primary, or a tab
+ *    (or a whole group) moved here.
  *
  * Live tmux survivors reattach to the running process (scrollback intact via
  * the tmux repaint); dead records relaunch fresh in the same cwd (Claude
@@ -82,19 +82,20 @@ export async function adoptRecord(
 }
 
 /**
- * Adopt records for the given session ids — the re-home path. Lists the
- * currently adoptable records (the sessions main just detached from their old
- * window are adoptable-live), keeps the ones whose id was handed to us, and
- * adopts each into this window. A session already in this store is skipped.
+ * Adopt records for the given session ids — the re-home path. Fetches those
+ * records whatever window they were stamped with (main just detached them
+ * from their old window; they are adoptable-live), adopts each into this
+ * window (the adoption re-stamps the record to this window), skipping any
+ * already in this store, then acknowledges to main so a caller waiting to
+ * act on the moved tab here (an MCP move into a group) can proceed.
  */
 export async function adoptRehomed(ids: string[], activeWorkspaceId: string | null): Promise<void> {
   if (ids.length === 0) return
-  const want = new Set(ids)
   const already = new Set(useSessionStore.getState().sessions.map((s) => s.id))
-  const records = (await window.electronAPI?.listSessionRecords?.().catch(() => [])) ?? []
+  const records =
+    (await window.electronAPI?.listSessionRecords?.({ ids }).catch(() => [])) ?? []
   for (const r of records) {
-    if (want.has(r.id) && !already.has(r.id)) {
-      await adoptRecord(r, activeWorkspaceId)
-    }
+    if (!already.has(r.id)) await adoptRecord(r, activeWorkspaceId)
   }
+  window.electronAPI?.ackRehomed?.(ids)
 }

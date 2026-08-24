@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   mergeLayoutForKeys,
-  partitionSidebarLayout,
+  absorbLayout,
   type LayoutGroupLike,
   type LayoutSessionLike
 } from './sidebar-layout-partition'
@@ -22,35 +22,6 @@ const g = (
 const s = (id: string, workspaceId?: string): LayoutSessionLike => ({
   id,
   ...(workspaceId ? { workspaceId } : {})
-})
-
-describe('partitionSidebarLayout', () => {
-  it('splits groups by their stamp and order ids by what they name', () => {
-    const parts = partitionSidebarLayout(
-      [g('gA', ['sA'], A), g('gB', ['sB'], B)],
-      ['gA', 'sX', 'gB', 'sB2', 'tab-1'],
-      [s('sA', A), s('sB', B), s('sX', A), s('sB2', B)],
-      A
-    )
-    expect(parts.get(A)).toEqual({
-      groups: [g('gA', ['sA'], A)],
-      displayOrder: ['gA', 'sX', 'tab-1']
-    })
-    expect(parts.get(B)).toEqual({ groups: [g('gB', ['sB'], B)], displayOrder: ['gB', 'sB2'] })
-  })
-
-  it('sends unstamped items to the fallback, null included', () => {
-    const parts = partitionSidebarLayout([g('g1', ['s1'])], ['g1', 's2'], [s('s2')], null)
-    expect([...parts.keys()]).toEqual([null])
-    expect(parts.get(null)!.displayOrder).toEqual(['g1', 's2'])
-  })
-
-  it('the WRITE path routes an unstamped group to the window workspace (fallback)', () => {
-    // Asymmetry with the TAKE path below: a persist in a workspace-bearing
-    // window writes an unstamped group to that workspace's file.
-    const parts = partitionSidebarLayout([g('g1', ['s1'])], ['g1'], [s('s1')], A)
-    expect(parts.get(A)!.groups.map((x) => x.id)).toEqual(['g1'])
-  })
 })
 
 describe('mergeLayoutForKeys', () => {
@@ -147,5 +118,52 @@ describe('mergeLayoutForKeys', () => {
       ['u1']
     )
     expect(out.groups.map((x) => x.id)).toEqual(['gN'])
+  })
+})
+
+describe("absorbLayout — taking in another window's groups", () => {
+  const store = {
+    groups: [g('g1', ['s1'], A)],
+    displayOrder: ['g1', 's-free']
+  }
+
+  it('appends unknown groups and unplaced order entries, in incoming order', () => {
+    const out = absorbLayout(store, {
+      groups: [g('g2', ['s2'], A), g('g3', ['s3'], B)],
+      displayOrder: ['g3', 'g2', 's-other']
+    })
+    expect(out.groups.map((x) => x.id)).toEqual(['g1', 'g2', 'g3'])
+    expect(out.displayOrder).toEqual(['g1', 's-free', 'g3', 'g2', 's-other'])
+  })
+
+  it('leaves a known group exactly as it is (the store wins over the handover)', () => {
+    const out = absorbLayout(store, {
+      groups: [g('g1', ['s1', 's9'], B)],
+      displayOrder: ['g1']
+    })
+    expect(out.groups).toEqual(store.groups)
+    expect(out.displayOrder).toEqual(store.displayOrder)
+  })
+
+  it('never surfaces at the top level an id nested in a group', () => {
+    const out = absorbLayout(store, {
+      groups: [g('g2', ['s2'], A, [{ sessionId: 't2' }])],
+      displayOrder: ['s2', 't2', 'g2', 's1']
+    })
+    expect(out.displayOrder).toEqual(['g1', 's-free', 'g2'])
+  })
+
+  it('tolerates a malformed handover', () => {
+    const out = absorbLayout(store, {
+      groups: [{ id: 'g2' } as unknown as LayoutGroupLike, null as unknown as LayoutGroupLike],
+      displayOrder: ['g2', 7 as unknown as string]
+    })
+    expect(out.groups.map((x) => x.id)).toEqual(['g1', 'g2'])
+    expect(out.groups[1].sessionIds).toEqual([])
+    expect(out.displayOrder).toEqual(['g1', 's-free', 'g2'])
+  })
+
+  it('is a no-op for an empty handover', () => {
+    expect(absorbLayout(store, {})).toEqual(store)
   })
 })

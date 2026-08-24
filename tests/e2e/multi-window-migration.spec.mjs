@@ -1,20 +1,22 @@
 /**
- * The one-time sidebar-layout migration (PRDCT-1703, invariant 6): the legacy
- * single `sidebar-layout.json` is partitioned into one file per workspace on
- * the first load after the update, every legacy group landing in EXACTLY ONE
- * per-workspace file, and the legacy file is kept as `.migrated-backup`.
+ * The one-time sidebar-layout migration (PRDCT-1703): on the first boot of
+ * the multi-window build (no windows.json yet) the legacy single
+ * `sidebar-layout.json` — and the per-workspace files of the halted
+ * one-workspace-per-window build, if any — become the FIRST WINDOW's own
+ * layout file, every group landing exactly once and stamped with a
+ * workspace, the sources kept as `.migrated-backup`.
  *
  * Seeded like a real pre-update profile: live tmux sessions with their
  * records (so the groups survive the renderer's restore, which drops a group
- * whose sessions are gone), and a legacy layout mixing a stamped group, an
+ * whose sessions are gone), a legacy layout mixing a stamped group, an
  * unstamped group placed by its cwd, an unstamped group with no usable cwd
- * (fallback: the last-active workspace), and a bare session id in the display
- * order placed by its record. The assertions read the FILES the migration
- * wrote and then the app's own scoped listing.
+ * (fallback: the last-active workspace), a bare session id in the display
+ * order, and one per-workspace file holding a fourth group. The assertions
+ * read the FILE the migration wrote and then the app's own scoped listing.
  *
- * Failure modes this must catch: everything dumped into one workspace, a
- * group dropped or duplicated, the legacy file deleted instead of kept, the
- * display order not following its items.
+ * Failure modes this must catch: a group dropped or duplicated, a group left
+ * unstamped (it would show in every workspace), a source deleted instead of
+ * kept, the migration running twice.
  */
 import {
   launchApp,
@@ -22,7 +24,10 @@ import {
   seedTrustedRoots,
   userDataDir,
   callMcp,
-  killLeakedE2eTmux
+  identityOf,
+  killLeakedE2eTmux,
+  persistedWindows,
+  windowLayout
 } from './harness.mjs'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -47,30 +52,11 @@ const WS_B = {
 }
 
 const SESS = {
-  a: {
-    id: '11111111-0000-4000-8000-000000000001',
-    tmux: 'clave-e2e-mig-a',
-    cwd: ROOT_A,
-    workspaceId: WS_A.id
-  },
-  b: {
-    id: '22222222-0000-4000-8000-000000000002',
-    tmux: 'clave-e2e-mig-b',
-    cwd: ROOT_B,
-    workspaceId: WS_B.id
-  },
-  c: {
-    id: '33333333-0000-4000-8000-000000000003',
-    tmux: 'clave-e2e-mig-c',
-    cwd: ROOT_A,
-    workspaceId: undefined
-  },
-  x: {
-    id: '44444444-0000-4000-8000-000000000004',
-    tmux: 'clave-e2e-mig-x',
-    cwd: ROOT_B,
-    workspaceId: WS_B.id
-  }
+  a: { id: '11111111-0000-4000-8000-000000000001', tmux: 'clave-e2e-mig-a', cwd: ROOT_A, workspaceId: WS_A.id },
+  b: { id: '22222222-0000-4000-8000-000000000002', tmux: 'clave-e2e-mig-b', cwd: ROOT_B, workspaceId: WS_B.id },
+  c: { id: '33333333-0000-4000-8000-000000000003', tmux: 'clave-e2e-mig-c', cwd: ROOT_A, workspaceId: undefined },
+  x: { id: '44444444-0000-4000-8000-000000000004', tmux: 'clave-e2e-mig-x', cwd: ROOT_B, workspaceId: WS_B.id },
+  p: { id: '55555555-0000-4000-8000-000000000005', tmux: 'clave-e2e-mig-p', cwd: ROOT_B, workspaceId: WS_B.id }
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -106,11 +92,6 @@ const group = (id, name, sessionIds, extra = {}) => ({
   ...extra
 })
 
-function readLayout(wsId) {
-  const f = path.join(DIR, 'sidebar-layouts', `${wsId}.json`)
-  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf-8')) : null
-}
-
 export async function run(t) {
   killLeakedE2eTmux()
   mkdirSync(ROOT_A, { recursive: true })
@@ -130,55 +111,52 @@ export async function run(t) {
   const legacyPath = path.join(DIR, 'sidebar-layout.json')
   const legacyText = JSON.stringify(legacy, null, 2)
   writeFileSync(legacyPath, legacyText)
+  // A per-workspace file of the halted build, holding a fourth group.
+  const perWsPath = path.join(DIR, 'sidebar-layouts', `${WS_B.id}.json`)
+  mkdirSync(path.dirname(perWsPath), { recursive: true })
+  const perWsText = JSON.stringify(
+    { groups: [group('g-perws', 'Per-workspace B', [SESS.p.id], { workspaceId: WS_B.id })], displayOrder: ['g-perws'] },
+    null,
+    2
+  )
+  writeFileSync(perWsPath, perWsText)
 
   let app = null
   try {
     const launched = await launchApp(DIR, { settleMs: 7000 })
     app = launched.app
+    const id = await identityOf(launched.win)
+    const key = id?.windowKey
+    t.check('the first boot minted a window key', typeof key === 'string', id)
+    t.check('windows.json holds that one window', persistedWindows(DIR).length === 1 && persistedWindows(DIR)[0].key === key, persistedWindows(DIR))
 
     // ── the files ──
     t.check('the legacy file is gone from its old path', !existsSync(legacyPath))
     const backup = `${legacyPath}.migrated-backup`
     t.check('the legacy file is kept as .migrated-backup', existsSync(backup), backup)
+    t.check('the backup is the legacy file byte for byte', existsSync(backup) && readFileSync(backup, 'utf-8') === legacyText)
+    t.check('the per-workspace file is gone from its old path', !existsSync(perWsPath))
     t.check(
-      'the backup is the legacy file byte for byte',
-      existsSync(backup) && readFileSync(backup, 'utf-8') === legacyText
+      'and kept as .migrated-backup, byte for byte',
+      existsSync(`${perWsPath}.migrated-backup`) && readFileSync(`${perWsPath}.migrated-backup`, 'utf-8') === perWsText
     )
 
-    const fileA = readLayout(WS_A.id)
-    const fileB = readLayout(WS_B.id)
-    t.check('workspace A got a layout file', fileA !== null)
-    t.check('workspace B got a layout file', fileB !== null)
-    const idsA = (fileA?.groups ?? []).map((g) => g.id).sort()
-    const idsB = (fileB?.groups ?? []).map((g) => g.id).sort()
+    const file = windowLayout(DIR, key)
+    t.check("the first window got a layout file", file !== null)
+    const byId = new Map((file?.groups ?? []).map((g) => [g.id, g]))
     t.check(
-      'the stamped group and the orphan (fallback = last-active A) landed in A',
-      JSON.stringify(idsA) === JSON.stringify(['g-orphan', 'g-stamped']),
-      idsA
+      'every legacy group landed in it exactly once',
+      JSON.stringify([...byId.keys()].sort()) === JSON.stringify(['g-bycwd', 'g-orphan', 'g-perws', 'g-stamped']),
+      [...byId.keys()]
     )
+    t.equal('the stamped group kept its workspace', byId.get('g-stamped')?.workspaceId, WS_A.id)
+    t.equal('the cwd-placed group was stamped by its cwd', byId.get('g-bycwd')?.workspaceId, WS_B.id)
+    t.equal('the orphan was stamped with the fallback (last-active A)', byId.get('g-orphan')?.workspaceId, WS_A.id)
+    t.equal('the per-workspace group kept its stamp', byId.get('g-perws')?.workspaceId, WS_B.id)
     t.check(
-      'the cwd-placed group landed in B',
-      JSON.stringify(idsB) === JSON.stringify(['g-bycwd']),
-      idsB
-    )
-    t.check(
-      'every group is stamped with the workspace it landed in',
-      (fileA?.groups ?? []).every((g) => g.workspaceId === WS_A.id) &&
-        (fileB?.groups ?? []).every((g) => g.workspaceId === WS_B.id)
-    )
-    t.check(
-      'the bare session id in the order followed its record to B',
-      (fileB?.displayOrder ?? []).includes(SESS.x.id) &&
-        !(fileA?.displayOrder ?? []).includes(SESS.x.id),
-      { a: fileA?.displayOrder, b: fileB?.displayOrder }
-    )
-    t.check(
-      'the order follows the groups, in the legacy order',
-      JSON.stringify(fileA?.displayOrder?.filter((id) => id.startsWith('g-'))) ===
-        JSON.stringify(['g-stamped', 'g-orphan']) &&
-        JSON.stringify(fileB?.displayOrder?.filter((id) => id.startsWith('g-'))) ===
-          JSON.stringify(['g-bycwd']),
-      { a: fileA?.displayOrder, b: fileB?.displayOrder }
+      'the bare session id of the legacy order is in the window order',
+      (file?.displayOrder ?? []).includes(SESS.x.id),
+      file?.displayOrder
     )
 
     // ── the app: each workspace lists exactly its own migrated groups ──
@@ -186,36 +164,26 @@ export async function run(t) {
     const inB = await callMcp(app, 'list', { workspace: WS_B.id })
     const namesA = inA.groups.map((g) => g.name).sort()
     const namesB = inB.groups.map((g) => g.name).sort()
-    t.check(
-      'workspace A shows the stamped group and the orphan',
-      JSON.stringify(namesA) === JSON.stringify(['Orphan', 'Stamped A']),
-      namesA
-    )
-    t.check(
-      'workspace B shows the cwd-placed group',
-      JSON.stringify(namesB) === JSON.stringify(['By cwd B']),
-      namesB
-    )
+    t.check('workspace A shows the stamped group and the orphan', JSON.stringify(namesA) === JSON.stringify(['Orphan', 'Stamped A']), namesA)
+    t.check('workspace B shows the cwd-placed and the per-workspace groups', JSON.stringify(namesB) === JSON.stringify(['By cwd B', 'Per-workspace B']), namesB)
     const all = await callMcp(app, 'list', {})
-    t.equal('no group was duplicated across workspaces', all.groups.length, 3)
+    t.equal('no group was duplicated', all.groups.length, 4)
     t.check(
-      'every seeded session came back alive',
+      'every seeded session came back alive (orphan records adopted by the primary)',
       Object.values(SESS).every((s) => all.sessions.some((l) => l.id === s.id && l.alive)),
       all.sessions.map((s) => s.id)
     )
 
-    // A second boot must not re-run anything: the backup stays, nothing changes.
+    // A second boot must not re-run anything: the backups stay, nothing changes.
     await app.close()
     app = null
     await sleep(1000)
-    const again = await launchApp(DIR, { settleMs: 5000 })
+    const again = await launchApp(DIR, { settleMs: 6000 })
     app = again.app
-    t.check(
-      'a second boot leaves the backup in place (idempotent)',
-      existsSync(backup) && !existsSync(legacyPath)
-    )
+    t.check('a second boot leaves the backups in place (idempotent)', existsSync(backup) && !existsSync(legacyPath) && !existsSync(perWsPath))
+    t.equal('and the same window comes back', (await identityOf(again.win))?.windowKey, key)
     const listed = await callMcp(app, 'list', {})
-    t.equal('and the groups are still three', listed.groups.length, 3)
+    t.equal('and the groups are still four', listed.groups.length, 4)
 
     for (const s of Object.values(SESS)) {
       await callMcp(app, 'closeSession', { sessionId: s.id }).catch(() => {})

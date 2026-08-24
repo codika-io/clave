@@ -2,11 +2,12 @@
  *
  * A workspace is a ROOT FOLDER (e.g. ~/.antasphere), not a .clave file: each
  * workspace carries one chosen profile file (.clave/workspaces/<name>.clave)
- * that defines its pinned groups and toolbar. Each WINDOW shows exactly one
- * workspace and scopes everything visible in it (sessions, groups, pins,
+ * that defines its pinned groups and toolbar. Each WINDOW shows one workspace
+ * at a time and scopes everything visible in it (sessions, groups, pins,
  * toolbar); a window's `activeWorkspaceId === null` if and only if no
  * workspaces are registered (the app then behaves as if the feature didn't
- * exist). At most one window shows a given workspace at a time.
+ * exist). Any number of windows may show the same workspace: a window is the
+ * whole app once more, on whatever workspace the user picks for it.
  */
 export interface Workspace {
   /** Stable uuid — sessions, groups, and pins are stamped with it. */
@@ -27,19 +28,26 @@ export interface Workspace {
  *  same way the sidebar layouts store groups — main is dumb, crash-safe
  *  storage; the renderer is the source of truth during a run. */
 /** What a renderer learns about the window it runs in — and only that
- *  window. Runtime truth from the main-process WindowRegistry, never
- *  persisted (BrowserWindow ids restart at 1 on every launch). */
+ *  window. `windowId` is runtime truth from the main-process WindowRegistry
+ *  (BrowserWindow ids restart at 1 on every launch); `windowKey` is the
+ *  persisted identity that survives a restart, the name of the window's own
+ *  sidebar layout file and the stamp on the session records it opened. */
 export interface WindowIdentity {
   windowId: number
+  windowKey: string
   /** The workspace this window SHOWS; null only in no-workspace mode. */
   workspaceId: string | null
-  /** The first window of the run, re-elected as the lowest surviving id when
-   *  it closes: hosts every workspace no window shows, carries app-level
-   *  fallbacks, and alone writes the unscoped (no-workspace) state. */
+  /** The lowest-id live window, re-elected when it closes: takes in what a
+   *  closing window leaves behind and adopts orphans at boot (records and
+   *  layouts whose window no longer exists), and carries app-level fallbacks. */
   isPrimary: boolean
-  /** Workspaces whose sessions and state writes this window owns: its own,
-   *  plus — for the primary — every registered workspace no window shows. */
-  hostedWorkspaceIds: string[]
+}
+
+/** One entry of <userData>/windows.json — a window to bring back at boot. */
+export interface PersistedWindow {
+  key: string
+  workspaceId: string | null
+  bounds?: { x: number; y: number; width: number; height: number }
 }
 
 export interface WorkspaceStateFile {

@@ -167,26 +167,38 @@ export function identityOf(page) {
   return page.evaluate(() => window.electronAPI.windowIdentity())
 }
 
-/** Show a workspace in a window of its own, driving the REAL path: the
+/** Open a NEW window — the app once more — driving the REAL path: the
  *  renderer of `fromPage` calls `window.electronAPI.windowOpen`, exactly what
- *  the File menu, the picker and clave_open_window do. Resolves once the new
- *  window's renderer has loaded and settled; when the workspace was already
- *  shown somewhere, `focusedExisting` is true and `page` is that window's. */
-export async function openWindow(app, fromPage, workspaceId, { settleMs = 4000 } = {}) {
+ *  the File menu, the popover and clave_open_window do. `workspaceId` null
+ *  means "the asking window's own". Resolves once the new window's renderer
+ *  has loaded and settled. */
+export async function openWindow(app, fromPage, workspaceId = null, { settleMs = 4000 } = {}) {
   const before = new Set(app.windows())
   // Subscribe BEFORE asking, so a window that appears between the answer and
   // the wait cannot slip past unobserved.
   const nextWindow = app.waitForEvent('window', { timeout: 15_000 }).catch(() => null)
-  const result = await fromPage.evaluate((ws) => window.electronAPI.windowOpen(ws), workspaceId)
-  if (result.focusedExisting) {
-    return { ...result, page: await windowFor(app, result.windowId) }
-  }
+  const result = await fromPage.evaluate(
+    (ws) => window.electronAPI.windowOpen(ws ?? undefined),
+    workspaceId
+  )
   const page = app.windows().find((p) => !before.has(p)) ?? (await nextWindow)
   if (!page)
     throw new Error(`window:open answered ${JSON.stringify(result)} but no window appeared`)
   await page.waitForLoadState('domcontentloaded')
   await page.waitForTimeout(settleMs)
   return { ...result, page }
+}
+
+/** The persisted window list (`windows.json`) of an isolated instance. */
+export function persistedWindows(dir) {
+  const f = path.join(dir, 'windows.json')
+  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf-8')).windows : []
+}
+
+/** A window's own sidebar layout file, by its persisted key. */
+export function windowLayout(dir, windowKey) {
+  const f = path.join(dir, 'sidebar-layouts', 'windows', `${windowKey}.json`)
+  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf-8')) : null
 }
 
 /** Poll until `fn` returns a truthy value or the budget runs out. */

@@ -1,5 +1,7 @@
 import { Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import { focusedOrPrimaryWindow } from './window-routing'
+import { windowRegistry } from './window-registry'
+import { workspaceManager } from './workspace-manager'
 import { checkForUpdatesNow, openUpdaterLog, RELEASES_URL } from './auto-updater'
 
 const REPO_URL = 'https://github.com/codika-io/clave'
@@ -37,7 +39,22 @@ async function checkForUpdatesFromMenu(): Promise<void> {
  * Help entries. Replacing it means we now own every standard item too — the
  * Edit roles below are not decoration, they are what keeps ⌘C/⌘V working.
  */
-export function buildAppMenu(): void {
+export interface AppMenuDeps {
+  /** Open a new window on a workspace (index.ts owns createWindow). */
+  openWindow: (workspaceId: string | null) => { windowId: number }
+}
+
+export function buildAppMenu(deps: AppMenuDeps): void {
+  // File › New Window: the app once more, on the workspace of the window
+  // the user is looking at (else the last-active one). ⌘⇧N is free: ⌘N is
+  // the renderer's new-session shortcut.
+  const newWindow = (): void => {
+    const current = focusedOrPrimaryWindow()
+    const workspaceId =
+      (current ? windowRegistry.getWorkspaceForWindow(current.id) : null) ??
+      workspaceManager.resolveInitialWorkspaceId()
+    deps.openWindow(workspaceId)
+  }
   const template: MenuItemConstructorOptions[] = [
     {
       label: APP_NAME,
@@ -73,6 +90,16 @@ export function buildAppMenu(): void {
         { role: 'unhide' },
         { type: 'separator' },
         { role: 'quit', label: `Quit ${APP_NAME}` }
+      ]
+    },
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Window',
+          accelerator: 'CommandOrControl+Shift+N',
+          click: newWindow
+        }
       ]
     },
     {

@@ -3,6 +3,7 @@ import { ptyManager, isTmuxAvailable, type PtySpawnOptions } from '../pty-manage
 import { getPreference } from './clave-file-handlers'
 import { workspaceManager } from '../workspace-manager'
 import { windowRegistry } from '../window-registry'
+import { windowState } from '../window-state'
 import * as titleGenerator from '../title-generator'
 import { startWatching as startAgentStateWatching, clearState as clearAgentState } from '../agent-state-manager'
 
@@ -33,7 +34,11 @@ export function registerPtyHandlers(): void {
       (win ? windowRegistry.getWorkspaceForWindow(win.id) : null) ??
       workspaceManager.getLastActiveWorkspaceId() ??
       undefined
-    const session = ptyManager.spawn(cwd, { ...options, tmuxMode, workspaceId })
+    // The asking window is the session's HOME: its persisted key goes on the
+    // record, so the next boot brings the tab back in that window (an
+    // adoption or a move re-stamps through this same path).
+    const windowKey = (win ? windowRegistry.getKeyForWindow(win.id) : null) ?? undefined
+    const session = ptyManager.spawn(cwd, { ...options, tmuxMode, workspaceId, windowKey })
     // The sender hosts the session from now on: its renderer holds the xterm
     // and receives pty:data. Adoption and re-homing rebind through this same
     // path (the adopting window is the sender).
@@ -171,10 +176,22 @@ export function registerPtyHandlers(): void {
   // With a workspaceId only that workspace's records come back: a secondary
   // window adopts and prompts for its own workspace, never for everyone's.
   // Unfiltered (the primary at boot) is today's behavior.
-  ipcMain.handle('records:list-adoptable', (_event, workspaceId?: unknown) => {
+  // The records a window may bring back: its OWN (stamped with its key) —
+  // plus, for the primary, the orphans (no stamp, or a window that no longer
+  // exists). `ids` overrides the filter: the re-home path hands a window the
+  // ids of sessions another window just released, whatever their stamp.
+  ipcMain.handle('records:list-adoptable', (event, filter?: { ids?: unknown }) => {
     const all = ptyManager.listAdoptableSessions()
-    if (typeof workspaceId !== 'string') return all
-    return all.filter((r) => r.workspaceId === workspaceId)
+    if (filter && Array.isArray(filter.ids)) {
+      const wanted = new Set(filter.ids.filter((x): x is string => typeof x === 'string'))
+      return all.filter((r) => wanted.has(r.id))
+    }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const key = win ? windowRegistry.getKeyForWindow(win.id) : null
+    if (!win || !key) return []
+    if (!windowRegistry.isPrimary(win.id)) return all.filter((r) => r.windowKey === key)
+    const known = new Set([...windowState.keys(), ...windowRegistry.liveKeys()])
+    return all.filter((r) => r.windowKey === key || !r.windowKey || !known.has(r.windowKey))
   })
 
   // User declined to bring a survivor back → destroy it (record + tmux session).

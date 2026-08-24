@@ -9,6 +9,7 @@ import { callRenderer, callRendererAll, registerMcpBridge } from './mcp-bridge'
 import { windowRegistry } from '../window-registry'
 import { focusedOrPrimaryWindow } from '../window-routing'
 import { workspaceManager } from '../workspace-manager'
+import { moveSessionsToWindow, awaitRehomed } from '../ipc-handlers/window-handlers'
 import {
   loadOrCreateServerState,
   saveServerState,
@@ -27,7 +28,7 @@ import { createOffer } from '../copy-offer-manager'
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company). Clave can show several WINDOWS at once, each displaying ONE workspace and its own tabs; a workspace no window shows keeps its sessions running hidden. You address tabs by session id or name from anywhere and Clave routes each call to the window that hosts the tab — you never manage windows yourself. Things you open default to your own tab's workspace; pass the workspace parameter to open work elsewhere without switching the user's view, and clave_switch_workspace only when the user should look at it. The clave_* tools let you manipulate the app around you: list the current tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file — .html files render as a live page), attach a web view to a group (clave_set_group_view: a dev server URL or an .html file the user sees in the main pane when clicking the group — the way to surface a live dashboard, a preview, or a presentation right where its sessions live), attach a web view to a single session (clave_set_session_view: same idea for ONE tab with no group around it — a dashboard icon appears on the session's row; with a command Clave also runs the server for it, hidden), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user; addressed to your OWN tab it logs a CHECKPOINT into the transport record instead of delivering — a solo session's internal note, written headline-first so the workstream record carries its narrative), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Clave also records the transport layer it mediates — cross-tab message deliveries with both endpoints' token usage, agent tab spawns, Task-subagent fan-outs, session state transitions and tab closes — into an append-only event store that the exos CLI lands into each workstream's record (exos workstream capture); read it there (exos workstream events, stats, log) — there is no live query tool. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company). Clave can run several WINDOWS at once: a window is the whole app once more, on whatever workspace the user put it on (several windows may show the same workspace); each tab and group lives in the window it was opened in. You address tabs by session id or name from anywhere and Clave routes each call to the window that holds the tab. Things you open land in your own window and default to your own tab's workspace; pass the window parameter (a window id from clave_list) to open them in another window, the workspace parameter to open work in another workspace WITHOUT switching the user's view, clave_open_window to open a new window, and clave_switch_workspace only when the user should look at another workspace in your window. The clave_* tools let you manipulate the app around you: list the windows, tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups and windows, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file — .html files render as a live page), attach a web view to a group (clave_set_group_view: a dev server URL or an .html file the user sees in the main pane when clicking the group — the way to surface a live dashboard, a preview, or a presentation right where its sessions live), attach a web view to a single session (clave_set_session_view: same idea for ONE tab with no group around it — a dashboard icon appears on the session's row; with a command Clave also runs the server for it, hidden), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user; addressed to your OWN tab it logs a CHECKPOINT into the transport record instead of delivering — a solo session's internal note, written headline-first so the workstream record carries its narrative), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Clave also records the transport layer it mediates — cross-tab message deliveries with both endpoints' token usage, agent tab spawns, Task-subagent fan-outs, session state transitions and tab closes — into an append-only event store that the exos CLI lands into each workstream's record (exos workstream capture); read it there (exos workstream events, stats, log) — there is no live query tool. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -120,7 +121,22 @@ async function windowForSessionRef(ref: string): Promise<BrowserWindowLike | nul
 
 type BrowserWindowLike = ReturnType<typeof windowRegistry.getWindow>
 
-/** §3.8: resolve which window's renderer executes a command, BEFORE dispatch. */
+/** The `window` tool argument → a live window, or null when absent. An
+ *  unknown id is an error, never a silent fallback to another window. */
+function resolveWindowArg(arg: unknown, callerSessionId: string | undefined): BrowserWindowLike {
+  if (arg === undefined || arg === null) return null
+  if (arg === 'mine') {
+    const own = callerSessionId ? windowRegistry.getWindowForSession(callerSessionId) : null
+    if (!own) throw new Error('window "mine" needs a calling tab — this request has no tab identity')
+    return own
+  }
+  const id = typeof arg === 'number' ? arg : Number(arg)
+  const win = Number.isInteger(id) ? windowRegistry.getWindow(id) : null
+  if (!win) throw new Error(`No open Clave window with id ${String(arg)} — clave_list shows the windows`)
+  return win
+}
+
+/** Resolve which window's renderer executes a command, BEFORE dispatch. */
 async function resolveCommandWindow(
   command: string,
   payload: Record<string, unknown> | null,
@@ -144,17 +160,11 @@ async function resolveCommandWindow(
     }
     // 'parent' / 'mine' / an unresolved ref fall to the caller's window (rule 3).
   }
-  // Rule 2 — an explicit workspace argument routes to that workspace's host.
-  // Not for switchWorkspace: there the argument is the DESTINATION, and §3.6
-  // has the switch operate on the CALLER's window (rule 3) — routing it to the
-  // destination's host would flip the primary instead of the asking window.
-  if (command !== 'switchWorkspace' && typeof p.workspace === 'string') {
-    const wsId = resolveWorkspaceIdMain(p.workspace)
-    if (wsId) {
-      const host = windowRegistry.getHostWindowForWorkspace(wsId)
-      if (host) return host
-    }
-  }
+  // Rule 2 — an explicit `window` argument: a window id from clave_list, or
+  // "mine" for the caller's own. Any window may open work in any workspace,
+  // so the workspace argument never picks a window.
+  const named = resolveWindowArg(p.window, callerSessionId)
+  if (named) return named
   // Rule 3 — the caller's own hosting window.
   if (callerSessionId) {
     const callerWin = windowRegistry.getWindowForSession(callerSessionId)
@@ -179,16 +189,29 @@ function dedupeById<T extends { id?: unknown }>(items: T[]): T[] {
   return out
 }
 
-/** `clave_list` scope `all`: dispatch to every window and merge. Each window
- *  reports only what it hosts, so the arrays concatenate; a dedupe by id makes
- *  invariant 10 ("every live session exactly once") hold even during the brief
- *  window a re-home leaves a session in two stores. The per-window scalars
- *  (workspaces, active, focused, caller) come from the caller's own window. */
+/** `clave_list`: dispatch to every window and merge. Each window reports its
+ *  own tabs and groups (a tab lives in exactly one window), so the arrays
+ *  concatenate; a dedupe by id keeps "every live session exactly once" true
+ *  even during the brief moment a move leaves a session in two stores. Every
+ *  session and group is annotated with the window it lives in, and the
+ *  listing carries the windows themselves. The per-window scalars
+ *  (workspaces, active, focused, caller) come from the caller's own window
+ *  — for a windowless caller, the focused or primary one. The scope
+ *  "active" is the CALLER's window's workspace, resolved here so every
+ *  window filters on the same id. */
 async function aggregateList(
   payload: Record<string, unknown>,
   callerSessionId: string | undefined
 ): Promise<unknown> {
-  const replies = await callRendererAll<Record<string, unknown>>('list', payload)
+  const callerWin =
+    (callerSessionId ? windowRegistry.getWindowForSession(callerSessionId) : null) ??
+    focusedOrPrimaryWindow()
+  const scope = typeof payload.workspace === 'string' ? payload.workspace : 'all'
+  const scoped =
+    scope === 'active'
+      ? { ...payload, workspace: (callerWin && windowRegistry.getWorkspaceForWindow(callerWin.id)) ?? 'all' }
+      : payload
+  const replies = await callRendererAll<Record<string, unknown>>('list', scoped)
   const ok = replies
     .filter((r) => r.ok && r.result)
     .map((r) => ({ windowId: r.windowId, r: r.result! }))
@@ -196,16 +219,65 @@ async function aggregateList(
     const firstErr = replies.find((r) => !r.ok)?.error
     throw new Error(firstErr ?? 'Clave window not available')
   }
-  const callerWin = callerSessionId ? windowRegistry.getWindowForSession(callerSessionId) : null
   const base = (callerWin ? ok.find((o) => o.windowId === callerWin.id)?.r : undefined) ?? ok[0].r
-  const arr = (o: Record<string, unknown>, k: string): { id?: unknown }[] =>
-    Array.isArray(o[k]) ? (o[k] as { id?: unknown }[]) : []
+  const arr = (o: { windowId: number; r: Record<string, unknown> }, k: string): { id?: unknown }[] =>
+    Array.isArray(o.r[k])
+      ? (o.r[k] as { id?: unknown }[]).map((x) => ({ ...x, windowId: o.windowId }))
+      : []
+  const windows = windowRegistry.listWindows().map((w) => {
+    const identity = windowRegistry.identityOf(w.id)
+    const ws = identity?.workspaceId ?? null
+    return {
+      id: w.id,
+      workspaceId: ws,
+      workspaceName: ws ? (workspaceManager.getWorkspaces().find((x) => x.id === ws)?.name ?? null) : null,
+      isPrimary: identity?.isPrimary ?? false,
+      focused: !!windowRegistry.resolveTargetWindow({}) && windowRegistry.resolveTargetWindow({})?.id === w.id,
+      mine: !!callerWin && callerWin.id === w.id
+    }
+  })
   return {
     ...base,
-    sessions: dedupeById(ok.flatMap((o) => arr(o.r, 'sessions'))),
-    groups: dedupeById(ok.flatMap((o) => arr(o.r, 'groups'))),
-    pinnedGroups: dedupeById(ok.flatMap((o) => arr(o.r, 'pinnedGroups')))
+    windows,
+    callerWindowId: callerWin?.id ?? null,
+    sessions: dedupeById(ok.flatMap((o) => arr(o, 'sessions'))),
+    groups: dedupeById(ok.flatMap((o) => arr(o, 'groups'))),
+    // Pins are per workspace and global: every window holds the same list.
+    pinnedGroups: dedupeById(ok.flatMap((o) => (Array.isArray(o.r.pinnedGroups) ? (o.r.pinnedGroups as { id?: unknown }[]) : [])))
   }
+}
+
+/** Main's "open a new window", injected by the entry (index.ts owns
+ *  createWindow; importing it here would be a cycle). */
+let windowOpener: ((workspaceId: string | null) => { windowId: number }) | null = null
+
+export function registerMcpWindowOpener(
+  fn: (workspaceId: string | null) => { windowId: number }
+): void {
+  windowOpener = fn
+}
+
+/** `clave_open_window`: a new window on the given workspace, else on the
+ *  caller's own (the app once more, where you are). */
+function openWindowFromTool(
+  p: Record<string, unknown>,
+  callerSessionId: string | undefined
+): { windowId: number; workspaceId: string | null } {
+  if (!windowOpener) throw new Error('Clave cannot open windows yet')
+  let workspaceId: string | null
+  if (typeof p.workspace === 'string' && p.workspace.length > 0) {
+    workspaceId = resolveWorkspaceIdMain(p.workspace)
+    if (!workspaceId) throw new Error(`Unknown workspace "${p.workspace}"`)
+  } else {
+    const own =
+      (callerSessionId ? windowRegistry.getWindowForSession(callerSessionId) : null) ??
+      focusedOrPrimaryWindow()
+    workspaceId =
+      (own ? windowRegistry.getWorkspaceForWindow(own.id) : null) ??
+      workspaceManager.resolveInitialWorkspaceId()
+  }
+  const { windowId } = windowOpener(workspaceId)
+  return { windowId, workspaceId }
 }
 
 /** Run a renderer command and wrap the outcome as an MCP tool result. The
@@ -221,10 +293,33 @@ async function runCommand(command: string, payload: unknown, caller?: string): P
     const callerSessionId =
       caller ?? (typeof p.callerSessionId === 'string' ? p.callerSessionId : undefined)
     let result: unknown
-    if (command === 'list' && (p.workspace ?? 'all') === 'all') {
+    if (command === 'list') {
       result = await aggregateList(p, callerSessionId)
+    } else if (command === 'openWindow') {
+      result = openWindowFromTool(p, callerSessionId)
     } else {
       const win = await resolveCommandWindow(command, p, callerSessionId)
+      // A move INTO another window: the session travels first (detach +
+      // re-adopt there, id preserved), then the group placement runs where
+      // it now lives.
+      if (command === 'moveSession' && typeof p.sessionId === 'string' && p.window !== undefined) {
+        const subjectId = p.sessionId === 'mine' ? callerSessionId : p.sessionId
+        const target = resolveWindowArg(p.window, callerSessionId)
+        if (subjectId && UUID_RE.test(subjectId) && target && target.id !== win?.id) {
+          const outcome = moveSessionsToWindow([subjectId], target.id)
+          const refused = outcome.refused.find((r) => r.sessionId === subjectId)
+          if (refused) {
+            throw new Error(
+              refused.reason === 'not-tmux'
+                ? 'This session is not tmux-backed and cannot move between windows'
+                : `Session ${subjectId} is not live`
+            )
+          }
+          await awaitRehomed([subjectId])
+          result = await callRenderer<unknown>(command, { ...p, sessionId: subjectId }, target)
+          return { content: [{ type: 'text', text: JSON.stringify(result ?? { ok: true }) }] }
+        }
+      }
       result = await callRenderer<unknown>(command, payload, win)
     }
     return { content: [{ type: 'text', text: JSON.stringify(result ?? { ok: true }) }] }
@@ -250,18 +345,24 @@ function buildServer(callerSessionId: string | undefined): McpServer {
   // switchWorkspace — otherwise they silently fall to the primary window).
   const run = (command: string, args: unknown): Promise<ToolResult> =>
     runCommand(command, args, callerSessionId)
+  const windowArg = z
+    .union([z.number().int(), z.literal('mine')])
+    .optional()
+    .describe(
+      'Window to land in: a window id from clave_list, or "mine" (the default — your own tab\'s window).'
+    )
 
   server.registerTool(
     'clave_list',
     {
       description:
-        'List the registered workspaces (root folders; exactly one is active and scopes what the user sees), all groups and sessions (tabs) currently open in Clave, plus the pinned workspace groups (launchable templates from .clave files, with their state: idle / active-visible / active-hidden), the focused session, and — when called from inside a Clave tab — which session/group is yours. Sessions, groups, and pins are annotated with their workspaceId/workspaceName.',
+        'List the open Clave windows (id, workspace, which is yours), the registered workspaces (root folders; each window shows one and scopes what the user sees in it), all groups and sessions (tabs) currently open across every window, plus the pinned workspace groups (launchable templates from .clave files, with their state: idle / active-visible / active-hidden), the focused session, and — when called from inside a Clave tab — which session/group/window is yours. Sessions and groups are annotated with their workspaceId/workspaceName and the windowId they live in.',
       inputSchema: {
         workspace: z
           .string()
           .optional()
           .describe(
-            'Scope the listing: "all" (default), "active", or a workspace id/name. Hidden workspaces\' sessions keep running — "all" shows everything.'
+            'Scope the listing: "all" (default), "active" (your own window\'s workspace), or a workspace id/name. Hidden workspaces\' sessions keep running — "all" shows everything.'
           )
       }
     },
@@ -286,7 +387,8 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .optional()
           .describe(
             "Workspace (id or name) the group belongs to. Default: your own tab's workspace, else the active one."
-          )
+          ),
+        window: windowArg
       }
     },
     (args) => run('createGroup', { ...args, callerSessionId })
@@ -340,7 +442,8 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .optional()
           .describe(
             "Workspace (id or name) the new tab belongs to — lets you open work in another workspace WITHOUT switching the user's view. Default: the target group's workspace, else your own tab's, else the active one."
-          )
+          ),
+        window: windowArg
       }
     },
     (args) => run('openSession', { ...args, callerSessionId })
@@ -356,7 +459,8 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         workspace: z
           .string()
           .optional()
-          .describe('Restrict the lookup to one workspace (id or name)')
+          .describe('Restrict the lookup to one workspace (id or name)'),
+        window: windowArg
       }
     },
     (args) => run('launchGroup', { ...args, callerSessionId })
@@ -366,7 +470,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_switch_workspace',
     {
       description:
-        "Switch the app's ACTIVE workspace — the user's whole visible world (sidebar sessions, groups, templates, toolbar) flips to that workspace; hidden workspaces' sessions keep running. Prefer opening background work with clave_open_session's workspace parameter instead; switch only when the user should actually look at the other workspace.",
+        "Switch YOUR WINDOW's active workspace — that window's whole visible world (sidebar sessions, groups, templates, toolbar) flips to that workspace; hidden workspaces' sessions keep running, other windows are untouched. Prefer opening background work with clave_open_session's workspace parameter, or another window with clave_open_window; switch only when the user should actually look at the other workspace here.",
       inputSchema: {
         workspace: z.string().describe('Workspace id or name to activate')
       }
@@ -378,13 +482,19 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_move_session',
     {
       description:
-        'Move an existing Clave tab into a group, or out of its group with "root". Use this instead of closing and recreating a session. Note: moving the last tab out of a group deletes that group (including its quick-launch terminal configs).',
+        'Move an existing Clave tab into a group, or out of its group with "root" — and, with window, into another WINDOW (tmux-backed tabs only: the tab keeps its id and scrollback). Use this instead of closing and recreating a session. Note: moving the last tab out of a group deletes that group (including its quick-launch terminal configs).',
       inputSchema: {
         sessionId: z.string().describe('Id of the session to move'),
         groupId: z
           .string()
           .describe(
             'Target: a group id, an exact group name, "mine" for the calling tab\'s group, or "root" to ungroup'
+          ),
+        window: z
+          .union([z.number().int(), z.literal('mine')])
+          .optional()
+          .describe(
+            'Window to move the tab INTO (a window id from clave_list, or "mine"); the group is then resolved in that window. Omit to stay in its window.'
           )
       }
     },
@@ -446,7 +556,8 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         launch: z
           .boolean()
           .optional()
-          .describe('Launch the terminal immediately (default true); false just saves the config')
+          .describe('Launch the terminal immediately (default true); false just saves the config'),
+        window: windowArg
       }
     },
     (args) => run('addGroupTerminal', { ...args, callerSessionId })
@@ -602,10 +713,26 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .optional()
           .describe(
             'How an .html/.htm file opens: "rendered" shows the live page (the default for HTML), "source" the code editor. Ignored for other file types.'
-          )
+          ),
+        window: windowArg
       }
     },
     (args) => run('openFile', { ...args, callerSessionId })
+  )
+
+  server.registerTool(
+    'clave_open_window',
+    {
+      description:
+        "Open a NEW Clave window — the whole app once more, on a workspace. Defaults to your own window's workspace (a second view of the same workspace, its own sidebar); pass workspace to open another one without switching the user's view here. Returns { windowId, workspaceId }; use the windowId as the window parameter of clave_open_session / clave_create_group / clave_launch_group / clave_move_session to put work in it.",
+      inputSchema: {
+        workspace: z
+          .string()
+          .optional()
+          .describe('Workspace (id or name) the new window opens on. Default: your own window\'s.')
+      }
+    },
+    (args) => run('openWindow', { ...args, callerSessionId })
   )
 
   server.registerTool(

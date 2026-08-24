@@ -19,7 +19,7 @@ import type {
 } from './session-types'
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
 import { useWorkspaceStore } from './workspace-store'
-import { partitionSidebarLayout, mergeLayoutForKeys } from '../lib/sidebar-layout-partition'
+import { mergeLayoutForKeys, absorbLayout } from '../lib/sidebar-layout-partition'
 
 // Re-export types and constants so existing imports continue to work
 export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, GroupViewConfig, SessionViewConfig, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
@@ -104,17 +104,24 @@ interface SessionState {
   /** Remove a tab because its session RE-HOMED to another window — drop it
    *  from this store WITHOUT killing the pty (it is alive, just moved). */
   removeSessionForRehome: (id: string) => void
+  /** Drop a group because it MOVED whole to another window: its members that
+   *  moved are already gone (removeSessionForRehome); any that stayed become
+   *  plain tabs. Never touches a pty. */
+  removeGroupForMove: (groupId: string) => void
   resetSessions: () => Promise<void>
   /** Replace the layout of the given workspaces (null = unscoped) with the
-   *  one read from their files, pruned to `survivingSessionIds` (sessions
-   *  that still exist anywhere — here, in another window, or on disk), and
-   *  leave every other workspace's groups untouched. The runtime counterpart
-   *  the boot restore, for a window that starts hosting a workspace. */
+   *  one read from this window's file, pruned to `survivingSessionIds`
+   *  (sessions that still exist — adopted here, or a record on disk), and
+   *  leave every other workspace's groups untouched. The boot restore. */
   mergeLayoutForKeys: (
     keys: (string | null)[],
     persisted: { groups: SessionGroup[]; displayOrder: string[] },
     survivingSessionIds: string[]
   ) => void
+  /** Take in groups handed over by another window (a closing window's
+   *  sidebar, a group moved here): unknown groups and order entries are
+   *  appended, known ones left alone. The members arrive through adoption. */
+  absorbLayout: (incoming: { groups: SessionGroup[]; displayOrder: string[] }) => void
   selectSession: (id: string, addToSelection: boolean) => void
   selectSessions: (ids: string[]) => void
   setFocusedSession: (id: string) => void
@@ -226,64 +233,28 @@ let groupCounter = 0
 let sidebarPersistEnabled = false
 let lastPersistedGroups: SessionGroup[] | null = null
 let lastPersistedOrder: string[] | null = null
-/** Per layout key, the JSON last handed to main — a partition is re-sent
- *  only when IT changed, so a group edit in one workspace never rewrites the
- *  others' files. Set only once main accepted the write (a refused write must
- *  be retried, not remembered as done). */
-const lastPersistedPartitions = new Map<string | null, string>()
-/** Layout keys this window has TAKEN: loaded from their files and merged into
- *  the store. Only a taken key is ever written — a window that merely hosts a
- *  workspace, before it has read that workspace's layout, must not overwrite
- *  the file with an empty partition. Boot marks its keys taken after the
- *  restore; a key gained at runtime is taken by `takeLayouts` (workspace-
- *  actions); a key lost is dropped so regaining it reloads the file. */
-const layoutKeysTaken = new Set<string | null>()
+/** The JSON last accepted by main — re-sent only on change. */
+let lastPersistedJson: string | null = null
 
-export function markLayoutKeysTaken(keys: (string | null)[]): void {
-  for (const k of keys) layoutKeysTaken.add(k)
-}
-
-export function dropLayoutKeys(keys: (string | null)[]): void {
-  for (const k of keys) {
-    layoutKeysTaken.delete(k)
-    lastPersistedPartitions.delete(k)
-  }
-}
-
-export function isLayoutKeyTaken(key: string | null): boolean {
-  return layoutKeysTaken.has(key)
-}
-
-function persistSidebarLayout(state: {
-  groups: SessionGroup[]
-  displayOrder: string[]
-  sessions: Session[]
-}): void {
-  const { groups, displayOrder, sessions } = state
+/** This window's whole sidebar, to its own file (one file per window — main
+ *  resolves it from the sender). Every group carries its workspace stamp
+ *  inside the file, so the window comes back showing the right ones. */
+function persistSidebarLayout(state: { groups: SessionGroup[]; displayOrder: string[] }): void {
+  const { groups, displayOrder } = state
   if (groups === lastPersistedGroups && displayOrder === lastPersistedOrder) return
   lastPersistedGroups = groups
   lastPersistedOrder = displayOrder
-  const ws = useWorkspaceStore.getState()
-  const parts = partitionSidebarLayout(groups, displayOrder, sessions, ws.activeWorkspaceId)
-  // Only the workspaces THIS window hosts AND has taken are written (the
-  // hosting rule; main refuses the rest loudly). Hosted keys with no items
-  // still get written, so deleting the last group of a workspace reaches its
-  // file.
-  const hosted: (string | null)[] = ws.activeWorkspaceId === null ? [null] : ws.hostedWorkspaceIds
-  for (const key of new Set<string | null>([...hosted, ...parts.keys()])) {
-    if (!hosted.includes(key) || !layoutKeysTaken.has(key)) continue
-    const part = parts.get(key) ?? { groups: [], displayOrder: [] }
-    const json = JSON.stringify(part)
-    if (lastPersistedPartitions.get(key) === json) continue
-    window.electronAPI
-      ?.sidebarLayoutSave?.(key, part)
-      .then((res) => {
-        if (res?.ok) lastPersistedPartitions.set(key, json)
-      })
-      .catch(() => {
-        // Persistence failures are non-fatal — groups stay in memory for this run.
-      })
-  }
+  const data = { groups, displayOrder }
+  const json = JSON.stringify(data)
+  if (json === lastPersistedJson) return
+  window.electronAPI
+    ?.sidebarLayoutSave?.(data)
+    .then((res) => {
+      if (res?.ok) lastPersistedJson = json
+    })
+    .catch(() => {
+      // Persistence failures are non-fatal — groups stay in memory for this run.
+    })
 }
 
 /** Mirror a session's tab name into its tmux sidecar (main process), so the
@@ -574,6 +545,16 @@ export const useSessionStore = create<SessionState>((set) => ({
       return { ...state, groups: merged.groups, displayOrder: merged.displayOrder }
     }),
 
+  absorbLayout: (incoming) =>
+    set((state) => {
+      const merged = absorbLayout(
+        { groups: state.groups, displayOrder: getDisplayOrder(state) },
+        incoming
+      )
+      groupCounter = Math.max(groupCounter, merged.groups.length)
+      return { ...state, groups: merged.groups, displayOrder: merged.displayOrder }
+    }),
+
   removeSessionForRehome: (id) =>
     set((state) => {
       // The session lives on in another window now; only detach it from THIS
@@ -590,6 +571,18 @@ export const useSessionStore = create<SessionState>((set) => ({
         displayOrder: getDisplayOrder(state).filter((did) => did !== id),
         selectedSessionIds: state.selectedSessionIds.filter((sid) => sid !== id),
         focusedSessionId: state.focusedSessionId === id ? null : state.focusedSessionId
+      }
+    }),
+
+  removeGroupForMove: (groupId) =>
+    set((state) => {
+      const group = state.groups.find((g) => g.id === groupId)
+      if (!group) return state
+      const stayed = group.sessionIds.filter((sid) => state.sessions.some((s) => s.id === sid))
+      const order = getDisplayOrder(state).filter((did) => did !== groupId)
+      return {
+        groups: state.groups.filter((g) => g.id !== groupId),
+        displayOrder: [...order, ...stayed.filter((sid) => !order.includes(sid))]
       }
     }),
 

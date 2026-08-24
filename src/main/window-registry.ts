@@ -5,16 +5,19 @@ export type { WindowIdentity }
 
 /**
  * The WindowRegistry — the single in-main source of truth for multi-window
- * Clave (PRDCT-1703). It answers three questions and nothing else:
+ * Clave (PRDCT-1703). A window is the whole app once more, on whatever
+ * workspace it shows; any number of windows may show the same workspace.
+ * The registry answers three questions and nothing else:
  *
- *   1. which WORKSPACE does each window show (at most one window per
- *      workspace — mirroring one workspace into two windows is out of scope),
+ *   1. which window is which: its runtime `BrowserWindow` id, its persisted
+ *      `key` (the name of its layout file and the stamp on the session
+ *      records it opened), and the workspace it currently shows,
  *   2. which WINDOW hosts each live session (the renderer holding its xterm
- *      and receiving its `pty:data`), bound at spawn / adoption / re-home,
+ *      and receiving its `pty:data`), bound at spawn / adoption / move,
  *      unbound at exit,
- *   3. which window is the PRIMARY — the first of the run, re-elected as the
- *      lowest surviving id when it closes while others remain. The primary
- *      hosts every workspace no window shows, and carries app-level
+ *   3. which window is the PRIMARY — the lowest live id, re-elected when it
+ *      closes while others remain. The primary takes in what a closing
+ *      window leaves behind, adopts orphans at boot, and carries app-level
  *      fallbacks.
  *
  * The registry emits nothing; callers route. It is deliberately generic over
@@ -23,7 +26,8 @@ export type { WindowIdentity }
  * — the one Electron static the resolution ladder needs — is injected. The
  * `windowRegistry` singleton below is the production instance.
  *
- * Nothing here is persisted: BrowserWindow ids restart at 1 on every launch.
+ * Nothing here is persisted: BrowserWindow ids restart at 1 on every launch;
+ * the keys come from windows.json (window-state.ts).
  */
 export interface WindowLike {
   readonly id: number
@@ -37,6 +41,7 @@ export interface WindowRegistryDeps<W extends WindowLike> {
 
 interface Entry<W extends WindowLike> {
   win: W
+  key: string
   workspaceId: string | null
 }
 
@@ -49,14 +54,14 @@ export class WindowRegistry<W extends WindowLike = WindowLike> {
 
   // ── Windows ────────────────────────────────────────────────────────────────
 
-  registerWindow(win: W, workspaceId: string | null): void {
-    this.windows.set(win.id, { win, workspaceId })
+  registerWindow(win: W, key: string, workspaceId: string | null): void {
+    this.windows.set(win.id, { win, key, workspaceId })
     if (this.primaryId === null || !this.isLive(this.primaryId)) this.primaryId = win.id
   }
 
   /** Forget a window (on 'closed'). Its session bindings are dropped — the
-   *  teardown ladder detaches those sessions BEFORE calling this, and a
-   *  re-home rebinds them through the spawn path — and the primary is
+   *  teardown ladder detaches those sessions BEFORE calling this, and the
+   *  primary re-adopts them through the spawn path — and the primary is
    *  re-elected as the lowest surviving id when the primary itself left. */
   unregisterWindow(windowId: number): void {
     this.windows.delete(windowId)
@@ -76,16 +81,26 @@ export class WindowRegistry<W extends WindowLike = WindowLike> {
     return this.isLive(windowId) ? this.windows.get(windowId)!.win : null
   }
 
-  /** The window SHOWING a workspace, if any (never the hidden host). */
-  getWindowForWorkspace(workspaceId: string): W | null {
+  getWindowByKey(key: string): W | null {
     for (const [id, entry] of this.windows) {
-      if (entry.workspaceId === workspaceId && this.isLive(id)) return entry.win
+      if (entry.key === key && this.isLive(id)) return entry.win
     }
     return null
   }
 
+  getKeyForWindow(windowId: number): string | null {
+    return this.isLive(windowId) ? this.windows.get(windowId)!.key : null
+  }
+
   getWorkspaceForWindow(windowId: number): string | null {
     return this.isLive(windowId) ? this.windows.get(windowId)!.workspaceId : null
+  }
+
+  /** Every live window showing a workspace, lowest id first. */
+  getWindowsForWorkspace(workspaceId: string): W[] {
+    return this.listWindows().filter(
+      (w) => this.windows.get(w.id)!.workspaceId === workspaceId
+    )
   }
 
   getPrimaryWindow(): W | null {
@@ -99,45 +114,14 @@ export class WindowRegistry<W extends WindowLike = WindowLike> {
     return this.getPrimaryWindow()?.id === windowId
   }
 
-  /** The hosting rule: a workspace's sessions are hosted by the window
-   *  showing it; a workspace no window shows is hosted by the primary. */
-  getHostWindowForWorkspace(workspaceId: string): W | null {
-    return this.getWindowForWorkspace(workspaceId) ?? this.getPrimaryWindow()
-  }
-
-  /** Every workspace a window may write for (layout file, pin refresh): the
-   *  one it shows, plus — for the primary — every registered workspace no
-   *  live window shows. `allWorkspaceIds` is the registry of the moment. */
-  getHostedWorkspaceIds(windowId: number, allWorkspaceIds: string[]): string[] {
-    if (!this.isLive(windowId)) return []
-    const own = this.windows.get(windowId)!.workspaceId
-    const hosted: string[] = own ? [own] : []
-    if (this.isPrimary(windowId)) {
-      for (const ws of allWorkspaceIds) {
-        if (ws !== own && this.getWindowForWorkspace(ws) === null) hosted.push(ws)
-      }
-    }
-    return hosted
-  }
-
-  /** May `windowId` write state scoped to `workspaceId`? True when it shows
-   *  that workspace, or when it is the primary and no window shows it. The
-   *  null key (no-workspace mode) belongs to the primary alone. */
-  canWriteWorkspace(windowId: number, workspaceId: string | null): boolean {
-    if (!this.isLive(windowId)) return false
-    if (workspaceId === null) return this.isPrimary(windowId)
-    const shown = this.getWindowForWorkspace(workspaceId)
-    if (shown) return shown.id === windowId
-    return this.isPrimary(windowId)
-  }
-
-  identityOf(windowId: number, allWorkspaceIds: string[]): WindowIdentity | null {
+  identityOf(windowId: number): WindowIdentity | null {
     if (!this.isLive(windowId)) return null
+    const entry = this.windows.get(windowId)!
     return {
       windowId,
-      workspaceId: this.windows.get(windowId)!.workspaceId,
-      isPrimary: this.isPrimary(windowId),
-      hostedWorkspaceIds: this.getHostedWorkspaceIds(windowId, allWorkspaceIds)
+      windowKey: entry.key,
+      workspaceId: entry.workspaceId,
+      isPrimary: this.isPrimary(windowId)
     }
   }
 
@@ -147,6 +131,11 @@ export class WindowRegistry<W extends WindowLike = WindowLike> {
       .filter((id) => this.isLive(id))
       .sort((a, b) => a - b)
       .map((id) => this.windows.get(id)!.win)
+  }
+
+  /** The keys of every live window. */
+  liveKeys(): Set<string> {
+    return new Set(this.listWindows().map((w) => this.windows.get(w.id)!.key))
   }
 
   // ── Sessions ───────────────────────────────────────────────────────────────
@@ -173,16 +162,16 @@ export class WindowRegistry<W extends WindowLike = WindowLike> {
   // ── Routing ────────────────────────────────────────────────────────────────
 
   /** The ladder every UI-landing call resolves through: the subject session's
-   *  hosting window → the workspace's host window → the focused window → the
+   *  hosting window → the explicitly named window → the focused window → the
    *  primary → null. Every rung is checked non-destroyed. */
-  resolveTargetWindow(opts: { sessionId?: string; workspaceId?: string }): W | null {
+  resolveTargetWindow(opts: { sessionId?: string; windowId?: number }): W | null {
     if (opts.sessionId) {
       const bySession = this.getWindowForSession(opts.sessionId)
       if (bySession) return bySession
     }
-    if (opts.workspaceId) {
-      const byWorkspace = this.getHostWindowForWorkspace(opts.workspaceId)
-      if (byWorkspace) return byWorkspace
+    if (opts.windowId !== undefined) {
+      const byId = this.getWindow(opts.windowId)
+      if (byId) return byId
     }
     const focused = this.deps.getFocusedWindow()
     if (focused && !focused.isDestroyed() && this.windows.has(focused.id)) return focused

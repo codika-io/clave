@@ -8,7 +8,12 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
 import { applyPersistedIcon } from './ipc-handlers/app-handlers'
 import { cleanupDroppedFiles } from './ipc-handlers/dropped-file-handlers'
-import { registerWindowHandlers, broadcastIdentities } from './ipc-handlers/window-handlers'
+import {
+  registerWindowHandlers,
+  broadcastIdentities,
+  moveSessionsToWindow,
+  takeClosingLayout
+} from './ipc-handlers/window-handlers'
 import { ptyManager, preloadLoginShellEnv } from './pty-manager'
 import { initAutoUpdater, cleanupAutoUpdater } from './auto-updater'
 import { buildAppMenu } from './app-menu'
@@ -20,13 +25,17 @@ import { openclawClient, buildOpenclawWsUrl } from './openclaw-client'
 import { preferencesManager } from './preferences-manager'
 import { workspaceManager } from './workspace-manager'
 import { windowRegistry } from './window-registry'
+import { windowState } from './window-state'
+import { sidebarLayoutManager } from './sidebar-layout-manager'
+import { sessionWorkspaceResolver } from './session-records-index'
+import type { PersistedWindow } from '../shared/workspace-types'
 import {
   initMissionControl,
   cleanupMissionControl,
   attachMissionControlWindow
 } from './mission-control-manager'
 import { cleanupClaveWatchers } from './ipc-handlers/clave-file-handlers'
-import { startMcpServer, stopMcpServer } from './mcp/mcp-server'
+import { startMcpServer, stopMcpServer, registerMcpWindowOpener } from './mcp/mcp-server'
 import { sweepSessionMcpConfigs } from './mcp/mcp-runtime'
 import { registerPreviewScheme, installPreviewProtocol } from './preview-protocol'
 
@@ -40,23 +49,25 @@ if (TEST_NO_ACTIVATE && process.platform === 'darwin') {
 }
 
 /**
- * The teardown ladder (PRDCT-1703). One window closing used to run the whole
- * app's shutdown — every session in every window received pty:exit and went
- * dead. Now:
+ * The teardown ladder (PRDCT-1703). A window is the whole app once more, and
+ * closing one must not disturb another:
  *
- *  - a NON-LAST window closing touches only the sessions IT hosts: each is
- *    detached (`kill(id, false)` — a tmux-backed session keeps running in the
- *    tmux server with its record intact; a plain one dies exactly as it did
- *    on close before, its record stays restorable), its binding dropped, the
- *    window forgotten, the primary re-elected if it was the primary, and the
- *    new host told which sessions to re-home (`session:rehome`, the record
- *    ids — the renderer's adoption of them is the re-homing half). Sessions
- *    hosted by OTHER windows are never touched; ssh and OpenClaw stay up.
- *  - the LAST window closing is today's behavior verbatim.
+ *  - a NON-LAST window closing hands what it holds to the PRIMARY (the lowest
+ *    live id, re-elected if the closing one was it): its tmux-backed sessions
+ *    move there (detach + re-adopt, id preserved, scrollback intact) together
+ *    with its groups; a plain-pty session dies exactly as it did on close
+ *    before, its record re-stamped to the primary so the next boot offers it
+ *    there. The window is forgotten by windows.json — a window the user closed
+ *    does not come back. Sessions hosted by OTHER windows are never touched;
+ *    ssh and OpenClaw stay up.
+ *  - the LAST window closing is the app's shutdown as before; it stays in
+ *    windows.json so the next launch (or the Dock's activate) brings it back.
+ *  - windows closing one after another inside a QUIT hand nothing over: every
+ *    one of them comes back at the next launch, with its own content.
  */
 let quitting = false
 
-function onWindowClosed(windowId: number): void {
+function onWindowClosed(windowId: number, windowKey: string): void {
   // Only CLAVE windows count (the registry's), never a stray BrowserWindow a
   // dialog or a picker might own — or the final close would skip the app's
   // shutdown.
@@ -68,24 +79,60 @@ function onWindowClosed(windowId: number): void {
     windowRegistry.unregisterWindow(windowId)
     return
   }
+  if (quitting) {
+    windowRegistry.unregisterWindow(windowId)
+    return
+  }
   const hosted = windowRegistry.getSessionsForWindow(windowId)
-  for (const id of hosted) ptyManager.kill(id, false)
   windowRegistry.unregisterWindow(windowId)
-  // Windows closing one after another inside a quit re-home nothing: the
-  // survivor is about to close too, and the last one runs the full teardown.
-  if (quitting) return
-  const host = windowRegistry.getPrimaryWindow()
-  if (host && hosted.length > 0) host.webContents.send('session:rehome', hosted)
+  windowState.remove(windowKey)
+  const primary = windowRegistry.getPrimaryWindow()
+  if (!primary) return
+  const primaryKey = windowRegistry.getKeyForWindow(primary.id)
+  const layout = takeClosingLayout(windowKey)
+  // Plain-pty sessions die with their renderer (as on close before); their
+  // records follow the primary so the next boot offers them there.
+  const tmuxBacked: string[] = []
+  for (const id of hosted) {
+    if (ptyManager.getSession(id)?.tmuxName) tmuxBacked.push(id)
+    else {
+      if (primaryKey) ptyManager.setSessionWindowKey(id, primaryKey)
+      ptyManager.kill(id, false)
+    }
+  }
+  moveSessionsToWindow(tmuxBacked, primary.id, layout)
   broadcastIdentities()
 }
 
-function createWindow(workspaceId: string | null): BrowserWindow {
+/** Persist a window's frame after it settles, so it comes back on the same
+ *  screen at the same size. */
+function trackBounds(win: BrowserWindow, key: string): void {
+  let timer: NodeJS.Timeout | null = null
+  const save = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      if (win.isDestroyed() || !windowState.has(key)) return
+      const { x, y, width, height } = win.getNormalBounds()
+      windowState.upsert(key, { bounds: { x, y, width, height } })
+    }, 500)
+  }
+  win.on('resize', save)
+  win.on('move', save)
+}
+
+function createWindow(entry: PersistedWindow): BrowserWindow {
   const savedIcon = preferencesManager.get('appIcon')
   const icon = nativeImage.createFromPath(join(__dirname, `../../resources/icon-${savedIcon}.png`))
+  const workspaceId =
+    entry.workspaceId && workspaceManager.isRegistered(entry.workspaceId)
+      ? entry.workspaceId
+      : workspaceManager.resolveInitialWorkspaceId()
 
   const win = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: entry.bounds?.width ?? 1400,
+    height: entry.bounds?.height ?? 900,
+    ...(entry.bounds ? { x: entry.bounds.x, y: entry.bounds.y } : {}),
     minWidth: 800,
     minHeight: 600,
     show: false,
@@ -99,13 +146,19 @@ function createWindow(workspaceId: string | null): BrowserWindow {
       : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      // A test window is never put on screen (see below); without this
+      // Chromium would treat the hidden page as background and stop its
+      // timers and animation frames — the driver needs them running.
+      ...(TEST_NO_ACTIVATE ? { backgroundThrottling: false } : {})
     }
   })
 
   // Registered before load so the renderer's very first `window:identity`
   // finds it. The registry, not the state file, is what the window shows.
-  windowRegistry.registerWindow(win, workspaceId)
+  windowRegistry.registerWindow(win, entry.key, workspaceId)
+  windowState.upsert(entry.key, { workspaceId })
+  trackBounds(win, entry.key)
 
   // In dev mode, set dock icon from PNG. In packaged mode, let macOS
   // render from the .icon bundle (which supports Tahoe glass effect).
@@ -117,16 +170,18 @@ function createWindow(workspaceId: string | null): BrowserWindow {
   }
 
   win.on('ready-to-show', () => {
-    // showInactive() puts the window on screen without making it — or the app —
-    // key, which is the whole point of --test-no-activate.
-    if (TEST_NO_ACTIVATE) win.showInactive()
-    else win.show()
+    // Under --test-no-activate the window is NEVER put on screen: even
+    // showInactive() places a new window at the front of the desktop, over
+    // whatever the human is working on. The driver (Playwright over the
+    // debugger protocol) does not need the window shown; the renderer keeps
+    // running thanks to backgroundThrottling: false above.
+    if (!TEST_NO_ACTIVATE) win.show()
   })
 
   attachMissionControlWindow(win)
 
   const windowId = win.id
-  win.on('closed', () => onWindowClosed(windowId))
+  win.on('closed', () => onWindowClosed(windowId, entry.key))
 
   win.webContents.on('will-navigate', (event, url) => {
     if (url.startsWith('clave://')) {
@@ -161,34 +216,45 @@ function createWindow(workspaceId: string | null): BrowserWindow {
   return win
 }
 
-/** Show a workspace in a window of its own. A workspace already shown in a
- *  window is never duplicated (mirroring is out of scope): that window is
- *  brought forward instead. Otherwise a new window opens on it, and it
- *  becomes the last-active workspace — what the first window of the next
- *  run opens on. */
-export function openWorkspaceWindow(workspaceId: string): {
-  windowId: number
-  focusedExisting: boolean
-} {
-  const shown = windowRegistry.getWindowForWorkspace(workspaceId)
-  if (shown) {
-    // Under --test-no-activate the OS-level bring-forward is skipped entirely:
-    // a test instance must never steal the desktop's focus, and this focus()
-    // is the one deliberately-user-facing activation the flag's showInactive()
-    // path did not cover. The answer is unchanged either way — the workspace
-    // IS shown there, and callers branch on focusedExisting, not on key state.
-    if (!TEST_NO_ACTIVATE) {
-      if (shown.isMinimized()) shown.restore()
-      shown.show()
-      shown.focus()
-    }
-    return { windowId: shown.id, focusedExisting: true }
-  }
-  const win = createWindow(workspaceId)
-  workspaceManager.setLastActive(workspaceId)
-  // The primary's hosted set just shrank by this workspace.
+/** A new window, the app once more, on `workspaceId` (null = the
+ *  no-workspace state). Persisted at once so it comes back at the next boot. */
+export function openWindow(workspaceId: string | null): { windowId: number } {
+  const key = windowState.mintKey()
+  const win = createWindow({ key, workspaceId })
+  if (workspaceId) workspaceManager.setLastActive(workspaceId)
   broadcastIdentities()
-  return { windowId: win.id, focusedExisting: false }
+  return { windowId: win.id }
+}
+
+/**
+ * Bring back every persisted window. The first boot of the multi-window
+ * build (no windows.json yet) mints the first window's key and migrates the
+ * older sidebar-layout files into it — the one place that migration runs.
+ */
+function openPersistedWindows(): void {
+  const persisted = windowState.list()
+  if (persisted.length === 0) {
+    const key = windowState.mintKey()
+    const workspaceIds = workspaceManager.getWorkspaces().map((w) => w.id)
+    try {
+      sidebarLayoutManager.migrateIntoWindow(
+        key,
+        workspaceIds.length > 0
+          ? {
+              workspaceIds,
+              fallbackWorkspaceId: workspaceManager.resolveInitialWorkspaceId() ?? workspaceIds[0],
+              resolveWorkspaceForCwd: (cwd) => workspaceManager.resolveWorkspaceForCwd(cwd),
+              resolveWorkspaceForSession: sessionWorkspaceResolver()
+            }
+          : null
+      )
+    } catch (err) {
+      console.error('[sidebar-layout] migration into the first window failed:', err)
+    }
+    createWindow({ key, workspaceId: workspaceManager.resolveInitialWorkspaceId() })
+    return
+  }
+  for (const entry of persisted) createWindow(entry)
 }
 
 app.whenReady().then(() => {
@@ -208,7 +274,8 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
-  registerWindowHandlers({ openWorkspaceWindow })
+  registerWindowHandlers({ openWindow })
+  registerMcpWindowOpener(openWindow)
   installPreviewProtocol()
   // MCP failure must not break the app — spawns just omit the --mcp-config flag.
   void startMcpServer().catch((err) => console.error('[mcp] failed to start', err))
@@ -216,10 +283,8 @@ app.whenReady().then(() => {
   cleanupDroppedFiles()
   initNotificationManager()
   applyPersistedIcon()
-  // The first window opens on the last-active workspace (else the first
-  // registered one, else the no-workspace onboarding state).
-  createWindow(workspaceManager.resolveInitialWorkspaceId())
-  buildAppMenu()
+  openPersistedWindows()
+  buildAppMenu({ openWindow })
   initAutoUpdater()
   initTelemetry()
   initMissionControl()
@@ -246,7 +311,7 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow(workspaceManager.resolveInitialWorkspaceId())
+      openPersistedWindows()
     }
   })
 })

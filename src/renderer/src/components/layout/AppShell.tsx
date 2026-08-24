@@ -6,8 +6,7 @@ import {
   isFileTabId,
   getVisibleFlatOrder,
   inActiveWorkspace,
-  enableSidebarPersistence,
-  markLayoutKeysTaken
+  enableSidebarPersistence
 } from '../../store/session-store'
 import type { SessionGroup, SettingsSection } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
@@ -36,8 +35,7 @@ import { useWorkspaceStore } from '../../store/workspace-store'
 import {
   bootWorkspaces,
   refreshActiveWorkspacePins,
-  cycleWorkspace,
-  markBootLayoutsDone
+  cycleWorkspace
 } from '../../lib/workspace-actions'
 import { promptRestore } from '../../store/restore-prompt-store'
 import { RestorePromptDialog } from '../ui/RestorePromptDialog'
@@ -96,6 +94,15 @@ export function AppShell() {
 
   useWorkTracker()
 
+  // The window's title names its workspace — what tells windows apart in
+  // Mission Control and the Window menu (the title bar itself is hidden).
+  const activeWorkspaceName = useWorkspaceStore(
+    (s) => s.workspaces.find((w) => w.id === s.activeWorkspaceId)?.name ?? null
+  )
+  useEffect(() => {
+    document.title = activeWorkspaceName ? `${activeWorkspaceName} — Clave` : 'Clave'
+  }, [activeWorkspaceName])
+
   // Wire the in-app MCP command dispatcher and the secret-request store to
   // their main-process push channels. The module-level latch makes this run
   // exactly once per process even under React StrictMode's mount/remount, so
@@ -106,14 +113,21 @@ export function AppShell() {
     initMcpDispatcher()
     initSecretStore()
     initCopyOfferStore()
-    // Re-homing (§3.6): adopt sessions handed to this window (a closing
-    // window's, or a workspace pulled here), and drop a tab whose session
-    // re-homed AWAY (moved, not died — never kill the pty).
-    window.electronAPI?.onSessionRehome?.((ids) => {
-      void adoptRehomed(ids, useWorkspaceStore.getState().activeWorkspaceId)
+    // Re-homing: take in what another window hands over — a closing window's
+    // sessions with its groups, a tab or a group moved here — and drop a tab
+    // whose session moved AWAY (moved, not died — never kill the pty). The
+    // groups land first so the adopted members find their group.
+    window.electronAPI?.onSessionRehome?.(({ sessionIds, layout }) => {
+      if (layout) {
+        useSessionStore.getState().absorbLayout(layout as { groups: SessionGroup[]; displayOrder: string[] })
+      }
+      void adoptRehomed(sessionIds, useWorkspaceStore.getState().activeWorkspaceId)
     })
     window.electronAPI?.onSessionRemovedForRehome?.((id) => {
       useSessionStore.getState().removeSessionForRehome(id)
+    })
+    window.electronAPI?.onGroupRemovedForMove?.((groupId) => {
+      useSessionStore.getState().removeGroupForMove(groupId)
     })
     // What the agent button relaunches, per workspace. Deliberately NOT in the
     // session-adoption effect below: that one awaits the "restore sessions?"
@@ -134,48 +148,28 @@ export function AppShell() {
         // the active workspace. (This is the single sequential boot owner —
         // the old lazy loadWorkspaces() in Sidebar raced this effect.)
         await bootWorkspaces()
-        const wsState = useWorkspaceStore.getState()
-        const activeWorkspaceId = wsState.activeWorkspaceId
+        const activeWorkspaceId = useWorkspaceStore.getState().activeWorkspaceId
 
-        // Read the previous run's saved groups BEFORE any session is adopted
+        // Read this window's saved groups BEFORE any session is adopted
         // (re-adoption mutates the layout). Then rebuild groups around the
-        // survivors and only then turn persistence on, so the saved files are
-        // never overwritten before we've loaded them. Layouts are one file per
-        // workspace: this window loads the ones it HOSTS — the primary at boot
-        // hosts every workspace, a secondary window its own (null = the
-        // unscoped layout of no-workspace mode).
-        const layoutKeys: (string | null)[] =
-          activeWorkspaceId === null ? [null] : wsState.hostedWorkspaceIds
-        const savedLayout = await window.electronAPI
-          ?.sidebarLayoutLoad?.(layoutKeys)
-          .catch(() => null)
+        // survivors and only then turn persistence on, so the file is never
+        // overwritten before we've loaded it. One file per window; the
+        // primary's load also brings in the orphans of windows that no
+        // longer exist.
+        const savedLayout = await window.electronAPI?.sidebarLayoutLoad?.().catch(() => null)
         const persisted = {
           groups: (savedLayout?.groups ?? []) as SessionGroup[],
           displayOrder: savedLayout?.displayOrder ?? []
         }
 
-        // The primary adopts every survivor (hidden where not its workspace),
-        // so cross-workspace messaging and clave_list never regress. A
-        // SECONDARY window only ever adopts — and prompts for — its own
-        // workspace's records; the live ones another window hosts are already
-        // filtered out by main (alreadyAdopted).
-        const survivors =
-          (await window.electronAPI?.listSessionRecords?.(
-            wsState.isPrimary ? undefined : (activeWorkspaceId ?? undefined)
-          )) ?? []
-
-        // Reattach = silent, relaunch = ask. Live tmux survivors of EVERY
-        // workspace this window hosts re-attach unprompted (the primary hosts
-        // all; a workspace hidden here is still hosted), so cross-workspace
-        // messaging and clave_list never regress. Dead records are OFFERED
-        // only for the workspace this window SHOWS; dead records of a
-        // hidden-hosted workspace wait until that workspace is opened, their
-        // groups kept as shells meanwhile (spec §3.6). null active
-        // (no-workspace mode) shows everything.
-        const showsWorkspace = (s: (typeof survivors)[number]): boolean =>
-          (s.workspaceId ?? activeWorkspaceId ?? null) === (activeWorkspaceId ?? null)
+        // This window's own records (plus the orphans, for the primary):
+        // live tmux survivors re-attach silently, whatever their workspace
+        // (hidden where not the shown one, so cross-workspace messaging and
+        // clave_list never regress); dead records are offered once, all
+        // together, as they always were.
+        const survivors = (await window.electronAPI?.listSessionRecords?.()) ?? []
         const liveOnes = survivors.filter((s) => s.live)
-        const deadOnes = survivors.filter((s) => !s.live && showsWorkspace(s))
+        const deadOnes = survivors.filter((s) => !s.live)
 
         const adoptedIds: string[] = []
         for (const s of liveOnes) {
@@ -195,36 +189,19 @@ export function AppShell() {
           }
         }
 
-        // Rebuild the per-workspace layouts around what survives. A group is
-        // kept if a member does: an adopted session (live, or a shown-
-        // workspace dead record the user chose to relaunch), a dead record of
-        // a HIDDEN-hosted workspace still on disk (a shell, offered when that
-        // workspace is opened), or a live session held by another window (the
-        // secondary case). Only a shown-workspace record the user discarded is
-        // gone for good — today's single-window "Start fresh".
-        const surviving = new Set(adoptedIds)
-        for (const s of survivors) if (!showsWorkspace(s)) surviving.add(s.id)
-        const hostedStringKeys = layoutKeys.filter((k): k is string => typeof k === 'string')
-        const elsewhere =
-          (await window.electronAPI?.liveSessionsElsewhere?.(hostedStringKeys).catch(() => [])) ?? []
-        for (const id of elsewhere) surviving.add(id)
-        useSessionStore.getState().mergeLayoutForKeys(layoutKeys, persisted, [...surviving])
-        markLayoutKeysTaken(layoutKeys)
-
-        // A SECONDARY window pulls its workspace's live sessions off whichever
-        // window hosts them (the primary), re-homing them here with their
-        // scrollback (§3.6). The primary hosts every unshown workspace, so it
-        // never needs this. The re-homed sessions arrive on `session:rehome`.
-        if (!wsState.isPrimary && activeWorkspaceId) {
-          void window.electronAPI?.rehomeWorkspace?.(activeWorkspaceId)
-        }
+        // Rebuild the layout around what survives: a group is kept if a
+        // member was adopted. Every workspace's groups live in this one file,
+        // so every key is merged (null = the unscoped ones).
+        const keys: (string | null)[] = [
+          null,
+          ...useWorkspaceStore.getState().workspaces.map((w) => w.id)
+        ]
+        useSessionStore.getState().mergeLayoutForKeys(keys, persisted, adoptedIds)
       } catch (err) {
         console.error('Failed to restore sessions/groups on launch:', err)
       } finally {
-        // Turn persistence on only now — after the saved layouts were loaded
-        // and groups restored — so adoption writes can't clobber the files;
-        // and only now may a layout gained at runtime be merged in.
-        markBootLayoutsDone()
+        // Turn persistence on only now — after the saved layout was loaded
+        // and groups restored — so adoption writes can't clobber the file.
         enableSidebarPersistence()
       }
 
