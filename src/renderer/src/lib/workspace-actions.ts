@@ -8,7 +8,12 @@ import {
   type PinnedGroup,
   type PinnedGroupBlueprint
 } from '../store/pinned-store'
-import { useSessionStore, markLayoutKeysTaken, dropLayoutKeys } from '../store/session-store'
+import {
+  useSessionStore,
+  markLayoutKeysTaken,
+  dropLayoutKeys,
+  isLayoutKeyTaken
+} from '../store/session-store'
 
 /** Orchestration layer above the stores. The stores stay import-acyclic
  *  (session→workspace, pinned→workspace); everything that has to touch several
@@ -47,8 +52,9 @@ function persistPins(): void {
     const partition = serializePinnedGroups(groups.filter((pg) => pinPartition(pg) === key))
     const json = JSON.stringify(partition)
     if (lastPersistedPins.get(key) === json) continue
-    lastPersistedPins.set(key, json)
-    void window.electronAPI?.workspaceUpdatePins?.(key, partition)
+    void window.electronAPI?.workspaceUpdatePins?.(key, partition).then((res) => {
+      if (res?.ok) lastPersistedPins.set(key, json)
+    })
   }
 }
 
@@ -122,9 +128,7 @@ export function takeLayouts(keys: (string | null)[]): Promise<void> {
     for (const id of elsewhere) surviving.add(id)
     useSessionStore
       .getState()
-      .mergeLayoutForKeys(keys, persisted as { groups: never[]; displayOrder: string[] }, [
-        ...surviving
-      ])
+      .mergeLayoutForKeys(keys, persisted as { groups: never[]; displayOrder: string[] }, [...surviving])
     markLayoutKeysTaken(keys)
   })
   return layoutTakeQueue
@@ -144,8 +148,12 @@ function applyIdentity(identity: WindowIdentity): void {
   // The unscoped (null) partition follows the primary role.
   if (identity.isPrimary && !prev.isPrimary) gained.push(null as unknown as string)
   if (!identity.isPrimary && prev.isPrimary) lost.push(null as unknown as string)
-  if (lost.length) dropLayoutKeys(lost as (string | null)[])
-  if (gained.length) void takeLayouts(gained as (string | null)[])
+  if (lost.length) {
+    dropLayoutKeys(lost as (string | null)[])
+    for (const k of lost) lastPersistedPins.delete(k as string | null)
+  }
+  const toTake = (gained as (string | null)[]).filter((k) => !isLayoutKeyTaken(k))
+  if (toTake.length) void takeLayouts(toTake)
   // Main is the authority on which workspace this window shows. A change it
   // made on its own (a later slice's picker or tool) is applied here; a
   // change this window asked for is applied by the claim that asked.
@@ -412,18 +420,29 @@ export async function addWorkspace(
 
   const isFirst = workspaces.length === 0
   useWorkspaceStore.setState((s) => ({ workspaces: [...s.workspaces, ws] }))
-  // Main learns the workspace before this window claims it.
-  await persistWorkspaceRegistry()
 
   if (isFirst) {
-    // Invariant: active is null ⟺ zero workspaces. The first workspace
-    // becomes active immediately — this window claims it (no other window can
-    // be showing a workspace that did not exist a moment ago).
-    await claimWorkspace(ws.id)
-    // Leaving no-workspace mode: adopt everything that exists into the new
-    // workspace so nothing is stranded as "visible everywhere" noise.
+    // Leaving no-workspace mode. The current unscoped sidebar IS this
+    // workspace's content — there is nothing on disk to "take", so do the
+    // whole transition IN-STORE first, BEFORE main broadcasts the registry
+    // change: mark the workspace taken (so the gained-workspace identity push
+    // does not re-read its empty file and drop everything — the F1 race),
+    // make it active, and stamp every unscoped session/group/pin into it.
+    // Invariant: active is null ⟺ zero workspaces. No other window can be
+    // showing a workspace that did not exist a moment ago, so the optimistic
+    // active is safe and the claim below cannot be refused.
+    markLayoutKeysTaken([ws.id])
+    // The sole window now shows and hosts the new workspace; set both
+    // optimistically so the persist that stampUnowned triggers actually writes
+    // its file (the async identity push that would set hostedWorkspaceIds has
+    // not arrived yet). Main confirms hosting on the broadcast below.
+    useWorkspaceStore.setState({ activeWorkspaceId: ws.id, hostedWorkspaceIds: [ws.id] })
     stampUnowned(ws.id)
   }
+
+  // Main learns the workspace (and, on the first, that this window shows it).
+  await persistWorkspaceRegistry()
+  if (isFirst) await claimWorkspace(ws.id)
 
   await refreshWorkspacePins(ws)
   return ws

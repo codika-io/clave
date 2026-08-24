@@ -102,18 +102,11 @@ interface SessionState {
   addSession: (session: Session) => void
   removeSession: (id: string) => void
   resetSessions: () => Promise<void>
-  /** Rebuild groups + display order from a persisted layout after tmux-backed
-   *  sessions have been re-adopted on launch. Dangling references (sessions
-   *  whose tmux session did not survive) are pruned. */
-  restoreGroups: (
-    survivingSessionIds: string[],
-    persisted: { groups: SessionGroup[]; displayOrder: string[] }
-  ) => void
   /** Replace the layout of the given workspaces (null = unscoped) with the
    *  one read from their files, pruned to `survivingSessionIds` (sessions
    *  that still exist anywhere — here, in another window, or on disk), and
    *  leave every other workspace's groups untouched. The runtime counterpart
-   *  of restoreGroups, for a window that starts hosting a workspace. */
+   *  the boot restore, for a window that starts hosting a workspace. */
   mergeLayoutForKeys: (
     keys: (string | null)[],
     persisted: { groups: SessionGroup[]; displayOrder: string[] },
@@ -571,87 +564,9 @@ export const useSessionStore = create<SessionState>((set) => ({
     })
   },
 
-  restoreGroups: (survivingSessionIds, persisted) =>
-    set((state) => {
-      const persistedGroups = persisted?.groups ?? []
-      if (persistedGroups.length === 0) return state
-
-      const surviving = new Set(survivingSessionIds)
-
-      // Prune each group to the sessions/terminals that actually came back.
-      // A group whose members all vanished is dropped (it would render empty).
-      const groups: SessionGroup[] = []
-      for (const g of persistedGroups) {
-        const sessionIds = (g.sessionIds ?? []).filter((sid) => surviving.has(sid))
-        if (sessionIds.length === 0) continue
-        const terminals = (g.terminals ?? []).map((t) =>
-          t.sessionId && !surviving.has(t.sessionId) ? { ...t, sessionId: null } : t
-        )
-        // Legacy stamp: groups persisted before the workspace model inherit
-        // their first surviving member's workspace (adoption stamped it).
-        const memberWorkspaceId = state.sessions.find((s) => s.id === sessionIds[0])?.workspaceId
-        groups.push({ ...g, sessionIds, terminals, workspaceId: g.workspaceId ?? memberWorkspaceId })
-      }
-      if (groups.length === 0) return state
-
-      const keptGroupIds = new Set(groups.map((g) => g.id))
-      // Sessions nested inside a kept group (as a member or a group terminal)
-      // must not also appear at the top level of the display order.
-      const nested = new Set<string>()
-      for (const g of groups) {
-        for (const sid of g.sessionIds) nested.add(sid)
-        for (const t of g.terminals) if (t.sessionId) nested.add(t.sessionId)
-      }
-      // A session view's hidden serving session is nested the same way a group
-      // terminal's is — it must never surface as a top-level row.
-      for (const sess of state.sessions) {
-        if (sess.view?.serverSessionId) nested.add(sess.view.serverSessionId)
-      }
-
-      // Rebuild displayOrder from the persisted order, dropping dead references.
-      const order: string[] = []
-      const seen = new Set<string>()
-      for (const id of persisted?.displayOrder ?? []) {
-        if (seen.has(id)) continue
-        if (keptGroupIds.has(id)) {
-          order.push(id)
-          seen.add(id)
-        } else if (surviving.has(id) && !nested.has(id)) {
-          order.push(id)
-          seen.add(id)
-        }
-      }
-      // Append any surviving standalone session the persisted order missed,
-      // then any kept group not yet placed (belt-and-suspenders).
-      for (const s of state.sessions) {
-        if (!seen.has(s.id) && !nested.has(s.id)) {
-          order.push(s.id)
-          seen.add(s.id)
-        }
-      }
-      for (const g of groups) {
-        if (!seen.has(g.id)) {
-          order.push(g.id)
-          seen.add(g.id)
-        }
-      }
-
-      // Keep auto-generated group names ("Group N") from colliding with the
-      // restored ones on the next createGroup.
-      groupCounter = Math.max(groupCounter, groups.length)
-
-      return { ...state, groups, displayOrder: order }
-    }),
-
   mergeLayoutForKeys: (keys, persisted, survivingSessionIds) =>
     set((state) => {
-      const merged = mergeLayoutForKeys(
-        state,
-        keys,
-        persisted,
-        survivingSessionIds,
-        useWorkspaceStore.getState().activeWorkspaceId
-      )
+      const merged = mergeLayoutForKeys(state, keys, persisted, survivingSessionIds)
       groupCounter = Math.max(groupCounter, merged.groups.length)
       return { ...state, groups: merged.groups, displayOrder: merged.displayOrder }
     }),

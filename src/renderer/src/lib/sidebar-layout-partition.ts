@@ -73,7 +73,7 @@ export function partitionSidebarLayout<G extends LayoutGroupLike>(
  * file without it the moment this window persists. Only a session that is
  * gone everywhere prunes its group, exactly as boot restore does.
  *
- * The same shape as the boot-time restore (`restoreGroups`): a group with no
+ * The same shape the boot restore uses: a group with no
  * surviving member is dropped, a terminal whose session is gone is detached,
  * the persisted order is kept minus dead references, surviving standalone
  * sessions of those workspaces the order missed are appended, then kept
@@ -84,14 +84,24 @@ export function mergeLayoutForKeys<G extends LayoutGroupLike>(
   state: { groups: G[]; displayOrder: string[]; sessions: LayoutSessionLike[] },
   keys: LayoutKey[],
   persisted: LayoutSlice<G>,
-  surviving: Iterable<string>,
-  fallback: LayoutKey
+  surviving: Iterable<string>
 ): { groups: G[]; displayOrder: string[] } {
   const keySet = new Set<LayoutKey>(keys)
   const alive = new Set(surviving)
-  const ownsGroup = (g: G): boolean => keySet.has(g.workspaceId ?? fallback)
+  // Ownership is by EXPLICIT stamp; an unstamped item belongs to the unscoped
+  // (null) partition only, never to a string workspace being taken. This is
+  // the asymmetry with the WRITE path (partitionSidebarLayout routes an
+  // unstamped group to the window's workspace): a TAKE must never claim — and
+  // then drop from an empty file — an unstamped group that has not been
+  // stamped yet. Taking one workspace's layout leaves unstamped groups (and
+  // every other workspace's) exactly where they are; only when the NULL key
+  // itself is merged (no-workspace mode boot) does an unstamped group belong
+  // to it. (Regression guard for the first-workspace F1: registering the
+  // first workspace no longer routes the still-unstamped groups through the
+  // empty new file.)
+  const ownsGroup = (g: G): boolean => keySet.has(g.workspaceId ?? null)
   const sessionKey = new Map<string, LayoutKey>()
-  for (const s of state.sessions) sessionKey.set(s.id, s.workspaceId ?? fallback)
+  for (const s of state.sessions) sessionKey.set(s.id, s.workspaceId ?? null)
 
   // Everything of OTHER workspaces stays exactly where it is.
   const others = state.groups.filter((g) => !ownsGroup(g))

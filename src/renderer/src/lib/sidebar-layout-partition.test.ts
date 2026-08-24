@@ -44,6 +44,13 @@ describe('partitionSidebarLayout', () => {
     expect([...parts.keys()]).toEqual([null])
     expect(parts.get(null)!.displayOrder).toEqual(['g1', 's2'])
   })
+
+  it('the WRITE path routes an unstamped group to the window workspace (fallback)', () => {
+    // Asymmetry with the TAKE path below: a persist in a workspace-bearing
+    // window writes an unstamped group to that workspace's file.
+    const parts = partitionSidebarLayout([g('g1', ['s1'])], ['g1'], [s('s1')], A)
+    expect(parts.get(A)!.groups.map((x) => x.id)).toEqual(['g1'])
+  })
 })
 
 describe('mergeLayoutForKeys', () => {
@@ -58,8 +65,7 @@ describe('mergeLayoutForKeys', () => {
       store,
       [B],
       { groups: [g('gB-new', ['sB1', 'sB2'], B)], displayOrder: ['gB-new', 'sB-free'] },
-      ['sB1', 'sB-free'],
-      A
+      ['sB1', 'sB-free']
     )
     expect(out.groups.map((x) => x.id)).toEqual(['gA', 'gB-new'])
     expect(out.groups[1].sessionIds).toEqual(['sB1'])
@@ -71,8 +77,7 @@ describe('mergeLayoutForKeys', () => {
       { groups: [], displayOrder: [], sessions: [] },
       [B],
       { groups: [g('gB', ['hosted-elsewhere'], B)], displayOrder: ['gB'] },
-      ['hosted-elsewhere'],
-      B
+      ['hosted-elsewhere']
     )
     expect(out.groups.map((x) => x.id)).toEqual(['gB'])
     expect(out.displayOrder).toEqual(['gB'])
@@ -86,8 +91,7 @@ describe('mergeLayoutForKeys', () => {
         groups: [g('dead', ['gone'], B), g('live', ['ok'], B, [{ sessionId: 'gone-term' }])],
         displayOrder: ['dead', 'live']
       },
-      ['ok'],
-      B
+      ['ok']
     )
     expect(out.groups.map((x) => x.id)).toEqual(['live'])
     expect(out.groups[0].terminals).toEqual([{ sessionId: null }])
@@ -99,8 +103,7 @@ describe('mergeLayoutForKeys', () => {
       { groups: [], displayOrder: [], sessions: [s('in-group', B), s('standalone', B)] },
       [B],
       { groups: [g('gB', ['in-group'], B)], displayOrder: ['in-group', 'gB'] },
-      ['in-group', 'standalone'],
-      B
+      ['in-group', 'standalone']
     )
     expect(out.displayOrder).toEqual(['gB', 'standalone'])
   })
@@ -110,9 +113,39 @@ describe('mergeLayoutForKeys', () => {
       { groups: [], displayOrder: ['ghost'], sessions: [] },
       [B],
       { groups: [], displayOrder: [] },
-      [],
-      B
+      []
     )
     expect(out.displayOrder).toEqual([])
+  })
+
+  // ── The F1 seam: taking a string workspace must NEVER claim, and then drop
+  //    from an empty file, an UNSTAMPED store group. Registering the first
+  //    workspace fired takeLayouts([W]) while the groups were still unstamped;
+  //    ownership by `?? fallback`(=W) then rebuilt W from its empty file and
+  //    dropped them. Ownership is by explicit stamp: an unstamped group is the
+  //    null partition's, never a string key's. ──
+  it('taking a string workspace keeps unstamped store groups untouched (F1)', () => {
+    const out = mergeLayoutForKeys(
+      {
+        groups: [g('orphan-one', ['o1']), g('orphan-two', ['o2'])], // UNSTAMPED
+        displayOrder: ['orphan-one', 'orphan-two'],
+        sessions: [s('o1'), s('o2')] // unstamped sessions
+      },
+      [A], // taking workspace A, whose file is empty
+      { groups: [], displayOrder: [] }, // empty file — the destructive input
+      [] // nothing "surviving" for A
+    )
+    expect(out.groups.map((x) => x.id)).toEqual(['orphan-one', 'orphan-two'])
+    expect(out.displayOrder).toEqual(['orphan-one', 'orphan-two'])
+  })
+
+  it('merging the NULL key does own unstamped groups (no-workspace boot)', () => {
+    const out = mergeLayoutForKeys(
+      { groups: [], displayOrder: [], sessions: [s('u1')] },
+      [null], // the unscoped partition
+      { groups: [g('gN', ['u1'])], displayOrder: ['gN'] }, // its file
+      ['u1']
+    )
+    expect(out.groups.map((x) => x.id)).toEqual(['gN'])
   })
 })
