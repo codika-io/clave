@@ -19,6 +19,7 @@ import type {
 } from './session-types'
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
 import { useWorkspaceStore } from './workspace-store'
+import { mergeLayoutForKeys, absorbLayout, placeAdopted } from '../lib/sidebar-layout-partition'
 
 // Re-export types and constants so existing imports continue to work
 export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, GroupViewConfig, SessionViewConfig, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
@@ -99,15 +100,33 @@ interface SessionState {
    *  incoming one's. Pure view/selection change — sessions are untouched. */
   applyWorkspaceSwitch: (fromId: string | null, toId: string | null) => void
   addSession: (session: Session) => void
+  /** Add an ADOPTED session — a survivor at boot, a tab handed over by
+   *  another window — without any placement heuristic: never nested into the
+   *  selected group, never at the top level when a group (or a terminal, or
+   *  a view) already holds it, no selection or focus change. */
+  adoptSessionInPlace: (session: Session, options?: { focus?: boolean }) => void
   removeSession: (id: string) => void
+  /** Remove a tab because its session RE-HOMED to another window — drop it
+   *  from this store WITHOUT killing the pty (it is alive, just moved). */
+  removeSessionForRehome: (id: string) => void
+  /** Drop a group because it MOVED whole to another window: its members that
+   *  moved are already gone (removeSessionForRehome); any that stayed become
+   *  plain tabs. Never touches a pty. */
+  removeGroupForMove: (groupId: string) => void
   resetSessions: () => Promise<void>
-  /** Rebuild groups + display order from a persisted layout after tmux-backed
-   *  sessions have been re-adopted on launch. Dangling references (sessions
-   *  whose tmux session did not survive) are pruned. */
-  restoreGroups: (
-    survivingSessionIds: string[],
-    persisted: { groups: SessionGroup[]; displayOrder: string[] }
+  /** Replace the layout of the given workspaces (null = unscoped) with the
+   *  one read from this window's file, pruned to `survivingSessionIds`
+   *  (sessions that still exist — adopted here, or a record on disk), and
+   *  leave every other workspace's groups untouched. The boot restore. */
+  mergeLayoutForKeys: (
+    keys: (string | null)[],
+    persisted: { groups: SessionGroup[]; displayOrder: string[] },
+    survivingSessionIds: string[]
   ) => void
+  /** Take in groups handed over by another window (a closing window's
+   *  sidebar, a group moved here): unknown groups and order entries are
+   *  appended, known ones left alone. The members arrive through adoption. */
+  absorbLayout: (incoming: { groups: SessionGroup[]; displayOrder: string[] }) => void
   selectSession: (id: string, addToSelection: boolean) => void
   selectSessions: (ids: string[]) => void
   setFocusedSession: (id: string) => void
@@ -203,6 +222,25 @@ interface SessionState {
   hideAgentSession: (sessionId: string) => void
 }
 
+/** The defaults every session entering the store gets; the workspace stamp
+ *  falls back to this window's active workspace (mirrors pty:spawn). */
+function normalizeSession(session: Session): Session {
+  const workspaceId = session.workspaceId ?? useWorkspaceStore.getState().activeWorkspaceId ?? undefined
+  return {
+    ...session,
+    workspaceId,
+    antigravityMode: session.antigravityMode ?? false,
+    codexMode: session.codexMode ?? false,
+    claudeAgentsMode: session.claudeAgentsMode ?? false,
+    detectedUrl: session.detectedUrl ?? null,
+    serverStatus: session.serverStatus ?? null,
+    serverCommand: session.serverCommand ?? null,
+    hasUnseenActivity: session.hasUnseenActivity ?? false,
+    userRenamed: session.userRenamed ?? false,
+    planFilePath: session.planFilePath ?? null
+  }
+}
+
 let groupCounter = 0
 
 // Groups (and the sidebar ordering that nests them) live only in memory during
@@ -219,14 +257,28 @@ let groupCounter = 0
 let sidebarPersistEnabled = false
 let lastPersistedGroups: SessionGroup[] | null = null
 let lastPersistedOrder: string[] | null = null
+/** The JSON last accepted by main — re-sent only on change. */
+let lastPersistedJson: string | null = null
 
-function persistSidebarLayout(groups: SessionGroup[], displayOrder: string[]): void {
+/** This window's whole sidebar, to its own file (one file per window — main
+ *  resolves it from the sender). Every group carries its workspace stamp
+ *  inside the file, so the window comes back showing the right ones. */
+function persistSidebarLayout(state: { groups: SessionGroup[]; displayOrder: string[] }): void {
+  const { groups, displayOrder } = state
   if (groups === lastPersistedGroups && displayOrder === lastPersistedOrder) return
   lastPersistedGroups = groups
   lastPersistedOrder = displayOrder
-  window.electronAPI?.sidebarLayoutSave?.({ groups, displayOrder }).catch(() => {
-    // Persistence failures are non-fatal — groups stay in memory for this run.
-  })
+  const data = { groups, displayOrder }
+  const json = JSON.stringify(data)
+  if (json === lastPersistedJson) return
+  window.electronAPI
+    ?.sidebarLayoutSave?.(data)
+    .then((res) => {
+      if (res?.ok) lastPersistedJson = json
+    })
+    .catch(() => {
+      // Persistence failures are non-fatal — groups stay in memory for this run.
+    })
 }
 
 /** Mirror a session's tab name into its tmux sidecar (main process), so the
@@ -254,8 +306,7 @@ function persistSessionName(
  *  overwrite the saved file before we read it. */
 export function enableSidebarPersistence(): void {
   sidebarPersistEnabled = true
-  const { groups, displayOrder } = useSessionStore.getState()
-  persistSidebarLayout(groups, displayOrder)
+  persistSidebarLayout(useSessionStore.getState())
 }
 
 type SidebarSnapshot = {
@@ -440,8 +491,8 @@ export const useSessionStore = create<SessionState>((set) => ({
       // Central workspace stamp: callers with a specific home pass it (pin
       // launches, MCP caller inheritance, adoption, duplicate/resume); everyone
       // else inherits the active workspace. Mirrors the pty:spawn-side default.
-      const workspaceId = session.workspaceId ?? useWorkspaceStore.getState().activeWorkspaceId ?? undefined
-      const newSession = { ...session, workspaceId, antigravityMode: session.antigravityMode ?? false, codexMode: session.codexMode ?? false, claudeAgentsMode: session.claudeAgentsMode ?? false, detectedUrl: session.detectedUrl ?? null, serverStatus: session.serverStatus ?? null, serverCommand: session.serverCommand ?? null, hasUnseenActivity: session.hasUnseenActivity ?? false, userRenamed: session.userRenamed ?? false, planFilePath: session.planFilePath ?? null }
+      const newSession = normalizeSession(session)
+      const workspaceId = newSession.workspaceId
 
       // A spawn into a HIDDEN workspace (MCP background work) must not steal
       // the user's view: the sidebar already filters the tab out, so grabbing
@@ -489,6 +540,25 @@ export const useSessionStore = create<SessionState>((set) => ({
       }
     }),
 
+  adoptSessionInPlace: (session, options) =>
+    set((state) => {
+      if (state.sessions.some((s) => s.id === session.id)) return state
+      const newSession = normalizeSession(session)
+      const withOrder = { ...state, displayOrder: getDisplayOrder(state) }
+      // A deliberate move takes focus like a spawn — only when the tab is
+      // visible here (its workspace shown); a hidden one never steals the view.
+      const visible = inActiveWorkspace(newSession, useWorkspaceStore.getState().activeWorkspaceId)
+      const focusPatch =
+        options?.focus && visible
+          ? { selectedSessionIds: [session.id], focusedSessionId: session.id, activeView: 'terminals' as const }
+          : {}
+      return {
+        sessions: [...state.sessions, newSession],
+        displayOrder: placeAdopted(withOrder, session.id),
+        ...focusPatch
+      }
+    }),
+
   resetSessions: async () => {
     const { sessions, groups } = useSessionStore.getState()
 
@@ -511,76 +581,58 @@ export const useSessionStore = create<SessionState>((set) => ({
     })
   },
 
-  restoreGroups: (survivingSessionIds, persisted) =>
+  mergeLayoutForKeys: (keys, persisted, survivingSessionIds) =>
     set((state) => {
-      const persistedGroups = persisted?.groups ?? []
-      if (persistedGroups.length === 0) return state
+      const merged = mergeLayoutForKeys(state, keys, persisted, survivingSessionIds)
+      groupCounter = Math.max(groupCounter, merged.groups.length)
+      return { ...state, groups: merged.groups, displayOrder: merged.displayOrder }
+    }),
 
-      const surviving = new Set(survivingSessionIds)
+  absorbLayout: (incoming) =>
+    set((state) => {
+      const merged = absorbLayout(
+        { groups: state.groups, displayOrder: getDisplayOrder(state) },
+        incoming
+      )
+      groupCounter = Math.max(groupCounter, merged.groups.length)
+      return { ...state, groups: merged.groups, displayOrder: merged.displayOrder }
+    }),
 
-      // Prune each group to the sessions/terminals that actually came back.
-      // A group whose members all vanished is dropped (it would render empty).
-      const groups: SessionGroup[] = []
-      for (const g of persistedGroups) {
-        const sessionIds = (g.sessionIds ?? []).filter((sid) => surviving.has(sid))
-        if (sessionIds.length === 0) continue
-        const terminals = (g.terminals ?? []).map((t) =>
-          t.sessionId && !surviving.has(t.sessionId) ? { ...t, sessionId: null } : t
-        )
-        // Legacy stamp: groups persisted before the workspace model inherit
-        // their first surviving member's workspace (adoption stamped it).
-        const memberWorkspaceId = state.sessions.find((s) => s.id === sessionIds[0])?.workspaceId
-        groups.push({ ...g, sessionIds, terminals, workspaceId: g.workspaceId ?? memberWorkspaceId })
+  removeSessionForRehome: (id) =>
+    set((state) => {
+      // The session lives on in another window now; only detach it from THIS
+      // store's tab list, groups, order and selection. Never touch the pty.
+      const sessions = state.sessions.filter((s) => s.id !== id)
+      const groups = state.groups.map((g) => ({
+        ...g,
+        sessionIds: g.sessionIds.filter((sid) => sid !== id),
+        terminals: g.terminals.map((t) => (t.sessionId === id ? { ...t, sessionId: null } : t))
+      }))
+      return {
+        sessions,
+        groups,
+        displayOrder: getDisplayOrder(state).filter((did) => did !== id),
+        selectedSessionIds: state.selectedSessionIds.filter((sid) => sid !== id),
+        focusedSessionId: state.focusedSessionId === id ? null : state.focusedSessionId
       }
-      if (groups.length === 0) return state
+    }),
 
-      const keptGroupIds = new Set(groups.map((g) => g.id))
-      // Sessions nested inside a kept group (as a member or a group terminal)
-      // must not also appear at the top level of the display order.
-      const nested = new Set<string>()
-      for (const g of groups) {
-        for (const sid of g.sessionIds) nested.add(sid)
-        for (const t of g.terminals) if (t.sessionId) nested.add(t.sessionId)
+  removeGroupForMove: (groupId) =>
+    set((state) => {
+      const group = state.groups.find((g) => g.id === groupId)
+      if (!group) return state
+      // Members and quick-launch terminals that could not move (not live,
+      // not tmux-backed) stay here as plain tabs — never orphaned hidden.
+      const linked = [
+        ...group.sessionIds,
+        ...group.terminals.map((t) => t.sessionId).filter((id): id is string => id !== null)
+      ]
+      const stayed = linked.filter((sid) => state.sessions.some((s) => s.id === sid))
+      const order = getDisplayOrder(state).filter((did) => did !== groupId)
+      return {
+        groups: state.groups.filter((g) => g.id !== groupId),
+        displayOrder: [...order, ...stayed.filter((sid) => !order.includes(sid))]
       }
-      // A session view's hidden serving session is nested the same way a group
-      // terminal's is — it must never surface as a top-level row.
-      for (const sess of state.sessions) {
-        if (sess.view?.serverSessionId) nested.add(sess.view.serverSessionId)
-      }
-
-      // Rebuild displayOrder from the persisted order, dropping dead references.
-      const order: string[] = []
-      const seen = new Set<string>()
-      for (const id of persisted?.displayOrder ?? []) {
-        if (seen.has(id)) continue
-        if (keptGroupIds.has(id)) {
-          order.push(id)
-          seen.add(id)
-        } else if (surviving.has(id) && !nested.has(id)) {
-          order.push(id)
-          seen.add(id)
-        }
-      }
-      // Append any surviving standalone session the persisted order missed,
-      // then any kept group not yet placed (belt-and-suspenders).
-      for (const s of state.sessions) {
-        if (!seen.has(s.id) && !nested.has(s.id)) {
-          order.push(s.id)
-          seen.add(s.id)
-        }
-      }
-      for (const g of groups) {
-        if (!seen.has(g.id)) {
-          order.push(g.id)
-          seen.add(g.id)
-        }
-      }
-
-      // Keep auto-generated group names ("Group N") from colliding with the
-      // restored ones on the next createGroup.
-      groupCounter = Math.max(groupCounter, groups.length)
-
-      return { ...state, groups, displayOrder: order }
     }),
 
   removeSession: (id) =>
@@ -1414,6 +1466,6 @@ export const useSessionStore = create<SessionState>((set) => ({
 useSessionStore.subscribe((state) => {
   if (!sidebarPersistEnabled) return
   if (state.groups !== lastPersistedGroups || state.displayOrder !== lastPersistedOrder) {
-    persistSidebarLayout(state.groups, state.displayOrder)
+    persistSidebarLayout(state)
   }
 })

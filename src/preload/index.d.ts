@@ -3,10 +3,36 @@ import type {
   MutationResult,
   MutationScope
 } from '../shared/extensions-types'
-import type { WorkspaceStateFile } from '../shared/workspace-types'
+import type { WindowIdentity, Workspace, WorkspaceStateFile } from '../shared/workspace-types'
 import type { DownloadProgress, UpdaterState } from '../shared/updater-types'
 
-export type { DownloadProgress, UpdaterState }
+export type { DownloadProgress, UpdaterState, WindowIdentity }
+
+/** Main's answer to `windowSetWorkspace`. Any window may show any workspace;
+ *  only an unknown one is refused. */
+export type SetWorkspaceResult =
+  | { ok: true }
+  | { ok: false; reason: 'unknown-workspace' | 'no-window' }
+
+/** Main's answer to a state write (layout, pins). */
+export type WriteResult =
+  | { ok: true }
+  | { ok: false; reason: 'invalid-key' | 'no-window' }
+
+/** What a window is told to take in: session ids to adopt (their records
+ *  carry the rest) and, on a window close or a group move, groups. */
+export interface RehomePayload {
+  sessionIds: string[]
+  layout: { groups: unknown[]; displayOrder: string[] } | null
+  /** A deliberate move takes focus in its new window; a close hand-over does not. */
+  focus: boolean
+}
+
+/** The outcome of moving sessions to another window. */
+export interface MoveResult {
+  moved: string[]
+  refused: { sessionId: string; reason: 'not-live' | 'not-tmux' | 'same-window' }[]
+}
 
 /** Endpoint identity stamped on exchange-capture events; mirrors the
  *  contract's EndpointIdentity (src/main/exchange-capture/contract). `model`
@@ -174,6 +200,8 @@ export interface SessionRecord {
   /** Workspace this session belongs to (stamped at spawn, inferred from cwd
    *  for legacy records). Absent → unstamped; the renderer assigns active. */
   workspaceId?: string
+  /** The window this session lives in (its persisted key). */
+  windowKey?: string
   /** Attached web view behind the row's dashboard icon; restored at adoption.
    *  The serving session id never persists — the start action respawns it. */
   view?: { url: string; title?: string; command?: string; cwd?: string }
@@ -337,8 +365,12 @@ export interface ElectronAPI {
   ) => Promise<void>
   setSessionWorkspace: (id: string, workspaceId: string | null) => Promise<void>
   tmuxAvailable: () => Promise<boolean>
-  listSessionRecords: () => Promise<SessionRecord[]>
+  listSessionRecords: (filter?: { ids?: string[] }) => Promise<SessionRecord[]>
   discardSessionRecord: (key: string) => Promise<void>
+  onSessionRehome: (callback: (payload: RehomePayload) => void) => () => void
+  onSessionRemovedForRehome: (callback: (sessionId: string) => void) => () => void
+  onGroupRemovedForMove: (callback: (groupId: string) => void) => () => void
+  ackRehomed: (sessionIds: string[]) => void
   onSessionData: (id: string, callback: (data: string) => void) => () => void
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void
@@ -454,9 +486,23 @@ export interface ElectronAPI {
   unwatchDir: () => Promise<void>
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) => () => void
   sidebarLayoutLoad: () => Promise<{ groups: unknown[]; displayOrder: string[] }>
-  sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) => Promise<void>
+  sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) => Promise<WriteResult>
   workspaceLoad: () => Promise<WorkspaceStateFile>
-  workspaceSave: (data: WorkspaceStateFile) => Promise<void>
+  workspaceUpdateRegistry: (
+    workspaces: Workspace[]
+  ) => Promise<{ ok: true } | { ok: false; reason: 'invalid' }>
+  workspaceUpdatePins: (scope: string | null | 'all', pins: unknown[]) => Promise<WriteResult>
+  workspaceSetLastActive: (workspaceId: string | null) => Promise<{ ok: true }>
+  onWorkspaceStateChanged: (
+    callback: (state: { workspaces: Workspace[]; pins: unknown[] }) => void
+  ) => () => void
+  windowIdentity: () => Promise<WindowIdentity | null>
+  onWindowIdentityChanged: (callback: (identity: WindowIdentity) => void) => () => void
+  windowSetWorkspace: (workspaceId: string | null) => Promise<SetWorkspaceResult>
+  windowList: () => Promise<WindowIdentity[]>
+  windowOpen: (workspaceId?: string) => Promise<{ windowId: number }>
+  windowMoveSessions: (sessionIds: string[], targetWindowId: number) => Promise<MoveResult>
+  windowMoveGroup: (group: unknown, targetWindowId: number) => Promise<MoveResult & { ok: boolean }>
   getUsageLimits: () => Promise<UsageLimits | UsageError>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>

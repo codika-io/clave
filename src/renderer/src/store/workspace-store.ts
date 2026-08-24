@@ -8,9 +8,18 @@ export type { Workspace }
  *  (activation side effects, add/remove cascades, persistence) lives in
  *  lib/workspace-actions.ts, which sits above every store.
  *
+ *  Multi-window (PRDCT-1703): a window is the whole app once more, on
+ *  whatever workspace the user put it on. `activeWorkspaceId` is the
+ *  workspace THIS WINDOW shows — a per-window value handed to the renderer by
+ *  main at boot, never read from the state file. The identity fields beside
+ *  it say which window this is: its runtime id, its persisted key (the name
+ *  of its own sidebar layout file, the stamp on the session records it
+ *  opened), and whether it is the primary (the window that takes in what a
+ *  closing window leaves and adopts orphans at boot).
+ *
  *  Invariant: `activeWorkspaceId === null` ⟺ `workspaces.length === 0`.
- *  While workspaces exist, exactly one is always active — there is no
- *  "deactivated" state. With zero workspaces the app runs unscoped and
+ *  While workspaces exist, exactly one is always active in a window — there
+ *  is no "deactivated" state. With zero workspaces the app runs unscoped and
  *  behaves as if the workspace feature didn't exist.
  */
 interface WorkspaceState {
@@ -18,12 +27,20 @@ interface WorkspaceState {
   activeWorkspaceId: string | null
   /** True once boot hydration (workspace:load + pin import) has run. */
   loaded: boolean
+  /** This window's BrowserWindow id; null until identity arrives (or outside
+   *  Electron, where the renderer behaves as the sole, primary window). */
+  windowId: number | null
+  windowKey: string | null
+  isPrimary: boolean
 }
 
 export const useWorkspaceStore = create<WorkspaceState>(() => ({
   workspaces: [],
   activeWorkspaceId: null,
-  loaded: false
+  loaded: false,
+  windowId: null,
+  windowKey: null,
+  isPrimary: true
 }))
 
 /** The active workspace's id, for stamping newly created sessions/groups/pins.

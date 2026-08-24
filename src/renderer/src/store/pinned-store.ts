@@ -617,6 +617,31 @@ export async function togglePinnedGroup(pinnedId: string): Promise<void> {
   await spawnPinnedGroup(pinnedId, pg)
 }
 
+/** The default prompt a live group's `+` inherits from the pin it was stamped
+ *  from — what a session opened later in that group starts on.
+ *
+ *  `.clave` lets a group declare `prompt` at group level, but every workspace
+ *  file we actually author puts the project briefing on the group's first
+ *  session instead (`sessions[0].prompt` — what the product is, which repos sit
+ *  in the folder, wait for instructions). That string IS the group's brief, and
+ *  a tab opened from the `+` an hour later needs it exactly as much as the one
+ *  stamped at launch. Without this fallback the `+` in every real project group
+ *  launched a bare agent knowing nothing about the project, while the row's
+ *  tooltip stayed silent about it — the group-level `prompt` the code read is a
+ *  field no workspace file in the fleet sets.
+ *
+ *  Precedence: a declared group-level prompt wins (it is the explicit answer);
+ *  otherwise the root session's brief, then the first session that carries one.
+ *  Returned RAW — the `+` substitutes the @-tokens at press time against the
+ *  group's own cwd, the same way the group-level prompt has always been. */
+export function resolveGroupDefaultPrompt(
+  pg: Pick<PinnedGroup, 'prompt' | 'sessions'>
+): string | null {
+  if (pg.prompt) return pg.prompt
+  const root = pg.sessions.find((s) => s.rootSession && s.prompt)
+  return root?.prompt ?? pg.sessions.find((s) => s.prompt)?.prompt ?? null
+}
+
 async function spawnPinnedGroup(
   pinnedId: string,
   pg: PinnedGroup,
@@ -726,8 +751,10 @@ async function spawnPinnedGroup(
             cwd: pg.cwd ?? g.cwd,
             color: pg.color,
             // The group's default prompt travels with it: sessions launched
-            // later from the live group's `+` inherit what the .clave declared.
-            prompt: pg.prompt ?? null,
+            // later from the live group's `+` inherit what the .clave declared
+            // — at group level, or (what every real file does) on the group's
+            // first session. See resolveGroupDefaultPrompt.
+            prompt: resolveGroupDefaultPrompt(pg),
             terminals: liveTerminals,
             ...(declaredView ? { view: declaredView } : {})
           }

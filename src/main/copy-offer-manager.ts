@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { clipboard } from 'electron'
-import { getMainWindow } from './window-utils'
+import { broadcastToAllWindows } from './window-routing'
 
 /**
  * Lifecycle for agent-offered copyable values — the outbound mirror of the
@@ -66,7 +66,9 @@ export function listOfferViews(): CopyOfferView[] {
 }
 
 function pushToRenderer(): void {
-  getMainWindow()?.webContents.send('copy-offer:changed', listOfferViews())
+  // The offer surfaces a copy button in the offering tab's own header, which
+  // may be in any window; broadcast so whichever window hosts that tab shows it.
+  broadcastToAllWindows('copy-offer:changed', listOfferViews())
 }
 
 export function createOffer(input: {

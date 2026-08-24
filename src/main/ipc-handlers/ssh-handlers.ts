@@ -1,7 +1,8 @@
 import { ipcMain } from 'electron'
 import { sshManager } from '../ssh-manager'
 import { locationManager } from '../location-manager'
-import { getMainWindow } from '../window-utils'
+import { BrowserWindow } from 'electron'
+import { broadcastToAllWindows } from '../window-routing'
 
 export function registerSshHandlers(): void {
   ipcMain.handle('ssh:connect', async (_event, locationId: string) => {
@@ -20,16 +21,25 @@ export function registerSshHandlers(): void {
     return sshManager.exec(locationId, command)
   })
 
-  ipcMain.handle('ssh:open-shell', async (_event, locationId: string, cwd?: string) => {
+  ipcMain.handle('ssh:open-shell', async (event, locationId: string, cwd?: string) => {
     const { shellId, channel } = await sshManager.openShell(locationId, cwd)
+    // A remote shell's data/exit belong to the ONE window that opened it: its
+    // renderer holds the xterm. Bind the shell to that window (weakly — a
+    // closed window just drops the writes, exactly as pty:data does).
+    const openerId = BrowserWindow.fromWebContents(event.sender)?.id ?? null
+    const opener = (): BrowserWindow | null => {
+      if (openerId == null) return null
+      const w = BrowserWindow.fromId(openerId)
+      return w && !w.isDestroyed() ? w : null
+    }
 
     // Forward shell data to renderer
     channel.on('data', (data: Buffer) => {
-      getMainWindow()?.webContents.send(`ssh:shell-data:${shellId}`, data.toString('utf-8'))
+      opener()?.webContents.send(`ssh:shell-data:${shellId}`, data.toString('utf-8'))
     })
 
     channel.on('close', () => {
-      getMainWindow()?.webContents.send(`ssh:shell-exit:${shellId}`, 0)
+      opener()?.webContents.send(`ssh:shell-exit:${shellId}`, 0)
     })
 
     return shellId
@@ -92,13 +102,15 @@ export function registerSshHandlers(): void {
   })
 
   // SSH connection lifecycle — forward close/error to renderer
+  // Connection lifecycle is location-level, not window-level: broadcast so
+  // every window's location UI updates.
   sshManager.onClose((locationId) => {
-    getMainWindow()?.webContents.send('ssh:connection-closed', locationId)
+    broadcastToAllWindows('ssh:connection-closed', locationId)
     locationManager.setLocationStatus(locationId, 'disconnected')
   })
 
   sshManager.onError((locationId) => {
-    getMainWindow()?.webContents.send('ssh:connection-closed', locationId)
+    broadcastToAllWindows('ssh:connection-closed', locationId)
     locationManager.setLocationStatus(locationId, 'error')
   })
 }

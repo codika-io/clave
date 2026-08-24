@@ -1,7 +1,13 @@
 import { emitTabClosed } from '../../lib/exchange-capture'
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSessionStore, isFileTabId, getVisibleFlatOrder, inActiveWorkspace, enableSidebarPersistence } from '../../store/session-store'
+import {
+  useSessionStore,
+  isFileTabId,
+  getVisibleFlatOrder,
+  inActiveWorkspace,
+  enableSidebarPersistence
+} from '../../store/session-store'
 import type { SessionGroup, SettingsSection } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
@@ -26,10 +32,15 @@ import { Bars3BottomLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/ou
 import { cn } from '../../lib/utils'
 import { usePinnedStore, initClaveFileWatchers } from '../../store/pinned-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
-import { bootWorkspaces, refreshActiveWorkspacePins, cycleWorkspace } from '../../lib/workspace-actions'
+import {
+  bootWorkspaces,
+  refreshActiveWorkspacePins,
+  cycleWorkspace
+} from '../../lib/workspace-actions'
 import { promptRestore } from '../../store/restore-prompt-store'
 import { RestorePromptDialog } from '../ui/RestorePromptDialog'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
+import { adoptRecord, adoptRehomed } from '../../lib/adopt-record'
 import { initSecretStore } from '../../store/secret-store'
 import { initCopyOfferStore } from '../../store/copy-offer-store'
 import { ToolbarSecretPopover } from './ToolbarSecretPopover'
@@ -83,6 +94,15 @@ export function AppShell() {
 
   useWorkTracker()
 
+  // The window's title names its workspace — what tells windows apart in
+  // Mission Control and the Window menu (the title bar itself is hidden).
+  const activeWorkspaceName = useWorkspaceStore(
+    (s) => s.workspaces.find((w) => w.id === s.activeWorkspaceId)?.name ?? null
+  )
+  useEffect(() => {
+    document.title = activeWorkspaceName ? `${activeWorkspaceName} — Clave` : 'Clave'
+  }, [activeWorkspaceName])
+
   // Wire the in-app MCP command dispatcher and the secret-request store to
   // their main-process push channels. The module-level latch makes this run
   // exactly once per process even under React StrictMode's mount/remount, so
@@ -93,6 +113,22 @@ export function AppShell() {
     initMcpDispatcher()
     initSecretStore()
     initCopyOfferStore()
+    // Re-homing: take in what another window hands over — a closing window's
+    // sessions with its groups, a tab or a group moved here — and drop a tab
+    // whose session moved AWAY (moved, not died — never kill the pty). The
+    // groups land first so the adopted members find their group.
+    window.electronAPI?.onSessionRehome?.(({ sessionIds, layout, focus }) => {
+      if (layout) {
+        useSessionStore.getState().absorbLayout(layout as { groups: SessionGroup[]; displayOrder: string[] })
+      }
+      void adoptRehomed(sessionIds, useWorkspaceStore.getState().activeWorkspaceId, focus === true)
+    })
+    window.electronAPI?.onSessionRemovedForRehome?.((id) => {
+      useSessionStore.getState().removeSessionForRehome(id)
+    })
+    window.electronAPI?.onGroupRemovedForMove?.((groupId) => {
+      useSessionStore.getState().removeGroupForMove(groupId)
+    })
     // What the agent button relaunches, per workspace. Deliberately NOT in the
     // session-adoption effect below: that one awaits the "restore sessions?"
     // prompt, so anything after it waits on the user answering a dialog — and
@@ -114,113 +150,36 @@ export function AppShell() {
         await bootWorkspaces()
         const activeWorkspaceId = useWorkspaceStore.getState().activeWorkspaceId
 
-        // Read the previous run's saved groups BEFORE any session is adopted
+        // Read this window's saved groups BEFORE any session is adopted
         // (re-adoption mutates the layout). Then rebuild groups around the
-        // survivors and only then turn persistence on, so the saved file is
-        // never overwritten before we've loaded it.
+        // survivors and only then turn persistence on, so the file is never
+        // overwritten before we've loaded it. One file per window; the
+        // primary's load also brings in the orphans of windows that no
+        // longer exist.
         const savedLayout = await window.electronAPI?.sidebarLayoutLoad?.().catch(() => null)
         const persisted = {
           groups: (savedLayout?.groups ?? []) as SessionGroup[],
           displayOrder: savedLayout?.displayOrder ?? []
         }
 
+        // This window's own records (plus the orphans, for the primary):
+        // live tmux survivors re-attach silently, whatever their workspace
+        // (hidden where not the shown one, so cross-workspace messaging and
+        // clave_list never regress); dead records are offered once, all
+        // together, as they always were.
         const survivors = (await window.electronAPI?.listSessionRecords?.()) ?? []
-
-        /** Bring one record back as a tab. Live tmux survivors reattach; dead
-         *  ones (plain, or tmux killed by a reboot) relaunch fresh in the same
-         *  cwd, Claude resuming via claudeSessionId. */
-        const adoptRecord = async (s: (typeof survivors)[number]): Promise<string | null> => {
-          try {
-            const workspaceId = s.workspaceId ?? activeWorkspaceId ?? undefined
-            const info = await window.electronAPI.spawnSession(s.cwd, {
-              claudeMode: s.claudeMode,
-              antigravityMode: s.antigravityMode,
-              codexMode: s.codexMode,
-              claudeAgentsMode: s.claudeAgentsMode,
-              dangerousMode: s.dangerousMode,
-              model: s.model,
-              // Live survivor: MUST go through tmux to reattach. Dead record:
-              // fresh spawn under the current global tmux preference — the
-              // name is still offered so a tmux respawn reuses it (spawn
-              // handles record-key transitions either way).
-              ...(s.live && s.tmuxName
-                ? { tmuxMode: true, adoptTmuxName: s.tmuxName }
-                : s.tmuxName
-                  ? { adoptTmuxName: s.tmuxName }
-                  : {}),
-              // Reuse the original id so lifecycle-hook status routing keeps
-              // working after the session comes back.
-              adoptSessionId: s.id,
-              // Live survivor (quit/reopen): reattach to the running process —
-              // claudeSessionId only drives the header badge, the agent isn't
-              // re-run. Dead record: re-spawn fresh, so pass resumeSessionId to
-              // relaunch Claude with `--resume <id>` and reload the prior
-              // conversation.
-              ...(s.live
-                ? { claudeSessionId: s.claudeSessionId }
-                : s.claudeMode && s.claudeSessionId
-                  ? { resumeSessionId: s.claudeSessionId }
-                  : {}),
-              // Carry the account/profile forward so the badge is restored.
-              configDir: s.configDir,
-              claudeProfileId: s.claudeProfileId,
-              claudeProfileLabel: s.claudeProfileLabel,
-              // Explicit stamp (record value or legacy inference) so the
-              // rewritten record keeps the session's workspace, not the
-              // active one at adoption time.
-              workspaceId
-            })
-            addSession({
-              id: info.id,
-              cwd: info.cwd,
-              folderName: info.folderName,
-              // Restore the label the user last saw. `userRenamed` comes back
-              // too, so an explicit rename keeps its immunity to auto-titling.
-              name: s.displayName || s.folderName,
-              userRenamed: s.userRenamed === true,
-              alive: info.alive,
-              activityStatus: 'idle',
-              promptWaiting: null,
-              claudeMode: s.claudeMode,
-              antigravityMode: s.antigravityMode,
-              codexMode: s.codexMode,
-              claudeAgentsMode: s.claudeAgentsMode,
-              dangerousMode: s.dangerousMode,
-              model: s.model,
-              claudeSessionId: info.claudeSessionId,
-              claudeProfileId: s.claudeProfileId,
-              claudeProfileLabel: s.claudeProfileLabel,
-              claudeConfigDir: s.configDir,
-              sessionType: 'local',
-              workspaceId,
-              // The attached web view comes back with the tab; its hidden
-              // serving session did not survive, so the pane's probe shows
-              // down with a one-click start (serverSessionId stays unset).
-              view: s.view ? { ...s.view } : undefined
-            })
-            return info.id
-          } catch (err) {
-            console.error('Failed to adopt persistent session:', s.tmuxName ?? s.id, err)
-            return null
-          }
-        }
-
-        // Reattach = silent, relaunch = ask. Live tmux survivors were never
-        // disrupted, so they come back unprompted (as always). Everything else
-        // needs actual process launches on the user's behalf — gate those
-        // behind the restore prompt, "Start fresh" discarding the records.
         const liveOnes = survivors.filter((s) => s.live)
         const deadOnes = survivors.filter((s) => !s.live)
 
         const adoptedIds: string[] = []
         for (const s of liveOnes) {
-          const id = await adoptRecord(s)
+          const id = await adoptRecord(s, activeWorkspaceId)
           if (id) adoptedIds.push(id)
         }
         if (deadOnes.length > 0) {
           if (await promptRestore(deadOnes)) {
             for (const s of deadOnes) {
-              const id = await adoptRecord(s)
+              const id = await adoptRecord(s, activeWorkspaceId)
               if (id) adoptedIds.push(id)
             }
           } else {
@@ -230,15 +189,19 @@ export function AppShell() {
           }
         }
 
-        // Rebuild the persisted groups around the sessions that came back.
-        if (adoptedIds.length && persisted.groups.length) {
-          useSessionStore.getState().restoreGroups(adoptedIds, persisted)
-        }
+        // Rebuild the layout around what survives: a group is kept if a
+        // member was adopted. Every workspace's groups live in this one file,
+        // so every key is merged (null = the unscoped ones).
+        const keys: (string | null)[] = [
+          null,
+          ...useWorkspaceStore.getState().workspaces.map((w) => w.id)
+        ]
+        useSessionStore.getState().mergeLayoutForKeys(keys, persisted, adoptedIds)
       } catch (err) {
         console.error('Failed to restore sessions/groups on launch:', err)
       } finally {
-        // Turn persistence on only now — after the saved layout was loaded and
-        // groups restored — so adoption writes can't clobber the saved file.
+        // Turn persistence on only now — after the saved layout was loaded
+        // and groups restored — so adoption writes can't clobber the file.
         enableSidebarPersistence()
       }
 
@@ -358,8 +321,12 @@ export function AppShell() {
       // Cmd+? (Cmd+Shift+/) — open help panel
       if (e.metaKey && e.shiftKey && e.key === '/') {
         e.preventDefault()
-        const { fileTreeOpen: helpFileTreeOpen, toggleFileTree: helpToggleFileTree, sidePanelTab, setSidePanelTab } =
-          useSessionStore.getState()
+        const {
+          fileTreeOpen: helpFileTreeOpen,
+          toggleFileTree: helpToggleFileTree,
+          sidePanelTab,
+          setSidePanelTab
+        } = useSessionStore.getState()
         if (helpFileTreeOpen && sidePanelTab === 'help') {
           helpToggleFileTree()
         } else {
@@ -460,7 +427,8 @@ export function AppShell() {
         if (e.key === ']') {
           nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % flatIds.length
         } else {
-          nextIdx = currentIdx < 0 ? flatIds.length - 1 : (currentIdx - 1 + flatIds.length) % flatIds.length
+          nextIdx =
+            currentIdx < 0 ? flatIds.length - 1 : (currentIdx - 1 + flatIds.length) % flatIds.length
         }
         state.selectSession(flatIds[nextIdx], false)
       }
@@ -501,12 +469,15 @@ export function AppShell() {
     return window.electronAPI.onSshConnectionClosed((locationId) => {
       useSessionStore.setState((state) => {
         const remoteSessions = state.sessions.filter(
-          (s) => s.locationId === locationId && (s.sessionType === 'remote-terminal' || s.sessionType === 'remote-claude')
+          (s) =>
+            s.locationId === locationId &&
+            (s.sessionType === 'remote-terminal' || s.sessionType === 'remote-claude')
         )
         if (remoteSessions.length === 0) return {}
         return {
           sessions: state.sessions.map((s) =>
-            s.locationId === locationId && (s.sessionType === 'remote-terminal' || s.sessionType === 'remote-claude')
+            s.locationId === locationId &&
+            (s.sessionType === 'remote-terminal' || s.sessionType === 'remote-claude')
               ? { ...s, alive: false, activityStatus: 'ended' as const }
               : s
           )
@@ -518,46 +489,65 @@ export function AppShell() {
   // Sync agent STATUS updates to existing agent sessions in the sidebar.
   // Does NOT auto-add agents — only the picker adds agents to the sidebar.
   // Only updates sessions array when status actually changed to avoid unnecessary re-renders.
-  const syncAgentStatus = useCallback((locationId: string, typedAgents: import('../../../../shared/remote-types').Agent[]) => {
-    useSessionStore.setState((state) => {
-      const currentAgentSessions = state.sessions.filter(
-        (s) => s.sessionType === 'agent' && s.locationId === locationId
-      )
-      if (currentAgentSessions.length === 0) return {}
+  const syncAgentStatus = useCallback(
+    (locationId: string, typedAgents: import('../../../../shared/remote-types').Agent[]) => {
+      useSessionStore.setState((state) => {
+        const currentAgentSessions = state.sessions.filter(
+          (s) => s.sessionType === 'agent' && s.locationId === locationId
+        )
+        if (currentAgentSessions.length === 0) return {}
 
-      const incomingMap = new Map(typedAgents.map((a) => [a.id, a]))
-      const updates: Array<{ sessionId: string; alive: boolean; activityStatus: import('../../store/session-types').ActivityStatus; cwd?: string }> = []
+        const incomingMap = new Map(typedAgents.map((a) => [a.id, a]))
+        const updates: Array<{
+          sessionId: string
+          alive: boolean
+          activityStatus: import('../../store/session-types').ActivityStatus
+          cwd?: string
+        }> = []
 
-      for (const session of currentAgentSessions) {
-        if (!session.agentId) continue
-        const agent = incomingMap.get(session.agentId)
-        if (agent) {
-          const alive = agent.status !== 'offline'
-          const activityStatus: import('../../store/session-types').ActivityStatus =
-            agent.status === 'busy' ? 'active' : agent.status === 'offline' ? 'ended' : 'idle'
-          const cwd = agent.cwd
-          if (session.alive !== alive || session.activityStatus !== activityStatus || (cwd && session.cwd !== cwd)) {
-            updates.push({ sessionId: session.id, alive, activityStatus, cwd })
-          }
-        } else {
-          // Agent disappeared — mark offline if not already
-          if (session.alive || session.activityStatus !== 'ended') {
-            updates.push({ sessionId: session.id, alive: false, activityStatus: 'ended' })
+        for (const session of currentAgentSessions) {
+          if (!session.agentId) continue
+          const agent = incomingMap.get(session.agentId)
+          if (agent) {
+            const alive = agent.status !== 'offline'
+            const activityStatus: import('../../store/session-types').ActivityStatus =
+              agent.status === 'busy' ? 'active' : agent.status === 'offline' ? 'ended' : 'idle'
+            const cwd = agent.cwd
+            if (
+              session.alive !== alive ||
+              session.activityStatus !== activityStatus ||
+              (cwd && session.cwd !== cwd)
+            ) {
+              updates.push({ sessionId: session.id, alive, activityStatus, cwd })
+            }
+          } else {
+            // Agent disappeared — mark offline if not already
+            if (session.alive || session.activityStatus !== 'ended') {
+              updates.push({ sessionId: session.id, alive: false, activityStatus: 'ended' })
+            }
           }
         }
-      }
 
-      if (updates.length === 0) return {}
+        if (updates.length === 0) return {}
 
-      const updateMap = new Map(updates.map((u) => [u.sessionId, u]))
-      return {
-        sessions: state.sessions.map((s) => {
-          const update = updateMap.get(s.id)
-          return update ? { ...s, alive: update.alive, activityStatus: update.activityStatus, ...(update.cwd ? { cwd: update.cwd } : {}) } : s
-        })
-      }
-    })
-  }, [])
+        const updateMap = new Map(updates.map((u) => [u.sessionId, u]))
+        return {
+          sessions: state.sessions.map((s) => {
+            const update = updateMap.get(s.id)
+            return update
+              ? {
+                  ...s,
+                  alive: update.alive,
+                  activityStatus: update.activityStatus,
+                  ...(update.cwd ? { cwd: update.cwd } : {})
+                }
+              : s
+          })
+        }
+      })
+    },
+    []
+  )
 
   // Subscribe to agent updates from OpenClaw connections
   useEffect(() => {
@@ -625,21 +615,26 @@ export function AppShell() {
               onMouseDown={handleResizeStart}
               className="absolute top-0 right-0 w-2.5 h-full cursor-col-resize z-10 group/resize"
             >
-              <div className={cn(
-                'absolute top-0 right-0 h-full transition-colors border-r border-border/20',
-                draggingLeft ? 'bg-accent' : 'group-hover/resize:bg-accent/50'
-              )} style={{ width: '1.5px' }} />
+              <div
+                className={cn(
+                  'absolute top-0 right-0 h-full transition-colors border-r border-border/20',
+                  draggingLeft ? 'bg-accent' : 'group-hover/resize:bg-accent/50'
+                )}
+                style={{ width: '1.5px' }}
+              />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Inset main content — transparent flex container for floating boxes */}
-      <div className={cn(
-        'flex-1 flex flex-col min-w-0 my-2 gap-2 z-10 transition-[margin] duration-200',
-        sidebarOpen ? 'ml-1' : 'ml-2',
-        fileTreeOpen ? 'mr-1' : 'mr-2'
-      )}>
+      <div
+        className={cn(
+          'flex-1 flex flex-col min-w-0 my-2 gap-2 z-10 transition-[margin] duration-200',
+          sidebarOpen ? 'ml-1' : 'ml-2',
+          fileTreeOpen ? 'mr-1' : 'mr-2'
+        )}
+      >
         {/* Toolbar — its own floating card. Its row height is a token because
             the sidebar derives from it: --content-top-offset, and with it the
             launcher panel's top edge, is measured off this bar. */}
@@ -686,10 +681,7 @@ export function AppShell() {
               {/* File tree button */}
               <button
                 onClick={toggleFileTree}
-                className={cn(
-                  'btn-icon btn-icon-sm flex-shrink-0',
-                  fileTreeOpen && '!text-accent'
-                )}
+                className={cn('btn-icon btn-icon-sm flex-shrink-0', fileTreeOpen && '!text-accent')}
                 title="File tree (Cmd+E)"
               >
                 <Bars3BottomLeftIcon className="w-4 h-4 scale-x-[-1]" />
@@ -699,13 +691,17 @@ export function AppShell() {
         </div>
 
         {/* Non-terminal views — single floating card */}
-        <div className={cn(
-          'flex-1 min-h-0 floating-card',
-          activeView === 'terminals' ? 'hidden' : 'flex'
-        )}>
+        <div
+          className={cn(
+            'flex-1 min-h-0 floating-card',
+            activeView === 'terminals' ? 'hidden' : 'flex'
+          )}
+        >
           {/* view-fade-in re-fires each time a hidden panel is shown (display:none
               kills the animation, re-display restarts it). Terminals stay instant. */}
-          <div className={activeView === 'settings' ? 'flex-1 flex min-h-0 view-fade-in' : 'hidden'}>
+          <div
+            className={activeView === 'settings' ? 'flex-1 flex min-h-0 view-fade-in' : 'hidden'}
+          >
             <SettingsPanel />
           </div>
           <div className={activeView === 'agents' ? 'flex-1 flex min-h-0 view-fade-in' : 'hidden'}>
@@ -741,10 +737,13 @@ export function AppShell() {
               onMouseDown={handleTreeResizeStart}
               className="absolute top-0 left-0 w-2.5 h-full cursor-col-resize z-10 group/resize"
             >
-              <div className={cn(
-                'absolute top-0 left-0 h-full transition-colors border-l border-border/20',
-                draggingRight ? 'bg-accent' : 'group-hover/resize:bg-accent/50'
-              )} style={{ width: '1.5px' }} />
+              <div
+                className={cn(
+                  'absolute top-0 left-0 h-full transition-colors border-l border-border/20',
+                  draggingRight ? 'bg-accent' : 'group-hover/resize:bg-accent/50'
+                )}
+                style={{ width: '1.5px' }}
+              />
             </div>
             <SidePanel />
           </motion.div>
@@ -790,9 +789,7 @@ function ToolbarQuickActions() {
     <>
       {toolbarPins.map((pg, pgIdx) => (
         <div key={pg.id} className="flex items-center gap-0.5 flex-shrink-0">
-          {pgIdx > 0 && (
-            <div className="w-px h-3.5 bg-border-subtle mx-0.5" />
-          )}
+          {pgIdx > 0 && <div className="w-px h-3.5 bg-border-subtle mx-0.5" />}
           {pg.terminals.map((t, i) => {
             const key = `${pg.id}-${i}`
             const IconComp = getTerminalIconComponent(t.icon)
@@ -811,43 +808,43 @@ function ToolbarQuickActions() {
                 onOpenChange={(open) => setOpenId(open ? key : null)}
                 header={<IconComp className="w-3.5 h-3.5 shrink-0" style={{ color: colorHex }} />}
               >
-                {t.serverUrl
-                  ? (api) => (
-                      <button
-                        onClick={(e) => {
-                          if (e.altKey) api.openTerminalOnly()
-                          else api.handleClick()
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault()
-                          api.openTerminalOnly()
-                        }}
-                        className="relative p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
-                        style={{ color: colorHex }}
-                        title={api.title}
-                      >
-                        <IconComp className="w-4 h-4" />
-                        {api.state !== 'unknown' && (
-                          <span
-                            className={cn(
-                              'absolute right-0.5 bottom-0.5 w-1.5 h-1.5 rounded-full',
-                              api.state === 'up' && 'bg-emerald-500',
-                              api.state === 'starting' && 'bg-amber-400 animate-pulse',
-                              api.state === 'down' && 'bg-text-tertiary'
-                            )}
-                          />
-                        )}
-                      </button>
-                    )
-                  : (
-                      <button
-                        className="p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
-                        style={{ color: colorHex }}
-                        title={t.command || 'Shell'}
-                      >
-                        <IconComp className="w-4 h-4" />
-                      </button>
-                    )}
+                {t.serverUrl ? (
+                  (api) => (
+                    <button
+                      onClick={(e) => {
+                        if (e.altKey) api.openTerminalOnly()
+                        else api.handleClick()
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        api.openTerminalOnly()
+                      }}
+                      className="relative p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
+                      style={{ color: colorHex }}
+                      title={api.title}
+                    >
+                      <IconComp className="w-4 h-4" />
+                      {api.state !== 'unknown' && (
+                        <span
+                          className={cn(
+                            'absolute right-0.5 bottom-0.5 w-1.5 h-1.5 rounded-full',
+                            api.state === 'up' && 'bg-emerald-500',
+                            api.state === 'starting' && 'bg-amber-400 animate-pulse',
+                            api.state === 'down' && 'bg-text-tertiary'
+                          )}
+                        />
+                      )}
+                    </button>
+                  )
+                ) : (
+                  <button
+                    className="p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
+                    style={{ color: colorHex }}
+                    title={t.command || 'Shell'}
+                  >
+                    <IconComp className="w-4 h-4" />
+                  </button>
+                )}
               </ToolbarTerminalPopover>
             )
           })}
@@ -857,4 +854,3 @@ function ToolbarQuickActions() {
     </>
   )
 }
-

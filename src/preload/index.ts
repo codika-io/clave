@@ -60,9 +60,33 @@ const electronAPI = {
 
   tmuxAvailable: () => ipcRenderer.invoke('tmux:available'),
 
-  listSessionRecords: () => ipcRenderer.invoke('records:list-adoptable'),
+  // This window's own records (plus the orphans, for the primary); `ids`
+  // fetches specific records whatever their window (the re-home path).
+  listSessionRecords: (filter?: { ids?: string[] }) =>
+    ipcRenderer.invoke('records:list-adoptable', filter),
 
   discardSessionRecord: (key: string) => ipcRenderer.invoke('records:discard', key),
+
+  // Sessions handed to this window to take in — a closing window's (with its
+  // groups), or tabs moved here — as ids; the records carry the rest.
+  onSessionRehome: (
+    callback: (payload: { sessionIds: string[]; layout: unknown | null; focus: boolean }) => void
+  ) =>
+    createIpcListener<[{ sessionIds: string[]; layout: unknown | null; focus: boolean }]>(
+      'session:rehome',
+      callback
+    ),
+  // A session this window held just MOVED to another window: drop the tab
+  // without touching the pty.
+  onSessionRemovedForRehome: (callback: (sessionId: string) => void) =>
+    createIpcListener<[string]>('session:removed-for-rehome', callback),
+  // A group this window held just MOVED whole to another window: drop it
+  // here without touching any pty.
+  onGroupRemovedForMove: (callback: (groupId: string) => void) =>
+    createIpcListener<[string]>('group:removed-for-move', callback),
+  // Acknowledge a `session:rehome` once adopted (a cross-window MCP move
+  // waits on it before placing the tab in a group here).
+  ackRehomed: (sessionIds: string[]) => ipcRenderer.send('window:rehomed', sessionIds),
 
   onSessionData: (id: string, callback: (data: string) => void) =>
     createIpcListener<[string]>(`pty:data:${id}`, callback),
@@ -244,16 +268,53 @@ const electronAPI = {
   onFsChanged: (callback: (cwd: string, changedDirs: string[]) => void) =>
     createIpcListener<[string, string[]]>('fs:changed', callback),
 
-  // Sidebar layout (session groups + display order) — persisted from the main
-  // process so it survives a hard kill that drops lazily-flushed localStorage.
+  // Sidebar layout (session groups + display order), ONE FILE PER WINDOW —
+  // main-process JSON storage so the groups survive a hard kill that drops
+  // Chromium's lazily-flushed localStorage. A window reads and writes its own
+  // file only (main resolves it from the sender); the primary's load also
+  // takes in the orphans of windows that no longer exist.
   sidebarLayoutLoad: () => ipcRenderer.invoke('sidebar-layout:load'),
   sidebarLayoutSave: (data: { groups: unknown[]; displayOrder: string[] }) =>
     ipcRenderer.invoke('sidebar-layout:save', data),
 
   // Workspace registry + pins — main-process JSON storage, same crash-safety
-  // rationale as the sidebar layout.
+  // rationale as the sidebar layouts, written FIELD BY FIELD: several windows
+  // share the file, and a whole-file save was last-writer-wins.
   workspaceLoad: () => ipcRenderer.invoke('workspace:load'),
-  workspaceSave: (data: unknown) => ipcRenderer.invoke('workspace:save', data),
+  workspaceUpdateRegistry: (workspaces: unknown[]) =>
+    ipcRenderer.invoke('workspace:update-registry', workspaces),
+  workspaceUpdatePins: (scope: string | null | 'all', pins: unknown[]) =>
+    ipcRenderer.invoke('workspace:update-pins', scope, pins),
+  workspaceSetLastActive: (workspaceId: string | null) =>
+    ipcRenderer.invoke('workspace:set-last-active', workspaceId),
+  onWorkspaceStateChanged: (
+    callback: (state: { workspaces: unknown[]; pins: unknown[] }) => void
+  ) =>
+    createIpcListener<[{ workspaces: unknown[]; pins: unknown[] }]>(
+      'workspace:state-changed',
+      callback
+    ),
+
+  // This window's identity — its id, its persisted key, the workspace it
+  // shows, whether it is the primary. A renderer only ever learns its own;
+  // pushed again when the primary is re-elected.
+  windowIdentity: () => ipcRenderer.invoke('window:identity'),
+  onWindowIdentityChanged: (callback: (identity: unknown) => void) =>
+    createIpcListener<[unknown]>('window:identity-changed', callback),
+  // Tell main this window now shows a workspace (persisted; the next spawn
+  // stamps against it). Any window may show any workspace.
+  windowSetWorkspace: (workspaceId: string | null) =>
+    ipcRenderer.invoke('window:set-workspace', workspaceId),
+  // Every open window, for the "move to window" pickers.
+  windowList: () => ipcRenderer.invoke('window:list'),
+  // A new window — the app once more — on a workspace (default: this one's).
+  windowOpen: (workspaceId?: string) => ipcRenderer.invoke('window:open', workspaceId),
+  // Move live tabs (tmux-backed) to another window, id and scrollback kept.
+  windowMoveSessions: (sessionIds: string[], targetWindowId: number) =>
+    ipcRenderer.invoke('window:move-sessions', sessionIds, targetWindowId),
+  // Move a whole group (its object + its live members) to another window.
+  windowMoveGroup: (group: unknown, targetWindowId: number) =>
+    ipcRenderer.invoke('window:move-group', group, targetWindowId),
 
   // Usage
   getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),
