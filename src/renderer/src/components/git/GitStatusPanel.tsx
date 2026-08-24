@@ -5,7 +5,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ContextMenu } from '../ui/ContextMenu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import { shortenPath } from '../../lib/utils'
-import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon, InformationCircleIcon, ArrowPathIcon, FolderIcon } from '@heroicons/react/24/outline'
+import { ArrowTopRightOnSquareIcon, ArrowUturnLeftIcon, PlusIcon, MinusIcon, InformationCircleIcon, ArrowPathIcon, FolderIcon, CubeIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
 import { buildGitTree, compactTree, collectAllDirPaths } from '../../lib/git-file-tree'
 import {
   buildRepoTree,
@@ -973,6 +973,41 @@ export function GitStatusPanel({
 // full-width so file rows keep their room in the narrow panel.
 const TREE_INDENT_PX = 12
 
+/**
+ * The repo row's leading mark. A cube rather than a folder — the row is not a
+ * folder, and the tree already has folder rows beside it — and rather than the
+ * branch glyph, which is the Git TAB's mark: a repo is not a branch, and the
+ * two would read as the same object at two sizes. Heroicons has no git icon;
+ * of what it does have, the cube is the one that carries the folder outline's
+ * weight, so the icon column lines up instead of skipping a beat at every repo.
+ */
+function RepoGlyph(): React.JSX.Element {
+  return <CubeIcon className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0" />
+}
+
+/**
+ * The hairline that closes one block of the repo tree and opens the next.
+ *
+ * Drawn at the head of a block rather than at its foot, which is the fix for
+ * what the old foot-drawn rule got wrong: only a repo drew one, so a tree of
+ * repos and the plain folders holding them came out ruled under every repo and
+ * under nothing else — a line above the first folder, a line below the last
+ * repo inside it, and nothing between the folders themselves. A block knows its
+ * own depth; the block that happens to precede it does not.
+ *
+ * `data-tree-rule` carries that depth for the E2E spec, which asserts on the
+ * boundaries rather than on pixels.
+ */
+function TreeRule({ depth }: { depth: number }): React.JSX.Element {
+  return (
+    <div
+      className="tree-rule"
+      data-tree-rule={depth}
+      style={{ marginLeft: 12 + depth * TREE_INDENT_PX, marginRight: 12 }}
+    />
+  )
+}
+
 function MultiRepoSection({
   name,
   repoPath,
@@ -981,7 +1016,8 @@ function MultiRepoSection({
   isSelected,
   onSelect,
   selectedRepoPaths,
-  depth = 0
+  depth = 0,
+  rule = false
 }: {
   name: string
   repoPath: string
@@ -991,6 +1027,8 @@ function MultiRepoSection({
   onSelect?: (path: string, metaKey: boolean) => void
   selectedRepoPaths?: Set<string>
   depth?: number
+  /** Close the block above this one with a rule at this row's own depth. */
+  rule?: boolean
 }) {
   const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
   const openJourneyPanel = useSessionStore((s) => s.openJourneyPanel)
@@ -1079,8 +1117,12 @@ function MultiRepoSection({
 
   return (
     <div>
+      {rule && <TreeRule depth={depth} />}
       {/* Collapsible header */}
       <button
+        data-tree-row={depth}
+        data-tree-kind="repo"
+        data-tree-name={name}
         className={`git-tree-row w-full flex items-center gap-1.5 pr-3 text-xs transition-colors ${
           isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
         }`}
@@ -1105,6 +1147,8 @@ function MultiRepoSection({
         >
           <path d="M3 1.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
+
+        <RepoGlyph />
 
         {/* Repo name — long hover reveals the full path */}
         <Tooltip delayDuration={2000}>
@@ -1194,13 +1238,6 @@ function MultiRepoSection({
         </div>
       )}
 
-      {/* Row divider, inset to this row's tree depth. A full-bleed rule cuts
-          across the indentation and costs the reader the sense of the tree —
-          the line has to start where the row does. */}
-      <div
-        className="h-px bg-border-subtle"
-        style={{ marginLeft: 12 + depth * TREE_INDENT_PX, marginRight: 12 }}
-      />
     </div>
   )
 }
@@ -1221,13 +1258,16 @@ function RepoDirRow({
   depth,
   collapsed,
   onToggle,
-  statusByPath
+  statusByPath,
+  rule = false
 }: {
   node: RepoTreeDir
   depth: number
   collapsed: boolean
   onToggle: () => void
   statusByPath: Map<string, GitStatusResult>
+  /** Close the block above this one with a rule at this row's own depth. */
+  rule?: boolean
 }): React.JSX.Element {
   // Subtree roll-up — shown only while folded; expanded children carry their own.
   const rollup = useMemo(() => {
@@ -1245,7 +1285,13 @@ function RepoDirRow({
   }, [node, statusByPath])
 
   return (
-    <button
+    <div>
+      {rule && <TreeRule depth={depth} />}
+      <button
+      data-tree-row={depth}
+      data-tree-kind="dir"
+      data-tree-name={node.name}
+      data-tree-collapsed={collapsed ? 'true' : undefined}
       className="git-tree-row w-full flex items-center gap-1.5 pr-3 text-xs hover:bg-surface-100 transition-colors"
       style={{ paddingLeft: 12 + depth * TREE_INDENT_PX }}
       onClick={onToggle}
@@ -1282,7 +1328,96 @@ function RepoDirRow({
           )}
         </span>
       )}
-    </button>
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Why this folder is not auto-refreshing, and what to do about it.
+ *
+ * Two different facts share it. Live updates PAUSE above a settable number of
+ * repositories (polling a hundred of them every five seconds is real work), and
+ * that one is the user's to change — so the note names the current limit and
+ * opens the setting. Discovery TRUNCATES at a fixed 300, which nobody can
+ * raise, so that half only explains itself.
+ *
+ * Folded by default: the collapsed line is the whole news, and a reader who
+ * wants the reason opens it.
+ */
+function GitPanelFootnote({
+  repoCount,
+  truncated,
+  refreshing,
+  lastUpdated,
+  refresh
+}: {
+  repoCount: number
+  truncated: boolean
+  refreshing: boolean
+  lastUpdated: number | null
+  refresh: () => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const pollLimit = useSessionStore((s) => s.gitLivePollLimit)
+  const setActiveView = useSessionStore((s) => s.setActiveView)
+
+  return (
+    <div className="git-footnote" data-git-footnote data-open={open ? 'true' : undefined}>
+      <div className="git-footnote-line">
+        <button
+          className="git-footnote-summary"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          data-git-footnote-toggle
+        >
+          <InformationCircleIcon className="w-3 h-3 flex-shrink-0" />
+          <span className="truncate">
+            {truncated ? `First ${repoCount} repos` : 'Live updates paused'}
+            {lastUpdated !== null && (
+              <span className="opacity-70"> · {formatUpdatedAt(lastUpdated)}</span>
+            )}
+          </span>
+          <ChevronUpIcon
+            className={`w-3 h-3 flex-shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+        <button
+          className="git-footnote-action"
+          onClick={refresh}
+          disabled={refreshing}
+          aria-label="Refresh"
+        >
+          <ArrowPathIcon className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+      {open && (
+        <div className="git-footnote-body" data-git-footnote-body>
+          <p>
+            {truncated
+              ? `This folder holds more repositories than the panel indexes at once, so it lists the first ${repoCount}. Open a folder further in to see the rest.`
+              : `Auto-refresh stops above ${pollLimit} repositories and this folder has ${repoCount}. It still refreshes when you ask, when an agent finishes, and when the window comes back to the front.`}
+          </p>
+          {!truncated && (
+            <div className="git-footnote-buttons">
+              {/* One button, and it goes to the number rather than changing it.
+                  A "keep watching all 85" that silently raised the limit and
+                  then retired the note left no way back to the setting it had
+                  just moved — the only affordance for a thing you might want to
+                  undo has to be the place you can undo it. */}
+              <button
+                className="btn-compact btn-secondary"
+                onClick={() => setActiveView('settings')}
+                data-git-footnote-settings
+              >
+                Change limit
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1399,7 +1534,17 @@ export function MultiRepoGitPanel({
     [repoTree, collapsedDirs]
   )
 
-  const renderTreeRow = (row: FlatRepoRow): React.JSX.Element | null => {
+  /**
+   * Where a rule goes. A row opens a new block — and so closes the one above
+   * it — when it is no deeper than the row before it; a row DEEPER than its
+   * predecessor is that predecessor's own child, and ruling a folder off from
+   * its first repo would be the opposite of what the line is for. The first row
+   * closes nothing, and the root repo above the tree is closed by the dock
+   * separator instead.
+   */
+  const renderTreeRow = (row: FlatRepoRow, index: number): React.JSX.Element | null => {
+    const prev = index > 0 ? treeRows![index - 1] : null
+    const rule = prev !== null && row.depth <= prev.depth
     if (row.node.type === 'dir') {
       return (
         <RepoDirRow
@@ -1409,6 +1554,7 @@ export function MultiRepoGitPanel({
           collapsed={row.collapsed}
           onToggle={() => toggleDir(row.node.path)}
           statusByPath={statusByPath}
+          rule={rule}
         />
       )
     }
@@ -1425,33 +1571,13 @@ export function MultiRepoGitPanel({
         onSelect={handleRepoSelect}
         selectedRepoPaths={selectedRepoPaths}
         depth={row.depth}
+        rule={rule}
       />
     )
   }
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {(truncated || !live) && (
-        <div className="px-3 py-1.5 text-[11px] text-text-tertiary border-b border-border flex items-center gap-1.5">
-          <span className="flex-1 min-w-0">
-            {truncated
-              ? `Large folder — showing first ${repos.length} repos. `
-              : `${repos.length} repos — `}
-            live updates paused.
-            {lastUpdated !== null && (
-              <span className="opacity-70">{' '}Updated {formatUpdatedAt(lastUpdated)}.</span>
-            )}
-          </span>
-          <button
-            className="flex-shrink-0 inline-flex items-center gap-1 underline hover:text-text-secondary disabled:opacity-60 disabled:no-underline"
-            onClick={refresh}
-            disabled={refreshing}
-          >
-            <ArrowPathIcon className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
-      )}
       <div className="flex-1 overflow-y-auto">
         {/* Root repo */}
         {rootRepo && (
@@ -1487,8 +1613,8 @@ export function MultiRepoGitPanel({
             hidden when docked */}
         {!(hasRoot && nestedDocked) &&
           (treeRows
-            ? treeRows.map(renderTreeRow)
-            : nestedRepos.map((repo) => (
+            ? treeRows.map((row, i) => renderTreeRow(row, i))
+            : nestedRepos.map((repo, i) => (
                 <MultiRepoSection
                   key={repo.path}
                   name={repo.name}
@@ -1498,10 +1624,27 @@ export function MultiRepoGitPanel({
                   isSelected={selectedRepoPaths.has(repo.path)}
                   onSelect={handleRepoSelect}
                   selectedRepoPaths={selectedRepoPaths}
+                  rule={i > 0}
                 />
               )))}
         <ScrollGutter />
       </div>
+
+      {/* The state of the panel's own refreshing, at the foot of it. It used to
+          be a strip across the TOP of the list: a standing warning over the
+          thing you came to read, in a folder where nothing is wrong — a big
+          tree is a fact about the folder, not a problem. Down here it is a
+          footnote, folded, and it carries the way out rather than only the
+          news. */}
+      {(truncated || !live) && (
+        <GitPanelFootnote
+          repoCount={repos.length}
+          truncated={truncated}
+          refreshing={refreshing}
+          lastUpdated={lastUpdated}
+          refresh={refresh}
+        />
+      )}
 
       {/* Bottom dock tab for nested repos */}
       {nestedDocked && nestedRepos.length > 0 && (

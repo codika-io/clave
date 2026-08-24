@@ -618,22 +618,48 @@ body,
   gap: 2px;
 }
 
-/* The chips, wrapping under the head row across as many lines as they need. */
+/* The chips, wrapping under the head row across as many lines as they need —
+   and gone altogether when there are none. A workspace with nothing running,
+   or a search that matched no group, used to hold this row open around a line
+   of placeholder text; an empty strip under every sidebar is clutter that says
+   what the empty panel already said. Collapsed, the panel sits at exactly its
+   min-height (the head row), so nothing below it moves until a chip arrives.
+
+   A grid track rather than a height is what makes the arrival animatable:
+   0fr → 1fr transitions, height: auto does not. The inner .group-switcher-chips
+   is the flex box that used to be here, and the thing the track clips. */
 .group-switcher-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 220ms var(--ease-out-expo),
+    margin-top 220ms var(--ease-out-expo),
+    opacity 150ms var(--ease-out-expo);
+}
+.group-switcher-wrap[data-empty="true"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.group-switcher-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
-  min-height: var(--control-h-md);
+  min-height: 0;
+  overflow: hidden;
 }
 /* Only when there is a head row above them — the margin would otherwise open a
-   gap at the top of the panel. */
+   gap at the top of the panel — and it goes with the row on the way out, so the
+   collapse lands on nothing rather than on a 2px seam. */
 .group-switcher-head + .group-switcher-wrap {
   margin-top: 2px;
 }
 
 .group-switcher-add {
   flex-shrink: 0;
+}
+.group-switcher-head + .group-switcher-wrap[data-empty="true"] {
+  margin-top: 0;
 }
 
 /* The search field. It reads as a field rather than a chip — recessed instead
@@ -751,14 +777,6 @@ body,
 }
 .group-switcher-chip[data-selected="true"] .group-switcher-dot {
   box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 12%, transparent);
-}
-
-.group-switcher-empty {
-  padding: 0 0.5rem;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  opacity: 0.7;
-  white-space: nowrap;
 }
 
 /* ── Side panel bars ── */
@@ -1326,6 +1344,11 @@ body,
   .group-picker-panel {
     animation: none;
   }
+  /* The switcher's chip row still appears and disappears, it just stops
+     sliding: the collapse is layout, not decoration. */
+  .group-switcher-wrap {
+    transition: none;
+  }
 }
 
 /* ── Buttons ── */
@@ -1679,6 +1702,89 @@ body,
 }
 .git-sync-action:disabled {
   opacity: 0.4;
+}
+
+/* ── The git panel's footnote ── */
+
+/* Why the panel is not auto-refreshing, at the foot of it. Quiet on purpose:
+   this is a fact about the folder, not a fault, and it used to be a warning
+   strip across the top of the list you came to read. Tertiary text, a hairline
+   above it, and the panel's own surface — it should be findable, not loud. */
+.git-footnote {
+  flex-shrink: 0;
+  border-top: 1px solid var(--rule-color);
+  background-color: color-mix(in oklab, var(--surface-100) 40%, transparent);
+}
+
+.git-footnote-line {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  height: var(--control-h-md);
+}
+
+/* The whole collapsed line is the disclosure — a 12px chevron is not a target. */
+.git-footnote-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0.25rem;
+  border-radius: var(--radius-md);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  transition: color 150ms;
+}
+.git-footnote-summary:hover {
+  color: var(--text-secondary);
+}
+
+.git-footnote-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: var(--radius-md);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  transition: color 150ms, background-color 150ms;
+}
+.git-footnote-action:hover:not(:disabled) {
+  color: var(--text-primary);
+  background-color: var(--surface-200);
+}
+.git-footnote-action:disabled {
+  opacity: 0.6;
+}
+
+.git-footnote-body {
+  padding: 0 0.75rem 0.625rem;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  animation: fade-in 150ms var(--ease-out-expo);
+}
+
+.git-footnote-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.git-footnote-link {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 150ms;
+}
+.git-footnote-link:hover {
+  color: var(--text-primary);
 }
 
 /* The field the git panel shows in place of a file list when there is nothing

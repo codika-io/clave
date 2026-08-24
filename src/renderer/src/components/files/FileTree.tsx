@@ -4,7 +4,6 @@ import { openSessionProgrammatically } from '../../lib/mcp-dispatcher'
 import { useFileTree, type FlatTreeNode } from '../../hooks/use-file-tree'
 import { FileTreeItem } from './FileTreeItem'
 import { ContextMenu } from '../ui/ContextMenu'
-import { IconButton } from '../ui/tooltip'
 import {
   EyeIcon,
   WindowIcon,
@@ -17,7 +16,8 @@ import {
   DocumentDuplicateIcon,
   ClipboardDocumentIcon,
   MagnifyingGlassIcon,
-  PlayIcon
+  PlayIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline'
 
 interface ContextMenuState {
@@ -145,11 +145,8 @@ function InlineCreateInput({
   )
 }
 
-export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavigateToFolder }: {
+export function FileTree({ cwd, onNavigateToFolder }: {
   cwd: string | null
-  isCustom: boolean
-  onChangeFolder: () => void
-  onResetFolder: () => void
   onNavigateToFolder: (absolutePath: string) => void
 }) {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
@@ -424,52 +421,40 @@ export function FileTree({ cwd, isCustom, onChangeFolder, onResetFolder, onNavig
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Filter input + folder actions */}
-      <div className="flex items-center gap-0.5 px-3 py-1 border-b border-border-subtle flex-shrink-0">
-        <input
-          type="text"
-          placeholder="Filter..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="flex-1 h-[20px] px-2 rounded bg-surface-100 text-[11px] text-text-primary placeholder:text-text-tertiary outline-none focus:ring-1 focus:ring-border transition-colors min-w-0"
-        />
-        {isCustom && (
-          <IconButton
-            onClick={onResetFolder}
-            className="btn-icon btn-icon-sm flex-shrink-0"
-            tooltip="Reset to session folder"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2 6a4 4 0 0 1 7.2-2.4M10 6a4 4 0 0 1-7.2 2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-              <path d="M9.5 1.5v2.5H7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M2.5 10.5V8H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </IconButton>
-        )}
-        <IconButton
-          onClick={onChangeFolder}
-          className="btn-icon btn-icon-sm flex-shrink-0"
-          tooltip="Browse folder"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path
-              d="M1 3C1 2.45 1.45 2 2 2H4.5L6 3.5H10C10.55 3.5 11 3.95 11 4.5V9C11 9.55 10.55 10 10 10H2C1.45 10 1 9.55 1 9V3Z"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinejoin="round"
+      {/* The tab's own bar — the same field the sidebar searches groups with,
+          so "narrow a list" looks the same on both edges of the window. The
+          folder picker, the way home and collapse-all are NOT here: they belong
+          to both tabs and live in the panel's tab bar above. */}
+      <div className="px-2 pb-1.5 flex-shrink-0">
+        <div className="panel-bar" data-panel-bar="files">
+          <div className="search-field">
+            <MagnifyingGlassIcon className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+            <input
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && filter) {
+                  e.stopPropagation()
+                  setFilter('')
+                }
+              }}
+              placeholder="Filter files"
+              aria-label="Filter files"
+              spellCheck={false}
             />
-          </svg>
-        </IconButton>
-        <IconButton
-          onClick={collapseAll}
-          className="btn-icon btn-icon-sm flex-shrink-0"
-          tooltip="Collapse all"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 8l4-3 4 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M2 5l4-3 4 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </IconButton>
+            {filter && (
+              <button
+                className="search-field-clear"
+                onClick={() => setFilter('')}
+                title="Clear filter"
+                aria-label="Clear filter"
+              >
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+  )}
+          </div>
+        </div>
       </div>
 
       {/* Tree list */}
