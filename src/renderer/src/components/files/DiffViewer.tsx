@@ -31,7 +31,7 @@ function statusColor(status: string): string {
     case 'M':
     case 'T':
     case 'modified':
-      return 'text-orange-400'
+      return 'text-git-modified'
     case 'D':
     case 'deleted':
       return 'text-red-400'

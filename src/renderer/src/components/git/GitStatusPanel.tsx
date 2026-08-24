@@ -176,7 +176,7 @@ function RangeSection({
         }
       />
       {files.length === 0 ? (
-        <div className="pr-3 py-1 text-[11px] text-text-tertiary" style={{ paddingLeft: fileIndentPx }}>
+        <div className="flex items-center h-[var(--panel-row-h)] pr-3 text-[11px] text-text-tertiary" style={{ paddingLeft: fileIndentPx }}>
           {hasUpstream
             ? direction === 'incoming'
               ? 'Nothing incoming — up to date with the remote.'
@@ -1312,7 +1312,7 @@ function RepoDirRow({
       {collapsed && (
         <span className="ml-auto flex-shrink-0 flex items-center gap-1.5">
           {rollup.behind > 0 && (
-            <span className="text-[10px] font-medium text-orange-400">
+            <span className="text-[10px] font-medium text-git-incoming">
               {'↓'}{rollup.behind}
             </span>
           )}

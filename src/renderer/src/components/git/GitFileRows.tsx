@@ -81,7 +81,8 @@ export function FileRow({
 
   return (
     <div
-      className={`flex items-center gap-1.5 pr-3 py-0.5 text-xs transition-colors cursor-pointer group ${
+      data-git-row="file"
+      className={`flex items-center gap-1.5 pr-3 h-[var(--panel-row-h)] text-xs transition-colors cursor-pointer group ${
         disabled ? 'opacity-50 pointer-events-none' : isActiveDiff ? 'bg-accent/15 border-l-2 border-l-accent' : isSelected ? 'bg-surface-200 border-l-2 border-l-transparent' : 'hover:bg-surface-100 border-l-2 border-l-transparent'
       }`}
       style={{ paddingLeft: indentPx ?? 12 }}
@@ -170,7 +171,8 @@ export function GitTreeDirRow({
 
   return (
     <div
-      className={`flex items-center gap-1.5 py-0.5 text-xs transition-colors cursor-pointer pr-3 ${
+      data-git-row="dir"
+      className={`flex items-center gap-1.5 h-[var(--panel-row-h)] text-xs transition-colors cursor-pointer pr-3 ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       }`}
       style={{ paddingLeft: `${baseIndentPx + 8 + node.depth * 8}px` }}
@@ -267,7 +269,8 @@ export function GitTreeFileRow({
 
   return (
     <div
-      className={`flex items-center gap-1.5 py-0.5 text-xs transition-colors cursor-pointer group pr-3 ${
+      data-git-row="file"
+      className={`flex items-center gap-1.5 h-[var(--panel-row-h)] text-xs transition-colors cursor-pointer group pr-3 ${
         disabled ? 'opacity-50 pointer-events-none' : isActiveDiff ? 'bg-accent/15 border-l-2 border-l-accent' : isSelected ? 'bg-surface-200 border-l-2 border-l-transparent' : 'hover:bg-surface-100 border-l-2 border-l-transparent'
       }`}
       style={{ paddingLeft: `${baseIndentPx + 8 + node.depth * 8}px` }}

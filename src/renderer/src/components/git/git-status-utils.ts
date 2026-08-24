@@ -28,7 +28,7 @@ export function statusColor(status: GitFileStatus['status']): string {
       return 'text-green-400'
     case 'modified':
     case 'staged-modified':
-      return 'text-orange-400'
+      return 'text-git-modified'
     case 'deleted':
     case 'staged-deleted':
       return 'text-red-400'

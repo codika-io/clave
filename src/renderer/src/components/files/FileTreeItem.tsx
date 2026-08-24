@@ -77,7 +77,7 @@ export function FileTreeItem({
   return (
     <div
       data-tree-item
-      className={`relative flex items-center h-7 px-2 cursor-pointer select-none transition-colors text-sm ${
+      className={`relative flex items-center h-[var(--panel-row-h)] px-2 cursor-pointer select-none transition-colors text-sm ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       } ${node.ignored ? 'opacity-40' : ''}`}
       style={{ paddingLeft: `${8 + node.depth * 8}px` }}
@@ -91,7 +91,7 @@ export function FileTreeItem({
       {Array.from({ length: node.depth }, (_, i) => (
         <span
           key={i}
-          className="absolute top-0 bottom-0 w-px bg-border"
+          className="tree-guide"
           style={{ left: `${8 + i * 8 + 6}px` }}
         />
       ))}

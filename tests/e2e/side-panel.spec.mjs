@@ -55,6 +55,11 @@ const REPOS = [
 
 // A second folder, over the DEFAULT live-poll limit (50), for the footnote.
 // Bare inits: the note is about how many repos there are, not what is in them.
+// Bare remotes for the one repo that must sit BEHIND its upstream — outside
+// ROOT so the panel does not discover them as repos of their own.
+const ORIGINS = '/private/tmp/clave-e2e-side-panel-origins'
+const BEHIND_REPO = 'alpha-app'
+
 const BIG_ROOT = '/private/tmp/clave-e2e-side-panel-big'
 const BIG_COUNT = 51
 
@@ -76,11 +81,47 @@ function seedRepos() {
     const git = (...args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' })
     git('init', '-q', '-b', 'main')
     writeFileSync(path.join(dir, 'README.md'), `# ${path.basename(rel)}\n`)
+    // Two files a directory deep, so the git tab's TREE mode has a folder row
+    // to render — compaction folds a lone child into its parent's path.
+    mkdirSync(path.join(dir, 'src'), { recursive: true })
+    writeFileSync(path.join(dir, 'src', 'one.txt'), 'one\n')
+    writeFileSync(path.join(dir, 'src', 'two.txt'), 'two\n')
     git('add', '-A')
     git('-c', 'user.email=e2e@clave', '-c', 'user.name=e2e', 'commit', '-qm', 'init')
-    // One untracked file, so every repo has something to unfold.
+    // One untracked file, so every repo has something to unfold — and one
+    // MODIFIED tracked file, which is the row whose tone the tab is judged on.
     writeFileSync(path.join(dir, 'work.txt'), 'dirty\n')
+    writeFileSync(path.join(dir, 'README.md'), `# ${path.basename(rel)}\n\nedited\n`)
+    writeFileSync(path.join(dir, 'src', 'one.txt'), 'one edited\n')
+    writeFileSync(path.join(dir, 'src', 'two.txt'), 'two edited\n')
   }
+  seedBehindUpstream()
+}
+
+/**
+ * One repo left BEHIND a real upstream, so the panel actually renders an
+ * incoming (↓) badge. Without it the tone check on those badges asserts over an
+ * empty list and passes whatever color they are painted.
+ */
+function seedBehindUpstream() {
+  rmSync(ORIGINS, { recursive: true, force: true })
+  mkdirSync(ORIGINS, { recursive: true })
+  const bare = path.join(ORIGINS, 'alpha.git')
+  const work = path.join(ORIGINS, 'alpha-push')
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', bare], { stdio: 'ignore' })
+
+  const repo = path.join(ROOT, BEHIND_REPO)
+  const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' })
+  git(repo, 'remote', 'add', 'origin', bare)
+  git(repo, 'push', '-q', '-u', 'origin', 'main')
+
+  // A second clone moves the branch on, then the repo fetches without merging.
+  execFileSync('git', ['clone', '-q', bare, work], { stdio: 'ignore' })
+  writeFileSync(path.join(work, 'ahead.txt'), 'from the remote\n')
+  git(work, 'add', '-A')
+  git(work, '-c', 'user.email=e2e@clave', '-c', 'user.name=e2e', 'commit', '-qm', 'remote work')
+  git(work, 'push', '-q')
+  git(repo, 'fetch', '-q')
 }
 
 /** The tree's rows and rules in document order — shape, not pixels. */
@@ -189,6 +230,68 @@ export async function run(t) {
       expandedFiles,
       rowsBeforeFilter
     })
+
+    // ── The indent guides are the faintest line in the panel ──────────────
+    // They used to be drawn on --border, the structural weight, once per level
+    // on every row — which turns a tree into a table of gridlines. Asserted as a
+    // relation, not a number: whatever the palette is retuned to, a guide must
+    // stay lighter than the hairline between blocks, which is itself lighter
+    // than a structural border.
+    //
+    // Swept over ALL THREE themes, because each declares its own value and the
+    // app boots in one of them: checking only the active theme let a guide
+    // raised back to the border weight in the other two pass untouched.
+    const guideSweep = await win.evaluate(() => {
+      const root = document.documentElement
+      const was = root.getAttribute('data-theme')
+      const alpha = (c) => {
+        const m = c.match(/rgba?\(([^)]+)\)/)
+        if (!m) return null
+        const parts = m[1].split(',').map((v) => parseFloat(v))
+        return parts.length > 3 ? parts[3] : 1
+      }
+      const probe = document.createElement('span')
+      probe.style.position = 'fixed'
+      document.body.appendChild(probe)
+      const resolve = (expr) => {
+        probe.style.backgroundColor = ''
+        probe.style.backgroundColor = expr
+        return alpha(getComputedStyle(probe).backgroundColor)
+      }
+      const out = { count: document.querySelectorAll('.tree-guide').length, themes: {} }
+      for (const theme of ['dark', 'light', 'coffee']) {
+        if (theme === 'dark') root.removeAttribute('data-theme')
+        else root.setAttribute('data-theme', theme)
+        const el = document.querySelector('.tree-guide')
+        out.themes[theme] = {
+          guide: el ? alpha(getComputedStyle(el).backgroundColor) : null,
+          rule: resolve('var(--rule-color)'),
+          border: resolve('var(--border-color)')
+        }
+      }
+      if (was === null) root.removeAttribute('data-theme')
+      else root.setAttribute('data-theme', was)
+      probe.remove()
+      return out
+    })
+    t.check('an opened folder draws indent guides', guideSweep.count > 0, guideSweep)
+    const themed = Object.entries(guideSweep.themes)
+    t.check(
+      'every theme declares a guide weight',
+      themed.length === 3 && themed.every(([, v]) => typeof v.guide === 'number'),
+      guideSweep.themes
+    )
+    t.check(
+      'in every theme a guide is fainter than the hairline between blocks',
+      themed.every(([, v]) => v.guide < v.rule),
+      guideSweep.themes
+    )
+    t.check(
+      'and in every theme far fainter than a structural border',
+      themed.every(([, v]) => v.guide < v.border / 2),
+      guideSweep.themes
+    )
+
     await win.click('[data-panel-bar="tabs"] [aria-label="Collapse all"]')
     await win.waitForTimeout(800)
     t.equal(
@@ -196,6 +299,24 @@ export async function run(t) {
       await win.evaluate(() => document.querySelectorAll('[data-tree-item]').length),
       rowsBeforeFilter
     )
+
+    // ── Row height: the two tabs are one list to the eye ──────────────────
+    // Inside a repo, the git tab used to pack its rows at 20px against the file
+    // tree's 28px, so opening a repo dropped you into a denser list than the one
+    // you came from and read as clutter. Measured, not asserted from the CSS: a
+    // row that grows a taller child grows with it, and that is what would break
+    // the parity again.
+    const fileRowHeights = await win.evaluate(() => [
+      ...new Set(
+        [...document.querySelectorAll('[data-tree-item]')].map((el) => el.getBoundingClientRect().height)
+      )
+    ])
+    t.check(
+      'every row of the file tree is one height — a folder is not shorter than a file',
+      fileRowHeights.length === 1,
+      fileRowHeights
+    )
+    const FILE_ROW_H = fileRowHeights[0]
 
     // ── The git tab ───────────────────────────────────────────────────────
     await win.evaluate(() => {
@@ -244,6 +365,119 @@ export async function run(t) {
     const seq = await readTree(win)
     const rows = seq.filter((e) => e.kind !== 'rule')
     t.check('the repo tree rendered', rows.length >= REPOS.length, seq)
+
+    // The same measurement inside a repo. The shared collapse-all fired on the
+    // file tab folds every repo, mounted or not, so unfold one by hand first.
+    await win.evaluate(() => {
+      document.querySelector('[data-tree-kind="repo"]')?.click()
+    })
+    await win.waitForTimeout(2500)
+
+    // Both view modes, because they are two different row components and only
+    // one of them is on screen at a time — a height fixed in the list rows and
+    // left behind in the tree rows is exactly the regression this misses if it
+    // only ever looks at the default.
+    const measureGitRows = () =>
+      win.evaluate(() => {
+        const els = [...document.querySelectorAll('[data-git-row]')]
+        return {
+          count: els.length,
+          kinds: [...new Set(els.map((el) => el.getAttribute('data-git-row')))].sort(),
+          heights: [...new Set(els.map((el) => el.getBoundingClientRect().height))]
+        }
+      })
+
+    const listRows = await measureGitRows()
+    t.check('a repo unfolded to its files', listRows.count > 0, listRows)
+    t.check(
+      'a repo’s rows are the height of the file tree’s rows',
+      listRows.heights.length === 1 && listRows.heights[0] === FILE_ROW_H,
+      { listRows, FILE_ROW_H }
+    )
+
+    await win.click('[data-panel-bar="git"] [aria-label="Tree view"]')
+    await win.waitForTimeout(1500)
+    const treeRows = await measureGitRows()
+    t.check(
+      'tree view renders folders as well as files',
+      treeRows.count > 0 && treeRows.kinds.includes('dir') && treeRows.kinds.includes('file'),
+      treeRows
+    )
+    t.check(
+      'and both are the height of the file tree’s rows',
+      treeRows.heights.length === 1 && treeRows.heights[0] === FILE_ROW_H,
+      { treeRows, FILE_ROW_H }
+    )
+    await win.click('[data-panel-bar="git"] [aria-label="List view"]')
+    await win.waitForTimeout(1500)
+
+    // ── The tones: modified is not a warning ──────────────────────────────
+    // Orange is reserved for the one row that is actually a heads-up (a file an
+    // incoming change and the working tree both touch). A modified file and an
+    // incoming commit are the normal life of a repo and must not wear it.
+    //
+    // Colors are compared through a probe element rather than against a literal
+    // rgb(): tailwind v4 declares its palette in oklch and Chromium hands that
+    // string back unconverted, so a hardcoded `rgb(251, 146, 60)` matches
+    // nothing and the check passes no matter what color the row is wearing.
+    const tones = await win.evaluate(() => {
+      const probe = document.createElement('span')
+      probe.style.position = 'fixed'
+      probe.style.opacity = '0'
+      document.body.appendChild(probe)
+      const resolve = (expr) => {
+        probe.style.color = ''
+        probe.style.color = expr
+        return getComputedStyle(probe).color
+      }
+      const wanted = {
+        modified: resolve('var(--color-git-modified)'),
+        incoming: resolve('var(--color-git-incoming)'),
+        orange: resolve('var(--color-orange-400)')
+      }
+      const letters = [...document.querySelectorAll('[data-git-row="file"] .font-mono')].map(
+        (el) => ({ letter: el.textContent.trim(), color: getComputedStyle(el).color })
+      )
+      const badges = [...document.querySelectorAll('.git-sync-badge')].map((el) => ({
+        text: el.textContent.trim(),
+        color: getComputedStyle(el).color
+      }))
+      probe.remove()
+      return { wanted, letters, badges }
+    })
+    t.check(
+      'the tones resolve to three distinct colors',
+      new Set(Object.values(tones.wanted)).size === 3,
+      tones.wanted
+    )
+    const modifiedLetters = tones.letters.filter((l) => l.letter === 'M')
+    t.check('the repo has a modified file to judge', modifiedLetters.length > 0, tones.letters)
+    t.check(
+      'a modified file wears the modified tone, not orange',
+      modifiedLetters.every((l) => l.color === tones.wanted.modified),
+      { modifiedLetters, wanted: tones.wanted.modified }
+    )
+    t.check(
+      'no status letter is painted orange',
+      tones.letters.every((l) => l.color !== tones.wanted.orange),
+      tones.letters
+    )
+    const incomingBadges = tones.badges.filter((b) => b.text.startsWith('\u2193'))
+    t.check(
+      'a repo is behind its upstream, so there is an incoming badge to judge',
+      incomingBadges.length > 0,
+      tones.badges
+    )
+    t.check(
+      'the incoming badge wears the incoming tone, not orange',
+      incomingBadges.every((b) => b.color === tones.wanted.incoming),
+      { incomingBadges, wanted: tones.wanted.incoming }
+    )
+    t.check(
+      'no sync badge is painted orange',
+      tones.badges.every((b) => b.color !== tones.wanted.orange),
+      tones.badges
+    )
 
     // ── The rules: one at every block boundary, none anywhere else ────────
     // A row opens a new block — and closes the one above it — exactly when it
