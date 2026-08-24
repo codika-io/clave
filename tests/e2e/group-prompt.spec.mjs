@@ -3,9 +3,15 @@
  *
  * This asserts on the PAYLOAD CROSSING INTO THE MAIN PROCESS, not on the UI. The
  * prompt was silently dropped twice on the `.clave` import path while every
- * screen still looked right — a group card showing "prompt" and a `+` row
- * promising it prove only that the renderer holds a string, never that anything
- * was handed on.
+ * screen still looked right — a group card showing "prompt" and a `+` promising
+ * it prove only that the renderer holds a string, never that anything was handed
+ * on.
+ *
+ * The control is the `+` in the group's HEADER. It used to be a "New session"
+ * row at the foot of the card and moved into the header when the header's
+ * terminals became one button; its title, its aria-label and its handler came
+ * with it unchanged. Only the selector moved — which is what this spec caught,
+ * three commits later, by failing on a row that no longer existed.
  */
 import {
   launchApp,
@@ -96,18 +102,20 @@ export async function run(t) {
       await win.evaluate(() => !document.querySelector('.group-picker-panel'))
     )
 
-    // The group's `+`.
-    const addRow = await win.evaluate(() => document.querySelector('.group-add-row')?.title ?? null)
+    // The group's `+`, in its header.
+    const addBtn = await win.evaluate(
+      () => document.querySelector('.group-new-session')?.title ?? null
+    )
     t.check(
-      'the + row promises the group prompt',
-      /starts on the group's prompt/.test(addRow ?? ''),
-      addRow
+      'the + promises the group prompt',
+      /starts on the group's prompt/.test(addBtn ?? ''),
+      addBtn
     )
     const readSpawns = await spyPtySpawn(app)
     const before = await win.evaluate(
       () => document.querySelectorAll('[class*="sidebar-item"]').length
     )
-    await win.click('.group-add-row')
+    await win.click('.group-new-session')
     await win.waitForTimeout(4000)
     const after = await win.evaluate(
       () => document.querySelectorAll('[class*="sidebar-item"]').length
@@ -140,29 +148,30 @@ export async function run(t) {
       sent.initialPrompt
     )
     // ── the `+` must never promise what the launch will drop ──
-    // `claude agents` is spawned bare and refuses a positional prompt. The row's
-    // wording and the spawn both have to come from ONE answer; when they each
-    // carried their own, the row promised a brief that silently never arrived.
+    // `claude agents` is spawned bare and refuses a positional prompt. The
+    // control's wording and the spawn both have to come from ONE answer; when
+    // they each carried their own, the `+` promised a brief that silently never
+    // arrived.
     await win.click('.launcher-caret')
     await win.waitForTimeout(800)
     await win.click('[role="menuitem"]:has-text("Claude Agents")')
     await win.waitForTimeout(4000)
 
     const agentsTooltip = await win.evaluate(
-      () => document.querySelector('.group-add-row')?.title ?? null
+      () => document.querySelector('.group-new-session')?.title ?? null
     )
     t.check(
-      'with Claude Agents remembered, the + row stops promising the prompt',
+      'with Claude Agents remembered, the + stops promising the prompt',
       /can't take the group's prompt/.test(agentsTooltip ?? ''),
       agentsTooltip
     )
 
     const spawnsBefore = (await readSpawns()).length
-    await win.click('.group-add-row')
+    await win.click('.group-new-session')
     await win.waitForTimeout(4000)
     const agentsSpawn = (await readSpawns())[spawnsBefore] ?? {}
     t.equal('and the launch really is Claude Agents', agentsSpawn.claudeAgentsMode, true)
-    t.equal('carrying no prompt, exactly as the row said', agentsSpawn.initialPrompt, null)
+    t.equal('carrying no prompt, exactly as the + said', agentsSpawn.initialPrompt, null)
   } finally {
     await app.close()
   }

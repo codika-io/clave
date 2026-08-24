@@ -10,8 +10,15 @@ import { useMultiRepoStatus } from '../../hooks/use-multi-repo-status'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { shortenPath } from '../../lib/utils'
 import { HelpPanel } from '../help/HelpPanel'
-import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
-import { QuestionMarkCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
+import { Tooltip, TooltipTrigger, TooltipContent, IconButton } from '../ui/tooltip'
+import {
+  QuestionMarkCircleIcon,
+  InformationCircleIcon,
+  ChevronLeftIcon,
+  FolderOpenIcon,
+  ArrowUturnLeftIcon,
+  DocumentTextIcon
+} from '@heroicons/react/24/outline'
 
 function getParentPaths(fullPath: string): { path: string; name: string }[] {
   const homedir = fullPath.match(/^\/Users\/[^/]+/)?.[0] ?? ''
@@ -154,6 +161,7 @@ export function SidePanel() {
   // The repo's dirt, driving the toolbar's + badge.
   const singleRepoChangeCount = singleRepoGit.status?.files.length ?? 0
 
+
   // Compute repo paths for MagicSync across all git modes
   const allRepoPaths = useMemo(() => {
     if (multiRepo.result.mode === 'multi') return multiRepo.result.repos.map((r) => r.path)
@@ -243,92 +251,96 @@ export function SidePanel() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
-      {/* Header — drag region for window movement, interactive children opt out */}
+      {/* Header — the panel's chrome, and the window's drag region; every
+          interactive child opts out. No rule under it: the bars ARE the chrome,
+          exactly as the sidebar's launcher and switcher panels are, and a line
+          under them only says again what the panel edge already said. */}
       <div
-        className="flex flex-col border-b border-border-subtle flex-shrink-0"
+        className="flex flex-col gap-1 px-2 pt-2 pb-1 flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* Row 1: Back button + centered segmented control */}
-        <div className="flex items-center px-3 pt-3 pb-1.5">
-          {/* Back button — fixed width so the segmented control stays centered */}
-          <div className="w-6 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            {canGoBack && (
-              <button
-                onClick={goBack}
-                className="w-6 h-6 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-surface-200 transition-colors"
-                title="Go back"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            )}
-          </div>
-          <div className="flex-1 flex justify-center">
-          <div
-            className="flex items-center bg-surface-100 rounded p-0.5 gap-0.5"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        {/* Row 1 — which tab, and the controls that belong to BOTH of them.
+            The folder the panel is pointed at and collapse-all used to be
+            duplicated per tab (one collapse-all in the file tree's filter row,
+            another in the git toolbar); hoisting them here is what makes the
+            two tabs read as one panel with two views rather than two panels. */}
+        <div
+          className="panel-bar"
+          data-panel-bar="tabs"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <button
+            onClick={() => setSidePanelTab('files')}
+            className="panel-tab"
+            data-selected={effectiveTab === 'files' ? 'true' : undefined}
           >
+            <DocumentTextIcon className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>Files</span>
+          </button>
+          {!isRemoteSession && (
             <button
-              onClick={() => setSidePanelTab('files')}
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                effectiveTab === 'files'
-                  ? 'bg-surface-200 text-text-primary'
-                  : 'text-text-tertiary hover:text-text-secondary'
-              }`}
+              onClick={() => setSidePanelTab('git')}
+              className="panel-tab"
+              data-selected={effectiveTab === 'git' ? 'true' : undefined}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M6.5 1H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h4.5a1 1 0 0 0 1-1V2.5L6.5 1Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
-                <path d="M4.5 9.5V10a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1V4.5a1 1 0 0 0-1-1h-.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+              {/* Heroicons has no branch glyph — the one hand-rolled icon the
+                  convention leaves room for. */}
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-shrink-0">
+                <circle cx="6" cy="1.5" r="1.25" stroke="currentColor" strokeWidth="1.1" />
+                <circle cx="3" cy="10.5" r="1.25" stroke="currentColor" strokeWidth="1.1" />
+                <circle cx="9" cy="10.5" r="1.25" stroke="currentColor" strokeWidth="1.1" />
+                <path d="M6 2.75v3.5" stroke="currentColor" strokeWidth="1.1" />
+                <path d="M6 6.25L3 9.25" stroke="currentColor" strokeWidth="1.1" />
+                <path d="M6 6.25l3 3" stroke="currentColor" strokeWidth="1.1" />
               </svg>
-              Files
+              <span>Git</span>
             </button>
-            {!isRemoteSession && (
-              <button
-                onClick={() => setSidePanelTab('git')}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                  effectiveTab === 'git'
-                    ? 'bg-surface-200 text-text-primary'
-                    : 'text-text-tertiary hover:text-text-secondary'
-                }`}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <circle cx="6" cy="1.5" r="1.25" stroke="currentColor" strokeWidth="1.1" />
-                  <circle cx="3" cy="10.5" r="1.25" stroke="currentColor" strokeWidth="1.1" />
-                  <circle cx="9" cy="10.5" r="1.25" stroke="currentColor" strokeWidth="1.1" />
-                  <path d="M6 2.75v3.5" stroke="currentColor" strokeWidth="1.1" />
-                  <path d="M6 6.25L3 9.25" stroke="currentColor" strokeWidth="1.1" />
-                  <path d="M6 6.25l3 3" stroke="currentColor" strokeWidth="1.1" />
-                </svg>
-                Git
-              </button>
-            )}
-          </div>
-          </div>
-          <div className="w-6 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            <button
-              onClick={() => {
-                if (effectiveTab === 'help') {
-                  setSidePanelTab(prevTabRef.current)
-                } else {
-                  prevTabRef.current = sidePanelTab === 'help' ? 'files' : sidePanelTab as 'files' | 'git'
-                  setSidePanelTab('help')
-                }
-              }}
-              className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
-                effectiveTab === 'help'
-                  ? 'text-accent bg-accent/10'
-                  : 'text-text-tertiary hover:text-text-secondary hover:bg-surface-200'
-              }`}
-              title={effectiveTab === 'help' ? 'Close help' : 'Help'}
-            >
-              <QuestionMarkCircleIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          )}
+          <span className="panel-bar-spacer" />
+          <span className="panel-sep" aria-hidden="true" />
+          <IconButton
+            onClick={handleChangeFolder}
+            className="panel-icon-btn"
+            aria-label="Open another folder"
+            tooltip="Open another folder"
+          >
+            <FolderOpenIcon className="w-3.5 h-3.5" />
+          </IconButton>
+          <CollapseAllButton />
+          <span className="panel-sep" aria-hidden="true" />
+          <IconButton
+            onClick={() => {
+              if (effectiveTab === 'help') {
+                setSidePanelTab(prevTabRef.current)
+              } else {
+                prevTabRef.current = sidePanelTab === 'help' ? 'files' : (sidePanelTab as 'files' | 'git')
+                setSidePanelTab('help')
+              }
+            }}
+            className="panel-icon-btn"
+            data-active={effectiveTab === 'help' ? 'true' : undefined}
+            aria-label={effectiveTab === 'help' ? 'Close help' : 'Help'}
+            tooltip={effectiveTab === 'help' ? 'Close help' : 'Help'}
+          >
+            <QuestionMarkCircleIcon className="w-3.5 h-3.5" />
+          </IconButton>
         </div>
 
-        {/* Row 2: Left-aligned path display + optional branch badge */}
-        {effectiveTab !== 'help' && <div className="relative flex items-center gap-1.5 px-3 pb-2">
+        {/* Row 2 — where you are. The back arrow and the way home flank the
+            path because all three are the same subject: this row's job is the
+            location, the bar above it is the panel's. */}
+        {effectiveTab !== 'help' && <div className="relative flex items-center gap-0.5 px-1 min-w-0">
+          {canGoBack && (
+            <IconButton
+              onClick={goBack}
+              className="panel-icon-btn"
+              aria-label="Go back"
+              tooltip="Go back"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            >
+              <ChevronLeftIcon className="w-3.5 h-3.5" />
+            </IconButton>
+          )}
           <div className="flex-1 min-w-0">
             {isRemoteSession && locationName ? (
               <div
@@ -431,88 +443,119 @@ export function SidePanel() {
             )}
           </div>
 
+          {isCustom && (
+            <IconButton
+              onClick={handleResetFolder}
+              className="panel-icon-btn"
+              aria-label="Back to the session's folder"
+              tooltip="Back to the session's folder"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            >
+              <ArrowUturnLeftIcon className="w-3.5 h-3.5" />
+            </IconButton>
+          )}
         </div>}
       </div>
 
-      {/* Shared git toolbar — branch on left, controls on right. It wraps:
-          three badges plus seven controls do not fit the 240px default width,
-          so the control cluster drops to its own line rather than off the edge. */}
+      {/* The git tab's own bar. Same panel as the tab bar above it, so the two
+          stack as one block of chrome. It wraps rather than clips: a branch
+          name, three badges and six controls do not fit the 240px default
+          width, and a second line inside the panel reads as intended where the
+          old loose row running toward the edge did not. */}
       {isGitTabActive && !isRemoteSession && multiRepo.result.mode !== 'none' && multiRepo.result.mode !== 'loading' && (
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-1 border-b border-border-subtle flex-shrink-0">
-          {/* Branch name (single-repo only). The badges sit outside the
-              truncating name so a long branch never clips them away — they are
-              the toolbar's controls, the name is only a label. */}
-          {isSingleRepo && singleRepoGit.status?.branch && (
-            <span className="flex items-center gap-1 text-xs text-text-secondary min-w-0">
-              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="flex-shrink-0 text-text-tertiary">
-                <circle cx="6" cy="2.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-                <circle cx="6" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-                <path d="M6 4v4" stroke="currentColor" strokeWidth="1.2" />
-              </svg>
-              <span className="truncate min-w-0">{singleRepoGit.status.branch}</span>
-            </span>
-          )}
-          {isSingleRepo && singleRepoGit.status && (
-            <span className="flex items-center gap-1 flex-shrink-0">
-              {singleRepoGit.status.ahead > 0 && (
-                <GitSyncBadge
-                  tone="outgoing"
-                  count={singleRepoGit.status.ahead}
-                  active={showOutgoingSingle}
-                  onToggle={() => setShowOutgoingSingle((v) => !v)}
-                  title="Show what a push will send"
-                />
-              )}
-              {singleRepoGit.status.behind > 0 && (
-                <GitSyncBadge
-                  tone="incoming"
-                  count={singleRepoGit.status.behind}
-                  active={showIncomingSingle}
-                  onToggle={() => setShowIncomingSingle((v) => !v)}
-                  title="Show what a pull will bring"
-                />
-              )}
-              {singleRepoChangeCount > 0 && (
-                <GitSyncBadge
-                  tone="changes"
-                  count={singleRepoChangeCount}
-                  active={showChangesSingle}
-                  onToggle={() => setShowChangesSingle((v) => !v)}
-                  title={showChangesSingle ? 'Hide local changes' : 'Show local changes'}
-                />
-              )}
-            </span>
-          )}
-          {/* Parent-repo notice — opened folder isn't a repo, changes come from above */}
-          {isSingleRepo &&
-            !isNavigatedSubfolder &&
-            singleRepoGit.status?.repoRoot &&
-            cwd &&
-            singleRepoGit.status.repoRoot !== cwd && (
-              <span className="flex items-center gap-1 text-[10px] text-text-tertiary truncate min-w-0">
-                <InformationCircleIcon className="w-3 h-3 flex-shrink-0" />
-                <Tooltip delayDuration={300}>
-                  <TooltipTrigger asChild>
-                    <span className="truncate cursor-default">
-                      Part of {singleRepoGit.status.repoRoot.split(/[\\/]/).pop() || singleRepoGit.status.repoRoot}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="font-mono max-w-[300px]">
-                    This folder isn’t a git repository. The changes shown belong to the parent repository {shortenPath(singleRepoGit.status.repoRoot)}, which contains it.
-                  </TooltipContent>
-                </Tooltip>
+        <div className="px-2 pb-1.5 flex-shrink-0">
+          <div className="panel-bar panel-bar--nowrap" data-panel-bar="git">
+            {/* Branch name (single-repo only). The badges sit outside the
+                truncating name so a long branch never clips them away — they are
+                the toolbar's controls, the name is only a label. */}
+            {isSingleRepo && singleRepoGit.status?.branch && (
+              <span className="flex items-center gap-1 pl-1.5 text-xs text-text-secondary min-w-0">
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="flex-shrink-0 text-text-tertiary">
+                  <circle cx="6" cy="2.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
+                  <circle cx="6" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M6 4v4" stroke="currentColor" strokeWidth="1.2" />
+                </svg>
+                <span className="truncate min-w-0">{singleRepoGit.status.branch}</span>
               </span>
             )}
-          <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-            <MagicPullButton repoPaths={allRepoPaths} onDone={gitRefresh} />
-            <MagicSyncButton repoPaths={allRepoPaths} onDone={gitRefresh} />
-            {isSingleRepo && cwd && (
-              <JourneyButton cwd={cwd} repoName={cwd.split('/').pop() ?? cwd} />
+            {/* A folder of repos has no one branch, so the bar's left half says
+                what it does have. The per-repo change counts are on the rows
+                themselves — a total here only cost the label its own word. */}
+            {multiRepo.result.mode === 'multi' && (
+              <span className="pl-1.5 text-xs text-text-secondary truncate min-w-0">
+                {multiRepo.result.repos.length} repo{multiRepo.result.repos.length === 1 ? '' : 's'}
+              </span>
             )}
-            <CommitBarToggle />
-            <PanelModeToggle />
-            <ViewModeToggle />
-            <CollapseAllButton />
+            {isSingleRepo && singleRepoGit.status && (
+              <span className="flex items-center gap-1 flex-shrink-0">
+                {singleRepoGit.status.ahead > 0 && (
+                  <GitSyncBadge
+                    tone="outgoing"
+                    count={singleRepoGit.status.ahead}
+                    active={showOutgoingSingle}
+                    onToggle={() => setShowOutgoingSingle((v) => !v)}
+                    title="Show what a push will send"
+                  />
+                )}
+                {singleRepoGit.status.behind > 0 && (
+                  <GitSyncBadge
+                    tone="incoming"
+                    count={singleRepoGit.status.behind}
+                    active={showIncomingSingle}
+                    onToggle={() => setShowIncomingSingle((v) => !v)}
+                    title="Show what a pull will bring"
+                  />
+                )}
+                {singleRepoChangeCount > 0 && (
+                  <GitSyncBadge
+                    tone="changes"
+                    count={singleRepoChangeCount}
+                    active={showChangesSingle}
+                    onToggle={() => setShowChangesSingle((v) => !v)}
+                    title={showChangesSingle ? 'Hide local changes' : 'Show local changes'}
+                  />
+                )}
+              </span>
+            )}
+            {/* Parent-repo notice — opened folder isn't a repo, changes come from above */}
+            {isSingleRepo &&
+              !isNavigatedSubfolder &&
+              singleRepoGit.status?.repoRoot &&
+              cwd &&
+              singleRepoGit.status.repoRoot !== cwd && (
+                <span className="flex items-center gap-1 text-[10px] text-text-tertiary truncate min-w-0">
+                  <InformationCircleIcon className="w-3 h-3 flex-shrink-0" />
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <span className="truncate cursor-default">
+                        Part of {singleRepoGit.status.repoRoot.split(/[\\/]/).pop() || singleRepoGit.status.repoRoot}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="font-mono max-w-[300px]">
+                      This folder isn’t a git repository. The changes shown belong to the parent repository {shortenPath(singleRepoGit.status.repoRoot)}, which contains it.
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
+              )}
+            {/* Three segments, hairlined apart: what reaches the remote, what
+                opens a panel over the repo, what changes how the list is drawn.
+                Collapse-all is gone from here — it is in the tab bar above,
+                where the file tree can reach it too. */}
+            <span className="panel-bar-spacer" />
+            <span className="panel-sep" aria-hidden="true" />
+            {/* One cluster that never breaks apart — see .panel-bar--nowrap. */}
+            <span className="flex items-center gap-0.5 flex-shrink-0">
+              <MagicPullButton repoPaths={allRepoPaths} onDone={gitRefresh} />
+              <MagicSyncButton repoPaths={allRepoPaths} onDone={gitRefresh} />
+              <span className="panel-sep" aria-hidden="true" />
+              <CommitBarToggle />
+              {isSingleRepo && cwd && (
+                <JourneyButton cwd={cwd} repoName={cwd.split('/').pop() ?? cwd} />
+              )}
+              <span className="panel-sep" aria-hidden="true" />
+              <PanelModeToggle />
+              <ViewModeToggle />
+  </span>
           </div>
         </div>
       )}
@@ -530,13 +573,7 @@ export function SidePanel() {
         <>
           {/* Keep FileTree mounted across tab switches so folder expansion state is preserved */}
           <div className={sidePanelTab === 'files' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
-            <FileTree
-              cwd={cwd}
-              isCustom={isCustom}
-              onChangeFolder={handleChangeFolder}
-              onResetFolder={handleResetFolder}
-              onNavigateToFolder={handleNavigateToFolder}
-            />
+            <FileTree cwd={cwd} onNavigateToFolder={handleNavigateToFolder} />
           </div>
           {sidePanelTab === 'git' && (
             multiRepo.result.mode === 'multi' ? (

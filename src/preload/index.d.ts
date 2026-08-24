@@ -233,6 +233,10 @@ export interface FileReadResult {
 export interface UsageWindow {
   key: string
   label: string
+  /** 'session' | 'weekly_all' | 'weekly_scoped' | whatever the service adds. */
+  kind: string
+  /** What a scoped cap is scoped to ('Fable', 'Opus'), else null. */
+  scope: string | null
   usedPercentage: number
   resetsAt: number | null
   severity: 'normal' | 'warning' | 'critical' | null
@@ -456,6 +460,8 @@ export interface ElectronAPI {
   missionControlGetEnabled: () => Promise<boolean>
   missionControlSetEnabled: (enabled: boolean) => Promise<void>
   setAppIcon: (icon: string) => Promise<void>
+  /** A trackpad haptic (macOS Force Touch); fire-and-forget, no-op elsewhere. */
+  hapticTick: (pattern?: 'alignment' | 'generic' | 'level') => void
   getUsername: () => Promise<string | null>
   getAppVersion: () => Promise<string>
   installUpdate: () => Promise<void>

@@ -20,6 +20,7 @@ import type {
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
 import { useWorkspaceStore } from './workspace-store'
 import { mergeLayoutForKeys, absorbLayout, placeAdopted } from '../lib/sidebar-layout-partition'
+import { moveLayoutItems } from '../lib/sidebar-layout-ops'
 
 // Re-export types and constants so existing imports continue to work
 export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, GroupViewConfig, SessionViewConfig, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
@@ -154,9 +155,11 @@ interface SessionState {
   /** Set (or clear, with null) the group's default prompt — what sessions
    *  launched from the group's own `+` start on. */
   setGroupPrompt: (groupId: string, prompt: string | null) => void
+  /** Move rows or groups relative to `targetId`; `null` = the top level, at
+   *  the end (the explicit ungroup). Rules in lib/sidebar-layout-ops.ts. */
   moveItems: (
     itemIds: string[],
-    targetId: string,
+    targetId: string | null,
     position: 'before' | 'after' | 'inside'
   ) => void
   undoSidebar: () => void
@@ -954,54 +957,18 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   moveItems: (itemIds, targetId, position) =>
     set((state) => {
+      // The structural rules live in moveLayoutItems (pure, unit-tested):
+      // one place per id, no group inside a group, only a group emptied by
+      // this move is dropped. A no-op drop records no undo step.
+      const next = moveLayoutItems(
+        { groups: state.groups, displayOrder: getDisplayOrder(state) },
+        itemIds,
+        targetId,
+        position
+      )
+      if (!next) return {}
       const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
-      const displayOrder = getDisplayOrder(state)
-      const newGroups = state.groups.map((g) => ({
-        ...g,
-        sessionIds: [...g.sessionIds]
-      }))
-
-      const targetIsGroup = newGroups.some((g) => g.id === targetId)
-      const targetParentGroup = newGroups.find((g) => g.sessionIds.includes(targetId))
-
-      // Remove dragged items from current locations
-      for (const id of itemIds) {
-        const idx = displayOrder.indexOf(id)
-        if (idx !== -1) displayOrder.splice(idx, 1)
-        for (const g of newGroups) {
-          const sIdx = g.sessionIds.indexOf(id)
-          if (sIdx !== -1) g.sessionIds.splice(sIdx, 1)
-        }
-      }
-
-      if (position === 'inside' && targetIsGroup) {
-        // Drop into group
-        const group = newGroups.find((g) => g.id === targetId)!
-        group.sessionIds.push(...itemIds)
-      } else if (targetParentGroup && !targetIsGroup) {
-        // Target is inside a group → reorder within group
-        const idx = targetParentGroup.sessionIds.indexOf(targetId)
-        const insertIdx = position === 'after' ? idx + 1 : idx
-        targetParentGroup.sessionIds.splice(insertIdx, 0, ...itemIds)
-      } else {
-        // Target is top-level → reorder in displayOrder
-        const idx = displayOrder.indexOf(targetId)
-        if (idx === -1) {
-          displayOrder.push(...itemIds)
-        } else {
-          const insertIdx = position === 'after' ? idx + 1 : idx
-          displayOrder.splice(insertIdx, 0, ...itemIds)
-        }
-      }
-
-      // Remove empty groups
-      const emptyGroupIds = newGroups
-        .filter((g) => g.sessionIds.length === 0)
-        .map((g) => g.id)
-      const finalGroups = newGroups.filter((g) => g.sessionIds.length > 0)
-      const finalDisplayOrder = displayOrder.filter((id) => !emptyGroupIds.includes(id))
-
-      return { displayOrder: finalDisplayOrder, groups: finalGroups, sidebarUndoStack }
+      return { displayOrder: next.displayOrder, groups: next.groups, sidebarUndoStack }
     }),
 
   undoSidebar: () =>

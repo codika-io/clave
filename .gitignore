@@ -43,3 +43,4 @@ assets/*.mp4
 
 # Native helper build artifact (built by scripts/build-native.sh)
 resources/native/mission-control-helper
+resources/native/haptic-helper

@@ -73,6 +73,12 @@ export function mergeLayoutForKeys<G extends LayoutGroupLike>(
 
   const kept: G[] = []
   for (const g of persisted.groups ?? []) {
+    // One object per group id. An unstamped in-memory group is written to the
+    // window's workspace file (partitionSidebarLayout's fallback) yet stays in
+    // `others` on a take (ownership is by explicit stamp), so the file's copy
+    // would otherwise come back beside the live one — two groups with one id,
+    // and every by-id lookup editing the wrong half. The live copy wins.
+    if (otherGroupIds.has(g.id)) continue
     const sessionIds = (g.sessionIds ?? []).filter((sid) => alive.has(sid))
     if (sessionIds.length === 0) continue
     const terminals = (g.terminals ?? []).map((t) =>

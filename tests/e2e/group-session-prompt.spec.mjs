@@ -98,15 +98,20 @@ export async function run(t) {
     await win.click('.group-picker-card')
     await win.waitForTimeout(6000)
 
-    const addRow = await win.evaluate(() => document.querySelector('.group-add-row')?.title ?? null)
+    // The `+` sits in the group's header; it was a row at the foot of the card
+    // until the header's terminals became one button, and moved with its title,
+    // its aria-label and its handler intact.
+    const addBtn = await win.evaluate(
+      () => document.querySelector('.group-new-session')?.title ?? null
+    )
     t.check(
-      "the + row promises the group's prompt",
-      /starts on the group's prompt/.test(addRow ?? ''),
-      addRow
+      "the + promises the group's prompt",
+      /starts on the group's prompt/.test(addBtn ?? ''),
+      addBtn
     )
 
     const readSpawns = await spyPtySpawn(app)
-    await win.click('.group-add-row')
+    await win.click('.group-new-session')
     await win.waitForTimeout(4000)
 
     const spawns = await readSpawns()

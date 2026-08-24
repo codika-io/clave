@@ -105,12 +105,12 @@ export async function run(t) {
     await win.click('.group-picker-card')
     await win.waitForTimeout(6000)
 
-    // Its `+` must launch on the brief the file now says.
-    const rails = win.locator('.group-rail')
-    await rails
-      .nth((await rails.count()) - 1)
-      .locator('.group-add-row')
-      .click()
+    // Its `+` must launch on the brief the file now says. The freshly stamped
+    // group is the last card in the list, and its `+` sits in the card's HEADER
+    // — a SIBLING of .group-rail, not a descendant, since the "New session" row
+    // at the foot of the card became the header's `+`. Hence the last `+` in the
+    // list rather than the last rail's row.
+    await win.locator('.group-new-session').last().click()
     await win.waitForTimeout(4000)
 
     const prompts = (await readSpawns()).map((x) => x.initialPrompt).filter(Boolean)

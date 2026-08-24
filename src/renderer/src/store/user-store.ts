@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { isPaletteKey, seedFromString, type PaletteKey } from '../lib/brand-field'
 
 export const USER_ICONS = [
   'user',
@@ -17,43 +18,78 @@ export const USER_ICONS = [
 
 export type UserIcon = (typeof USER_ICONS)[number]
 
-export const USER_ICON_COLORS = [
-  '#95979c',
-  '#5e6ad2',
-  '#8b95a8',
-  '#4cb782',
-  '#53b7c5',
-  '#db8b4e',
-  '#d45461',
-  '#e8b931'
-] as const
+const DEFAULT_ICON: UserIcon = 'rocket'
+
+/**
+ * What a profile used to be: an icon on a flat 20%-alpha wash of one of eight
+ * hexes. The wash is gone — the avatar is an Antasphere field now — but a
+ * saved hex still has to land somewhere, so each one maps to the palette
+ * nearest it in temperature. Read once, at load; nothing writes hexes again.
+ */
+const LEGACY_COLOR_TO_PALETTE: Record<string, PaletteKey> = {
+  '#95979c': 'basalt',
+  '#5e6ad2': 'iris',
+  '#8b95a8': 'tide',
+  '#4cb782': 'reef',
+  '#53b7c5': 'glacier',
+  '#db8b4e': 'furnace',
+  '#d45461': 'dawn',
+  '#e8b931': 'solar',
+  '#007aff': 'glacier'
+}
+
+// Iris: a cool violet that lands near the app's own accent, so a profile
+// nobody has touched still looks like it belongs to Clave.
+const DEFAULT_PALETTE: PaletteKey = 'iris'
 
 interface UserProfile {
   name: string
   avatarIcon: UserIcon
-  avatarColor: string
+  /** The generative field behind the icon — an Antasphere palette key. */
+  avatarField: PaletteKey
+  /** Which draw of that palette. Derived from the name until someone rerolls it. */
+  avatarSeed: number
 }
 
 interface UserState extends UserProfile {
   setName: (name: string) => void
   setAvatarIcon: (icon: UserIcon) => void
-  setAvatarColor: (color: string) => void
+  setAvatarField: (field: PaletteKey) => void
+  /** Redraw the field: a new seed, same palette. */
+  reseedAvatar: () => void
 }
 
 const STORAGE_KEY = 'clave-user-profile'
 
 function loadProfile(): UserProfile {
+  const fallback = (name = 'User'): UserProfile => ({
+    name,
+    avatarIcon: DEFAULT_ICON,
+    avatarField: DEFAULT_PALETTE,
+    avatarSeed: seedFromString(name)
+  })
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { name: 'User', avatarIcon: 'user', avatarColor: '#007AFF' }
+    if (!raw) return fallback()
     const parsed = JSON.parse(raw)
+    const name = typeof parsed.name === 'string' ? parsed.name : 'User'
+    const legacy =
+      typeof parsed.avatarColor === 'string'
+        ? LEGACY_COLOR_TO_PALETTE[parsed.avatarColor.toLowerCase()]
+        : undefined
     return {
-      name: parsed.name ?? 'User',
-      avatarIcon: parsed.avatarIcon ?? 'user',
-      avatarColor: parsed.avatarColor ?? '#007AFF'
+      name,
+      avatarIcon: parsed.avatarIcon ?? DEFAULT_ICON,
+      avatarField: isPaletteKey(parsed.avatarField)
+        ? parsed.avatarField
+        : (legacy ?? DEFAULT_PALETTE),
+      avatarSeed:
+        typeof parsed.avatarSeed === 'number' && Number.isFinite(parsed.avatarSeed)
+          ? parsed.avatarSeed
+          : seedFromString(name)
     }
   } catch {
-    return { name: 'User', avatarIcon: 'user', avatarColor: '#007AFF' }
+    return fallback()
   }
 }
 
@@ -72,12 +108,16 @@ export function getInitials(name: string): string {
     .slice(0, 2)
 }
 
-export const useUserStore = create<UserState>((set) => ({
+export const useUserStore = create<UserState>((set, get) => ({
   ...loadProfile(),
 
   setName: (name) => {
-    persist({ name })
-    set({ name })
+    // A field the user has never touched follows the name, so the first thing
+    // they see is *their* draw rather than the default one.
+    const untouched = get().avatarSeed === seedFromString(get().name)
+    const next = untouched ? { name, avatarSeed: seedFromString(name) } : { name }
+    persist(next)
+    set(next)
   },
 
   setAvatarIcon: (avatarIcon) => {
@@ -85,18 +125,32 @@ export const useUserStore = create<UserState>((set) => ({
     set({ avatarIcon })
   },
 
-  setAvatarColor: (avatarColor) => {
-    persist({ avatarColor })
-    set({ avatarColor })
+  setAvatarField: (avatarField) => {
+    persist({ avatarField })
+    set({ avatarField })
+  },
+
+  reseedAvatar: () => {
+    const avatarSeed = Math.floor(Math.random() * 0x7fffffff)
+    persist({ avatarSeed })
+    set({ avatarSeed })
   }
 }))
 
-// If no custom name has been saved, resolve the OS username as the default
+// Land the migration rather than re-deriving it on every load: a profile saved
+// by an older build carries a hex and no seed, and leaving it that way means the
+// user's field would silently change the day LEGACY_COLOR_TO_PALETTE does.
 const profile = loadProfile()
+persist(profile)
+
+// If no custom name has been saved, resolve the OS username as the default
 if (profile.name === 'User' && window.electronAPI?.getUsername) {
-  window.electronAPI.getUsername().then((osName) => {
-    if (osName) {
-      useUserStore.getState().setName(osName)
-    }
-  }).catch(() => {})
+  window.electronAPI
+    .getUsername()
+    .then((osName) => {
+      if (osName) {
+        useUserStore.getState().setName(osName)
+      }
+    })
+    .catch(() => {})
 }

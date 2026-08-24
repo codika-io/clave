@@ -111,6 +111,24 @@ describe('mergeLayoutForKeys', () => {
     expect(out.displayOrder).toEqual(['orphan-one', 'orphan-two'])
   })
 
+  it('an unstamped live group already written to the file comes back ONCE (live copy wins)', () => {
+    // F1 follow-up: the unstamped group was persisted into A's file by the
+    // write fallback; re-taking A must not produce a second object with its id.
+    const out = mergeLayoutForKeys(
+      {
+        groups: [g('shared', ['o1', 'o2'])], // UNSTAMPED, live, two rows
+        displayOrder: ['shared'],
+        sessions: [s('o1'), s('o2')]
+      },
+      [A],
+      { groups: [g('shared', ['o1'])], displayOrder: ['shared'] }, // the file's older copy
+      ['o1', 'o2']
+    )
+    expect(out.groups.map((x) => x.id)).toEqual(['shared'])
+    expect(out.groups[0].sessionIds).toEqual(['o1', 'o2'])
+    expect(out.displayOrder).toEqual(['shared'])
+  })
+
   it('merging the NULL key does own unstamped groups (no-workspace boot)', () => {
     const out = mergeLayoutForKeys(
       { groups: [], displayOrder: [], sessions: [s('u1')] },

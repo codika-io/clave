@@ -1,11 +1,24 @@
+import { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Cog6ToothIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import {
+  Cog6ToothIcon,
+  ArrowDownTrayIcon,
+  ChatBubbleLeftRightIcon,
+  ClockIcon
+} from '@heroicons/react/24/outline'
+import type { UsageWindow } from '../../../../preload/index.d'
 import { useUserStore } from '../../store/user-store'
 import { useSessionStore } from '../../store/session-store'
 import { useUpdaterStore } from '../../store/updater-store'
+import { useWorkTrackerStore } from '../../store/work-tracker-store'
+import { useFeedbackStore } from '../../store/feedback-store'
+import { useUsageStore, tightestWindow, shortLabel, formatReset } from '../../store/usage-store'
+import { formatDuration } from '../work-tracker/utils'
 import { UserIconDisplay } from '../ui/UserIconDisplay'
+import { BrandField } from '../ui/BrandField'
+import { cn } from '../../lib/utils'
 
-export function UpdateBanner() {
+export function UpdateBanner(): React.ReactElement {
   const phase = useUpdaterStore((s) => s.phase)
   const version = useUpdaterStore((s) => s.availableVersion)
   const dismissed = useUpdaterStore((s) => s.dismissed)
@@ -15,7 +28,9 @@ export function UpdateBanner() {
   // No listener here any more: the shell subscribes once and hydrates from the
   // main process, so this banner renders whatever the truth is at mount rather
   // than whatever push it happened to catch.
-  const handleUpdate = () => startDownload()
+  const handleUpdate = (): void => {
+    startDownload()
+  }
 
   const showUpdateBanner = phase === 'available' && !dismissed
 
@@ -57,10 +72,115 @@ export function UpdateBanner() {
   )
 }
 
-export function SidebarFooter() {
+/**
+ * The second line of the foot panel: how much of your agent is left.
+ *
+ * The window shown is not named here and must not be — which caps an account
+ * has is the service's business (a 5-hour session block, a weekly all-models
+ * cap, one weekly cap per model, and whatever it adds next), so the store picks
+ * whichever came back is tightest. What is on the line is therefore always the
+ * one about to stop you, with its own short name beside it so you can see WHICH
+ * ceiling that is without opening anything.
+ *
+ * Percent LEFT, not percent used. The old line here counted minutes worked
+ * today, which said nothing about whether you could keep going.
+ */
+function UsageLine({ window: w }: { window: UsageWindow }): React.ReactElement {
+  const openSettings = useSessionStore((s) => s.openSettings)
+
+  const left = Math.max(0, Math.round(100 - w.usedPercentage))
+  const reset = formatReset(w.resetsAt)
+  // The service's verdict first where it disagrees with the raw percentage:
+  // it is plan-aware and a bare number is not.
+  const rank = { normal: 0, warning: 1, critical: 2 }
+  const byPct = left <= 10 ? 'critical' : left <= 30 ? 'warning' : 'normal'
+  const level = rank[w.severity ?? 'normal'] >= rank[byPct] ? (w.severity ?? 'normal') : byPct
+
+  const tone =
+    level === 'critical'
+      ? 'text-wellbeing-strong'
+      : level === 'warning'
+        ? 'text-wellbeing-gentle'
+        : 'text-text-secondary'
+
+  return (
+    <button
+      onClick={() => openSettings('usage')}
+      className="flex items-center gap-1.5 min-w-0 flex-1 h-full px-1.5 -mx-0.5 rounded-lg hover:bg-surface-100 transition-colors"
+      title={[w.label, `${left}% left`, reset].filter(Boolean).join(' · ')}
+    >
+      <span className="usage-meter" aria-hidden="true">
+        <span
+          className={cn('usage-meter-fill', `usage-meter-fill--${level}`)}
+          style={{ width: `${Math.max(3, left)}%` }}
+        />
+      </span>
+      <span className={cn('text-[11px] font-medium tabular-nums flex-shrink-0', tone)}>
+        {left}% left
+      </span>
+      <span className="text-[11px] text-text-tertiary truncate">· {shortLabel(w)}</span>
+    </button>
+  )
+}
+
+/**
+ * What the second line falls back to when there are no limits to show — not
+ * signed in, offline, or an account the service says nothing about. Only when
+ * there is actually something to say: a tracker reading `0m · 0 sessions` is
+ * the meaningless thing the usage line replaced, and repeating it as a fallback
+ * would put it straight back.
+ */
+function WorkLine(): React.ReactElement {
+  const todayTotalMinutes = useWorkTrackerStore((s) => s.todayTotalMinutes)
+  const todaySessionCount = useWorkTrackerStore((s) => s.todaySessionCount)
+  const breakSuggestion = useWorkTrackerStore((s) => s.breakSuggestion)
+  const openSettings = useSessionStore((s) => s.openSettings)
+
+  const isStrong = breakSuggestion === 'strong'
+  const hasBreak = isStrong || breakSuggestion === 'gentle'
+  const tone = hasBreak
+    ? isStrong
+      ? 'text-wellbeing-strong'
+      : 'text-wellbeing-gentle'
+    : 'text-text-secondary'
+
+  return (
+    <button
+      onClick={() => openSettings('usage')}
+      className="flex items-center gap-1.5 min-w-0 flex-1 h-full px-1.5 -mx-0.5 rounded-lg hover:bg-surface-100 transition-colors"
+      title="Usage"
+    >
+      <ClockIcon className={cn('w-3.5 h-3.5 flex-shrink-0', tone)} />
+      <span className={cn('text-[11px] font-medium', tone)}>
+        {formatDuration(todayTotalMinutes)}
+      </span>
+      <span className="text-[11px] text-text-tertiary truncate">
+        {hasBreak
+          ? isStrong
+            ? '· take a break'
+            : '· break?'
+          : `· ${todaySessionCount} session${todaySessionCount !== 1 ? 's' : ''}`}
+      </span>
+    </button>
+  )
+}
+
+/**
+ * The foot of the sidebar: one panel, the same material as the launcher and the
+ * switcher at the top, holding everything that is about *you* rather than about
+ * the work — the avatar and name, the day's hours, the way to reach us, and the
+ * settings gear.
+ *
+ * Its ground is the user's own Antasphere field, bled faintly across the panel
+ * and masked away before it reaches the gear (see .sidebar-footer-field). That
+ * is the whole point of the block: the colour you chose is a material the panel
+ * is made of, not a 20% wash behind a glyph.
+ */
+export function SidebarFooter(): React.ReactElement {
   const name = useUserStore((s) => s.name)
   const avatarIcon = useUserStore((s) => s.avatarIcon)
-  const avatarColor = useUserStore((s) => s.avatarColor)
+  const avatarField = useUserStore((s) => s.avatarField)
+  const avatarSeed = useUserStore((s) => s.avatarSeed)
   const openSettings = useSessionStore((s) => s.openSettings)
 
   const phase = useUpdaterStore((s) => s.phase)
@@ -68,36 +188,112 @@ export function SidebarFooter() {
   const dismissed = useUpdaterStore((s) => s.dismissed)
   const undismiss = useUpdaterStore((s) => s.undismiss)
 
+  const usageStatus = useUsageStore((s) => s.status)
+  const usageWindows = useUsageStore((s) => s.windows)
+  const loadUsage = useUsageStore((s) => s.load)
+  const trackerEnabled = useWorkTrackerStore((s) => s.enabled)
+  const trackerMinutes = useWorkTrackerStore((s) => s.todayTotalMinutes)
+  const feedbackCollapsed = useFeedbackStore((s) => s.collapsed)
+  const openFeedback = useFeedbackStore((s) => s.setDialogOpen)
+
+  // The store also fetches when it is first imported; this is the belt to that
+  // brace. Mounting is the moment the line is actually about to be looked at,
+  // and `load` is cached, so asking again here costs nothing when the boot
+  // fetch already landed and rescues the line when it did not.
+  useEffect(() => {
+    void loadUsage()
+  }, [loadUsage])
+
   const showUpdateDot = dismissed && version !== null && phase === 'available'
+  // The card above is showing while `collapsed === false`; the icon is the
+  // collapsed form, and neither shows while the state is still null.
+  const showFeedbackIcon = feedbackCollapsed === true
+
+  // What the second line says, in order of what is worth knowing: the agent's
+  // remaining headroom, else the hours worked, else nothing — and if that
+  // leaves only the feedback icon, the row still carries it.
+  const usage = usageStatus === 'error' ? null : tightestWindow(usageWindows)
+  const showWork = !usage && trackerEnabled && trackerMinutes > 0
+  const showMetaRow = usage !== null || showWork || showFeedbackIcon
 
   return (
-    <button
-      onClick={() => openSettings()}
-      className="group w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-text-primary"
-      title="Settings (⌘,)"
-    >
-      <div className="relative">
-        <UserIconDisplay icon={avatarIcon} color={avatarColor} size="xs" />
-        {/* Update dot indicator when dismissed */}
-        {showUpdateDot && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-surface-0 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation()
-              undismiss()
-            }}
-          />
-        )}
+    <div className="sidebar-panel">
+      {/* The panel's ground. Held a hair off the app's own surface and then
+          grained at well over the house alpha: the gradient is genuinely there,
+          you just meet the noise first — the way the website's page field sits
+          under a page of reading. Fading the canvas instead would take the
+          grain down with it and leave a smear. */}
+      <BrandField
+        palette={avatarField}
+        seed={avatarSeed}
+        groundLift={0.05}
+        grainAlpha={0.3}
+        className="sidebar-footer-field"
+      />
+
+      <div className="sidebar-footer-row sidebar-footer-row--user">
+        <button
+          onClick={() => openSettings()}
+          className="relative flex-shrink-0"
+          title="Settings (⌘,)"
+        >
+          <UserIconDisplay icon={avatarIcon} field={avatarField} seed={avatarSeed} size="xs" />
+          {/* Update dot indicator when dismissed */}
+          {showUpdateDot && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-surface-0 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation()
+                undismiss()
+              }}
+            />
+          )}
+        </button>
+
+        <button
+          onClick={() => openSettings()}
+          className="sidebar-footer-name"
+          title="Settings (⌘,)"
+        >
+          {name}
+        </button>
+
+        <button
+          onClick={() => openSettings()}
+          className="sidebar-footer-btn"
+          title="Settings (⌘,)"
+          aria-label="Settings"
+        >
+          <Cog6ToothIcon className="w-4 h-4" />
+        </button>
       </div>
-      <div className="flex-1 text-left min-w-0">
-        <span className="text-[13px] font-semibold truncate block">{name}</span>
-      </div>
-      {/* Hover affordance lives on the gear only — darker grey fill */}
-      <span className="flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 text-text-tertiary transition-colors duration-150 group-hover:text-text-primary group-hover:bg-surface-200">
-        <Cog6ToothIcon className="w-4 h-4" />
-      </span>
-    </button>
+
+      {showMetaRow && (
+        <>
+          <div className="sidebar-footer-sep" />
+          <div className="sidebar-footer-row sidebar-footer-row--meta">
+            {usage ? (
+              <UsageLine window={usage} />
+            ) : showWork ? (
+              <WorkLine />
+            ) : (
+              <span className="flex-1" />
+            )}
+            {showFeedbackIcon && (
+              <button
+                onClick={() => openFeedback(true)}
+                className="sidebar-footer-btn"
+                title="Talk to us"
+                aria-label="Talk to us"
+              >
+                <ChatBubbleLeftRightIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   )
 }

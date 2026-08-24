@@ -35,7 +35,7 @@ function commitFileStatusColor(status: GitCommitFileStatus['status']): string {
       return 'text-green-400'
     case 'M':
     case 'T':
-      return 'text-orange-400'
+      return 'text-git-modified'
     case 'D':
       return 'text-red-400'
     case 'R':
@@ -177,7 +177,7 @@ function CommitRow({
     variant === 'outgoing'
       ? 'border-l-2 border-l-green-400/40'
       : variant === 'incoming'
-        ? 'border-l-2 border-l-orange-400/40'
+        ? 'border-l-2 border-l-git-incoming/40'
         : 'border-l-2 border-l-transparent'
 
   return (
@@ -426,7 +426,7 @@ export function GitLogView({
             <LogSectionHeader
               label="Incoming"
               count={incoming.length}
-              color="text-orange-400"
+              color="text-git-incoming"
               tone="incoming"
               action="Pull (rebase)"
               actionTitle="Pull these commits — fast-forward if possible, otherwise rebase (autostash)"

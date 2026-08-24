@@ -1,6 +1,16 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useSessionStore } from '../../store/session-store'
-import { ListBulletIcon, Bars3BottomLeftIcon, ArrowPathIcon, ArrowDownIcon, PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline'
+import {
+  ListBulletIcon,
+  Bars3BottomLeftIcon,
+  ArrowPathIcon,
+  ArrowDownIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  ChevronDoubleUpIcon,
+  ClockIcon,
+  QueueListIcon
+} from '@heroicons/react/24/outline'
 import { IconButton } from '../ui/tooltip'
 import type { MagicSyncStep, MagicPullStep } from '../../../../preload/index.d'
 
@@ -12,7 +22,7 @@ export type GitSyncTone = 'incoming' | 'outgoing' | 'changes'
 
 /** One text color per tone — the badge derives its border and fill from it. */
 const TONE_TEXT_CLASS: Record<GitSyncTone, string> = {
-  incoming: 'text-orange-400',
+  incoming: 'text-git-incoming',
   outgoing: 'text-green-400',
   changes: 'text-text-secondary'
 }
@@ -119,7 +129,7 @@ export function SectionHeader({
   indentPx?: number
 }) {
   return (
-    <div className="flex items-center pr-3 py-1.5" style={{ paddingLeft: indentPx ?? 12 }}>
+    <div className="git-section-header flex items-center pr-3" style={{ paddingLeft: indentPx ?? 12 }}>
       <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
         {label} ({count})
       </span>
@@ -148,18 +158,23 @@ export function SectionHeader({
   )
 }
 
+/**
+ * Collapse everything the side panel currently lists. It lives in the panel's
+ * tab bar rather than in either tab, because `collapseAllTrigger` is a store
+ * counter both trees watch — the file tree folds its directories, the git tree
+ * folds its repos and their parent folders — and one button that does both is
+ * the honest shape of that.
+ */
 export function CollapseAllButton() {
   const triggerCollapseAll = useSessionStore((s) => s.triggerCollapseAll)
   return (
     <IconButton
       onClick={triggerCollapseAll}
-      className="btn-icon btn-icon-sm flex-shrink-0"
+      className="panel-icon-btn"
+      aria-label="Collapse all"
       tooltip="Collapse all"
     >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-        <path d="M2 8l4-3 4 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M2 5l4-3 4 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <ChevronDoubleUpIcon className="w-3.5 h-3.5" />
     </IconButton>
   )
 }
@@ -171,13 +186,14 @@ export function ViewModeToggle() {
   return (
     <IconButton
       onClick={() => setGitViewMode(isTree ? 'list' : 'tree')}
-      className="btn-icon btn-icon-sm flex-shrink-0"
+      className="panel-icon-btn"
+      aria-label={isTree ? 'List view' : 'Tree view'}
       tooltip={isTree ? 'List view' : 'Tree view'}
     >
       {isTree ? (
-        <ListBulletIcon className="w-3 h-3" />
+        <ListBulletIcon className="w-3.5 h-3.5" />
       ) : (
-        <Bars3BottomLeftIcon className="w-3 h-3" />
+        <Bars3BottomLeftIcon className="w-3.5 h-3.5" />
       )}
     </IconButton>
   )
@@ -189,10 +205,12 @@ export function CommitBarToggle(): React.JSX.Element {
   return (
     <IconButton
       onClick={() => setGitShowCommitBar(!gitShowCommitBar)}
-      className={`btn-icon btn-icon-sm flex-shrink-0 ${gitShowCommitBar ? 'text-accent' : ''}`}
+      className="panel-icon-btn"
+      data-active={gitShowCommitBar ? 'true' : undefined}
+      aria-label={gitShowCommitBar ? 'Hide commit bar' : 'Show commit bar'}
       tooltip={gitShowCommitBar ? 'Hide commit bar' : 'Show commit bar'}
     >
-      <PencilSquareIcon className="w-3 h-3" />
+      <PencilSquareIcon className="w-3.5 h-3.5" />
     </IconButton>
   )
 }
@@ -204,21 +222,11 @@ export function PanelModeToggle() {
   return (
     <IconButton
       onClick={() => setGitPanelMode(isLog ? 'changes' : 'log')}
-      className="btn-icon btn-icon-sm flex-shrink-0"
+      className="panel-icon-btn"
+      aria-label={isLog ? 'Changes' : 'Commit log'}
       tooltip={isLog ? 'Changes' : 'Commit log'}
     >
-      {isLog ? (
-        /* Changes/diff icon */
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d="M2 3h8M2 6h5M2 9h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      ) : (
-        /* Log/history icon */
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M6 3.5V6l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
+      {isLog ? <QueueListIcon className="w-3.5 h-3.5" /> : <ClockIcon className="w-3.5 h-3.5" />}
     </IconButton>
   )
 }
@@ -289,10 +297,11 @@ export function MagicSyncButton({
       <IconButton
         onClick={handleSync}
         disabled={syncing || repoPaths.length === 0}
-        className="btn-icon btn-icon-sm flex-shrink-0 disabled:opacity-40"
+        className="panel-icon-btn"
+        aria-label="Magic sync"
         tooltip={syncing ? (currentStep ?? 'Syncing...') : 'Magic sync'}
       >
-        <ArrowPathIcon className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+        <ArrowPathIcon className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
       </IconButton>
       {(syncing || resultMessage) && (
         <span className="ml-1 text-[10px] text-text-tertiary whitespace-nowrap">
@@ -364,10 +373,11 @@ export function MagicPullButton({
       <IconButton
         onClick={handlePull}
         disabled={pulling || repoPaths.length === 0}
-        className="btn-icon btn-icon-sm flex-shrink-0 disabled:opacity-40"
+        className="panel-icon-btn"
+        aria-label="Pull all"
         tooltip={pulling ? (currentStep ?? 'Pulling...') : 'Pull all'}
       >
-        <ArrowDownIcon className={`w-3 h-3 ${pulling ? 'animate-bounce' : ''}`} />
+        <ArrowDownIcon className={`w-3.5 h-3.5 ${pulling ? 'animate-bounce' : ''}`} />
       </IconButton>
       {(pulling || resultMessage) && (
         <span className="ml-1 text-[10px] text-text-tertiary whitespace-nowrap">
@@ -420,7 +430,7 @@ export function BranchHeader({
             )}
             {ahead > 0 && behind > 0 && ' '}
             {behind > 0 && (
-              <span className="text-orange-400">
+              <span className="text-git-incoming">
                 {'\u2193'}
                 {behind}
               </span>
@@ -447,7 +457,8 @@ export function JourneyButton({ cwd, repoName }: { cwd: string; repoName: string
   return (
     <IconButton
       onClick={() => openJourneyPanel(cwd, repoName)}
-      className="btn-icon btn-icon-sm flex-shrink-0"
+      className="panel-icon-btn"
+      aria-label="Journey"
       tooltip="Journey"
     >
       {/* Timeline/route icon */}

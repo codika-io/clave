@@ -21,8 +21,6 @@ export interface SwitcherEntry {
 interface GroupSwitcherProps {
   /** Every group the workspace knows about, already narrowed by the search. */
   entries: SwitcherEntry[]
-  /** How many entries exist before the search narrowed them. */
-  totalCount: number
   /** The live group id the list is filtered to, or null for All. */
   value: string | null
   onPick: (entry: SwitcherEntry) => void
@@ -53,19 +51,27 @@ interface GroupSwitcherProps {
  *
  * The search narrows the chips, so typing a group's name is how you reach one of
  * the dozens that is not on screen; the same query narrows the session list
- * below. Enter acts on the first chip left standing.
+ * below. Enter acts on the first chip left standing — and that chip carries the
+ * hover state from the moment you type, without the pointer. Enter had no
+ * visible target before: you typed, the chips reordered, and the only way to
+ * know which one Enter would take was to press it. The highlight is that answer,
+ * drawn where the answer is.
  *
  * Its top row is fixed — All, the field, the `+`. None of the three belongs to
  * the wrapping set: All is the filter's off position, the field is never
  * "selected" the way a chip is, and the `+` is the panel's action. Pinning them
  * also keeps them still while the chips below change under the search.
  *
+ * The chip row under it is the only part that comes and goes: with nothing to
+ * show it collapses away entirely rather than reserving a line for a placeholder,
+ * and it opens on a height transition when the first chip arrives — starting a
+ * group, or a search reaching past the running ones.
+ *
  * Named "switcher", not "rail": .group-rail is the coloured bar down a group's
  * sessions in the list below.
  */
 export function GroupSwitcher({
   entries,
-  totalCount,
   value,
   onPick,
   onAll,
@@ -75,6 +81,7 @@ export function GroupSwitcher({
   onSearchChange,
   onSearchSubmit
 }: GroupSwitcherProps): React.JSX.Element {
+  const searching = search.trim().length > 0
   return (
     <div className="group-switcher-panel">
       {/* Fixed top row: the filter's off position, the search field, the panel's
@@ -94,6 +101,10 @@ export function GroupSwitcher({
           <MagnifyingGlassIcon className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
           <input
             type="text"
+            // What Cmd+F reaches for. The shortcut has been aiming at this
+            // attribute since before the field was dropped from the sidebar and
+            // rebuilt here, and it found nothing in between.
+            data-sidebar-search
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyDown={(e) => {
@@ -133,29 +144,40 @@ export function GroupSwitcher({
         </button>
       </div>
 
-      <div className="group-switcher-wrap">
-        {entries.length === 0 ? (
-          <span className="group-switcher-empty">
-            {totalCount === 0 ? 'No groups yet' : 'No group matches'}
-          </span>
-        ) : (
-          entries.map((entry) => {
+      {/* The chips' row exists only when it holds chips. Empty — a workspace with
+          nothing running, a search that matched no group — it collapses to
+          nothing and the panel sits at its head row's height, instead of holding
+          a strip of placeholder text open under every sidebar forever: the row
+          arriving IS the news that a group arrived, and the list below already
+          says "No matching sessions" when a search finds nothing.
+
+          A grid track is what makes that animatable — 0fr → 1fr transitions
+          where height: auto does not — so the chips get an inner box of their
+          own to be clipped by. */}
+      <div className="group-switcher-wrap" data-empty={entries.length === 0 ? 'true' : undefined}>
+        <div className="group-switcher-chips">
+          {entries.map((entry, index) => {
             const hex = resolveColorHex(entry.color)
             const live = entry.liveGroupId !== null
             const selected = live && entry.liveGroupId === value
+            // The chip Enter would act on, derived from the same array
+            // `onSearchSubmit` reads its first element of — so the highlight
+            // cannot drift from what the key actually does.
+            const enterTarget = searching && index === 0
             return (
               <button
                 key={entry.key}
                 className="group-switcher-chip"
                 data-selected={selected ? 'true' : undefined}
+                data-enter-target={enterTarget ? 'true' : undefined}
                 data-idle={live ? undefined : 'true'}
                 onClick={() => onPick(entry)}
                 title={
                   !live
-                    ? `Start ${entry.name}`
+                    ? `Start ${entry.name}${enterTarget ? ' — Enter' : ''}`
                     : selected
                       ? `Showing ${entry.name} only — click for all`
-                      : `Show ${entry.name} only`
+                      : `Show ${entry.name} only${enterTarget ? ' — Enter' : ''}`
                 }
                 // Selected takes the group's own colour at the same strength its
                 // card uses in the list, so the chip and the group it filtered to
@@ -178,8 +200,8 @@ export function GroupSwitcher({
                 <span className="truncate">{entry.name}</span>
               </button>
             )
-          })
-        )}
+          })}
+        </div>
       </div>
     </div>
   )
