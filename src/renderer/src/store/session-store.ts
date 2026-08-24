@@ -19,6 +19,7 @@ import type {
 } from './session-types'
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
 import { useWorkspaceStore } from './workspace-store'
+import { partitionSidebarLayout, mergeLayoutForKeys } from '../lib/sidebar-layout-partition'
 
 // Re-export types and constants so existing imports continue to work
 export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, GroupViewConfig, SessionViewConfig, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
@@ -101,12 +102,15 @@ interface SessionState {
   addSession: (session: Session) => void
   removeSession: (id: string) => void
   resetSessions: () => Promise<void>
-  /** Rebuild groups + display order from a persisted layout after tmux-backed
-   *  sessions have been re-adopted on launch. Dangling references (sessions
-   *  whose tmux session did not survive) are pruned. */
-  restoreGroups: (
-    survivingSessionIds: string[],
-    persisted: { groups: SessionGroup[]; displayOrder: string[] }
+  /** Replace the layout of the given workspaces (null = unscoped) with the
+   *  one read from their files, pruned to `survivingSessionIds` (sessions
+   *  that still exist anywhere — here, in another window, or on disk), and
+   *  leave every other workspace's groups untouched. The runtime counterpart
+   *  the boot restore, for a window that starts hosting a workspace. */
+  mergeLayoutForKeys: (
+    keys: (string | null)[],
+    persisted: { groups: SessionGroup[]; displayOrder: string[] },
+    survivingSessionIds: string[]
   ) => void
   selectSession: (id: string, addToSelection: boolean) => void
   selectSessions: (ids: string[]) => void
@@ -219,14 +223,64 @@ let groupCounter = 0
 let sidebarPersistEnabled = false
 let lastPersistedGroups: SessionGroup[] | null = null
 let lastPersistedOrder: string[] | null = null
+/** Per layout key, the JSON last handed to main — a partition is re-sent
+ *  only when IT changed, so a group edit in one workspace never rewrites the
+ *  others' files. Set only once main accepted the write (a refused write must
+ *  be retried, not remembered as done). */
+const lastPersistedPartitions = new Map<string | null, string>()
+/** Layout keys this window has TAKEN: loaded from their files and merged into
+ *  the store. Only a taken key is ever written — a window that merely hosts a
+ *  workspace, before it has read that workspace's layout, must not overwrite
+ *  the file with an empty partition. Boot marks its keys taken after the
+ *  restore; a key gained at runtime is taken by `takeLayouts` (workspace-
+ *  actions); a key lost is dropped so regaining it reloads the file. */
+const layoutKeysTaken = new Set<string | null>()
 
-function persistSidebarLayout(groups: SessionGroup[], displayOrder: string[]): void {
+export function markLayoutKeysTaken(keys: (string | null)[]): void {
+  for (const k of keys) layoutKeysTaken.add(k)
+}
+
+export function dropLayoutKeys(keys: (string | null)[]): void {
+  for (const k of keys) {
+    layoutKeysTaken.delete(k)
+    lastPersistedPartitions.delete(k)
+  }
+}
+
+export function isLayoutKeyTaken(key: string | null): boolean {
+  return layoutKeysTaken.has(key)
+}
+
+function persistSidebarLayout(state: {
+  groups: SessionGroup[]
+  displayOrder: string[]
+  sessions: Session[]
+}): void {
+  const { groups, displayOrder, sessions } = state
   if (groups === lastPersistedGroups && displayOrder === lastPersistedOrder) return
   lastPersistedGroups = groups
   lastPersistedOrder = displayOrder
-  window.electronAPI?.sidebarLayoutSave?.({ groups, displayOrder }).catch(() => {
-    // Persistence failures are non-fatal — groups stay in memory for this run.
-  })
+  const ws = useWorkspaceStore.getState()
+  const parts = partitionSidebarLayout(groups, displayOrder, sessions, ws.activeWorkspaceId)
+  // Only the workspaces THIS window hosts AND has taken are written (the
+  // hosting rule; main refuses the rest loudly). Hosted keys with no items
+  // still get written, so deleting the last group of a workspace reaches its
+  // file.
+  const hosted: (string | null)[] = ws.activeWorkspaceId === null ? [null] : ws.hostedWorkspaceIds
+  for (const key of new Set<string | null>([...hosted, ...parts.keys()])) {
+    if (!hosted.includes(key) || !layoutKeysTaken.has(key)) continue
+    const part = parts.get(key) ?? { groups: [], displayOrder: [] }
+    const json = JSON.stringify(part)
+    if (lastPersistedPartitions.get(key) === json) continue
+    window.electronAPI
+      ?.sidebarLayoutSave?.(key, part)
+      .then((res) => {
+        if (res?.ok) lastPersistedPartitions.set(key, json)
+      })
+      .catch(() => {
+        // Persistence failures are non-fatal — groups stay in memory for this run.
+      })
+  }
 }
 
 /** Mirror a session's tab name into its tmux sidecar (main process), so the
@@ -254,8 +308,7 @@ function persistSessionName(
  *  overwrite the saved file before we read it. */
 export function enableSidebarPersistence(): void {
   sidebarPersistEnabled = true
-  const { groups, displayOrder } = useSessionStore.getState()
-  persistSidebarLayout(groups, displayOrder)
+  persistSidebarLayout(useSessionStore.getState())
 }
 
 type SidebarSnapshot = {
@@ -511,76 +564,11 @@ export const useSessionStore = create<SessionState>((set) => ({
     })
   },
 
-  restoreGroups: (survivingSessionIds, persisted) =>
+  mergeLayoutForKeys: (keys, persisted, survivingSessionIds) =>
     set((state) => {
-      const persistedGroups = persisted?.groups ?? []
-      if (persistedGroups.length === 0) return state
-
-      const surviving = new Set(survivingSessionIds)
-
-      // Prune each group to the sessions/terminals that actually came back.
-      // A group whose members all vanished is dropped (it would render empty).
-      const groups: SessionGroup[] = []
-      for (const g of persistedGroups) {
-        const sessionIds = (g.sessionIds ?? []).filter((sid) => surviving.has(sid))
-        if (sessionIds.length === 0) continue
-        const terminals = (g.terminals ?? []).map((t) =>
-          t.sessionId && !surviving.has(t.sessionId) ? { ...t, sessionId: null } : t
-        )
-        // Legacy stamp: groups persisted before the workspace model inherit
-        // their first surviving member's workspace (adoption stamped it).
-        const memberWorkspaceId = state.sessions.find((s) => s.id === sessionIds[0])?.workspaceId
-        groups.push({ ...g, sessionIds, terminals, workspaceId: g.workspaceId ?? memberWorkspaceId })
-      }
-      if (groups.length === 0) return state
-
-      const keptGroupIds = new Set(groups.map((g) => g.id))
-      // Sessions nested inside a kept group (as a member or a group terminal)
-      // must not also appear at the top level of the display order.
-      const nested = new Set<string>()
-      for (const g of groups) {
-        for (const sid of g.sessionIds) nested.add(sid)
-        for (const t of g.terminals) if (t.sessionId) nested.add(t.sessionId)
-      }
-      // A session view's hidden serving session is nested the same way a group
-      // terminal's is — it must never surface as a top-level row.
-      for (const sess of state.sessions) {
-        if (sess.view?.serverSessionId) nested.add(sess.view.serverSessionId)
-      }
-
-      // Rebuild displayOrder from the persisted order, dropping dead references.
-      const order: string[] = []
-      const seen = new Set<string>()
-      for (const id of persisted?.displayOrder ?? []) {
-        if (seen.has(id)) continue
-        if (keptGroupIds.has(id)) {
-          order.push(id)
-          seen.add(id)
-        } else if (surviving.has(id) && !nested.has(id)) {
-          order.push(id)
-          seen.add(id)
-        }
-      }
-      // Append any surviving standalone session the persisted order missed,
-      // then any kept group not yet placed (belt-and-suspenders).
-      for (const s of state.sessions) {
-        if (!seen.has(s.id) && !nested.has(s.id)) {
-          order.push(s.id)
-          seen.add(s.id)
-        }
-      }
-      for (const g of groups) {
-        if (!seen.has(g.id)) {
-          order.push(g.id)
-          seen.add(g.id)
-        }
-      }
-
-      // Keep auto-generated group names ("Group N") from colliding with the
-      // restored ones on the next createGroup.
-      groupCounter = Math.max(groupCounter, groups.length)
-
-      return { ...state, groups, displayOrder: order }
+      const merged = mergeLayoutForKeys(state, keys, persisted, survivingSessionIds)
+      groupCounter = Math.max(groupCounter, merged.groups.length)
+      return { ...state, groups: merged.groups, displayOrder: merged.displayOrder }
     }),
 
   removeSession: (id) =>
@@ -1414,6 +1402,6 @@ export const useSessionStore = create<SessionState>((set) => ({
 useSessionStore.subscribe((state) => {
   if (!sidebarPersistEnabled) return
   if (state.groups !== lastPersistedGroups || state.displayOrder !== lastPersistedOrder) {
-    persistSidebarLayout(state.groups, state.displayOrder)
+    persistSidebarLayout(state)
   }
 })

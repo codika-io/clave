@@ -1,35 +1,67 @@
-import type { Workspace, WorkspaceStateFile } from '../../../shared/workspace-types'
-import { useWorkspaceStore } from '../store/workspace-store'
+import type { WindowIdentity, Workspace } from '../../../shared/workspace-types'
+import { useWorkspaceStore, hostsWorkspace } from '../store/workspace-store'
 import {
   usePinnedStore,
   hydratePinnedGroups,
   serializePinnedGroups,
   refreshWorkspacePins,
+  type PinnedGroup,
   type PinnedGroupBlueprint
 } from '../store/pinned-store'
-import { useSessionStore } from '../store/session-store'
+import {
+  useSessionStore,
+  markLayoutKeysTaken,
+  dropLayoutKeys,
+  isLayoutKeyTaken
+} from '../store/session-store'
 
 /** Orchestration layer above the stores. The stores stay import-acyclic
  *  (session→workspace, pinned→workspace); everything that has to touch several
  *  of them — activation side effects, add/remove cascades, persistence — lives
- *  here. UI and MCP call these, never store internals. */
+ *  here. UI and MCP call these, never store internals.
+ *
+ *  Multi-window (PRDCT-1703): this window's workspace is a per-window value
+ *  main hands over at boot (`window:identity`), and every switch ASKS MAIN
+ *  FIRST — the guard that keeps one workspace in one window lives there. The
+ *  state file is written field by field (registry, pins, last-active), and
+ *  only for the workspaces this window hosts; what other windows change
+ *  arrives as `workspace:state-changed` and is folded in below. */
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 // Same latch pattern as enableSidebarPersistence: hydration must never be able
 // to clobber the state file before it has been read.
 
 let persistEnabled = false
+/** Per pins partition, the JSON last handed to main — re-sent only on change. */
+const lastPersistedPins = new Map<string | null, string>()
 
-export function persistWorkspaceState(): Promise<void> {
-  const ws = useWorkspaceStore.getState()
-  const data: WorkspaceStateFile = {
-    version: 1,
-    workspaces: ws.workspaces,
-    activeWorkspaceId: ws.activeWorkspaceId,
-    pins: serializePinnedGroups(usePinnedStore.getState().pinnedGroups),
-    pinsMigrated: true
+function pinPartition(pin: { workspaceId?: string | null }): string | null {
+  return pin.workspaceId ?? null
+}
+
+/** Write the pins of every workspace this window HOSTS whose partition
+ *  changed (the hosting rule; main refuses the rest loudly). */
+function persistPins(): void {
+  const groups = usePinnedStore.getState().pinnedGroups
+  const { hostedWorkspaceIds, isPrimary } = useWorkspaceStore.getState()
+  const keys = new Set<string | null>(hostedWorkspaceIds)
+  if (isPrimary) keys.add(null)
+  for (const pg of groups) keys.add(pinPartition(pg))
+  for (const key of keys) {
+    if (!hostsWorkspace(key)) continue
+    const partition = serializePinnedGroups(groups.filter((pg) => pinPartition(pg) === key))
+    const json = JSON.stringify(partition)
+    if (lastPersistedPins.get(key) === json) continue
+    void window.electronAPI?.workspaceUpdatePins?.(key, partition).then((res) => {
+      if (res?.ok) lastPersistedPins.set(key, json)
+    })
   }
-  return window.electronAPI?.workspaceSave(data) ?? Promise.resolve()
+}
+
+/** The registry is global: any window may rewrite the list of workspaces. */
+export function persistWorkspaceRegistry(): Promise<unknown> {
+  const { workspaces } = useWorkspaceStore.getState()
+  return window.electronAPI?.workspaceUpdateRegistry?.(workspaces) ?? Promise.resolve()
 }
 
 function enableWorkspacePersistence(): void {
@@ -42,8 +74,175 @@ function enableWorkspacePersistence(): void {
   usePinnedStore.subscribe((state) => {
     if (state.pinnedGroups === prevPins) return
     prevPins = state.pinnedGroups
-    void persistWorkspaceState()
+    persistPins()
   })
+}
+
+// ── Identity and the other windows ───────────────────────────────────────────
+
+let subscribed = false
+/** Claims in flight: a `window:workspace-changed` push that lands while this
+ *  window is itself switching must not run the view switch a second time. */
+let claimsInFlight = 0
+/** Resolved once the boot effect has restored its layouts — a key gained
+ *  before that must wait, or the boot restore would replace what it merged. */
+let bootLayoutsDone: () => void = () => {}
+const bootLayoutsReady = new Promise<void>((resolve) => {
+  bootLayoutsDone = resolve
+})
+/** Runtime layout takes, serialized: two identity pushes in a row (a window
+ *  closing, then another) must merge in order. */
+let layoutTakeQueue: Promise<void> = Promise.resolve()
+
+export function markBootLayoutsDone(): void {
+  bootLayoutsDone()
+}
+
+/**
+ * Take over the layouts of workspaces this window just started hosting: read
+ * their files and merge them into the store BEFORE anything could be written
+ * for them. Pruning uses every session that still exists for those
+ * workspaces — in this store, live in another window, or on disk as a record
+ * — so a group whose members live elsewhere (or wait for the next boot) is
+ * kept as a shell rather than dropped and written back as gone.
+ */
+export function takeLayouts(keys: (string | null)[]): Promise<void> {
+  layoutTakeQueue = layoutTakeQueue.then(async () => {
+    await bootLayoutsReady
+    if (keys.length === 0) return
+    const persisted = (await window.electronAPI?.sidebarLayoutLoad?.(keys).catch(() => null)) ?? {
+      groups: [],
+      displayOrder: []
+    }
+    const { activeWorkspaceId } = useWorkspaceStore.getState()
+    const surviving = new Set<string>()
+    for (const s of useSessionStore.getState().sessions) {
+      if (keys.includes(s.workspaceId ?? activeWorkspaceId)) surviving.add(s.id)
+    }
+    const ids = keys.filter((k): k is string => typeof k === 'string')
+    for (const id of ids) {
+      const records = (await window.electronAPI?.listSessionRecords?.(id).catch(() => [])) ?? []
+      for (const r of records) surviving.add(r.id)
+    }
+    const elsewhere = (await window.electronAPI?.liveSessionsElsewhere?.(ids).catch(() => [])) ?? []
+    for (const id of elsewhere) surviving.add(id)
+    useSessionStore
+      .getState()
+      .mergeLayoutForKeys(keys, persisted as { groups: never[]; displayOrder: string[] }, [
+        ...surviving
+      ])
+    markLayoutKeysTaken(keys)
+  })
+  return layoutTakeQueue
+}
+
+function applyIdentity(identity: WindowIdentity): void {
+  const prev = useWorkspaceStore.getState()
+  const before = new Set(prev.hostedWorkspaceIds)
+  const after = new Set(identity.hostedWorkspaceIds)
+  const gained = identity.hostedWorkspaceIds.filter((k) => !before.has(k))
+  const lost = prev.hostedWorkspaceIds.filter((k) => !after.has(k))
+  useWorkspaceStore.setState({
+    windowId: identity.windowId,
+    isPrimary: identity.isPrimary,
+    hostedWorkspaceIds: identity.hostedWorkspaceIds
+  })
+  // The unscoped (null) partition follows the primary role.
+  if (identity.isPrimary && !prev.isPrimary) gained.push(null as unknown as string)
+  if (!identity.isPrimary && prev.isPrimary) lost.push(null as unknown as string)
+  if (lost.length) {
+    dropLayoutKeys(lost as (string | null)[])
+    for (const k of lost) lastPersistedPins.delete(k as string | null)
+  }
+  const toTake = (gained as (string | null)[]).filter((k) => !isLayoutKeyTaken(k))
+  if (toTake.length) void takeLayouts(toTake)
+  // Main is the authority on which workspace this window shows. A change it
+  // made on its own (a later slice's picker or tool) is applied here; a
+  // change this window asked for is applied by the claim that asked.
+  if (claimsInFlight === 0 && identity.workspaceId !== prev.activeWorkspaceId && prev.loaded) {
+    useWorkspaceStore.setState({ activeWorkspaceId: identity.workspaceId })
+    useSessionStore.getState().applyWorkspaceSwitch(prev.activeWorkspaceId, identity.workspaceId)
+  }
+}
+
+/** Fold a change another window made. The registry is taken whole; of the
+ *  pins only the partitions this window does NOT host are replaced (the
+ *  hosted ones are this window's own truth), keeping the runtime state of a
+ *  pin already known here. Groups and sessions are never touched. */
+function foldExternalState(state: { workspaces: Workspace[]; pins: unknown[] }): void {
+  useWorkspaceStore.setState({ workspaces: state.workspaces })
+  const blueprints = state.pins as PinnedGroupBlueprint[]
+  usePinnedStore.setState((s) => {
+    const mine = s.pinnedGroups.filter((pg) => hostsWorkspace(pg.workspaceId))
+    const known = new Map(s.pinnedGroups.map((pg) => [pg.id, pg]))
+    const foreign: PinnedGroup[] = blueprints
+      .filter((bp) => typeof bp === 'object' && bp !== null && typeof bp.id === 'string')
+      .filter((bp) => !hostsWorkspace(bp.workspaceId))
+      .map((bp) => {
+        const prev = known.get(bp.id)
+        return {
+          ...bp,
+          sessions: (Array.isArray(bp.sessions) ? bp.sessions : []).map((sess) => ({
+            ...sess,
+            antigravityMode:
+              sess.antigravityMode ?? (sess as { geminiMode?: boolean }).geminiMode ?? false
+          })),
+          activeGroupId: prev?.activeGroupId ?? null,
+          visible: prev?.visible ?? false
+        }
+      })
+    return { pinnedGroups: [...mine, ...foreign] }
+  })
+  // The workspace this window shows was removed from another window: land on
+  // the first remaining one this window may show, else the unscoped state.
+  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
+  if (activeWorkspaceId && !workspaces.some((w) => w.id === activeWorkspaceId)) {
+    void (async () => {
+      const landed = await claimFirstAvailable([...workspaces.map((w) => w.id), null])
+      useSessionStore.getState().applyWorkspaceSwitch(activeWorkspaceId, landed)
+    })()
+  }
+}
+
+function subscribeToMain(): void {
+  if (subscribed) return
+  subscribed = true
+  window.electronAPI?.onWindowWorkspaceChanged?.((identity) => applyIdentity(identity))
+  window.electronAPI?.onWorkspaceStateChanged?.((state) => foldExternalState(state))
+}
+
+/** Make this window SHOW `id` (null = unscoped): main is asked first and may
+ *  refuse — the workspace is already shown in another window, which main
+ *  then brings forward — in which case nothing changes here. On success the
+ *  store follows and the workspace becomes the last-active one (what the
+ *  first window of the next run opens on). Does NOT run the view switch;
+ *  callers that need it call applyWorkspaceSwitch themselves. */
+async function claimWorkspace(
+  id: string | null,
+  options: { focus?: boolean } = {}
+): Promise<boolean> {
+  claimsInFlight++
+  try {
+    const res = (await window.electronAPI?.windowSetWorkspace?.(id, options)) ?? {
+      ok: true as const
+    }
+    if (!res.ok) return false
+    useWorkspaceStore.setState({ activeWorkspaceId: id })
+    void window.electronAPI?.workspaceSetLastActive?.(id)
+    return true
+  } finally {
+    claimsInFlight--
+  }
+}
+
+/** Claim the first candidate main accepts, PROBING (no window is brought
+ *  forward on a refusal — this is a fallback landing, not a user's open).
+ *  `null` (unscoped) always succeeds. */
+async function claimFirstAvailable(candidates: (string | null)[]): Promise<string | null> {
+  for (const id of candidates) {
+    if (await claimWorkspace(id, { focus: false })) return id
+  }
+  return useWorkspaceStore.getState().activeWorkspaceId
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
@@ -110,13 +309,27 @@ function migrateLocalStoragePins(
 }
 
 /** Boot hydration — the single owner (called from AppShell's boot effect,
- *  before session adoption so adoption can stamp against the registry). */
+ *  before session adoption so adoption can stamp against the registry).
+ *  This window's workspace comes from main's registry (`window:identity`),
+ *  never from the state file; outside Electron there is no identity and the
+ *  renderer behaves as the sole, primary window on the last-active one. */
 export async function bootWorkspaces(): Promise<void> {
+  const identity = (await window.electronAPI?.windowIdentity?.().catch(() => null)) ?? null
   const state = await window.electronAPI?.workspaceLoad?.().catch(() => null)
   const workspaces = state?.workspaces ?? []
-  const activeWorkspaceId = state?.activeWorkspaceId ?? null
+  const activeWorkspaceId = identity
+    ? identity.workspaceId
+    : (state?.lastActiveWorkspaceId ?? state?.activeWorkspaceId ?? null)
 
-  useWorkspaceStore.setState({ workspaces, activeWorkspaceId, loaded: true })
+  useWorkspaceStore.setState({
+    workspaces,
+    activeWorkspaceId,
+    loaded: true,
+    windowId: identity?.windowId ?? null,
+    isPrimary: identity?.isPrimary ?? true,
+    hostedWorkspaceIds: identity?.hostedWorkspaceIds ?? workspaces.map((w) => w.id)
+  })
+  subscribeToMain()
 
   let pins: PinnedGroupBlueprint[]
   if (state && !state.pinsMigrated) {
@@ -135,9 +348,13 @@ export async function bootWorkspaces(): Promise<void> {
   enableWorkspacePersistence()
 
   if (state && !state.pinsMigrated) {
-    // Persist the migrated pins (flips pinsMigrated true), then retire the
-    // localStorage key for good.
-    await persistWorkspaceState()
+    // Persist the migrated pins — the whole list at once, this being the sole
+    // window of the very first boot of the workspace model (flips
+    // pinsMigrated true) — then retire the localStorage key for good.
+    await window.electronAPI?.workspaceUpdatePins?.(
+      'all',
+      serializePinnedGroups(usePinnedStore.getState().pinnedGroups)
+    )
     localStorage.removeItem('clave-pinned-groups')
   }
 }
@@ -152,16 +369,17 @@ export async function refreshActiveWorkspacePins(): Promise<void> {
 
 // ── Workspace mutations ──────────────────────────────────────────────────────
 
-/** Pure view switch. Persists BEFORE returning so the main-process cache is
- *  current when the next pty:spawn stamps its record (IPC is FIFO). */
+/** Pure view switch. Main is asked BEFORE anything changes here, so its
+ *  registry is current when the next pty:spawn stamps its record (IPC is
+ *  FIFO) — and so a workspace another window shows is never switched to:
+ *  that window comes forward and this one keeps its view. */
 export async function setActiveWorkspace(id: string): Promise<void> {
   const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
   if (id === activeWorkspaceId) return
   const target = workspaces.find((w) => w.id === id)
   if (!target) return
 
-  useWorkspaceStore.setState({ activeWorkspaceId: id })
-  await persistWorkspaceState()
+  if (!(await claimWorkspace(id))) return
   useSessionStore.getState().applyWorkspaceSwitch(activeWorkspaceId, id)
   // Refresh from files in the background — the switch itself must be instant.
   void refreshWorkspacePins(target)
@@ -203,20 +421,31 @@ export async function addWorkspace(
   }
 
   const isFirst = workspaces.length === 0
-  useWorkspaceStore.setState((s) => ({
-    workspaces: [...s.workspaces, ws],
-    // Invariant: active is null ⟺ zero workspaces. The first workspace
-    // becomes active immediately.
-    activeWorkspaceId: isFirst ? ws.id : s.activeWorkspaceId
-  }))
+  useWorkspaceStore.setState((s) => ({ workspaces: [...s.workspaces, ws] }))
 
   if (isFirst) {
-    // Leaving no-workspace mode: adopt everything that exists into the new
-    // workspace so nothing is stranded as "visible everywhere" noise.
+    // Leaving no-workspace mode. The current unscoped sidebar IS this
+    // workspace's content — there is nothing on disk to "take", so do the
+    // whole transition IN-STORE first, BEFORE main broadcasts the registry
+    // change: mark the workspace taken (so the gained-workspace identity push
+    // does not re-read its empty file and drop everything — the F1 race),
+    // make it active, and stamp every unscoped session/group/pin into it.
+    // Invariant: active is null ⟺ zero workspaces. No other window can be
+    // showing a workspace that did not exist a moment ago, so the optimistic
+    // active is safe and the claim below cannot be refused.
+    markLayoutKeysTaken([ws.id])
+    // The sole window now shows and hosts the new workspace; set both
+    // optimistically so the persist that stampUnowned triggers actually writes
+    // its file (the async identity push that would set hostedWorkspaceIds has
+    // not arrived yet). Main confirms hosting on the broadcast below.
+    useWorkspaceStore.setState({ activeWorkspaceId: ws.id, hostedWorkspaceIds: [ws.id] })
     stampUnowned(ws.id)
   }
 
-  await persistWorkspaceState()
+  // Main learns the workspace (and, on the first, that this window shows it).
+  await persistWorkspaceRegistry()
+  if (isFirst) await claimWorkspace(ws.id)
+
   await refreshWorkspacePins(ws)
   return ws
 }
@@ -245,14 +474,14 @@ export async function renameWorkspace(id: string, name: string): Promise<void> {
   useWorkspaceStore.setState((s) => ({
     workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name: trimmed } : w))
   }))
-  await persistWorkspaceState()
+  await persistWorkspaceRegistry()
 }
 
 export async function setWorkspaceProfile(id: string, profileFile: string | null): Promise<void> {
   useWorkspaceStore.setState((s) => ({
     workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, profileFile } : w))
   }))
-  await persistWorkspaceState()
+  await persistWorkspaceRegistry()
   const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === id)
   if (ws) await refreshWorkspacePins(ws)
 }
@@ -309,12 +538,18 @@ export async function removeWorkspace(id: string): Promise<void> {
   }
 
   const wasActive = id === activeWorkspaceId
-  useWorkspaceStore.setState((s) => ({
-    workspaces: s.workspaces.filter((w) => w.id !== id),
-    activeWorkspaceId: wasActive ? targetId : s.activeWorkspaceId
-  }))
-  await persistWorkspaceState()
+  useWorkspaceStore.setState((s) => ({ workspaces: s.workspaces.filter((w) => w.id !== id) }))
+  await persistWorkspaceRegistry()
   if (wasActive) {
-    useSessionStore.getState().applyWorkspaceSwitch(id, targetId)
+    // The preferred target may be shown in another window (main refuses it);
+    // land on the first remaining workspace this window may show, else the
+    // unscoped state.
+    const remaining = useWorkspaceStore.getState().workspaces.map((w) => w.id)
+    const landed = await claimFirstAvailable([
+      ...(targetId ? [targetId] : []),
+      ...remaining.filter((w) => w !== targetId),
+      null
+    ])
+    useSessionStore.getState().applyWorkspaceSwitch(id, landed)
   }
 }

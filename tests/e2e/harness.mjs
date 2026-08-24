@@ -6,6 +6,7 @@
 // where `window.electronAPI` is undefined and none of this works.
 import { _electron as electron } from 'playwright-core'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -100,11 +101,17 @@ export async function stubReviewDialog(app, { response, checkboxChecked = false 
  *  server and its per-session bearer token, which belong to specs about the
  *  transport itself (see self-checkpoint.spec.mjs). Rejects on the handler's
  *  own error so a spec fails on a bad call instead of asserting on undefined. */
-export async function callMcp(app, command, payload, timeoutMs = 10_000) {
+export async function callMcp(app, command, payload, timeoutMs = 10_000, windowId = null) {
   const res = await app.evaluate(
-    async ({ BrowserWindow, ipcMain }, { command, payload, timeoutMs }) => {
-      const win = BrowserWindow.getAllWindows()[0]
-      if (!win) return { ok: false, error: 'no window' }
+    async ({ BrowserWindow, ipcMain }, { command, payload, timeoutMs, windowId }) => {
+      // Multi-window: the command runs in the renderer of the window named,
+      // else the lowest-id (primary) one — the dispatcher and the store it
+      // mutates are per window.
+      const win =
+        windowId != null
+          ? BrowserWindow.fromId(windowId)
+          : [...BrowserWindow.getAllWindows()].sort((a, b) => a.id - b.id)[0]
+      if (!win || win.isDestroyed()) return { ok: false, error: `no window ${windowId ?? ''}` }
       const requestId = `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`
       return await new Promise((resolve) => {
         const onResponse = (_e, res) => {
@@ -120,10 +127,113 @@ export async function callMcp(app, command, payload, timeoutMs = 10_000) {
         }, timeoutMs)
       })
     },
-    { command, payload, timeoutMs }
+    { command, payload, timeoutMs, windowId }
   )
   if (!res?.ok) throw new Error(`MCP "${command}" failed: ${res?.error ?? 'unknown'}`)
   return res.result
+}
+
+/** `callMcp` addressed to one window's renderer (multi-window specs). */
+export function callMcpIn(app, windowId, command, payload, timeoutMs = 10_000) {
+  return callMcp(app, command, payload, timeoutMs, windowId)
+}
+
+// ── Multi-window (PRDCT-1703) ────────────────────────────────────────────────
+
+/** Every open window as `{ id, page }`, lowest BrowserWindow id first. */
+export async function windows(app) {
+  const out = []
+  for (const page of app.windows()) {
+    if (page.isClosed()) continue
+    const bw = await app.browserWindow(page)
+    const id = await bw.evaluate((w) => w.id)
+    out.push({ id, page })
+  }
+  return out.sort((a, b) => a.id - b.id)
+}
+
+/** The page of the window with this BrowserWindow id, or null. */
+export async function windowFor(app, windowId) {
+  return (await windows(app)).find((w) => w.id === windowId)?.page ?? null
+}
+
+/** This renderer's identity as main reports it (`window:identity`). */
+export function identityOf(page) {
+  return page.evaluate(() => window.electronAPI.windowIdentity())
+}
+
+/** Show a workspace in a window of its own, driving the REAL path: the
+ *  renderer of `fromPage` calls `window.electronAPI.windowOpen`, exactly what
+ *  the File menu, the picker and clave_open_window do. Resolves once the new
+ *  window's renderer has loaded and settled; when the workspace was already
+ *  shown somewhere, `focusedExisting` is true and `page` is that window's. */
+export async function openWindow(app, fromPage, workspaceId, { settleMs = 4000 } = {}) {
+  const before = new Set(app.windows())
+  // Subscribe BEFORE asking, so a window that appears between the answer and
+  // the wait cannot slip past unobserved.
+  const nextWindow = app.waitForEvent('window', { timeout: 15_000 }).catch(() => null)
+  const result = await fromPage.evaluate((ws) => window.electronAPI.windowOpen(ws), workspaceId)
+  if (result.focusedExisting) {
+    return { ...result, page: await windowFor(app, result.windowId) }
+  }
+  const page = app.windows().find((p) => !before.has(p)) ?? (await nextWindow)
+  if (!page)
+    throw new Error(`window:open answered ${JSON.stringify(result)} but no window appeared`)
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForTimeout(settleMs)
+  return { ...result, page }
+}
+
+/** Poll until `fn` returns a truthy value or the budget runs out. */
+export async function until(fn, { tries = 40, gapMs = 250 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    const v = await fn()
+    if (v) return v
+    await new Promise((r) => setTimeout(r, gapMs))
+  }
+  return null
+}
+
+/** Close a window the way the user does (the BrowserWindow's own close, so
+ *  main's 'closed' handler — the teardown ladder — runs). */
+export async function closeWindow(app, page) {
+  const bw = await app.browserWindow(page)
+  await bw.evaluate((w) => w.close())
+  await new Promise((r) => setTimeout(r, 1000))
+}
+
+/**
+ * The PTYs live on the SHARED tmux socket ('clave', a fixed constant), so
+ * `--user-data-dir` isolation stops at userData: a spawned tab's tmux session
+ * and its live process survive `app.close()`. Kill ONLY sessions named for
+ * e2e fixture roots ('clave-e2e' is the harness's own prefix) — never
+ * anything of the user's, and never with pkill.
+ */
+export function killLeakedE2eTmux() {
+  try {
+    const names = execFileSync('tmux', ['-L', 'clave', 'list-sessions', '-F', '#{session_name}'], {
+      encoding: 'utf-8'
+    })
+      .split('\n')
+      .filter(Boolean)
+    for (const n of names) {
+      // `=name` is an EXACT target: never a prefix or a glob match.
+      if (n.includes('clave-e2e'))
+        execFileSync('tmux', ['-L', 'clave', 'kill-session', '-t', `=${n}`])
+    }
+  } catch {
+    // No tmux server = nothing leaked.
+  }
+}
+
+/** Is a tmux session of that name alive on the app's socket? */
+export function tmuxSessionAlive(name) {
+  try {
+    execFileSync('tmux', ['-L', 'clave', 'has-session', '-t', `=${name}`], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** The labels of the sidebar's session rows. */
