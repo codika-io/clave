@@ -172,9 +172,16 @@ export function openWorkspaceWindow(workspaceId: string): {
 } {
   const shown = windowRegistry.getWindowForWorkspace(workspaceId)
   if (shown) {
-    if (shown.isMinimized()) shown.restore()
-    shown.show()
-    shown.focus()
+    // Under --test-no-activate the OS-level bring-forward is skipped entirely:
+    // a test instance must never steal the desktop's focus, and this focus()
+    // is the one deliberately-user-facing activation the flag's showInactive()
+    // path did not cover. The answer is unchanged either way — the workspace
+    // IS shown there, and callers branch on focusedExisting, not on key state.
+    if (!TEST_NO_ACTIVATE) {
+      if (shown.isMinimized()) shown.restore()
+      shown.show()
+      shown.focus()
+    }
     return { windowId: shown.id, focusedExisting: true }
   }
   const win = createWindow(workspaceId)

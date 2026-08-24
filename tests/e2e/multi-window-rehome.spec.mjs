@@ -1,9 +1,3 @@
-// ⚠️ WIP — HANDED OVER MID-BUILD (context budget). This spec is renamed to
-// `.spec.mjs.wip` so the runner (globs `*.spec.mjs`) SKIPS it. It currently
-// throws ("ran to completion" fail) — the seeded-live-tmux rewrite compiles and
-// its shape is correct, but the last run errored before any assertion; the
-// successor debugs it (likely the seed's tmux send-keys timing or the
-// readSession callerSessionId self-read for a seeded id). See handover note.
 /**
  * Re-homing (PRDCT-1703 slice 2, §3.6). A live tmux session is hosted by
  * exactly one window; opening a workspace in a new window, or closing a
@@ -21,6 +15,13 @@
  * window clave_send DELIVERY to a session in another window is proven in
  * multi-window-routing.spec.mjs; here the id is shown preserved across the
  * move (addressing survives) and the session stays alive.
+ *
+ * Two boundaries, on purpose: while the session is HIDDEN-hosted (primary,
+ * workspace B not shown) its tab never mounts, so `readSession` — a read of
+ * the mounted xterm buffer — correctly refuses ("no terminal buffer"); the
+ * scrollback is asserted at the tmux boundary instead (capture-pane by pane
+ * id). Only in window B, where the tab mounts, is the marker asserted through
+ * the renderer's own buffer — that read IS the repaint proof.
  *
  * Fails if the re-home push is mutated away: the "into B" / "gone from A" pair
  * inverts.
@@ -74,16 +75,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const idsIn = (list) => (list?.sessions ?? []).map((s) => s.id)
 
 function seedLiveMarkerSession() {
-  execFileSync('tmux', ['-L', 'clave', 'new-session', '-d', '-s', SESS.tmux, '-c', SESS.cwd])
-  execFileSync('tmux', [
-    '-L',
-    'clave',
-    'send-keys',
-    '-t',
-    `=${SESS.tmux}`,
-    `echo ${MARKER}`,
-    'Enter'
-  ])
+  // -P -F prints the new pane's id: on tmux 3.7c a bare session name (with or
+  // without the `=` exact-match prefix) fails to resolve as a PANE target
+  // ("can't find pane") even while the session is alive and healthy — session-
+  // level commands (has-session, kill-session) resolve the same name fine.
+  // Targeting the pane id sidesteps the resolver entirely.
+  const paneId = execFileSync(
+    'tmux',
+    ['-L', 'clave', 'new-session', '-d', '-P', '-F', '#{pane_id}', '-s', SESS.tmux, '-c', SESS.cwd],
+    { encoding: 'utf-8' }
+  ).trim()
+  execFileSync('tmux', ['-L', 'clave', 'send-keys', '-t', paneId, `echo ${MARKER}`, 'Enter'])
+  SESS.paneId = paneId
   const dir = path.join(DIR, 'session-records')
   mkdirSync(dir, { recursive: true })
   writeFileSync(
@@ -118,6 +121,17 @@ function readMarker(app, windowId) {
     .then((r) => JSON.stringify(r).includes(MARKER))
     .catch(() => false)
 }
+/** The marker as tmux itself holds it — the boundary for HIDDEN-hosted phases,
+ *  where no tab is mounted and `readSession` correctly has no buffer to read. */
+function markerInTmux() {
+  try {
+    return execFileSync('tmux', ['-L', 'clave', 'capture-pane', '-p', '-t', SESS.paneId], {
+      encoding: 'utf-8'
+    }).includes(MARKER)
+  } catch {
+    return false
+  }
+}
 
 export async function run(t) {
   killLeakedE2eTmux()
@@ -142,9 +156,9 @@ export async function run(t) {
       idsIn(await callMcpIn(app, idA.windowId, 'list', {}))
     )
     t.check(
-      'its scrollback marker is readable in the primary (control)',
-      await readMarker(app, idA.windowId),
-      'marker in A'
+      'its scrollback marker is in the tmux pane (control, tmux boundary)',
+      markerInTmux(),
+      'marker in tmux'
     )
     t.check('the tmux session is alive', tmuxSessionAlive(SESS.tmux))
 
@@ -191,8 +205,8 @@ export async function run(t) {
       'alive'
     )
     t.check(
-      'its scrollback is still there',
-      await readMarker(app, idA.windowId),
+      'its scrollback is still there (tmux boundary — hidden-hosted, no mounted tab)',
+      markerInTmux(),
       'marker after close'
     )
     t.check('the tmux session survived the whole journey', tmuxSessionAlive(SESS.tmux))

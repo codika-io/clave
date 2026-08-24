@@ -78,6 +78,18 @@ export async function run(t) {
     t.equal('window B shows workspace B', idB?.workspaceId, WS_B.id)
     t.equal('two windows are open', (await windows(app)).length, 2)
 
+    // ── the already-shown guard under --test-no-activate: bookkeeping only ──
+    // Opening a workspace already shown elsewhere answers focusedExisting:true,
+    // but under the flag the OS-level bring-forward (restore/show/focus) is
+    // SKIPPED — an E2E run must never grab the desktop's focus. Read the key
+    // state immediately after the call: with the gate mutated away, focus()
+    // makes B key even under the accessory policy, and this goes red.
+    const again = await openWindow(app, winA, WS_B.id)
+    t.equal('re-opening workspace B reports the existing window', again.focusedExisting, true)
+    t.equal('and names window B, no duplicate window', again.windowId, idB.windowId)
+    const bKey = await (await app.browserWindow(b.page)).evaluate((w) => w.isFocused())
+    t.equal('under --test-no-activate the bring-forward did NOT make B key', bKey, false)
+
     // Agent tabs (they mint per-session tokens) — one per window.
     const P = await spawnAgentTabIn(app, winA, DIR)
     t.check('an agent tab P minted a token in window A', !!P?.token, P?.sessionId)

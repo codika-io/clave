@@ -27,7 +27,8 @@ import {
   seedWorkspaces,
   userDataDir,
   openWindow,
-  windows as allWindows
+  windows as allWindows,
+  until
 } from './harness.mjs'
 import { mkdirSync } from 'node:fs'
 
@@ -86,7 +87,9 @@ export async function run(t) {
     // ── the race-free measurement: was the window key AT its own show? ──
     await app.evaluate(({ app }) => {
       globalThis.__showStates = []
+      globalThis.__readyStates = [] // diagnostic: how far window creation got
       app.on('browser-window-created', (_e, w) => {
+        w.once('ready-to-show', () => globalThis.__readyStates.push({ id: w.id }))
         w.once('show', () =>
           globalThis.__showStates.push({ id: w.id, visible: w.isVisible(), focused: w.isFocused() })
         )
@@ -94,8 +97,23 @@ export async function run(t) {
     })
     const opened = await openWindow(app, win, WS_B.id, { settleMs: 1500 })
     t.equal('opening workspace B made a NEW window', opened.focusedExisting, false)
-    const shown = await app.evaluate(() => globalThis.__showStates)
-    t.equal('the new window reached its show handler', shown.length, 1)
+    // Bounded wait, never a fixed settle: under host load a new window can take
+    // longer than any fixed delay to reach ready-to-show → showInactive(), and
+    // reading the recorder early returns [] — that mechanism turned this block
+    // red (3 assertions) on a host at load average ~11 while the same build ran
+    // 4/4 green on a quiet one. Baseline: show fires well inside 1500ms solo.
+    // Ceiling 30s (the contention-ledger convention); what is ASSERTED — the
+    // state captured inside the show handler itself — is unchanged.
+    const shown =
+      (await until(
+        async () => {
+          const s = await app.evaluate(() => globalThis.__showStates)
+          return s.length >= 1 ? s : null
+        },
+        { tries: 120, gapMs: 250 }
+      )) ?? (await app.evaluate(() => globalThis.__showStates))
+    const ready = await app.evaluate(() => globalThis.__readyStates)
+    t.check('the new window reached its show handler', shown.length === 1, { shown, ready })
     t.equal('it was put on screen', shown[0]?.visible, true)
     t.equal('showInactive(), not show(): it was NOT key at that instant', shown[0]?.focused, false)
     t.equal('both windows are open', (await allWindows(app)).length, 2)
