@@ -1,9 +1,8 @@
-import { useCallback, memo } from 'react'
+import { useCallback, useEffect, useRef, useState, memo } from 'react'
 import { cn } from '../../lib/utils'
 import {
   useSessionStore,
   type SessionGroup,
-  TERMINAL_COLOR_VALUES,
   resolveColorHex
 } from '../../store/session-store'
 import {
@@ -12,8 +11,15 @@ import {
   CommandLineIcon,
   PlusIcon
 } from '@heroicons/react/24/outline'
-import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
+import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
+import { GroupTerminalsPanel } from './GroupTerminalsPanel'
 import { useInlineEdit } from '../../hooks/use-inline-edit'
+
+/** Hover-to-open timing for the terminals panel: a short wait so a cursor
+ *  passing over the icon does not pop it, and a longer grace on leave so the
+ *  hand can travel from the icon into the panel across the 6px gap. */
+const PANEL_OPEN_DELAY = 140
+const PANEL_CLOSE_DELAY = 240
 
 interface SessionGroupItemProps {
   group: SessionGroup
@@ -22,6 +28,10 @@ interface SessionGroupItemProps {
   onTerminalIconClick: (terminalId: string) => void
   onTerminalIconContextMenu: (terminalId: string, e: React.MouseEvent) => void
   onAddTerminalClick: () => void
+  /** The header's `+`: a new session inside this group, on the group's prompt. */
+  onNewSession: () => void
+  /** What the `+` will do, for its tooltip (whether the group's prompt applies). */
+  newSessionTitle: string
   aliveSessionIds: Set<string>
   focusedSessionId: string | null
   allSelected?: boolean
@@ -31,6 +41,9 @@ interface SessionGroupItemProps {
   onEditingDone?: () => void
   onPointerDown?: (e: React.PointerEvent) => void
   isDragging?: boolean
+  /** Any sidebar drag in flight: the terminals panel must not pop under a
+   *  dragged row passing over its icon. */
+  dragActive?: boolean
 }
 
 function SessionGroupItemImpl({
@@ -40,6 +53,8 @@ function SessionGroupItemImpl({
   onTerminalIconClick,
   onTerminalIconContextMenu,
   onAddTerminalClick,
+  onNewSession,
+  newSessionTitle,
   aliveSessionIds,
   focusedSessionId,
   allSelected,
@@ -47,8 +62,9 @@ function SessionGroupItemImpl({
   forceEditing,
   onEditingDone,
   onPointerDown,
-  isDragging
-}: SessionGroupItemProps) {
+  isDragging,
+  dragActive
+}: SessionGroupItemProps): React.JSX.Element {
   const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
   const renameGroup = useSessionStore((s) => s.renameGroup)
 
@@ -82,14 +98,49 @@ function SessionGroupItemImpl({
     [onClick]
   )
 
+  // ── The terminals panel: opens on hovering its icon (or a click), closes
+  // when the cursor has left both the icon and the panel. One timer serves
+  // both directions so a quick leave-and-return never flickers it.
+  const [panelOpen, setPanelOpen] = useState(false)
+  const panelTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearPanelTimer = useCallback(() => {
+    if (panelTimer.current) {
+      clearTimeout(panelTimer.current)
+      panelTimer.current = null
+    }
+  }, [])
+  const scheduleOpen = useCallback(() => {
+    if (dragActive) return
+    clearPanelTimer()
+    panelTimer.current = setTimeout(() => setPanelOpen(true), PANEL_OPEN_DELAY)
+  }, [dragActive, clearPanelTimer])
+  const scheduleClose = useCallback(() => {
+    clearPanelTimer()
+    panelTimer.current = setTimeout(() => setPanelOpen(false), PANEL_CLOSE_DELAY)
+  }, [clearPanelTimer])
+  useEffect(() => clearPanelTimer, [clearPanelTimer])
+  // A drag in flight hides the panel (derived, so no effect has to close it);
+  // the cursor left the icon to start the drag, so the close timer is already
+  // running and the state settles on its own.
+  const panelShown = panelOpen && !dragActive
+
+  const terminals = group.terminals
+  const runningTerminals = terminals.filter(
+    (t) => !!t.sessionId && aliveSessionIds.has(t.sessionId)
+  )
+  const litColor = runningTerminals.length
+    ? (resolveColorHex(runningTerminals[0].color) ?? undefined)
+    : undefined
+  const terminalFocused = terminals.some(
+    (t) => !!t.sessionId && t.sessionId === focusedSessionId
+  )
+
   // Two different fades, deliberately not the same element. Dragging fades the
   // whole row. "Not the active selection" fades only the header's own folder and
   // name (0.45, a touch more than its tabs' 0.55, so a dimmed header reads
-  // differently from a dimmed tab) — and NOT the terminal icons beside them.
-  // Those icons are the one thing worth reading in a group you are not looking
-  // at, and stacking this dim on a stopped terminal's own fade took them to
-  // ~0.16 of full strength: present, invisible, and no way to tell what is
-  // running without clicking the group first.
+  // differently from a dimmed tab) — and NOT the controls beside them. The
+  // terminals button is the one thing worth reading in a group you are not
+  // looking at: whether something is running, and how many there are.
   const dragOpacity = isDragging ? 0.3 : undefined
   const labelOpacity = dimmed ? 0.45 : undefined
   const labelStyle = labelOpacity !== undefined ? { opacity: labelOpacity } : undefined
@@ -144,62 +195,93 @@ function SessionGroupItemImpl({
           </span>
         )}
 
-        {/* Terminal icons */}
-        <div className={cn('flex items-center gap-0 flex-shrink-0', editing && 'invisible')}>
-            {/* Add terminal button — on the left */}
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation()
-                onAddTerminalClick()
-              }}
-              className={cn(
-                'btn-icon btn-icon-xs hover:text-text-secondary',
-                group.terminals.length === 0
-                  ? ''
-                  : 'opacity-0 group-hover:opacity-100'
-              )}
-              title="Add terminal"
-            >
-              {group.terminals.length === 0 ? (
+        {/* Two controls, always the same two, whatever the terminal count:
+            the terminals button (icon + count, lit while one runs, the panel
+            on hover) and the `+` for a new session. The row used to lay every
+            terminal's icon out here and ran off the sidebar past a handful
+            (PRDCT-1670). */}
+        <div className={cn('flex items-center gap-0.5 flex-shrink-0', editing && 'invisible')}>
+          <Popover open={panelShown} onOpenChange={setPanelOpen}>
+            <PopoverAnchor asChild>
+              <span
+                role="button"
+                tabIndex={-1}
+                aria-label={`Terminals of ${group.name}`}
+                aria-expanded={panelShown}
+                data-group-terminals
+                data-running={runningTerminals.length > 0 ? 'true' : undefined}
+                className={cn(
+                  'group-terminals-btn btn-icon btn-icon-xs',
+                  terminalFocused && 'group-terminals-btn--focused',
+                  panelShown && 'group-terminals-btn--open'
+                )}
+                style={litColor ? { color: litColor } : undefined}
+                title={
+                  terminals.length === 0
+                    ? 'Terminals — none yet'
+                    : `${runningTerminals.length} of ${terminals.length} terminal${terminals.length > 1 ? 's' : ''} running`
+                }
+                onMouseEnter={scheduleOpen}
+                onMouseLeave={scheduleClose}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clearPanelTimer()
+                  setPanelOpen((v) => !v)
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
                 <CommandLineIcon className="w-4 h-4" />
-              ) : (
-                <PlusIcon className="w-3.5 h-3.5" />
-              )}
-            </span>
-            {/* Configured terminals */}
-            {group.terminals.map((t) => {
-              const alive = !!t.sessionId && aliveSessionIds.has(t.sessionId)
-              const focused = !!t.sessionId && t.sessionId === focusedSessionId
-              const colorHex = resolveColorHex(t.color) ?? TERMINAL_COLOR_VALUES['blue']
-              const IconComp = getTerminalIconComponent(t.icon)
-              return (
-                <span
-                  key={t.id}
-                  role="button"
-                  tabIndex={-1}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onTerminalIconClick(t.id)
-                  }}
-                  onContextMenu={(e) => {
-                    e.stopPropagation()
-                    e.preventDefault()
-                    onTerminalIconContextMenu(t.id, e)
-                  }}
-                  className={cn(
-                    'btn-icon btn-icon-xs terminal-icon',
-                    focused && 'terminal-icon--focused'
-                  )}
-                  style={{ color: colorHex, opacity: alive ? 1 : 0.5 }}
-                  title={`${t.command || 'Shell'}${alive ? ' (running)' : ''}`}
-                >
-                  <IconComp className="w-4 h-4" />
-                </span>
-              )
-            })}
-          </div>
+                {terminals.length > 0 && (
+                  <span className="group-terminals-count tabular-nums">{terminals.length}</span>
+                )}
+              </span>
+            </PopoverAnchor>
+            <PopoverContent
+              side="bottom"
+              align="end"
+              sideOffset={4}
+              className="p-0"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+              onMouseEnter={clearPanelTimer}
+              onMouseLeave={scheduleClose}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GroupTerminalsPanel
+                terminals={terminals}
+                aliveSessionIds={aliveSessionIds}
+                focusedSessionId={focusedSessionId}
+                onTerminalClick={(tid) => {
+                  setPanelOpen(false)
+                  onTerminalIconClick(tid)
+                }}
+                onTerminalContextMenu={(tid, e) => {
+                  setPanelOpen(false)
+                  onTerminalIconContextMenu(tid, e)
+                }}
+                onAddTerminal={() => {
+                  setPanelOpen(false)
+                  onAddTerminalClick()
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+          <span
+            role="button"
+            tabIndex={-1}
+            aria-label={`New session in ${group.name}`}
+            className="btn-icon btn-icon-xs group-new-session"
+            title={newSessionTitle}
+            onClick={(e) => {
+              e.stopPropagation()
+              onNewSession()
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <PlusIcon className="w-4 h-4" />
+          </span>
+        </div>
       </button>
     </div>
   )
@@ -216,7 +298,9 @@ export const SessionGroupItem = memo(SessionGroupItemImpl, (prev, next) => {
     prev.allSelected !== next.allSelected ||
     prev.dimmed !== next.dimmed ||
     prev.forceEditing !== next.forceEditing ||
-    prev.isDragging !== next.isDragging
+    prev.isDragging !== next.isDragging ||
+    prev.dragActive !== next.dragActive ||
+    prev.newSessionTitle !== next.newSessionTitle
   ) {
     return false
   }

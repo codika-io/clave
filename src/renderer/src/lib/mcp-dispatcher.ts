@@ -397,9 +397,8 @@ export async function openSessionProgrammatically(payload: {
   } else if (groupOfSession(useSessionStore.getState().groups, info.id)) {
     // addSession auto-groups a new tab into the group the USER currently has
     // selected. An agent that didn't ask for a group must not inherit the
-    // user's live UI selection, so pull it back to top level (sentinel target
-    // → moveItems appends to displayOrder; same trick as moveSession "root").
-    useSessionStore.getState().moveItems([info.id], '__clave-mcp-root__', 'after')
+    // user's live UI selection, so pull it back to the top level.
+    useSessionStore.getState().moveItems([info.id], null, 'after')
   }
 
   // Agent-delegation spawns are transport events (PRDCT-1568): record them
@@ -435,11 +434,8 @@ function handleMoveSession(payload: {
     throw new Error(`No session with id "${payload.sessionId}"`)
   }
   if (payload.groupId === 'root') {
-    // A target that matches no group and no session falls through to "append
-    // at top level" in moveItems, which is exactly ungrouping. (The session's
-    // own id would NOT work: moveItems resolves the target's parent group
-    // before detaching, and would re-insert it where it came from.)
-    state.moveItems([payload.sessionId], '__clave-mcp-root__', 'after')
+    // The explicit ungroup: a null target is the top level, at the end.
+    state.moveItems([payload.sessionId], null, 'after')
   } else {
     const group = resolveGroup(state.groups, payload.groupId, payload.callerSessionId)
     state.moveItems([payload.sessionId], group.id, 'inside')

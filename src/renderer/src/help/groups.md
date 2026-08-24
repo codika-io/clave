@@ -4,15 +4,16 @@ Groups let you organize sessions and save workspace configurations for quick lau
 
 ## Creating Groups
 
-Drag one session onto another in the sidebar to create a group. You can:
+Select one or more sessions and press **Cmd+G** (or right-click → **Group**) to create a group. Drag a session onto a group to move it there — a drag always moves just the row you grabbed, never the rest of your selection. You can:
 
 - **Rename**: Right-click the group header
 - **Color**: Assign a color (8 presets or custom hex)
-- **Collapse/Expand**: Click the group header
+- **Collapse/Expand**: Click the folder icon, or click the header of a selected group
+- **Undo**: Cmd+Z undoes the last group, move, rename, or recolor
 
 ## Group Terminals
 
-Each group can have terminal configs: pre-configured commands that spawn new sessions inside the group. Terminals support:
+Each group can have terminal configs: pre-configured commands that spawn new sessions inside the group. The terminal icon in the group header shows how many are attached and lights up in a running terminal's colour; hover it (or click) for the list — click a terminal to start or focus it, right-click to edit, and **New terminal** at the bottom adds one. The `+` beside it starts a new session in the group. Terminals support:
 
 - **Command**: The shell command to run
 - **Command mode**: `prefill` (paste into terminal for you to run) or `auto` (execute immediately)

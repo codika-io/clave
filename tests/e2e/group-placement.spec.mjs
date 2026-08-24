@@ -81,7 +81,8 @@ export async function run(t) {
     await groups.nth(1).locator('[class*="sidebar-item"]').first().click()
     await win.waitForTimeout(1200)
 
-    await groups.nth(0).locator('.group-add-row').click()
+    await win.locator('button[aria-label="Add a group"]').waitFor()
+    await win.locator('[aria-label="New session in Lane A"]').click()
     await win.waitForTimeout(6000)
 
     const after = await groupSizes(win)

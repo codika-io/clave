@@ -30,7 +30,7 @@ import { useAgentStore } from '../../store/agent-store'
 import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, revealGroup, spawnTemplate, exportClaveFile, getExportFileName } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
-import { useSidebarDnd, GAP_HEIGHT } from '../../hooks/use-sidebar-dnd'
+import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
 import { WorkTracker } from '../work-tracker/WorkTracker'
 import { ScrollArea } from '../ui/scroll-area'
@@ -39,7 +39,6 @@ import {
   TrashIcon,
   Squares2X2Icon,
   FolderMinusIcon,
-  PlusIcon,
   CommandLineIcon,
   XMarkIcon,
   DocumentDuplicateIcon,
@@ -76,18 +75,23 @@ function GroupColorPickerHeader({ groupId, initialColor }: { groupId: string; in
 }
 
 /** Animated gap spacer for drop displacement */
-function DropGap({ active }: { active: boolean }) {
+function DropGap({ active, edge = 'before' }: { active: boolean; edge?: 'before' | 'after' }) {
+  // The drop line takes NO space: a zero-height wrapper in the flow and a bar
+  // drawn over the seam between rows. It used to be a 16px (once 36px) slot
+  // inserted into the list, and every move of the line shifted the rows under
+  // a cursor that had not moved — the hit-test then needed compensation for
+  // gaps opening and closing, and still lost: hovering your own last row
+  // closed the gap, the card shrank, and the cursor was "outside" it.
   return (
     <div
       className={cn(
-        'transition-[height,opacity] duration-200 ease-out overflow-hidden',
+        'sidebar-drop-gap relative h-0',
+        edge === 'after' && 'sidebar-drop-gap--after',
         active && 'sidebar-drop-gap-active'
       )}
-      style={{ height: active ? GAP_HEIGHT : 0, opacity: active ? 1 : 0 }}
+      aria-hidden
     >
-      {active && (
-        <div className="mx-2 h-0.5 mt-[17px] bg-accent rounded-full" />
-      )}
+      {active && <div className="sidebar-drop-line" />}
     </div>
   )
 }
@@ -1391,7 +1395,9 @@ export function Sidebar() {
               />
             )}
             <div>
-              <div className="px-2 space-y-0.5">
+              {/* 6px between top-level items: room for the drop line to sit
+                  between two cards with air on both sides of it. */}
+              <div className="px-2 space-y-1.5" style={{ '--drop-seam': '6px' } as React.CSSProperties}>
                 {filteredSessions ? (
                   <>
                     {filteredSessions.length === 0 && idleSearchMatches.length === 0 ? (
@@ -1488,6 +1494,7 @@ export function Sidebar() {
                             />
                             {isLastItem && (
                               <DropGap
+                                edge="after"
                                 active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
                               />
                             )}
@@ -1513,6 +1520,7 @@ export function Sidebar() {
                             />
                             {isLastItem && (
                               <DropGap
+                                edge="after"
                                 active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
                               />
                             )}
@@ -1564,6 +1572,14 @@ export function Sidebar() {
                                 onTerminalIconClick={(tid) => handleTerminalIconClick(group.id, tid)}
                                 onTerminalIconContextMenu={(tid, e) => handleTerminalIconContextMenu(group.id, tid, e)}
                                 onAddTerminalClick={() => handleAddTerminalClick(group.id)}
+                                onNewSession={() => void handleGroupNewSession(group.id)}
+                                newSessionTitle={
+                                  !group.prompt
+                                    ? `New session in ${group.name}`
+                                    : groupPromptApplies
+                                      ? `New session in ${group.name} — starts on the group's prompt`
+                                      : `New session in ${group.name} — Claude Agents can't take the group's prompt`
+                                }
                                 aliveSessionIds={aliveSessionIds}
                                 focusedSessionId={focusedSessionId}
                                 allSelected={allGroupSelected}
@@ -1572,6 +1588,7 @@ export function Sidebar() {
                                 onEditingDone={clearRenaming}
                                 onPointerDown={(e) => handlePointerDown(e, group.id, true)}
                                 isDragging={draggedIds.includes(group.id)}
+                                dragActive={isDragging}
                               />
                               <div
                                 className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
@@ -1583,8 +1600,12 @@ export function Sidebar() {
                                       sessions so the boundary reads at a glance —
                                       groups are containers, not filters. */}
                                   <div
-                                    className="px-1 pb-1 space-y-0.5 group-rail"
+                                    className="px-1 pt-1 space-y-0.5 group-rail"
                                     data-selected={allGroupSelected ? 'true' : undefined}
+                                    // The rows stay in the DOM while collapsed (the
+                                    // grid track animates to 0); the drag hit-test
+                                    // reads this to ignore them (use-sidebar-dnd).
+                                    data-group-collapsed={group.collapsed ? 'true' : undefined}
                                     style={
                                       groupColorHex
                                         ? ({ '--group-rail-color': groupColorHex } as React.CSSProperties)
@@ -1617,6 +1638,7 @@ export function Sidebar() {
                                             />
                                             {isLastInGroup && (
                                               <DropGap
+                                edge="after"
                                                 active={isDragging && dropIndicator?.targetId === sid && dropIndicator?.position === 'after'}
                                               />
                                             )}
@@ -1645,39 +1667,35 @@ export function Sidebar() {
                                           />
                                           {isLastInGroup && (
                                             <DropGap
+                                edge="after"
                                               active={isDragging && dropIndicator?.targetId === sid && dropIndicator?.position === 'after'}
                                             />
                                           )}
                                         </div>
                                       )
                                     })}
-                                    {/* The group's `+`: a new session inside this
-                                        group, seeded with the group's prompt. */}
-                                    <button
-                                      className="group-add-row"
-                                      title={
-                                        !group.prompt
-                                          ? `New session in ${group.name}`
-                                          : groupPromptApplies
-                                            ? `New session in ${group.name} — starts on the group's prompt`
-                                            : `New session in ${group.name} — Claude Agents can't take the group's prompt`
-                                      }
-                                      aria-label={`New session in ${group.name}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        void handleGroupNewSession(group.id)
-                                      }}
-                                      onPointerDown={(e) => e.stopPropagation()}
-                                    >
-                                      <PlusIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                                      <span className="truncate">New session</span>
-                                    </button>
+                                    {/* The foot of the rail: while dragging, the
+                                        "last position of the group" drop zone
+                                        (use-sidebar-dnd) — the last row's bottom
+                                        half is the other way to aim there. The
+                                        group's `+` for a new session lives in the
+                                        header; a row here read as one more thing
+                                        to click and got clicked by mistake. */}
+                                    <div
+                                      // With the 2px row spacing above it, IS
+                                      // the rail's bottom padding: 4px under the
+                                      // last row, the same as its sides and top.
+                                      className="h-0.5"
+                                      data-sidebar-drop-zone="group-end"
+                                      data-group-id={group.id}
+                                    />
                                   </div>
                                 </div>
                               </div>
                             </div>
                             {isLastItem && (
                               <DropGap
+                                edge="after"
                                 active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
                               />
                             )}
