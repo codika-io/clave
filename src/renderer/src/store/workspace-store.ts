@@ -8,12 +8,14 @@ export type { Workspace }
  *  (activation side effects, add/remove cascades, persistence) lives in
  *  lib/workspace-actions.ts, which sits above every store.
  *
- *  Multi-window (PRDCT-1703): `activeWorkspaceId` is the workspace THIS
- *  WINDOW shows — a per-window value handed to the renderer by main at boot,
- *  never read from the state file. The identity fields beside it say which
- *  window this is, whether it is the primary, and which workspaces it hosts
- *  (may write layout and pins for): its own, plus — for the primary — every
- *  registered workspace no window shows.
+ *  Multi-window (PRDCT-1703): a window is the whole app once more, on
+ *  whatever workspace the user put it on. `activeWorkspaceId` is the
+ *  workspace THIS WINDOW shows — a per-window value handed to the renderer by
+ *  main at boot, never read from the state file. The identity fields beside
+ *  it say which window this is: its runtime id, its persisted key (the name
+ *  of its own sidebar layout file, the stamp on the session records it
+ *  opened), and whether it is the primary (the window that takes in what a
+ *  closing window leaves and adopts orphans at boot).
  *
  *  Invariant: `activeWorkspaceId === null` ⟺ `workspaces.length === 0`.
  *  While workspaces exist, exactly one is always active in a window — there
@@ -28,8 +30,8 @@ interface WorkspaceState {
   /** This window's BrowserWindow id; null until identity arrives (or outside
    *  Electron, where the renderer behaves as the sole, primary window). */
   windowId: number | null
+  windowKey: string | null
   isPrimary: boolean
-  hostedWorkspaceIds: string[]
 }
 
 export const useWorkspaceStore = create<WorkspaceState>(() => ({
@@ -37,8 +39,8 @@ export const useWorkspaceStore = create<WorkspaceState>(() => ({
   activeWorkspaceId: null,
   loaded: false,
   windowId: null,
-  isPrimary: true,
-  hostedWorkspaceIds: []
+  windowKey: null,
+  isPrimary: true
 }))
 
 /** The active workspace's id, for stamping newly created sessions/groups/pins.
@@ -50,12 +52,4 @@ export function getActiveWorkspaceId(): string | null {
 export function getWorkspaceById(id: string | null | undefined): Workspace | undefined {
   if (!id) return undefined
   return useWorkspaceStore.getState().workspaces.find((w) => w.id === id)
-}
-
-/** Does this window host `workspaceId` — may it write that workspace's
- *  layout and pins? The null (unscoped) partition belongs to the primary. */
-export function hostsWorkspace(workspaceId: string | null | undefined): boolean {
-  const s = useWorkspaceStore.getState()
-  if (workspaceId == null) return s.isPrimary
-  return s.hostedWorkspaceIds.includes(workspaceId)
 }

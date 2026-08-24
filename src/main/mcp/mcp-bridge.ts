@@ -1,6 +1,7 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
-import { getMainWindow } from '../window-utils'
+import { windowRegistry } from '../window-registry'
+import { focusedOrPrimaryWindow } from '../window-routing'
 
 /** A renderer reply to an `mcp:command` request. */
 interface McpBridgeResponse {
@@ -18,17 +19,12 @@ interface PendingRequest {
 
 const pending = new Map<string, PendingRequest>()
 
-/**
- * Send a command to the renderer's MCP dispatcher and await its reply. The
- * sidebar state (groups, tabs) lives in the renderer's Zustand store, so every
- * MCP tool call is executed there and the result travels back over
- * `mcp:response`.
- */
-export function callRenderer<T>(command: string, payload: unknown, timeoutMs = 10_000): Promise<T> {
-  const win = getMainWindow()
-  if (!win) {
-    return Promise.reject(new Error('Clave window not available'))
-  }
+function dispatch<T>(
+  win: BrowserWindow,
+  command: string,
+  payload: unknown,
+  timeoutMs: number
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const requestId = randomUUID()
     const timer = setTimeout(() => {
@@ -42,6 +38,55 @@ export function callRenderer<T>(command: string, payload: unknown, timeoutMs = 1
     })
     win.webContents.send('mcp:command', { requestId, command, payload })
   })
+}
+
+/**
+ * Send a command to ONE window's renderer dispatcher and await its reply. The
+ * sidebar state (groups, tabs) lives in each renderer's Zustand store, and
+ * with multiple windows that state is PARTITIONED by hosting — so the caller
+ * (mcp-server) resolves which window should execute the command and passes it
+ * here. When no window is given, the focused window (else the primary) runs
+ * it: the single-window-equivalent fallback for a windowless MCP client.
+ */
+export function callRenderer<T>(
+  command: string,
+  payload: unknown,
+  win?: BrowserWindow | null,
+  timeoutMs = 10_000
+): Promise<T> {
+  const target = win && !win.isDestroyed() ? win : focusedOrPrimaryWindow()
+  if (!target) {
+    return Promise.reject(new Error('Clave window not available'))
+  }
+  return dispatch<T>(target, command, payload, timeoutMs)
+}
+
+/**
+ * Dispatch a command to EVERY window and collect all replies. Used to
+ * aggregate across the partitioned stores (`clave_list` scope all) and to
+ * resolve a session reference to the one window whose store holds it. A window
+ * that errors or times out is reported, never fatal to the others.
+ */
+export async function callRendererAll<T>(
+  command: string,
+  payload: unknown,
+  timeoutMs = 10_000
+): Promise<{ windowId: number; ok: boolean; result?: T; error?: string }[]> {
+  const windows = windowRegistry.listWindows()
+  return Promise.all(
+    windows.map(async (win) => {
+      try {
+        const result = await dispatch<T>(win, command, payload, timeoutMs)
+        return { windowId: win.id, ok: true, result }
+      } catch (err) {
+        return {
+          windowId: win.id,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err)
+        }
+      }
+    })
+  )
 }
 
 /** Register the `mcp:response` listener. Call once at startup. */

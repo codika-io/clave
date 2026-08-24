@@ -1,10 +1,12 @@
 import { execFile } from 'child_process'
+import { bringForward } from './window-routing'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
 import { app, Notification } from 'electron'
 import { getLoginShellEnv, getUserShell } from './pty-manager'
-import { getMainWindow } from './window-utils'
+import { broadcastToAllWindows } from './window-routing'
+import { windowRegistry } from './window-registry'
 
 /**
  * Lifecycle for agent-initiated secret requests. An MCP tool creates a
@@ -68,7 +70,15 @@ export function getRequest(id: string): SecretRequest | null {
 }
 
 function pushToRenderer(): void {
-  getMainWindow()?.webContents.send('secret:requests-changed', listRequests())
+  // The list drives the toolbar popover in every window; broadcast it. The
+  // notification and its click-to-focus (createRequest) go to the ONE window
+  // hosting the requesting session.
+  broadcastToAllWindows('secret:requests-changed', listRequests())
+}
+
+/** The window hosting the request's caller session (else focused/primary). */
+function windowForRequest(callerSessionId: string | undefined): Electron.BrowserWindow | null {
+  return windowRegistry.resolveTargetWindow({ sessionId: callerSessionId })
 }
 
 function resolveWaiters(req: SecretRequest): void {
@@ -97,7 +107,7 @@ export function createRequest(input: {
   pushToRenderer()
 
   // Description only — never command output or values.
-  const win = getMainWindow()
+  const win = windowForRequest(input.callerSessionId)
   if (Notification.isSupported() && !win?.isFocused()) {
     const notification = new Notification({
       title: 'Clave — secret requested',
@@ -105,11 +115,7 @@ export function createRequest(input: {
       silent: false
     })
     notification.on('click', () => {
-      const w = getMainWindow()
-      if (w) {
-        w.show()
-        w.focus()
-      }
+      bringForward(windowForRequest(input.callerSessionId))
     })
     notification.show()
     if (process.platform === 'darwin') app.dock?.bounce('informational')

@@ -1,12 +1,9 @@
 /**
- * The renderer's half of per-workspace sidebar layouts (PRDCT-1703), kept
- * pure so vitest pins it: how the one in-memory sidebar is split into one
- * layout per workspace for writing, and how a workspace's layout read from
- * its file is merged back into the store when a window starts hosting it.
- *
- * The rule both directions share: an item belongs to the workspace it is
- * stamped with; unstamped items belong to `fallback` — this window's
- * workspace, or null in no-workspace mode (the unscoped layout).
+ * The pure sidebar-layout merges (PRDCT-1703), kept pure so vitest pins
+ * them: how this window's layout read from its own file is merged into the
+ * store at boot (`mergeLayoutForKeys`), and how groups handed over by
+ * another window — a closing window's sidebar, a group moved here — are
+ * taken in (`absorbLayout`).
  */
 export interface LayoutGroupLike {
   id: string
@@ -27,39 +24,6 @@ export interface LayoutSlice<G extends LayoutGroupLike> {
 }
 
 export type LayoutKey = string | null
-
-/** Split the sidebar into one layout per workspace. A group goes by its own
- *  stamp; a display-order id goes by the group or session it names; anything
- *  unstamped or unknown (file tabs, stale ids) goes to `fallback`. */
-export function partitionSidebarLayout<G extends LayoutGroupLike>(
-  groups: G[],
-  displayOrder: string[],
-  sessions: LayoutSessionLike[],
-  fallback: LayoutKey
-): Map<LayoutKey, LayoutSlice<G>> {
-  const out = new Map<LayoutKey, LayoutSlice<G>>()
-  const bucket = (key: LayoutKey): LayoutSlice<G> => {
-    let b = out.get(key)
-    if (!b) {
-      b = { groups: [], displayOrder: [] }
-      out.set(key, b)
-    }
-    return b
-  }
-  const groupKey = new Map<string, LayoutKey>()
-  for (const g of groups) {
-    const key = g.workspaceId ?? fallback
-    groupKey.set(g.id, key)
-    bucket(key).groups.push(g)
-  }
-  const sessionKey = new Map<string, LayoutKey>()
-  for (const s of sessions) sessionKey.set(s.id, s.workspaceId ?? fallback)
-  for (const id of displayOrder) {
-    const key = groupKey.has(id) ? groupKey.get(id)! : (sessionKey.get(id) ?? fallback)
-    bucket(key).displayOrder.push(id)
-  }
-  return out
-}
 
 /**
  * Replace the partitions of `keys` in the store with `persisted` (those
@@ -152,4 +116,65 @@ export function mergeLayoutForKeys<G extends LayoutGroupLike>(
   for (const g of kept) push(g.id)
 
   return { groups: [...others, ...kept], displayOrder: order }
+}
+
+/**
+ * Append what another window handed over: groups not already in the store
+ * (by id) and top-level order entries not already placed, in the incoming
+ * order. Known groups and entries are left exactly where they are, and an id
+ * nested inside a kept group never surfaces at the top level. The members
+ * themselves arrive through adoption (addSession), which places a session
+ * whose group already holds it.
+ */
+export function absorbLayout<G extends LayoutGroupLike>(
+  state: { groups: G[]; displayOrder: string[] },
+  incoming: { groups?: G[]; displayOrder?: string[] }
+): { groups: G[]; displayOrder: string[] } {
+  const known = new Set(state.groups.map((g) => g.id))
+  const groups = [...state.groups]
+  for (const g of incoming.groups ?? []) {
+    if (!g || typeof g.id !== 'string' || known.has(g.id)) continue
+    known.add(g.id)
+    groups.push({
+      ...g,
+      sessionIds: Array.isArray(g.sessionIds) ? g.sessionIds : [],
+      terminals: Array.isArray(g.terminals) ? g.terminals : []
+    })
+  }
+  const nested = new Set<string>()
+  for (const g of groups) {
+    for (const sid of g.sessionIds) nested.add(sid)
+    for (const t of g.terminals) if (t.sessionId) nested.add(t.sessionId)
+  }
+  const placed = new Set(state.displayOrder)
+  const displayOrder = [...state.displayOrder]
+  for (const id of incoming.displayOrder ?? []) {
+    if (typeof id !== 'string' || placed.has(id) || nested.has(id)) continue
+    placed.add(id)
+    displayOrder.push(id)
+  }
+  return { groups, displayOrder }
+}
+
+/**
+ * Where an ADOPTED session goes in the sidebar — a survivor at boot, a tab
+ * handed over by another window. Placement-neutral by design: an adoption
+ * never nests a tab into a group it was not in (the fresh-spawn heuristic
+ * that nests into the selected group must not apply — a moved tab would be
+ * swallowed by whatever the target window has selected) and never puts it
+ * at the top level when something already holds it (a group's members, a
+ * group's quick-launch terminal, a session view's hidden server) — that
+ * would show one tab twice. Returns the new top-level order.
+ */
+export function placeAdopted<G extends LayoutGroupLike>(
+  state: { groups: G[]; displayOrder: string[]; sessions: LayoutSessionLike[] },
+  sessionId: string
+): string[] {
+  if (state.displayOrder.includes(sessionId)) return state.displayOrder
+  for (const g of state.groups) {
+    if (g.sessionIds.includes(sessionId)) return state.displayOrder
+    if (g.terminals.some((t) => t.sessionId === sessionId)) return state.displayOrder
+  }
+  if (state.sessions.some((s) => s.view?.serverSessionId === sessionId)) return state.displayOrder
+  return [...state.displayOrder, sessionId]
 }

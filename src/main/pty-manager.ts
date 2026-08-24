@@ -331,6 +331,13 @@ export interface SessionRecord {
    *  adoption rewrites. Legacy records without it are annotated at list time
    *  by inferring from cwd against registered workspace roots. */
   workspaceId?: string
+  /** The WINDOW this session lives in (PRDCT-1703): the persisted key of the
+   *  window that spawned or last adopted it. At boot each window adopts its
+   *  own records; a record whose window no longer exists is an orphan the
+   *  primary window takes. Rewritten on every adoption, so a move between
+   *  windows (detach + re-adopt) re-stamps it. Legacy records without it are
+   *  orphans, adopted by the primary. */
+  windowKey?: string
   /** Attached web view (renderer session.view): the page behind the row's
    *  dashboard icon, restored at adoption. The hidden serving session's id is
    *  deliberately absent — it never survives a restart; the view's start
@@ -498,6 +505,9 @@ export interface PtySpawnOptions {
   /** Workspace to stamp on the session record. The pty:spawn handler defaults
    *  it to the active workspace; explicit values win (pin launches, MCP). */
   workspaceId?: string
+  /** The persisted key of the window asking (stamped by pty-handlers from the
+   *  sender; adoption and re-homing re-stamp through the same path). */
+  windowKey?: string
 }
 
 interface PendingSpawn {
@@ -682,7 +692,10 @@ class PtyManager {
       configDir: options?.configDir,
       claudeProfileId: options?.claudeProfileId,
       claudeProfileLabel: options?.claudeProfileLabel,
-      workspaceId: previous?.workspaceId ?? options?.workspaceId
+      workspaceId: previous?.workspaceId ?? options?.workspaceId,
+      // The asking window is the home from now on — an adoption or a move
+      // re-stamps; only a windowless spawn keeps what the record had.
+      windowKey: options?.windowKey ?? previous?.windowKey
     }
     let recordKey: string | null = null
 
@@ -959,6 +972,17 @@ class PtyManager {
     const next = workspaceId ?? undefined
     if (meta.workspaceId === next) return
     writeSessionRecord({ ...meta, workspaceId: next })
+  }
+
+  /** Re-home a record to another window WITHOUT touching the process — used
+   *  when a closing window hands a non-tmux session (whose pty dies with the
+   *  window) to the primary, so the next boot offers it there. */
+  setSessionWindowKey(id: string, windowKey: string): void {
+    const key = this.recordKeyForSession(id)
+    if (!key) return
+    const meta = readSessionRecord(key)
+    if (!meta || meta.windowKey === windowKey) return
+    writeSessionRecord({ ...meta, windowKey })
   }
 
   /**

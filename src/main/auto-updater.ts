@@ -1,7 +1,7 @@
 import { app, shell } from 'electron'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import log from 'electron-log/main'
-import { getMainWindow } from './window-utils'
+import { broadcastToAllWindows } from './window-routing'
 import type { DownloadProgress, UpdatePhase, UpdaterState } from '../shared/updater-types'
 
 export type { DownloadProgress, UpdatePhase, UpdaterState }
@@ -116,7 +116,8 @@ let autoRetried = false
 let checkInterval: ReturnType<typeof setInterval> | null = null
 
 function sendToRenderer(channel: string, ...args: unknown[]): void {
-  getMainWindow()?.webContents.send(channel, ...args)
+  // Update state is app-level; every window's updater overlay must hear it.
+  broadcastToAllWindows(channel, ...args)
 }
 
 function setState(patch: Partial<UpdaterState>): void {

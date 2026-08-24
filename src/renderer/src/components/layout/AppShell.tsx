@@ -6,8 +6,7 @@ import {
   isFileTabId,
   getVisibleFlatOrder,
   inActiveWorkspace,
-  enableSidebarPersistence,
-  markLayoutKeysTaken
+  enableSidebarPersistence
 } from '../../store/session-store'
 import type { SessionGroup, SettingsSection } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
@@ -36,12 +35,12 @@ import { useWorkspaceStore } from '../../store/workspace-store'
 import {
   bootWorkspaces,
   refreshActiveWorkspacePins,
-  cycleWorkspace,
-  markBootLayoutsDone
+  cycleWorkspace
 } from '../../lib/workspace-actions'
 import { promptRestore } from '../../store/restore-prompt-store'
 import { RestorePromptDialog } from '../ui/RestorePromptDialog'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
+import { adoptRecord, adoptRehomed } from '../../lib/adopt-record'
 import { initSecretStore } from '../../store/secret-store'
 import { initCopyOfferStore } from '../../store/copy-offer-store'
 import { ToolbarSecretPopover } from './ToolbarSecretPopover'
@@ -95,6 +94,15 @@ export function AppShell() {
 
   useWorkTracker()
 
+  // The window's title names its workspace — what tells windows apart in
+  // Mission Control and the Window menu (the title bar itself is hidden).
+  const activeWorkspaceName = useWorkspaceStore(
+    (s) => s.workspaces.find((w) => w.id === s.activeWorkspaceId)?.name ?? null
+  )
+  useEffect(() => {
+    document.title = activeWorkspaceName ? `${activeWorkspaceName} — Clave` : 'Clave'
+  }, [activeWorkspaceName])
+
   // Wire the in-app MCP command dispatcher and the secret-request store to
   // their main-process push channels. The module-level latch makes this run
   // exactly once per process even under React StrictMode's mount/remount, so
@@ -105,6 +113,22 @@ export function AppShell() {
     initMcpDispatcher()
     initSecretStore()
     initCopyOfferStore()
+    // Re-homing: take in what another window hands over — a closing window's
+    // sessions with its groups, a tab or a group moved here — and drop a tab
+    // whose session moved AWAY (moved, not died — never kill the pty). The
+    // groups land first so the adopted members find their group.
+    window.electronAPI?.onSessionRehome?.(({ sessionIds, layout, focus }) => {
+      if (layout) {
+        useSessionStore.getState().absorbLayout(layout as { groups: SessionGroup[]; displayOrder: string[] })
+      }
+      void adoptRehomed(sessionIds, useWorkspaceStore.getState().activeWorkspaceId, focus === true)
+    })
+    window.electronAPI?.onSessionRemovedForRehome?.((id) => {
+      useSessionStore.getState().removeSessionForRehome(id)
+    })
+    window.electronAPI?.onGroupRemovedForMove?.((groupId) => {
+      useSessionStore.getState().removeGroupForMove(groupId)
+    })
     // What the agent button relaunches, per workspace. Deliberately NOT in the
     // session-adoption effect below: that one awaits the "restore sessions?"
     // prompt, so anything after it waits on the user answering a dialog — and
@@ -124,137 +148,38 @@ export function AppShell() {
         // the active workspace. (This is the single sequential boot owner —
         // the old lazy loadWorkspaces() in Sidebar raced this effect.)
         await bootWorkspaces()
-        const wsState = useWorkspaceStore.getState()
-        const activeWorkspaceId = wsState.activeWorkspaceId
+        const activeWorkspaceId = useWorkspaceStore.getState().activeWorkspaceId
 
-        // Read the previous run's saved groups BEFORE any session is adopted
+        // Read this window's saved groups BEFORE any session is adopted
         // (re-adoption mutates the layout). Then rebuild groups around the
-        // survivors and only then turn persistence on, so the saved files are
-        // never overwritten before we've loaded them. Layouts are one file per
-        // workspace: this window loads the ones it HOSTS — the primary at boot
-        // hosts every workspace, a secondary window its own (null = the
-        // unscoped layout of no-workspace mode).
-        const layoutKeys: (string | null)[] =
-          activeWorkspaceId === null ? [null] : wsState.hostedWorkspaceIds
-        const savedLayout = await window.electronAPI
-          ?.sidebarLayoutLoad?.(layoutKeys)
-          .catch(() => null)
+        // survivors and only then turn persistence on, so the file is never
+        // overwritten before we've loaded it. One file per window; the
+        // primary's load also brings in the orphans of windows that no
+        // longer exist.
+        const savedLayout = await window.electronAPI?.sidebarLayoutLoad?.().catch(() => null)
         const persisted = {
           groups: (savedLayout?.groups ?? []) as SessionGroup[],
           displayOrder: savedLayout?.displayOrder ?? []
         }
 
-        // The primary adopts every survivor (hidden where not its workspace),
-        // so cross-workspace messaging and clave_list never regress. A
-        // SECONDARY window only ever adopts — and prompts for — its own
-        // workspace's records; the live ones another window hosts are already
-        // filtered out by main (alreadyAdopted).
-        const survivors =
-          (await window.electronAPI?.listSessionRecords?.(
-            wsState.isPrimary ? undefined : (activeWorkspaceId ?? undefined)
-          )) ?? []
-
-        /** Bring one record back as a tab. Live tmux survivors reattach; dead
-         *  ones (plain, or tmux killed by a reboot) relaunch fresh in the same
-         *  cwd, Claude resuming via claudeSessionId. */
-        const adoptRecord = async (s: (typeof survivors)[number]): Promise<string | null> => {
-          try {
-            const workspaceId = s.workspaceId ?? activeWorkspaceId ?? undefined
-            const info = await window.electronAPI.spawnSession(s.cwd, {
-              claudeMode: s.claudeMode,
-              antigravityMode: s.antigravityMode,
-              codexMode: s.codexMode,
-              claudeAgentsMode: s.claudeAgentsMode,
-              dangerousMode: s.dangerousMode,
-              model: s.model,
-              // Live survivor: MUST go through tmux to reattach. Dead record:
-              // fresh spawn under the current global tmux preference — the
-              // name is still offered so a tmux respawn reuses it (spawn
-              // handles record-key transitions either way).
-              ...(s.live && s.tmuxName
-                ? { tmuxMode: true, adoptTmuxName: s.tmuxName }
-                : s.tmuxName
-                  ? { adoptTmuxName: s.tmuxName }
-                  : {}),
-              // Reuse the original id so lifecycle-hook status routing keeps
-              // working after the session comes back.
-              adoptSessionId: s.id,
-              // Live survivor (quit/reopen): reattach to the running process —
-              // claudeSessionId only drives the header badge, the agent isn't
-              // re-run. Dead record: re-spawn fresh, so pass resumeSessionId to
-              // relaunch Claude with `--resume <id>` and reload the prior
-              // conversation.
-              ...(s.live
-                ? { claudeSessionId: s.claudeSessionId }
-                : s.claudeMode && s.claudeSessionId
-                  ? { resumeSessionId: s.claudeSessionId }
-                  : {}),
-              // Carry the account/profile forward so the badge is restored.
-              configDir: s.configDir,
-              claudeProfileId: s.claudeProfileId,
-              claudeProfileLabel: s.claudeProfileLabel,
-              // Explicit stamp (record value or legacy inference) so the
-              // rewritten record keeps the session's workspace, not the
-              // active one at adoption time.
-              workspaceId
-            })
-            addSession({
-              id: info.id,
-              cwd: info.cwd,
-              folderName: info.folderName,
-              // Restore the label the user last saw. `userRenamed` comes back
-              // too, so an explicit rename keeps its immunity to auto-titling.
-              name: s.displayName || s.folderName,
-              userRenamed: s.userRenamed === true,
-              alive: info.alive,
-              activityStatus: 'idle',
-              promptWaiting: null,
-              claudeMode: s.claudeMode,
-              antigravityMode: s.antigravityMode,
-              codexMode: s.codexMode,
-              claudeAgentsMode: s.claudeAgentsMode,
-              dangerousMode: s.dangerousMode,
-              model: s.model,
-              claudeSessionId: info.claudeSessionId,
-              claudeProfileId: s.claudeProfileId,
-              claudeProfileLabel: s.claudeProfileLabel,
-              claudeConfigDir: s.configDir,
-              sessionType: 'local',
-              workspaceId,
-              // The attached web view comes back with the tab; its hidden
-              // serving session did not survive, so the pane's probe shows
-              // down with a one-click start (serverSessionId stays unset).
-              view: s.view ? { ...s.view } : undefined
-            })
-            return info.id
-          } catch (err) {
-            console.error('Failed to adopt persistent session:', s.tmuxName ?? s.id, err)
-            return null
-          }
-        }
-
-        // Reattach = silent, relaunch = ask. Live tmux survivors of EVERY
-        // workspace this window hosts re-attach unprompted (the primary hosts
-        // all; a workspace hidden here is still hosted), so cross-workspace
-        // messaging and clave_list never regress. Dead records are OFFERED
-        // only for the workspace this window SHOWS; dead records of a
-        // hidden-hosted workspace wait until that workspace is opened, their
-        // groups kept as shells meanwhile (spec §3.6). null active
-        // (no-workspace mode) shows everything.
-        const showsWorkspace = (s: (typeof survivors)[number]): boolean =>
-          (s.workspaceId ?? activeWorkspaceId ?? null) === (activeWorkspaceId ?? null)
+        // This window's own records (plus the orphans, for the primary):
+        // live tmux survivors re-attach silently, whatever their workspace
+        // (hidden where not the shown one, so cross-workspace messaging and
+        // clave_list never regress); dead records are offered once, all
+        // together, as they always were.
+        const survivors = (await window.electronAPI?.listSessionRecords?.()) ?? []
         const liveOnes = survivors.filter((s) => s.live)
-        const deadOnes = survivors.filter((s) => !s.live && showsWorkspace(s))
+        const deadOnes = survivors.filter((s) => !s.live)
 
         const adoptedIds: string[] = []
         for (const s of liveOnes) {
-          const id = await adoptRecord(s)
+          const id = await adoptRecord(s, activeWorkspaceId)
           if (id) adoptedIds.push(id)
         }
         if (deadOnes.length > 0) {
           if (await promptRestore(deadOnes)) {
             for (const s of deadOnes) {
-              const id = await adoptRecord(s)
+              const id = await adoptRecord(s, activeWorkspaceId)
               if (id) adoptedIds.push(id)
             }
           } else {
@@ -264,28 +189,19 @@ export function AppShell() {
           }
         }
 
-        // Rebuild the per-workspace layouts around what survives. A group is
-        // kept if a member does: an adopted session (live, or a shown-
-        // workspace dead record the user chose to relaunch), a dead record of
-        // a HIDDEN-hosted workspace still on disk (a shell, offered when that
-        // workspace is opened), or a live session held by another window (the
-        // secondary case). Only a shown-workspace record the user discarded is
-        // gone for good — today's single-window "Start fresh".
-        const surviving = new Set(adoptedIds)
-        for (const s of survivors) if (!showsWorkspace(s)) surviving.add(s.id)
-        const hostedStringKeys = layoutKeys.filter((k): k is string => typeof k === 'string')
-        const elsewhere =
-          (await window.electronAPI?.liveSessionsElsewhere?.(hostedStringKeys).catch(() => [])) ?? []
-        for (const id of elsewhere) surviving.add(id)
-        useSessionStore.getState().mergeLayoutForKeys(layoutKeys, persisted, [...surviving])
-        markLayoutKeysTaken(layoutKeys)
+        // Rebuild the layout around what survives: a group is kept if a
+        // member was adopted. Every workspace's groups live in this one file,
+        // so every key is merged (null = the unscoped ones).
+        const keys: (string | null)[] = [
+          null,
+          ...useWorkspaceStore.getState().workspaces.map((w) => w.id)
+        ]
+        useSessionStore.getState().mergeLayoutForKeys(keys, persisted, adoptedIds)
       } catch (err) {
         console.error('Failed to restore sessions/groups on launch:', err)
       } finally {
-        // Turn persistence on only now — after the saved layouts were loaded
-        // and groups restored — so adoption writes can't clobber the files;
-        // and only now may a layout gained at runtime be merged in.
-        markBootLayoutsDone()
+        // Turn persistence on only now — after the saved layout was loaded
+        // and groups restored — so adoption writes can't clobber the file.
         enableSidebarPersistence()
       }
 

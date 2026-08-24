@@ -5,7 +5,7 @@
 // installed Clave. The regular `playwright` MCP opens the renderer in Chrome
 // where `window.electronAPI` is undefined and none of this works.
 import { _electron as electron } from 'playwright-core'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -167,26 +167,38 @@ export function identityOf(page) {
   return page.evaluate(() => window.electronAPI.windowIdentity())
 }
 
-/** Show a workspace in a window of its own, driving the REAL path: the
+/** Open a NEW window — the app once more — driving the REAL path: the
  *  renderer of `fromPage` calls `window.electronAPI.windowOpen`, exactly what
- *  the File menu, the picker and clave_open_window do. Resolves once the new
- *  window's renderer has loaded and settled; when the workspace was already
- *  shown somewhere, `focusedExisting` is true and `page` is that window's. */
-export async function openWindow(app, fromPage, workspaceId, { settleMs = 4000 } = {}) {
+ *  the File menu, the popover and clave_open_window do. `workspaceId` null
+ *  means "the asking window's own". Resolves once the new window's renderer
+ *  has loaded and settled. */
+export async function openWindow(app, fromPage, workspaceId = null, { settleMs = 4000 } = {}) {
   const before = new Set(app.windows())
   // Subscribe BEFORE asking, so a window that appears between the answer and
   // the wait cannot slip past unobserved.
   const nextWindow = app.waitForEvent('window', { timeout: 15_000 }).catch(() => null)
-  const result = await fromPage.evaluate((ws) => window.electronAPI.windowOpen(ws), workspaceId)
-  if (result.focusedExisting) {
-    return { ...result, page: await windowFor(app, result.windowId) }
-  }
+  const result = await fromPage.evaluate(
+    (ws) => window.electronAPI.windowOpen(ws ?? undefined),
+    workspaceId
+  )
   const page = app.windows().find((p) => !before.has(p)) ?? (await nextWindow)
   if (!page)
     throw new Error(`window:open answered ${JSON.stringify(result)} but no window appeared`)
   await page.waitForLoadState('domcontentloaded')
   await page.waitForTimeout(settleMs)
   return { ...result, page }
+}
+
+/** The persisted window list (`windows.json`) of an isolated instance. */
+export function persistedWindows(dir) {
+  const f = path.join(dir, 'windows.json')
+  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf-8')).windows : []
+}
+
+/** A window's own sidebar layout file, by its persisted key. */
+export function windowLayout(dir, windowKey) {
+  const f = path.join(dir, 'sidebar-layouts', 'windows', `${windowKey}.json`)
+  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf-8')) : null
 }
 
 /** Poll until `fn` returns a truthy value or the budget runs out. */
@@ -314,4 +326,108 @@ export async function spyPtySpawn(app) {
     )
   }
   return async () => app.evaluate(() => globalThis.__e2eSpawns ?? [])
+}
+
+// ── MCP over HTTP (PRDCT-1703 slice 2 routing) ───────────────────────────────
+// The real transport: mcp-server resolves WHICH window runs each call from the
+// caller's per-session token, so routing (§3.8) is only exercised over HTTP,
+// not through callMcpIn (which targets one window's dispatcher directly).
+
+/** Minimal Streamable-HTTP MCP client bound to one session's bearer token. */
+export function mcpHttpClient(url, token) {
+  let mcpSessionId = null
+  let nextId = 1
+  const post = async (body) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${token}`,
+        ...(mcpSessionId ? { 'mcp-session-id': mcpSessionId } : {})
+      },
+      body: JSON.stringify(body)
+    })
+    const sid = res.headers.get('mcp-session-id')
+    if (sid) mcpSessionId = sid
+    const text = await res.text()
+    const payloads =
+      text.startsWith('event:') || text.includes('\ndata:') || text.startsWith('data:')
+        ? text
+            .split('\n')
+            .filter((l) => l.startsWith('data:'))
+            .map((l) => l.slice(5).trim())
+        : [text]
+    const parsed = payloads.filter(Boolean).map((p) => JSON.parse(p))
+    return parsed[parsed.length - 1] ?? null
+  }
+  return {
+    async init() {
+      const res = await post({
+        jsonrpc: '2.0',
+        id: nextId++,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'clave-e2e', version: '0.0.0' }
+        }
+      })
+      await post({ jsonrpc: '2.0', method: 'notifications/initialized' })
+      return res
+    },
+    async call(name, args) {
+      return post({
+        jsonrpc: '2.0',
+        id: nextId++,
+        method: 'tools/call',
+        params: { name, arguments: args }
+      })
+    }
+  }
+}
+
+/** The structured payload of a tool result (JSON in the text block). */
+export function toolPayload(rpc) {
+  const r = rpc?.result
+  if (!r) return null
+  if (r.structuredContent) return r.structuredContent
+  const text = r.content?.find((c) => c.type === 'text')?.text
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { raw: text }
+  }
+}
+
+/** Whether a tool call came back as an error (transport or tool-level). */
+export function toolErrored(rpc) {
+  return rpc?.error !== undefined || rpc?.result?.isError === true
+}
+
+/** The MCP endpoint URL for an isolated app instance. */
+export function mcpEndpoint(dir) {
+  return JSON.parse(readFileSync(path.join(dir, 'mcp-server.json'), 'utf-8')).url
+}
+
+/** Spawn a Claude agent tab in `page`'s window (its launcher button) and
+ *  return its clave session id + per-session MCP bearer token, once minted.
+ *  Agent tabs mint an mcp-config under <dir>/mcp-configs/<claveId>.json. */
+export async function spawnAgentTabIn(app, page, dir, { until: untilFn = until } = {}) {
+  const before = new Set(
+    existsSync(path.join(dir, 'mcp-configs')) ? readdirSync(path.join(dir, 'mcp-configs')) : []
+  )
+  await page.click('.launcher-split .launcher-btn')
+  const cfg = await untilFn(() => {
+    const d = path.join(dir, 'mcp-configs')
+    if (!existsSync(d)) return null
+    const f = readdirSync(d).find((f) => f.endsWith('.json') && !before.has(f))
+    return f ? { claveId: f.replace(/\.json$/, ''), file: path.join(d, f) } : null
+  })
+  if (!cfg) return null
+  const token = JSON.parse(
+    readFileSync(cfg.file, 'utf-8')
+  ).mcpServers?.clave?.headers?.Authorization?.replace(/^Bearer /, '')
+  return { sessionId: cfg.claveId, token }
 }

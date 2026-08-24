@@ -4,7 +4,8 @@ import {
   PlusIcon,
   CheckIcon,
   Cog6ToothIcon,
-  FolderOpenIcon
+  FolderOpenIcon,
+  ArrowTopRightOnSquareIcon
 } from '@heroicons/react/24/outline'
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover'
 import { useWorkspaceStore } from '../../store/workspace-store'
@@ -170,7 +171,7 @@ export function ToolbarWorkspacePopover(): React.JSX.Element {
                   return (
                     <button
                       key={ws.id}
-                      className={cn('menu-item', isActive && 'bg-surface-200')}
+                      className={cn('menu-item group', isActive && 'bg-surface-200')}
                       onClick={() => {
                         if (!isActive) void setActiveWorkspace(ws.id)
                         handleOpenChange(false)
@@ -189,6 +190,18 @@ export function ToolbarWorkspacePopover(): React.JSX.Element {
                         <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />
                       )}
                       {isActive && <CheckIcon className="w-3.5 h-3.5 text-accent flex-shrink-0" />}
+                      <span
+                        role="button"
+                        title="Open in new window"
+                        className="btn-icon flex-shrink-0 opacity-0 group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void window.electronAPI?.windowOpen?.(ws.id)
+                          handleOpenChange(false)
+                        }}
+                      >
+                        <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+                      </span>
                     </button>
                   )
                 })}

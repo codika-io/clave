@@ -1,37 +1,33 @@
 /**
- * Multi-window core (PRDCT-1703, slice 1): one workspace per window, each
- * window hosting its own sessions and writing its own layout file.
+ * Multi-window core (PRDCT-1703): a window is the whole app once more, on
+ * whatever workspace it shows — the SAME workspace as another window
+ * included. Sessions and groups live in the window they were opened in;
+ * each window writes its own layout file; a restart brings every window
+ * back with its own content; closing a window hands its content to the
+ * primary.
  *
  * What this pins, on the REAL app with real PTYs:
- *   - a second window opens on another workspace with its own identity, and
- *     opening a workspace already shown somewhere focuses that window instead
- *     of duplicating it (invariant 12);
- *   - a spawn from a window is stamped with THAT window's workspace even when
- *     the state file's last-active workspace says otherwise (invariant 4);
- *   - the windows write separate layout files, none losing another's groups
- *     (invariant 5): a window that starts hosting a workspace — at its own
- *     boot, after an in-window switch, or when another window closes —
- *     reads that workspace's file before it may write it, and a group whose
- *     sessions merely live elsewhere is kept, never written back as gone;
- *   - a cross-workspace write is refused by main, loudly;
- *   - a secondary window's restore prompt lists only ITS workspace's dead
- *     records (invariant 13) — with the positive control that it does prompt
- *     for its own;
- *   - closing window B leaves window A's session ALIVE AND STREAMING — the
- *     observation is the terminal buffer still advancing after the close,
- *     not process liveness (invariant 1); B's tmux-backed session is
- *     detached, not killed (its process and record survive);
- *   - after a restart the first window comes back on the last-active
- *     workspace, and every workspace's groups come back from their own files
- *     around the re-adopted sessions (invariant 15's single-window floor plus
- *     the per-workspace half of the restart assertion; the two-window half
- *     needs re-homing, slice 2).
+ *   - a second window on the SAME workspace opens with its own identity and
+ *     its own (empty) sidebar; what one window opens the other never lists;
+ *   - a spawn is stamped with the asking window's key AND its workspace,
+ *     even when the state file's last-active says otherwise;
+ *   - one layout file per window, none carrying another's groups;
+ *   - switching a window's workspace touches no other window and is
+ *     persisted; a third window on an already-shown workspace opens (no
+ *     guard);
+ *   - a restart brings BOTH windows back — same keys, same workspaces, each
+ *     with its own groups around its re-adopted sessions;
+ *   - closing window 2 leaves window 1's terminal ALIVE AND STREAMING (the
+ *     buffer still advancing, not process liveness) and hands window 2's
+ *     tmux-backed sessions AND groups to window 1 — the persisted window
+ *     list and window 2's layout file forget it;
+ *   - a restart after that brings one window back with everything.
  *
  * Failure modes this must catch: the old whole-app teardown on any close
- * (the streaming assertion goes red), a whole-file layout write, a window
- * writing a workspace it never read (the seed groups vanish from disk), a
- * spawn stamped from the state file, a guard that opens a second window, an
- * unfiltered restore prompt.
+ * (the streaming assertion goes red), a shared layout file (a window's
+ * group shows up in the other), a spawn stamped from the state file, a
+ * close that loses the window's tabs or groups, a restart that forgets a
+ * window or its workspace.
  */
 import {
   launchApp,
@@ -46,15 +42,16 @@ import {
   closeWindow,
   killLeakedE2eTmux,
   tmuxSessionAlive,
-  until
+  until,
+  persistedWindows,
+  windowLayout
 } from './harness.mjs'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const DIR = userDataDir('multi-window-core')
 const ROOT_A = '/tmp/clave-e2e-mw-core-a'
 const ROOT_B = '/tmp/clave-e2e-mw-core-b'
-const ROOT_C = '/tmp/clave-e2e-mw-core-c'
 const ws = (letter, root) => ({
   id: `${letter}${letter}${letter}${letter}${letter}${letter}${letter}${letter}-0000-4000-8000-0000000000${letter}1`,
   name: `Core${letter.toUpperCase()}`,
@@ -64,19 +61,12 @@ const ws = (letter, root) => ({
 })
 const WS_A = ws('a', ROOT_A)
 const WS_B = ws('b', ROOT_B)
-const WS_C = ws('c', ROOT_C)
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const groupNames = (layout) => (layout?.groups ?? []).map((g) => g.name).sort()
+const listNames = (list) => (list?.groups ?? []).map((g) => g.name).sort()
+const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort())
 
-function layoutFile(wsId) {
-  return path.join(DIR, 'sidebar-layouts', `${wsId}.json`)
-}
-function readLayout(wsId) {
-  return existsSync(layoutFile(wsId)) ? JSON.parse(readFileSync(layoutFile(wsId), 'utf-8')) : null
-}
-function groupNames(layout) {
-  return (layout?.groups ?? []).map((g) => g.name)
-}
 function sessionRecords() {
   const dir = path.join(DIR, 'session-records')
   if (!existsSync(dir)) return []
@@ -84,26 +74,8 @@ function sessionRecords() {
     .filter((f) => f.endsWith('.json'))
     .map((f) => JSON.parse(readFileSync(path.join(dir, f), 'utf-8')))
 }
-function writeDeadRecord(id, root, workspaceId) {
-  mkdirSync(path.join(DIR, 'session-records'), { recursive: true })
-  writeFileSync(
-    path.join(DIR, 'session-records', `${id}.json`),
-    JSON.stringify({
-      id,
-      cwd: root,
-      folderName: path.basename(root),
-      claudeMode: false,
-      antigravityMode: false,
-      codexMode: false,
-      claudeAgentsMode: false,
-      dangerousMode: false,
-      workspaceId
-    })
-  )
-}
 /** The highest tick number visible in a session's terminal buffer. */
 async function lastTick(app, sessionId, windowId) {
-  // A read needs a caller identity; a tab may always read itself.
   const read = await callMcpIn(app, windowId, 'readSession', {
     sessionId,
     lines: 40,
@@ -113,40 +85,44 @@ async function lastTick(app, sessionId, windowId) {
   const ticks = [...text.matchAll(/tick-(\d+)/g)].map((m) => Number(m[1]))
   return ticks.length ? Math.max(...ticks) : -1
 }
-/** Wait until a layout file lists exactly these group names (order-free). */
-async function untilGroups(wsId, names) {
-  return until(() => {
-    const got = groupNames(readLayout(wsId)).sort()
-    return JSON.stringify(got) === JSON.stringify([...names].sort()) ? got : null
+/** Wait until a window's layout file lists exactly these group names. */
+async function untilGroups(key, names) {
+  return until(() => (same(groupNames(windowLayout(DIR, key)), names) ? true : null))
+}
+async function untilListed(app, windowId, names, scope = 'all') {
+  return until(async () => {
+    const l = await callMcpIn(app, windowId, 'list', { workspace: scope })
+    return same(listNames(l), names) ? l : null
   })
 }
 
 export async function run(t) {
   killLeakedE2eTmux()
-  for (const r of [ROOT_A, ROOT_B, ROOT_C]) mkdirSync(r, { recursive: true })
-  // The OLD key only: the new build reads it as the last-active workspace
-  // (the downgrade-compatibility read half of invariant 7).
-  seedWorkspaces(DIR, { workspaces: [WS_A, WS_B, WS_C], activeWorkspaceId: WS_A.id, fresh: true })
-  seedTrustedRoots(DIR, [ROOT_A, ROOT_B, ROOT_C])
+  for (const r of [ROOT_A, ROOT_B]) mkdirSync(r, { recursive: true })
+  // The OLD key only: the new build reads it as the last-active workspace.
+  seedWorkspaces(DIR, { workspaces: [WS_A, WS_B], activeWorkspaceId: WS_A.id, fresh: true })
+  seedTrustedRoots(DIR, [ROOT_A, ROOT_B])
 
   let app = null
   const opened = []
   try {
-    // ── window A: the primary, on the last-active workspace ──
+    // ── window 1: the primary, on the last-active workspace ──
     const launched = await launchApp(DIR)
     app = launched.app
-    const winA = launched.win
-    const idA = await identityOf(winA)
-    t.equal('the first window shows the last-active workspace', idA?.workspaceId, WS_A.id)
-    t.equal('the first window is the primary', idA?.isPrimary, true)
+    const win1 = launched.win
+    const id1 = await identityOf(win1)
+    t.equal('the first window shows the last-active workspace', id1?.workspaceId, WS_A.id)
+    t.equal('the first window is the primary', id1?.isPrimary, true)
+    t.check('the first window has a persisted key', typeof id1?.windowKey === 'string', id1)
+    const key1 = id1.windowKey
     t.check(
-      'alone, the primary hosts every workspace',
-      [WS_A.id, WS_B.id, WS_C.id].every((w) => idA?.hostedWorkspaceIds?.includes(w)),
-      idA?.hostedWorkspaceIds
+      'windows.json lists the first window on its workspace',
+      persistedWindows(DIR).some((w) => w.key === key1 && w.workspaceId === WS_A.id),
+      persistedWindows(DIR)
     )
 
-    // A group with a ticking terminal in A. The loop is the streaming probe.
-    const groupA = await callMcp(app, 'createGroup', { name: 'A lane' })
+    // A group with a ticking terminal in window 1. The loop is the streaming probe.
+    const groupA = await callMcp(app, 'createGroup', { name: 'W1 lane' })
     const tick = await callMcp(app, 'openSession', {
       cwd: ROOT_A,
       mode: 'terminal',
@@ -155,127 +131,81 @@ export async function run(t) {
       autoRun: true
     })
     opened.push(tick.sessionId)
-    // Seed groups in B and C from the primary, which hosts them hidden: their
-    // files must survive every hosting hand-over below.
-    for (const [name, root, wsx] of [
-      ['B seed', ROOT_B, WS_B],
-      ['C seed', ROOT_C, WS_C]
-    ]) {
-      const g = await callMcp(app, 'createGroup', { name, workspace: wsx.id })
-      const s = await callMcp(app, 'openSession', {
-        cwd: root,
-        mode: 'terminal',
-        groupId: g.groupId,
-        workspace: wsx.id
-      })
-      opened.push(s.sessionId)
-    }
     await sleep(3000)
-    const t0 = await lastTick(app, tick.sessionId, idA.windowId)
-    t.check('the terminal in A is streaming (positive control)', t0 > 0, t0)
+    const t0 = await lastTick(app, tick.sessionId, id1.windowId)
+    t.check('the terminal in window 1 is streaming (positive control)', t0 > 0, t0)
     t.check(
-      "the primary wrote B's seed group to B's file",
-      !!(await untilGroups(WS_B.id, ['B seed'])),
-      groupNames(readLayout(WS_B.id))
+      "window 1's own layout file carries its group",
+      !!(await untilGroups(key1, ['W1 lane'])),
+      groupNames(windowLayout(DIR, key1))
     )
-    t.check(
-      "the primary wrote C's seed group to C's file",
-      !!(await untilGroups(WS_C.id, ['C seed'])),
-      groupNames(readLayout(WS_C.id))
-    )
+    const recTick = sessionRecords().find((r) => r.id === tick.sessionId)
+    t.equal("the session record carries window 1's key", recTick?.windowKey, key1)
 
-    // DEAD records for A and B, written after A booted: window B's boot must
-    // prompt for B's and neither adopt nor prompt for A's.
-    // Plain records are keyed by a UUID — a malformed id is pruned as junk.
-    const deadA = 'dddddddd-0000-4000-8000-00000000dea0'
-    const deadB = 'dddddddd-0000-4000-8000-00000000deb0'
-    writeDeadRecord(deadA, ROOT_A, WS_A.id)
-    writeDeadRecord(deadB, ROOT_B, WS_B.id)
-
-    // ── window B on workspace B ──
-    const b = await openWindow(app, winA, WS_B.id, { settleMs: 1000 })
-    t.equal('opening workspace B made a NEW window', b.focusedExisting, false)
-    const prompt = await until(() =>
-      b.page.evaluate(() => {
-        const text = document.body.textContent || ''
-        return text.includes('Restore previous session?') ? text : null
-      })
-    )
-    t.check('window B prompted for its own dead record (positive control)', prompt !== null)
-    t.check(
-      "and the prompt lists ONE terminal — B's, not A's",
-      !!prompt && prompt.includes('1 terminal') && !prompt.includes('2 terminals'),
-      prompt?.slice(
-        prompt.indexOf('Restore previous session?'),
-        prompt.indexOf('Restore previous session?') + 120
-      )
-    )
-    await b.page.click('button:has-text("Start fresh")')
-    await sleep(2500)
-    t.check(
-      'B discarded its own dead record',
-      !existsSync(path.join(DIR, 'session-records', `${deadB}.json`))
-    )
-    t.check(
-      "and left A's dead record alone",
-      existsSync(path.join(DIR, 'session-records', `${deadA}.json`))
-    )
-    rmSync(path.join(DIR, 'session-records', `${deadA}.json`), { force: true })
-
-    const idB = await identityOf(b.page)
-    t.equal('window B shows workspace B', idB?.workspaceId, WS_B.id)
-    t.equal('window B is not the primary', idB?.isPrimary, false)
-    t.check(
-      'window B hosts only workspace B',
-      JSON.stringify(idB?.hostedWorkspaceIds) === JSON.stringify([WS_B.id]),
-      idB?.hostedWorkspaceIds
-    )
-    const idA2 = await identityOf(winA)
-    t.check(
-      'the primary no longer hosts workspace B once B shows it',
-      idA2?.hostedWorkspaceIds?.includes(WS_A.id) && !idA2?.hostedWorkspaceIds?.includes(WS_B.id),
-      idA2?.hostedWorkspaceIds
-    )
+    // ── window 2 on the SAME workspace ──
+    const w2 = await openWindow(app, win1, WS_A.id, { settleMs: 2500 })
+    const id2 = await identityOf(w2.page)
+    t.equal('window 2 shows the same workspace A', id2?.workspaceId, WS_A.id)
+    t.equal('window 2 is not the primary', id2?.isPrimary, false)
+    t.check('window 2 has its own key', typeof id2?.windowKey === 'string' && id2.windowKey !== key1, id2)
+    const key2 = id2.windowKey
     t.equal('two windows are open', (await windows(app)).length, 2)
-
-    // B took over workspace B WITHOUT truncating its file: the seed group,
-    // whose session lives in the primary, is still there.
     t.check(
-      "B's file still carries the seed group after B's boot",
-      groupNames(readLayout(WS_B.id)).includes('B seed'),
-      groupNames(readLayout(WS_B.id))
+      'windows.json lists both windows',
+      persistedWindows(DIR).length === 2 && persistedWindows(DIR).some((w) => w.key === key2),
+      persistedWindows(DIR)
     )
-    const listB = await callMcpIn(app, idB.windowId, 'list', { workspace: WS_B.id })
+    const list2 = await callMcpIn(app, id2.windowId, 'list', {})
     t.check(
-      'and B shows it as a group (its session lives elsewhere for now)',
-      listB.groups.some((g) => g.name === 'B seed'),
-      listB.groups.map((g) => g.name)
+      "window 2 starts with an empty sidebar — window 1's group is not there",
+      list2.groups.length === 0 && list2.sessions.length === 0,
+      { groups: listNames(list2), sessions: list2.sessions.length }
     )
 
-    // The guard: workspace B is shown — asking again focuses, never duplicates.
-    const again = await openWindow(app, winA, WS_B.id)
-    t.equal('opening a shown workspace reports focusedExisting', again.focusedExisting, true)
-    t.equal('and names the window that shows it', again.windowId, idB.windowId)
-    t.equal('and opened no window', (await windows(app)).length, 2)
-
-    // The state file's last-active is now B (B was opened last)...
-    const stateAfterOpen = JSON.parse(readFileSync(path.join(DIR, 'workspace-state.json'), 'utf-8'))
-    t.equal(
-      'opening B made it the last-active workspace',
-      stateAfterOpen.lastActiveWorkspaceId,
-      WS_B.id
+    // A group with a session in window 2, from window 2's own renderer.
+    const group2 = await callMcpIn(app, id2.windowId, 'createGroup', { name: 'W2 lane' })
+    const opened2 = await callMcpIn(app, id2.windowId, 'openSession', {
+      cwd: ROOT_A,
+      mode: 'terminal',
+      groupId: group2.groupId
+    })
+    opened.push(opened2.sessionId)
+    await sleep(2000)
+    const rec2 = sessionRecords().find((r) => r.id === opened2.sessionId)
+    t.equal("a spawn from window 2 carries window 2's key", rec2?.windowKey, key2)
+    t.equal('and its workspace', rec2?.workspaceId, WS_A.id)
+    t.check(
+      "window 1 never lists window 2's tab",
+      !(await callMcpIn(app, id1.windowId, 'list', {})).sessions.some((s) => s.id === opened2.sessionId)
     )
-    t.equal(
-      'the old key mirrors the new one (downgrade safety)',
-      stateAfterOpen.activeWorkspaceId,
-      WS_B.id
+    t.check(
+      "window 2's file carries its group and not window 1's",
+      !!(await untilGroups(key2, ['W2 lane'])),
+      groupNames(windowLayout(DIR, key2))
+    )
+    t.check(
+      "window 1's file is untouched",
+      same(groupNames(windowLayout(DIR, key1)), ['W1 lane']),
+      groupNames(windowLayout(DIR, key1))
+    )
+    t.check(
+      'the legacy single layout file never appears',
+      !existsSync(path.join(DIR, 'sidebar-layout.json'))
     )
 
-    // ...yet a RAW pty:spawn from A's renderer with no workspace at all is
-    // stamped by main from A's window, not from the file (invariant 4 at
-    // main's own layer; every renderer path stamps explicitly, this is the
-    // fallback a windowed caller gets).
-    const rawId = await winA.evaluate(
+    // ── window 2 switches to B: window 1 untouched, the switch persisted ──
+    await callMcpIn(app, id2.windowId, 'switchWorkspace', { workspace: WS_B.id })
+    await until(() => identityOf(w2.page).then((id) => (id?.workspaceId === WS_B.id ? id : null)))
+    t.equal('window 2 now shows workspace B', (await identityOf(w2.page))?.workspaceId, WS_B.id)
+    t.equal('window 1 still shows A', (await identityOf(win1))?.workspaceId, WS_A.id)
+    t.check(
+      'windows.json follows the switch',
+      persistedWindows(DIR).find((w) => w.key === key2)?.workspaceId === WS_B.id,
+      persistedWindows(DIR)
+    )
+    // The state file's last-active is now B — yet a RAW pty:spawn from window
+    // 1's renderer with no workspace at all is stamped by main from window 1.
+    const rawId = await win1.evaluate(
       (cwd) =>
         window.electronAPI
           .spawnSession(cwd, { claudeMode: false, tmuxMode: false })
@@ -284,269 +214,126 @@ export async function run(t) {
     )
     await sleep(800)
     const rawRec = sessionRecords().find((r) => r.id === rawId)
-    t.equal(
-      'a raw spawn from window A is stamped by main with A, not the last-active B',
-      rawRec?.workspaceId,
-      WS_A.id
-    )
-    await winA.evaluate((id) => window.electronAPI.killSession(id), rawId)
+    t.equal('a raw spawn from window 1 is stamped with A, not the last-active B', rawRec?.workspaceId, WS_A.id)
+    t.equal("and with window 1's key", rawRec?.windowKey, key1)
+    await win1.evaluate((id) => window.electronAPI.killSession(id), rawId)
 
-    // ...and a spawn from A through the dispatcher, with no workspace named, is stamped A too.
-    const openedA2 = await callMcpIn(app, idA.windowId, 'openSession', {
-      cwd: ROOT_A,
-      mode: 'terminal',
-      groupId: groupA.groupId
-    })
-    opened.push(openedA2.sessionId)
-    await sleep(1500)
-    const recA2 = sessionRecords().find((r) => r.id === openedA2.sessionId)
-    t.equal(
-      'a spawn from window A is stamped with A, not the last-active B',
-      recA2?.workspaceId,
-      WS_A.id
-    )
-
-    // A group with a session in B, from B's own renderer.
-    const groupB = await callMcpIn(app, idB.windowId, 'createGroup', { name: 'B lane' })
-    const openedB = await callMcpIn(app, idB.windowId, 'openSession', {
+    const groupB = await callMcpIn(app, id2.windowId, 'createGroup', { name: 'B from W2' })
+    const openedB = await callMcpIn(app, id2.windowId, 'openSession', {
       cwd: ROOT_B,
       mode: 'terminal',
       groupId: groupB.groupId
     })
     opened.push(openedB.sessionId)
-    await sleep(2500)
-    const recB = sessionRecords().find((r) => r.id === openedB.sessionId)
-    t.equal('a spawn from window B is stamped with B', recB?.workspaceId, WS_B.id)
-
-    // ── one layout file per workspace, none carrying another's groups ──
     t.check(
-      "A's file carries A's group and not B's",
-      !!(await untilGroups(WS_A.id, ['A lane'])),
-      groupNames(readLayout(WS_A.id))
-    )
-    t.check(
-      "B's file carries the seed AND B's own group, nothing of A",
-      !!(await untilGroups(WS_B.id, ['B seed', 'B lane'])),
-      groupNames(readLayout(WS_B.id))
-    )
-    t.check(
-      'the legacy single layout file never appears',
-      !existsSync(path.join(DIR, 'sidebar-layout.json'))
+      "window 2's file carries both of its groups (A's hidden, B's shown)",
+      !!(await untilGroups(key2, ['W2 lane', 'B from W2'])),
+      groupNames(windowLayout(DIR, key2))
     )
 
-    // A cross-workspace write is refused by main, loudly, and writes nothing:
-    // B's renderer tries to overwrite A's layout file.
-    const rogue = await b.page.evaluate(
-      (wsId) =>
-        window.electronAPI.sidebarLayoutSave(wsId, {
-          groups: [
-            {
-              id: 'rogue',
-              name: 'Rogue',
-              sessionIds: [],
-              collapsed: false,
-              cwd: null,
-              terminals: []
-            }
-          ],
-          displayOrder: ['rogue']
-        }),
-      WS_A.id
-    )
-    t.equal("a write to another window's workspace is refused", rogue?.ok, false)
-    t.equal('the refusal names the reason', rogue?.reason, 'not-host')
-    t.check(
-      "and A's file is untouched",
-      !groupNames(readLayout(WS_A.id)).includes('Rogue'),
-      groupNames(readLayout(WS_A.id))
-    )
+    // ── a third window on a workspace already shown: no guard, it opens ──
+    const w3 = await openWindow(app, win1, WS_A.id, { settleMs: 1500 })
+    t.equal('a third window on A opened (no guard)', (await windows(app)).length, 3)
+    t.equal('and shows A', (await identityOf(w3.page))?.workspaceId, WS_A.id)
+    await closeWindow(app, w3.page)
+    t.equal('closing the empty third window leaves two', (await windows(app)).length, 2)
+    t.equal('and windows.json forgot it', persistedWindows(DIR).length, 2)
 
-    // ── B switches to C (unshown): it must READ C's file before writing it ──
-    await callMcpIn(app, idB.windowId, 'switchWorkspace', { workspace: WS_C.id })
-    await until(() => identityOf(b.page).then((id) => (id?.workspaceId === WS_C.id ? id : null)))
-    t.equal('window B now shows workspace C', (await identityOf(b.page))?.workspaceId, WS_C.id)
-    await sleep(1000)
-    const groupCfromB = await callMcpIn(app, idB.windowId, 'createGroup', { name: 'C from B' })
-    const openedC = await callMcpIn(app, idB.windowId, 'openSession', {
-      cwd: ROOT_C,
-      mode: 'terminal',
-      groupId: groupCfromB.groupId
-    })
-    opened.push(openedC.sessionId)
-    t.check(
-      "C's file keeps the seed group next to the one B added",
-      !!(await untilGroups(WS_C.id, ['C seed', 'C from B'])),
-      groupNames(readLayout(WS_C.id))
-    )
-    t.check(
-      "B's file kept both of B's groups after B left it",
-      JSON.stringify(groupNames(readLayout(WS_B.id)).sort()) ===
-        JSON.stringify(['B lane', 'B seed']),
-      groupNames(readLayout(WS_B.id))
-    )
-
-    // ── close B: A keeps streaming, B's sessions are detached not killed,
-    //    and A regains C without clobbering what B wrote ──
-    // Its tmux session is created when the tab mounts; focus it, then poll.
-    await callMcpIn(app, idB.windowId, 'focus', { sessionId: openedC.sessionId })
-    const tmuxC = await until(() => {
-      const name = sessionRecords().find((r) => r.id === openedC.sessionId)?.tmuxName
-      return name && tmuxSessionAlive(name) ? name : null
-    })
-    t.check("B's session is tmux-backed and running (the detach case)", tmuxC !== null, tmuxC)
-    const before = await lastTick(app, tick.sessionId, idA.windowId)
-    await closeWindow(app, b.page)
-    t.equal('window B is gone', (await windows(app)).length, 1)
-    await sleep(1500)
-    const after = await lastTick(app, tick.sessionId, idA.windowId)
-    t.check("A's terminal kept streaming across B's close", after > before, { before, after })
-    const listAfter = await callMcp(app, 'list', {})
-    const aAfter = listAfter.sessions.find((s) => s.id === tick.sessionId)
-    t.equal("A's session never received pty:exit", aAfter?.alive, true)
-    t.check(
-      "B's tmux session survived the close (detached, not killed)",
-      tmuxSessionAlive(tmuxC),
-      tmuxC
-    )
-    t.check(
-      "B's session record survived the close",
-      sessionRecords().some((r) => r.id === openedC.sessionId)
-    )
-    const idA3 = await identityOf(winA)
-    t.check(
-      'the primary hosts B and C again after B closed',
-      idA3?.hostedWorkspaceIds?.includes(WS_B.id) && idA3?.hostedWorkspaceIds?.includes(WS_C.id),
-      idA3?.hostedWorkspaceIds
-    )
-    // A change in A now: C's file must still hold what B wrote there. The
-    // group carries a session so it survives the restart below (an empty
-    // group has nothing to restore around).
-    const groupA2 = await callMcp(app, 'createGroup', { name: 'A second' })
-    const openedA3 = await callMcp(app, 'openSession', {
-      cwd: ROOT_A,
-      mode: 'terminal',
-      groupId: groupA2.groupId
-    })
-    opened.push(openedA3.sessionId)
-    await sleep(2000)
-    t.check(
-      "A's file gained the new group next to the first",
-      !!(await untilGroups(WS_A.id, ['A lane', 'A second'])),
-      groupNames(readLayout(WS_A.id))
-    )
-    t.check(
-      "C's file still carries what B wrote (A re-read it before writing)",
-      JSON.stringify(groupNames(readLayout(WS_C.id)).sort()) ===
-        JSON.stringify(['C from B', 'C seed']),
-      groupNames(readLayout(WS_C.id))
-    )
-    t.check(
-      "B's file is intact too",
-      JSON.stringify(groupNames(readLayout(WS_B.id)).sort()) ===
-        JSON.stringify(['B lane', 'B seed']),
-      groupNames(readLayout(WS_B.id))
-    )
-
-    // ── restart: the last-active workspace, and every layout, come back ──
+    // ── restart with two windows open: both come back with their own content ──
     await app.close()
     app = null
     await sleep(1500)
-    const relaunched = await launchApp(DIR, { settleMs: 6000 })
+    const relaunched = await launchApp(DIR, { settleMs: 7000 })
     app = relaunched.app
-    const win1 = relaunched.win
-    const id1 = await identityOf(win1)
-    t.equal(
-      'after a restart the first window opens on the last-active workspace',
-      id1?.workspaceId,
-      WS_C.id
-    )
-    // The first window shows C. Its restore prompt is scoped to C (§3.6): the
-    // C-seed session was spawned into a hidden workspace and never mounted, so
-    // it comes back as a dead record and is offered here — and ONLY it, not
-    // B's dead seed, which waits for B to be opened (its group stays a shell).
-    // Answer Restore so C seed relaunches; boot then finishes restoring.
-    const restartPrompt = await until(() =>
-      win1.evaluate(() => {
-        const text = document.body.textContent || ''
-        return text.includes('Restore previous session?') ? text : null
-      })
-    )
-    t.check('the restart prompt is scoped to the shown workspace (C)', restartPrompt !== null)
+    const back = await windows(app)
+    t.equal('after a restart both windows come back', back.length, 2)
+    const ids = await Promise.all(back.map((w) => identityOf(w.page)))
+    const back1 = ids.find((i) => i?.windowKey === key1)
+    const back2 = ids.find((i) => i?.windowKey === key2)
+    t.check('window 1 came back with its key, on A', back1?.workspaceId === WS_A.id, ids)
+    t.check('window 2 came back with its key, on B', back2?.workspaceId === WS_B.id, ids)
+    const r1 = await untilListed(app, back1.windowId, ['W1 lane'])
+    t.check("window 1 restored ITS group around its session", !!r1, listNames(await callMcpIn(app, back1.windowId, 'list', {})))
     t.check(
-      'and offers ONE terminal — C-seed, not B-seed',
-      !!restartPrompt &&
-        restartPrompt.includes('1 terminal') &&
-        !restartPrompt.includes('2 terminals'),
-      restartPrompt?.slice(
-        restartPrompt.indexOf('Restore previous session?'),
-        restartPrompt.indexOf('Restore previous session?') + 120
-      )
+      'and the ticking session is back in it, alive',
+      r1?.groups.find((g) => g.name === 'W1 lane')?.sessionIds.includes(tick.sessionId) &&
+        r1?.sessions.find((s) => s.id === tick.sessionId)?.alive === true,
+      r1?.groups
     )
-    await win1.click('button:has-text("Restore")')
-    await sleep(2500)
-    const expected = [
-      ['A lane', WS_A, tick.sessionId],
-      ['A second', WS_A, openedA3.sessionId],
-      ['B seed', WS_B, opened[1]], // hidden-hosted shell: group kept, dead record awaits B opening
-      ['B lane', WS_B, openedB.sessionId], // live, adopted hidden
-      ['C seed', WS_C, null], // relaunched fresh, new id
-      ['C from B', WS_C, openedC.sessionId]
-    ]
-    // Adoption of every survivor races the machine load; poll until the store
-    // holds every group rather than sampling once.
-    const listed =
-      (await until(async () => {
-        const l = await callMcp(app, 'list', {})
-        return expected.every(([name]) => l.groups.some((g) => g.name === name)) ? l : null
-      })) ?? (await callMcp(app, 'list', {}))
-    const names = listed.groups.map((g) => g.name)
-    for (const [name, wsx, sid] of expected) {
-      const g = listed.groups.find((x) => x.name === name)
-      t.check(
-        `"${name}" came back from its own file, scoped to its workspace`,
-        g?.workspaceId === wsx.id,
-        { names, g }
-      )
-      if (sid)
-        t.check(`and its session is in "${name}"`, !!g?.sessionIds?.includes(sid), g?.sessionIds)
-    }
-    // The primary now holds every workspace's groups in one store, and still
-    // writes each workspace's file with that workspace's groups only.
+    const r2 = await untilListed(app, back2.windowId, ['W2 lane', 'B from W2'])
+    t.check('window 2 restored ITS two groups (the hidden A one included)', !!r2, listNames(await callMcpIn(app, back2.windowId, 'list', {})))
+    t.check(
+      'with their sessions in place',
+      r2?.groups.find((g) => g.name === 'W2 lane')?.sessionIds.includes(opened2.sessionId) &&
+        r2?.groups.find((g) => g.name === 'B from W2')?.sessionIds.includes(openedB.sessionId),
+      r2?.groups
+    )
+    const win1b = back.find((w) => w.id === back1.windowId).page
+    const win2b = back.find((w) => w.id === back2.windowId).page
+
+    // ── close window 2: window 1 keeps streaming and takes window 2's content ──
+    await callMcpIn(app, back2.windowId, 'focus', { sessionId: openedB.sessionId })
+    const tmuxB = await until(() => {
+      const name = sessionRecords().find((r) => r.id === openedB.sessionId)?.tmuxName
+      return name && tmuxSessionAlive(name) ? name : null
+    })
+    t.check("window 2's session is tmux-backed and running (the hand-over case)", tmuxB !== null, tmuxB)
+    await sleep(2000)
+    const before = await lastTick(app, tick.sessionId, back1.windowId)
+    await closeWindow(app, win2b)
+    t.equal('window 2 is gone', (await windows(app)).length, 1)
     await sleep(1500)
+    const after = await lastTick(app, tick.sessionId, back1.windowId)
+    t.check("window 1's terminal kept streaming across the close", after > before, { before, after })
+    const handed = await untilListed(app, back1.windowId, ['W1 lane', 'W2 lane', 'B from W2'])
+    t.check("window 1 took in window 2's groups", !!handed, listNames(await callMcpIn(app, back1.windowId, 'list', {})))
     t.check(
-      "after the restart A's file carries only A's groups",
-      JSON.stringify(groupNames(readLayout(WS_A.id)).sort()) ===
-        JSON.stringify(['A lane', 'A second']),
-      groupNames(readLayout(WS_A.id))
+      "and window 2's sessions, alive, in their groups",
+      handed?.sessions.find((s) => s.id === opened2.sessionId)?.alive === true &&
+        handed?.sessions.find((s) => s.id === openedB.sessionId)?.alive === true &&
+        handed?.groups.find((g) => g.name === 'W2 lane')?.sessionIds.includes(opened2.sessionId) &&
+        handed?.groups.find((g) => g.name === 'B from W2')?.sessionIds.includes(openedB.sessionId),
+      handed?.sessions.map((s) => [s.id, s.alive])
     )
+    t.check("window 2's tmux session survived (detached, not killed)", tmuxSessionAlive(tmuxB), tmuxB)
+    t.equal('windows.json forgot window 2', persistedWindows(DIR).length, 1)
+    t.check("window 2's layout file is gone", windowLayout(DIR, key2) === null)
     t.check(
-      "after the restart B's file carries only B's groups",
-      JSON.stringify(groupNames(readLayout(WS_B.id)).sort()) ===
-        JSON.stringify(['B lane', 'B seed']),
-      groupNames(readLayout(WS_B.id))
+      "window 1's file now carries everything",
+      !!(await untilGroups(key1, ['W1 lane', 'W2 lane', 'B from W2'])),
+      groupNames(windowLayout(DIR, key1))
     )
+    const recHanded = sessionRecords().find((r) => r.id === opened2.sessionId)
+    t.equal("a handed-over session's record now carries window 1's key", recHanded?.windowKey, key1)
+
+    // ── restart once more: one window, everything still there ──
+    await app.close()
+    app = null
+    await sleep(1500)
+    const again = await launchApp(DIR, { settleMs: 7000 })
+    app = again.app
+    t.equal('one window comes back', (await windows(app)).length, 1)
+    const idF = await identityOf(again.win)
+    t.equal('with its key', idF?.windowKey, key1)
+    const fin = await untilListed(app, idF.windowId, ['W1 lane', 'W2 lane', 'B from W2'])
+    t.check('and every group', !!fin, listNames(await callMcpIn(app, idF.windowId, 'list', {})))
     t.check(
-      "after the restart C's file carries only C's groups",
-      JSON.stringify(groupNames(readLayout(WS_C.id)).sort()) ===
-        JSON.stringify(['C from B', 'C seed']),
-      groupNames(readLayout(WS_C.id))
+      "including the hidden workspace-B one, scoped to B",
+      fin?.groups.find((g) => g.name === 'B from W2')?.workspaceId === WS_B.id,
+      fin?.groups
     )
     const state2 = JSON.parse(readFileSync(path.join(DIR, 'workspace-state.json'), 'utf-8'))
     t.check(
-      'the new build writes both keys (one-release downgrade safety)',
-      state2.lastActiveWorkspaceId === WS_C.id && state2.activeWorkspaceId === WS_C.id,
+      'the new build writes both last-active keys (one-release downgrade safety)',
+      state2.lastActiveWorkspaceId === state2.activeWorkspaceId && typeof state2.activeWorkspaceId === 'string',
       state2
     )
+    t.check('and window 1 came back on A', idF?.workspaceId === WS_A.id, idF)
 
-    // Single window: the in-window switch works as it always did.
-    await callMcp(app, 'switchWorkspace', { workspace: WS_A.id })
-    await sleep(800)
-    t.equal('the single window switched to A', (await identityOf(win1))?.workspaceId, WS_A.id)
-
-    // Cleanup: close every session this spec opened (kills their tmux sessions).
     for (const sid of opened) {
       await callMcp(app, 'closeSession', { sessionId: sid }).catch(() => {})
     }
+    void win1b
   } finally {
     if (app) await app.close()
     killLeakedE2eTmux()

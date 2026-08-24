@@ -1,4 +1,5 @@
 import { ipcMain, Notification, BrowserWindow, app } from 'electron'
+import { bringForward } from './window-routing'
 
 export type NotificationStatus = 'shown' | 'skipped-focused' | 'unsupported'
 
@@ -26,10 +27,7 @@ export function initNotificationManager(): void {
       })
 
       notification.on('click', () => {
-        if (win) {
-          win.show()
-          win.focus()
-        }
+        bringForward(win)
         event.sender.send('notification:clicked', options.sessionId)
       })
 

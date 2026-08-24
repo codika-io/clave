@@ -1,9 +1,8 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { workspaceManager } from '../workspace-manager'
 import { windowRegistry } from '../window-registry'
 import { isValidLayoutKey } from '../sidebar-layout-manager'
 import type { Workspace } from '../../shared/workspace-types'
-import { broadcastIdentities } from './window-handlers'
 
 /** Registry/pin changes reach every OTHER window, which folds them into its
  *  stores (registry and pins only — never groups or sessions). The sender
@@ -49,36 +48,20 @@ export function registerWorkspaceHandlers(): void {
     }
     workspaceManager.updateRegistry(workspaces)
     broadcastStateChanged(event.sender)
-    // A workspace added or removed changes what the primary hosts.
-    broadcastIdentities()
     return { ok: true as const }
   })
 
-  // The hosting rule applies to pins too: a window writes the pins of a
-  // workspace it hosts. 'all' (the one-time localStorage import) is the
-  // primary's alone. The scope is a partition key and is validated as one.
+  // Pins are per workspace and global to the app: any window writes the
+  // partition it changed (a refresh from the .clave files, a pin added or
+  // removed), and every other window folds the change in. 'all' is the
+  // one-time localStorage import. The scope is a partition key and is
+  // validated as one.
   ipcMain.handle('workspace:update-pins', (event, scope: unknown, pins: unknown) => {
-    const sender = BrowserWindow.fromWebContents(event.sender)
     const key: string | null | 'all' | undefined =
       scope === 'all' || scope === null ? scope : isValidLayoutKey(scope) ? scope : undefined
     if (key === undefined || !Array.isArray(pins)) {
       console.error(`[workspace] refused: invalid pins scope ${JSON.stringify(scope)}`)
       return { ok: false as const, reason: 'invalid-key' as const }
-    }
-    const allowed =
-      !!sender &&
-      (key === 'all'
-        ? windowRegistry.isPrimary(sender.id)
-        : windowRegistry.canWriteWorkspace(sender.id, key))
-    if (!allowed) {
-      const host =
-        key && key !== 'all'
-          ? windowRegistry.getHostWindowForWorkspace(key)
-          : windowRegistry.getPrimaryWindow()
-      console.error(
-        `[workspace] refused: window ${sender?.id ?? '?'} may not write pins of workspace ${key ?? '(unscoped)'} — hosted by window ${host?.id ?? '?'}`
-      )
-      return { ok: false as const, reason: 'not-host' as const, hostWindowId: host?.id ?? null }
     }
     workspaceManager.updatePins(key, pins)
     broadcastStateChanged(event.sender)

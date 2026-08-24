@@ -3,7 +3,7 @@ import { spawn, ChildProcessByStdio } from 'child_process'
 import type { Readable, Writable } from 'stream'
 import { createInterface } from 'readline'
 import { join } from 'path'
-import { getMainWindow } from './window-utils'
+import { focusedOrPrimaryWindow } from './window-routing'
 import { preferencesManager } from './preferences-manager'
 
 /**
@@ -33,11 +33,13 @@ function helperPath(): string {
 }
 
 function sendToRenderer(channel: string): void {
-  getMainWindow()?.webContents.send(channel)
+  // The overlay follows the focused window (else primary): Mission Control
+  // shows one window's transform at a time.
+  focusedOrPrimaryWindow()?.webContents.send(channel)
 }
 
 function forwardEntered(): void {
-  const win = getMainWindow()
+  const win = focusedOrPrimaryWindow()
   if (!win || win.isMinimized() || Date.now() < suppressUntil) return
   sendToRenderer('mission-control:entered')
 }
@@ -57,7 +59,7 @@ function writeCommand(cmd: Record<string, unknown>): void {
 /** Tell the helper which window to watch. CGWindowID comes from getMediaSourceId(). */
 export function sendTargetWindow(): void {
   if (!child) return
-  const sourceId = getMainWindow()?.getMediaSourceId()
+  const sourceId = focusedOrPrimaryWindow()?.getMediaSourceId()
   const match = sourceId?.match(/^window:(\d+):/)
   if (match) {
     writeCommand({ cmd: 'set-target-window', windowId: Number(match[1]) })

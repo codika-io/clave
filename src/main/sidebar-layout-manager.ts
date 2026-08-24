@@ -3,7 +3,6 @@ import * as path from 'path'
 import { app } from 'electron'
 import {
   concatLayouts,
-  mergeLayouts,
   partitionLegacyLayout,
   type PartitionContext,
   type SidebarLayoutData
@@ -15,24 +14,28 @@ import {
  *  them, written from the main process so it survives a hard kill (Ctrl+C /
  *  crash) the way Chromium's lazily-flushed localStorage does not.
  *
- *  Keyed PER WORKSPACE since multi-window (PRDCT-1703): a window shows one
- *  workspace, so two windows writing one global file erased each other on
- *  every change. Each workspace's layout lives in
- *  `sidebar-layouts/<workspaceId>.json`; the null key — no-workspace mode,
- *  where nothing is stamped — keeps using the legacy `sidebar-layout.json`
- *  exactly as before. The legacy file is migrated the first time a load
- *  happens with at least one registered workspace (see `migrateLegacy`). */
+ *  ONE FILE PER WINDOW since multi-window (PRDCT-1703): a window is the whole
+ *  app once more, and its sidebar is its own — `sidebar-layouts/windows/
+ *  <windowKey>.json`, read and written by that window alone, so there is no
+ *  ownership rule and nothing to arbitrate. Groups keep their `workspaceId`
+ *  stamp inside the file (the window shows the ones of its active workspace,
+ *  as it always did). A file whose window no longer exists is an ORPHAN: the
+ *  primary window takes it in at its next boot.
+ *
+ *  Two older shapes migrate into the first window's file, once, on the first
+ *  boot of this build: the single `sidebar-layout.json` every release before
+ *  multi-window wrote, and the per-workspace `sidebar-layouts/<workspaceId>.
+ *  json` files of the halted one-workspace-per-window build (dev only).
+ *  Sources are RENAMED to `.migrated-backup`, never deleted. */
 export type SidebarLayout = SidebarLayoutData
-
-/** A layout key: a workspace id, or null for the unscoped (no-workspace) layout. */
-export type LayoutKey = string | null
 
 export const LEGACY_LAYOUT_FILE = 'sidebar-layout.json'
 export const LAYOUTS_DIR = 'sidebar-layouts'
+export const WINDOW_LAYOUTS_DIR = 'windows'
 export const MIGRATED_BACKUP_SUFFIX = '.migrated-backup'
 
-/** Keys become file names: only the id alphabet the registry mints (uuids)
- *  is accepted, so a malformed key can never escape the layouts directory. */
+/** Keys become file names: only the id alphabet we mint (uuids) is accepted,
+ *  so a malformed key can never escape the layouts directory. */
 export function isValidLayoutKey(key: unknown): key is string {
   return typeof key === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(key)
 }
@@ -45,19 +48,21 @@ function normalize(data: unknown): SidebarLayout {
   }
 }
 
-class SidebarLayoutManager {
-  private readonly legacyPath: string
-  private readonly dir: string
+export const EMPTY_LAYOUT: SidebarLayout = { groups: [], displayOrder: [] }
 
-  constructor() {
-    const userData = app.getPath('userData')
+export class SidebarLayoutManager {
+  private readonly legacyPath: string
+  private readonly workspaceDir: string
+  private readonly windowDir: string
+
+  constructor(userData: string) {
     this.legacyPath = path.join(userData, LEGACY_LAYOUT_FILE)
-    this.dir = path.join(userData, LAYOUTS_DIR)
+    this.workspaceDir = path.join(userData, LAYOUTS_DIR)
+    this.windowDir = path.join(userData, LAYOUTS_DIR, WINDOW_LAYOUTS_DIR)
   }
 
-  fileFor(key: LayoutKey): string | null {
-    if (key === null) return this.legacyPath
-    return isValidLayoutKey(key) ? path.join(this.dir, `${key}.json`) : null
+  fileForWindow(key: string): string | null {
+    return isValidLayoutKey(key) ? path.join(this.windowDir, `${key}.json`) : null
   }
 
   private readFile(file: string): SidebarLayout | null {
@@ -77,62 +82,105 @@ class SidebarLayoutManager {
     fs.renameSync(tmp, file)
   }
 
-  loadOne(key: LayoutKey): SidebarLayout {
-    const file = this.fileFor(key)
+  /** A window's own layout; empty when it has none yet. */
+  loadForWindow(key: string): SidebarLayout {
+    const file = this.fileForWindow(key)
     return (file ? this.readFile(file) : null) ?? { groups: [], displayOrder: [] }
   }
 
-  /** The layouts of several workspaces, concatenated in the given order —
-   *  what a window holds in memory: everything it hosts (the primary at boot
-   *  hosts every workspace; a secondary window hosts its own). */
-  load(keys: LayoutKey[]): SidebarLayout {
-    return concatLayouts(keys.map((k) => this.loadOne(k)))
-  }
-
-  save(key: LayoutKey, data: SidebarLayout): boolean {
-    const file = this.fileFor(key)
+  saveForWindow(key: string, data: SidebarLayout): boolean {
+    const file = this.fileForWindow(key)
     if (!file) return false
     this.writeFile(file, data)
     return true
   }
 
-  /**
-   * One-time migration off the single legacy file. Runs only when the legacy
-   * file exists AND at least one workspace is registered (in no-workspace
-   * mode the legacy file IS the null-key layout and stays in place). Each
-   * partition is merged into a per-workspace file that may already exist —
-   * a workspace registered mid-run wrote one before this ran — then the
-   * legacy file is RENAMED to `sidebar-layout.json.migrated-backup`, never
-   * deleted. Idempotent: the second call finds no legacy file and does
-   * nothing. Returns the workspaces written, or null when nothing ran.
-   */
-  migrateLegacy(ctx: PartitionContext): string[] | null {
-    if (ctx.workspaceIds.length === 0) return null
-    if (!fs.existsSync(this.legacyPath)) return null
-    const legacy = this.readFile(this.legacyPath)
-    const written: string[] = []
-    if (legacy) {
-      for (const [ws, partition] of partitionLegacyLayout(legacy, ctx)) {
-        const file = this.fileFor(ws)
-        if (!file) {
-          console.error(
-            `[sidebar-layout] migration: ${partition.groups.length} group(s) for an invalid workspace key ${JSON.stringify(ws)} stay only in the backup`
-          )
-          continue
-        }
-        const existing = this.readFile(file)
-        this.writeFile(file, existing ? mergeLayouts(existing, partition) : partition)
-        written.push(ws)
-      }
+  /** Drop a window's file — after its content was handed to another window
+   *  (a close, an orphan take). Missing is fine. */
+  deleteForWindow(key: string): void {
+    const file = this.fileForWindow(key)
+    if (!file) return
+    try {
+      fs.unlinkSync(file)
+    } catch {
+      /* already gone */
     }
-    // Unreadable legacy file: still parked as the backup so it is never
-    // re-attempted (and never lost) — there is nothing to partition.
-    fs.renameSync(this.legacyPath, `${this.legacyPath}${MIGRATED_BACKUP_SUFFIX}`)
-    console.log(
-      `[sidebar-layout] migrated ${LEGACY_LAYOUT_FILE} into ${written.length} per-workspace file(s); legacy kept as ${LEGACY_LAYOUT_FILE}${MIGRATED_BACKUP_SUFFIX}`
+  }
+
+  /** Keys of every window layout file on disk that belongs to none of
+   *  `knownKeys` — layouts whose window no longer exists. */
+  orphanKeys(knownKeys: Set<string>): string[] {
+    let files: string[] = []
+    try {
+      files = fs.readdirSync(this.windowDir).filter((f) => f.endsWith('.json'))
+    } catch {
+      return []
+    }
+    return files
+      .map((f) => f.slice(0, -'.json'.length))
+      .filter((k) => isValidLayoutKey(k) && !knownKeys.has(k))
+  }
+
+  /** The orphans' layouts concatenated, and their files removed — the take
+   *  is one-shot; the taker persists what it merged into its own file. */
+  takeOrphans(knownKeys: Set<string>): SidebarLayout {
+    const keys = this.orphanKeys(knownKeys)
+    if (keys.length === 0) return { groups: [], displayOrder: [] }
+    const layouts = keys.map((k) => this.loadForWindow(k))
+    for (const k of keys) this.deleteForWindow(k)
+    console.log(`[sidebar-layout] primary took ${keys.length} orphan window layout(s)`)
+    return concatLayouts(layouts)
+  }
+
+  /**
+   * One-time migration into the FIRST window's file, run by main on the first
+   * boot with no windows.json. Gathers, in this order: the legacy single file
+   * (partitioned by workspace when any is registered — that stamps each
+   * unstamped group with the workspace its cwd falls under, the same rule the
+   * halted build applied — else taken as is), then every per-workspace file.
+   * Concatenated (ids deduplicated), written under `windowKey`, every source
+   * renamed to `.migrated-backup`. Idempotent: a second run finds no sources.
+   * Returns the number of sources migrated.
+   */
+  migrateIntoWindow(windowKey: string, ctx: PartitionContext | null): number {
+    const sources: { file: string; layout: SidebarLayout | null }[] = []
+    if (fs.existsSync(this.legacyPath)) {
+      const legacy = this.readFile(this.legacyPath)
+      let layout: SidebarLayout | null = legacy
+      if (legacy && ctx && ctx.workspaceIds.length > 0) {
+        layout = concatLayouts([...partitionLegacyLayout(legacy, ctx).values()])
+      }
+      sources.push({ file: this.legacyPath, layout })
+    }
+    let perWorkspace: string[] = []
+    try {
+      perWorkspace = fs
+        .readdirSync(this.workspaceDir)
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+        .map((f) => path.join(this.workspaceDir, f))
+    } catch {
+      perWorkspace = []
+    }
+    for (const file of perWorkspace) sources.push({ file, layout: this.readFile(file) })
+    if (sources.length === 0) return 0
+
+    const merged = concatLayouts(
+      [this.loadForWindow(windowKey), ...sources.map((s) => s.layout)].filter(
+        (l): l is SidebarLayout => l !== null
+      )
     )
-    return written
+    this.saveForWindow(windowKey, merged)
+    for (const s of sources) {
+      // Unreadable sources are parked too, so they are never re-attempted
+      // (and never lost) — there is nothing to migrate from them.
+      fs.renameSync(s.file, `${s.file}${MIGRATED_BACKUP_SUFFIX}`)
+    }
+    console.log(
+      `[sidebar-layout] migrated ${sources.length} layout file(s) into window ${windowKey}; sources kept as ${MIGRATED_BACKUP_SUFFIX}`
+    )
+    return sources.length
   }
 }
 
-export const sidebarLayoutManager = new SidebarLayoutManager()
+export const sidebarLayoutManager = new SidebarLayoutManager(app.getPath('userData'))

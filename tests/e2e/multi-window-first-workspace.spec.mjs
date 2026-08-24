@@ -1,10 +1,11 @@
 /**
  * Registering the FIRST workspace must not destroy existing groups
- * (PRDCT-1703, invariant 15 — the single-window regression floor). This is
- * the F1 regression: groups created in no-workspace mode are UNSTAMPED, and
- * when the first workspace is registered the primary "takes" that workspace's
- * (empty) layout and used to prune every unstamped group as member-less,
- * silently emptying the sidebar.
+ * (PRDCT-1703 — the single-window regression floor). This is the F1
+ * regression of the halted build: groups created in no-workspace mode are
+ * UNSTAMPED, and registering the first workspace used to re-read an empty
+ * per-workspace layout and prune every unstamped group as member-less,
+ * silently emptying the sidebar. With one layout file per window there is
+ * nothing to re-read; this pins that it stays that way.
  *
  * Entirely production paths: MCP createGroup + openSession in no-workspace
  * mode, then the real Settings → "Add Workspace" button with only the native
@@ -23,10 +24,10 @@ import {
   stubFolderDialog,
   callMcp,
   until,
-  killLeakedE2eTmux
+  killLeakedE2eTmux,
+  windowLayout
 } from './harness.mjs'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
-import path from 'node:path'
+import { mkdirSync } from 'node:fs'
 
 const DIR = userDataDir('multi-window-first-workspace')
 // The workspace root, and a session cwd OUTSIDE it (so no cwd placement).
@@ -34,7 +35,6 @@ const ROOT_W = '/tmp/clave-e2e-firstws-w'
 const ROOT_S = '/tmp/clave-e2e-firstws-s'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-const readJson = (p) => (existsSync(p) ? JSON.parse(readFileSync(p, 'utf-8')) : null)
 const groupNames = (l) => (l?.groups ?? []).map((g) => g.name).sort()
 
 export async function run(t) {
@@ -120,13 +120,15 @@ export async function run(t) {
     const idAfter = await win.evaluate(() => window.electronAPI.windowIdentity())
     t.equal('the window now shows the new workspace', idAfter?.workspaceId, wsId)
 
-    // The workspace's layout file carries both groups; the legacy file was
-    // migrated to a backup (kept, never deleted).
-    const wFile = readJson(path.join(DIR, 'sidebar-layouts', `${wsId}.json`))
+    // The window's own layout file carries both groups, now stamped.
+    const wFile = await until(() => {
+      const l = windowLayout(DIR, idAfter?.windowKey)
+      return l && (l.groups ?? []).every((g) => g.workspaceId === wsId) && l.groups.length === 2 ? l : null
+    })
     t.check(
-      "the workspace's layout file carries both groups",
+      "the window's layout file carries both groups, stamped with the workspace",
       JSON.stringify(groupNames(wFile)) === JSON.stringify(['ORPHAN ONE', 'ORPHAN TWO']),
-      groupNames(wFile)
+      groupNames(windowLayout(DIR, idAfter?.windowKey))
     )
 
     // Restart: the groups come back from the workspace file around the

@@ -21,14 +21,14 @@ class FakeWindow implements WindowLike {
 
 function setup(focused: () => FakeWindow | null = () => null): {
   reg: WindowRegistry<FakeWindow>
-  win: (id: number, ws: string | null) => FakeWindow
+  win: (id: number, ws: string | null, key?: string) => FakeWindow
 } {
   const reg = new WindowRegistry<FakeWindow>({ getFocusedWindow: focused })
   return {
     reg,
-    win: (id, ws) => {
+    win: (id, ws, key = `key-${id}`) => {
       const w = new FakeWindow(id)
-      reg.registerWindow(w, ws)
+      reg.registerWindow(w, key, ws)
       return w
     }
   }
@@ -46,18 +46,19 @@ describe('primary election', () => {
 
   it('re-elects the lowest surviving id when the primary closes', () => {
     const { reg, win } = setup()
-    win(1, 'A')
-    const b = win(2, 'B')
+    const a = win(1, 'A')
     win(3, 'C')
+    const b = win(2, 'B')
+    a.destroy()
     reg.unregisterWindow(1)
     expect(reg.getPrimaryWindow()).toBe(b)
-    expect(reg.isPrimary(2)).toBe(true)
   })
 
   it('keeps the primary when a non-primary closes', () => {
     const { reg, win } = setup()
     const a = win(1, 'A')
-    win(2, 'B')
+    const b = win(2, 'B')
+    b.destroy()
     reg.unregisterWindow(2)
     expect(reg.getPrimaryWindow()).toBe(a)
   })
@@ -76,93 +77,42 @@ describe('primary election', () => {
   })
 })
 
-describe('window ↔ workspace', () => {
-  it('maps a workspace to the window showing it and back', () => {
+describe('window identity', () => {
+  it('knows each window by id and by key, and the workspace it shows', () => {
     const { reg, win } = setup()
-    const a = win(1, 'A')
-    expect(reg.getWindowForWorkspace('A')).toBe(a)
+    const a = win(1, 'A', 'ka')
+    expect(reg.getWindowByKey('ka')).toBe(a)
+    expect(reg.getKeyForWindow(1)).toBe('ka')
     expect(reg.getWorkspaceForWindow(1)).toBe('A')
-    expect(reg.getWindowForWorkspace('nope')).toBeNull()
-    expect(reg.getWorkspaceForWindow(99)).toBeNull()
+    expect(reg.getWindowByKey('nope')).toBeNull()
+    expect(reg.getKeyForWindow(9)).toBeNull()
   })
 
-  it('follows a switch', () => {
+  it('several windows may show the same workspace', () => {
     const { reg, win } = setup()
     const a = win(1, 'A')
-    reg.setWindowWorkspace(1, 'B')
-    expect(reg.getWindowForWorkspace('B')).toBe(a)
-    expect(reg.getWindowForWorkspace('A')).toBeNull()
+    const b = win(2, 'A')
+    win(3, 'B')
+    expect(reg.getWindowsForWorkspace('A')).toEqual([a, b])
   })
 
-  it('a workspace nobody shows is hosted by the primary', () => {
-    const { reg, win } = setup()
-    const a = win(1, 'A')
-    const b = win(2, 'B')
-    expect(reg.getHostWindowForWorkspace('C')).toBe(a)
-    expect(reg.getHostWindowForWorkspace('B')).toBe(b)
-  })
-
-  it('the hosted set: own workspace, plus the unshown ones for the primary only', () => {
+  it('follows a switch, and the switch touches no other window', () => {
     const { reg, win } = setup()
     win(1, 'A')
-    win(2, 'B')
-    const all = ['A', 'B', 'C', 'D']
-    expect(reg.getHostedWorkspaceIds(1, all)).toEqual(['A', 'C', 'D'])
-    expect(reg.getHostedWorkspaceIds(2, all)).toEqual(['B'])
-    expect(reg.getHostedWorkspaceIds(3, all)).toEqual([])
+    win(2, 'A')
+    reg.setWindowWorkspace(2, 'B')
+    expect(reg.getWorkspaceForWindow(1)).toBe('A')
+    expect(reg.getWorkspaceForWindow(2)).toBe('B')
   })
 
-  it('the hosted set moves when a window opens or closes', () => {
+  it('a destroyed window is dropped from keys, lists and lookups', () => {
     const { reg, win } = setup()
-    win(1, 'A')
-    const all = ['A', 'B']
-    expect(reg.getHostedWorkspaceIds(1, all)).toEqual(['A', 'B'])
-    win(2, 'B')
-    expect(reg.getHostedWorkspaceIds(1, all)).toEqual(['A'])
-    reg.unregisterWindow(2)
-    expect(reg.getHostedWorkspaceIds(1, all)).toEqual(['A', 'B'])
-  })
-})
-
-describe('write ownership (the hosting rule, enforced)', () => {
-  it('a window may write the workspace it shows', () => {
-    const { reg, win } = setup()
-    win(1, 'A')
-    win(2, 'B')
-    expect(reg.canWriteWorkspace(1, 'A')).toBe(true)
-    expect(reg.canWriteWorkspace(2, 'B')).toBe(true)
-  })
-
-  it('a window may never write a workspace another window shows', () => {
-    const { reg, win } = setup()
-    win(1, 'A')
-    win(2, 'B')
-    expect(reg.canWriteWorkspace(1, 'B')).toBe(false)
-    expect(reg.canWriteWorkspace(2, 'A')).toBe(false)
-  })
-
-  it('only the primary writes an unshown workspace', () => {
-    const { reg, win } = setup()
-    win(1, 'A')
-    win(2, 'B')
-    expect(reg.canWriteWorkspace(1, 'C')).toBe(true)
-    expect(reg.canWriteWorkspace(2, 'C')).toBe(false)
-  })
-
-  it('the null key (no-workspace mode) belongs to the primary alone', () => {
-    const { reg, win } = setup()
-    win(1, null)
-    win(2, null)
-    expect(reg.canWriteWorkspace(1, null)).toBe(true)
-    expect(reg.canWriteWorkspace(2, null)).toBe(false)
-  })
-
-  it('an unknown or destroyed window writes nothing', () => {
-    const { reg, win } = setup()
-    const a = win(1, 'A')
-    expect(reg.canWriteWorkspace(7, 'A')).toBe(false)
-    a.destroy()
-    expect(reg.canWriteWorkspace(1, 'A')).toBe(false)
+    win(1, 'A', 'ka')
+    const b = win(2, 'A', 'kb')
+    b.destroy()
+    expect(reg.liveKeys()).toEqual(new Set(['ka']))
+    expect(reg.getWindowByKey('kb')).toBeNull()
+    expect(reg.listWindows().map((w) => w.id)).toEqual([1])
   })
 })
 
@@ -172,11 +122,11 @@ describe('session hosting', () => {
     const a = win(1, 'A')
     win(2, 'B')
     reg.bindSession('s1', 1)
-    reg.bindSession('s2', 2)
-    reg.bindSession('s3', 1)
+    reg.bindSession('s2', 1)
+    reg.bindSession('s3', 2)
     expect(reg.getWindowForSession('s1')).toBe(a)
-    expect(reg.getSessionsForWindow(1).sort()).toEqual(['s1', 's3'])
-    expect(reg.getSessionsForWindow(2)).toEqual(['s2'])
+    expect(reg.getSessionsForWindow(1).sort()).toEqual(['s1', 's2'])
+    expect(reg.getSessionsForWindow(2)).toEqual(['s3'])
   })
 
   it('unbind forgets exactly that session', () => {
@@ -189,7 +139,7 @@ describe('session hosting', () => {
     expect(reg.getSessionsForWindow(1)).toEqual(['s2'])
   })
 
-  it('a re-bind moves the session (the re-home case)', () => {
+  it('a re-bind moves the session (the move case)', () => {
     const { reg, win } = setup()
     win(1, 'A')
     const b = win(2, 'B')
@@ -221,77 +171,80 @@ describe('session hosting', () => {
 
 describe('resolveTargetWindow ladder', () => {
   it("rung 1: the subject session's hosting window wins over everything", () => {
-    const b = new FakeWindow(2)
-    const { reg, win } = setup(() => b)
-    const a = win(1, 'A')
-    reg.registerWindow(b, 'B')
-    reg.bindSession('s1', 1)
-    expect(reg.resolveTargetWindow({ sessionId: 's1', workspaceId: 'B' })).toBe(a)
-  })
-
-  it("rung 2: the workspace's host window (shown, else primary)", () => {
     const { reg, win } = setup()
     const a = win(1, 'A')
     const b = win(2, 'B')
-    expect(reg.resolveTargetWindow({ workspaceId: 'B' })).toBe(b)
-    expect(reg.resolveTargetWindow({ workspaceId: 'unshown' })).toBe(a)
+    reg.bindSession('s1', 2)
+    expect(reg.resolveTargetWindow({ sessionId: 's1', windowId: 1 })).toBe(b)
+    expect(reg.resolveTargetWindow({ sessionId: 's1' })).toBe(b)
+    expect(a).toBeDefined()
+  })
+
+  it('rung 2: the explicitly named window', () => {
+    const { reg, win } = setup()
+    win(1, 'A')
+    const b = win(2, 'A')
+    expect(reg.resolveTargetWindow({ windowId: 2 })).toBe(b)
+    expect(reg.resolveTargetWindow({ sessionId: 'unknown', windowId: 2 })).toBe(b)
   })
 
   it('rung 3: the focused window when nothing more specific applies', () => {
-    const b = new FakeWindow(2)
-    const { reg, win } = setup(() => b)
+    let focused: FakeWindow | null = null
+    const { reg, win } = setup(() => focused)
     win(1, 'A')
-    reg.registerWindow(b, 'B')
+    const b = win(2, 'B')
+    focused = b
     expect(reg.resolveTargetWindow({})).toBe(b)
-    expect(reg.resolveTargetWindow({ sessionId: 'unknown' })).toBe(b)
+    expect(reg.resolveTargetWindow({ windowId: 99 })).toBe(b)
   })
 
   it('rung 4: the primary when nothing is focused', () => {
-    const { reg, win } = setup(() => null)
+    const { reg, win } = setup()
     const a = win(1, 'A')
     win(2, 'B')
     expect(reg.resolveTargetWindow({})).toBe(a)
+    expect(reg.resolveTargetWindow({ sessionId: 'nope' })).toBe(a)
   })
 
   it('a focused window the registry never saw is ignored', () => {
-    const stranger = new FakeWindow(42)
-    const { reg, win } = setup(() => stranger)
+    const stray = new FakeWindow(42)
+    const { reg, win } = setup(() => stray)
     const a = win(1, 'A')
     expect(reg.resolveTargetWindow({})).toBe(a)
   })
 
   it('null when no window exists at all', () => {
     const { reg } = setup()
-    expect(reg.resolveTargetWindow({ sessionId: 's', workspaceId: 'w' })).toBeNull()
+    expect(reg.resolveTargetWindow({})).toBeNull()
   })
 })
 
 describe('identity', () => {
   it("reports the window's own identity and nothing about other windows", () => {
     const { reg, win } = setup()
-    win(1, 'A')
-    win(2, 'B')
-    expect(reg.identityOf(2, ['A', 'B', 'C'])).toEqual({
+    win(1, 'A', 'ka')
+    win(2, 'A', 'kb')
+    expect(reg.identityOf(2)).toEqual({
       windowId: 2,
-      workspaceId: 'B',
-      isPrimary: false,
-      hostedWorkspaceIds: ['B']
-    })
-    expect(reg.identityOf(1, ['A', 'B', 'C'])).toEqual({
-      windowId: 1,
+      windowKey: 'kb',
       workspaceId: 'A',
-      isPrimary: true,
-      hostedWorkspaceIds: ['A', 'C']
+      isPrimary: false
     })
-    expect(reg.identityOf(9, [])).toBeNull()
+    expect(reg.identityOf(1)).toEqual({
+      windowId: 1,
+      windowKey: 'ka',
+      workspaceId: 'A',
+      isPrimary: true
+    })
+    expect(reg.identityOf(7)).toBeNull()
   })
 
   it('lists live windows lowest id first', () => {
     const { reg, win } = setup()
     win(3, 'C')
-    const a = win(1, 'A')
+    win(1, 'A')
     const b = win(2, 'B')
-    reg.unregisterWindow(3)
-    expect(reg.listWindows()).toEqual([a, b])
+    b.destroy()
+    expect(reg.listWindows().map((w) => w.id)).toEqual([1, 3])
   })
 })
