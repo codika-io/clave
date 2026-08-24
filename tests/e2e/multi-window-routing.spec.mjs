@@ -51,6 +51,15 @@ const WS_B = {
   profileFile: null,
   createdAt: 2
 }
+// A third workspace nobody shows: the destination of the switch test.
+const ROOT_C = '/tmp/clave-e2e-mw-route-c'
+const WS_C = {
+  id: 'cccccccc-0000-4000-8000-0000000000f3',
+  name: 'RouteC',
+  rootDir: ROOT_C,
+  profileFile: null,
+  createdAt: 3
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const idsIn = (list) => (list?.sessions ?? []).map((s) => s.id)
@@ -59,8 +68,13 @@ export async function run(t) {
   killLeakedE2eTmux()
   mkdirSync(ROOT_A, { recursive: true })
   mkdirSync(ROOT_B, { recursive: true })
-  seedWorkspaces(DIR, { workspaces: [WS_A, WS_B], activeWorkspaceId: WS_A.id, fresh: true })
-  seedTrustedRoots(DIR, [ROOT_A, ROOT_B])
+  mkdirSync(ROOT_C, { recursive: true })
+  seedWorkspaces(DIR, {
+    workspaces: [WS_A, WS_B, WS_C],
+    activeWorkspaceId: WS_A.id,
+    fresh: true
+  })
+  seedTrustedRoots(DIR, [ROOT_A, ROOT_B, ROOT_C])
 
   let app = null
   const opened = []
@@ -148,6 +162,18 @@ export async function run(t) {
       focusPfromB
     )
     t.equal('the focus resolved P', toolPayload(focusPfromB)?.focused, P.sessionId)
+    // The DISCRIMINATING direction: the subject lives in the NON-primary
+    // window. Above, a routing failure is masked by the windowless fallback
+    // (rule 4 → the primary, which happens to host P). Here P (window A, the
+    // primary) focuses Q, hosted in B: only rule 1 lands it in B; any fall-
+    // through runs it in A, which has no Q, and the call errors.
+    const focusQfromA = await mcpP.call('clave_focus', { sessionId: Q.sessionId })
+    t.check(
+      'P focusing Q (in window B) by id succeeds — routed to B, not the primary',
+      !toolErrored(focusQfromA),
+      focusQfromA
+    )
+    t.equal('the focus resolved Q', toolPayload(focusQfromA)?.focused, Q.sessionId)
 
     // ── INVARIANT 10: clave_list scope all reports every session exactly once ──
     const all = toolPayload(await mcpP.call('clave_list', { workspace: 'all' }))
@@ -200,6 +226,41 @@ export async function run(t) {
       toolErrored(ambiguous),
       ambiguous
     )
+
+    // ── RULE 3 (caller's window) + §3.6: clave_switch_workspace flips the
+    // CALLER's window, never the primary ──
+    // Q lives in window B; switching to RouteC (shown nowhere) must change B's
+    // workspace and leave A untouched. Two silent failure modes both land here
+    // as red: a tool that does not carry the caller's identity falls to the
+    // windowless fallback (the primary flips), and rule 2 applied to the
+    // destination argument routes to that workspace's host (the primary flips).
+    const switched = await mcpQ.call('clave_switch_workspace', { workspace: 'RouteC' })
+    t.check('Q (window B) switched to RouteC without error', !toolErrored(switched), switched)
+    await sleep(1500)
+    t.equal(
+      'window B — the caller — now shows RouteC',
+      (await identityOf(b.page))?.workspaceId,
+      WS_C.id
+    )
+    t.equal(
+      'window A — the primary — still shows RouteA',
+      (await identityOf(winA))?.workspaceId,
+      WS_A.id
+    )
+    // The guard (invariant 12) from the MCP side: switching B to RouteA, shown
+    // in window A, is refused — B keeps RouteC, A keeps RouteA — and under
+    // --test-no-activate the guard's bring-forward of A is bookkeeping only
+    // (A is not made key). Mutating that gate away makes A key: red.
+    await mcpQ.call('clave_switch_workspace', { workspace: 'RouteA' })
+    await sleep(1000)
+    t.equal(
+      'a switch to a workspace shown elsewhere is refused: B keeps RouteC',
+      (await identityOf(b.page))?.workspaceId,
+      WS_C.id
+    )
+    t.equal('and A still shows RouteA', (await identityOf(winA))?.workspaceId, WS_A.id)
+    const aKey = await (await app.browserWindow(winA)).evaluate((w) => w.isFocused())
+    t.equal('under --test-no-activate the guard did NOT make A key', aKey, false)
 
     for (const sid of opened) {
       if (sid)

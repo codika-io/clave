@@ -145,7 +145,10 @@ async function resolveCommandWindow(
     // 'parent' / 'mine' / an unresolved ref fall to the caller's window (rule 3).
   }
   // Rule 2 — an explicit workspace argument routes to that workspace's host.
-  if (typeof p.workspace === 'string') {
+  // Not for switchWorkspace: there the argument is the DESTINATION, and §3.6
+  // has the switch operate on the CALLER's window (rule 3) — routing it to the
+  // destination's host would flip the primary instead of the asking window.
+  if (command !== 'switchWorkspace' && typeof p.workspace === 'string') {
     const wsId = resolveWorkspaceIdMain(p.workspace)
     if (wsId) {
       const host = windowRegistry.getHostWindowForWorkspace(wsId)
@@ -208,11 +211,15 @@ async function aggregateList(
 /** Run a renderer command and wrap the outcome as an MCP tool result. The
  *  target window is resolved first (§3.8): with several windows the sidebar
  *  state is partitioned by hosting, so the command runs where its subject —
- *  or its caller — lives. */
-async function runCommand(command: string, payload: unknown): Promise<ToolResult> {
+ *  or its caller — lives. `caller` is the token-derived identity of the
+ *  calling tab and drives the routing for EVERY tool; the payload's own
+ *  `callerSessionId` (forwarded only by the identity-gated tools) is what the
+ *  renderer handlers read, and is the fallback for a call with no `caller`. */
+async function runCommand(command: string, payload: unknown, caller?: string): Promise<ToolResult> {
   try {
     const p = (payload ?? {}) as Record<string, unknown>
-    const callerSessionId = typeof p.callerSessionId === 'string' ? p.callerSessionId : undefined
+    const callerSessionId =
+      caller ?? (typeof p.callerSessionId === 'string' ? p.callerSessionId : undefined)
     let result: unknown
     if (command === 'list' && (p.workspace ?? 'all') === 'all') {
       result = await aggregateList(p, callerSessionId)
@@ -238,6 +245,11 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     { name: 'clave', version: app.getVersion() },
     { instructions: INSTRUCTIONS }
   )
+  // Every tool routes on the authenticated caller (rule 3 needs it even for
+  // tools whose payload does not carry callerSessionId, e.g. focus/rename/
+  // switchWorkspace — otherwise they silently fall to the primary window).
+  const run = (command: string, args: unknown): Promise<ToolResult> =>
+    runCommand(command, args, callerSessionId)
 
   server.registerTool(
     'clave_list',
@@ -253,7 +265,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           )
       }
     },
-    (args) => runCommand('list', { ...args, callerSessionId })
+    (args) => run('list', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -277,7 +289,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           )
       }
     },
-    (args) => runCommand('createGroup', { ...args, callerSessionId })
+    (args) => run('createGroup', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -331,7 +343,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           )
       }
     },
-    (args) => runCommand('openSession', { ...args, callerSessionId })
+    (args) => run('openSession', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -347,7 +359,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .describe('Restrict the lookup to one workspace (id or name)')
       }
     },
-    (args) => runCommand('launchGroup', { ...args, callerSessionId })
+    (args) => run('launchGroup', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -359,7 +371,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         workspace: z.string().describe('Workspace id or name to activate')
       }
     },
-    (args) => runCommand('switchWorkspace', args)
+    (args) => run('switchWorkspace', args)
   )
 
   server.registerTool(
@@ -376,7 +388,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           )
       }
     },
-    (args) => runCommand('moveSession', { ...args, callerSessionId })
+    (args) => run('moveSession', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -437,7 +449,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .describe('Launch the terminal immediately (default true); false just saves the config')
       }
     },
-    (args) => runCommand('addGroupTerminal', { ...args, callerSessionId })
+    (args) => run('addGroupTerminal', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -465,7 +477,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           )
       }
     },
-    (args) => runCommand('setGroupView', { ...args, callerSessionId })
+    (args) => run('setGroupView', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -497,7 +509,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .describe("Working directory for command (defaults to the session's cwd)")
       }
     },
-    (args) => runCommand('setSessionView', { ...args, callerSessionId })
+    (args) => run('setSessionView', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -507,7 +519,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       inputSchema: { sessionId: z.string().describe('Id of the session to close') }
     },
     // callerSessionId rides along so the close is recorded with its closer.
-    (args) => runCommand('closeSession', { ...args, callerSessionId })
+    (args) => run('closeSession', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -520,7 +532,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         name: z.string().describe('New display name')
       }
     },
-    (args) => runCommand('rename', args)
+    (args) => run('rename', args)
   )
 
   server.registerTool(
@@ -529,7 +541,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       description: 'Focus a Clave tab (bring it to the foreground in the app).',
       inputSchema: { sessionId: z.string().describe('Id of the session to focus') }
     },
-    (args) => runCommand('focus', args)
+    (args) => run('focus', args)
   )
 
   server.registerTool(
@@ -550,7 +562,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .describe('The message, delivered verbatim under the provenance header')
       }
     },
-    (args) => runCommand('sendToSession', { ...args, callerSessionId })
+    (args) => run('sendToSession', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -569,7 +581,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .describe('How many trailing lines to return (default 100)')
       }
     },
-    (args) => runCommand('readSession', { ...args, callerSessionId })
+    (args) => run('readSession', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -593,7 +605,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           )
       }
     },
-    (args) => runCommand('openFile', { ...args, callerSessionId })
+    (args) => run('openFile', { ...args, callerSessionId })
   )
 
   server.registerTool(
@@ -610,7 +622,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .describe('Tab to focus when the notification is clicked (defaults to the calling tab)')
       }
     },
-    (args) => runCommand('notify', { ...args, callerSessionId })
+    (args) => run('notify', { ...args, callerSessionId })
   )
 
   server.registerTool(

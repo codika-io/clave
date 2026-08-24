@@ -4,6 +4,7 @@ import * as path from 'path'
 import { windowRegistry, type WindowIdentity } from '../window-registry'
 import { workspaceManager } from '../workspace-manager'
 import { ptyManager, sessionRecordsDir } from '../pty-manager'
+import { TEST_NO_ACTIVATE } from '../test-mode'
 
 /** What a renderer learns about itself, and only itself: its window id, the
  *  workspace it shows, whether it is the primary, and the workspaces it
@@ -151,7 +152,9 @@ export function registerWindowHandlers(deps: WindowHandlerDeps): void {
       if (target !== null) {
         const shown = windowRegistry.getWindowForWorkspace(target)
         if (shown && shown.id !== win.id) {
-          if (options?.focus !== false) {
+          // Same gate as openWorkspaceWindow's bring-forward: under
+          // --test-no-activate the OS-level focus is skipped, the answer is not.
+          if (options?.focus !== false && !TEST_NO_ACTIVATE) {
             if (shown.isMinimized()) shown.restore()
             shown.show()
             shown.focus()
