@@ -114,7 +114,12 @@ class SidebarLayoutManager {
     if (legacy) {
       for (const [ws, partition] of partitionLegacyLayout(legacy, ctx)) {
         const file = this.fileFor(ws)
-        if (!file) continue
+        if (!file) {
+          console.error(
+            `[sidebar-layout] migration: ${partition.groups.length} group(s) for an invalid workspace key ${JSON.stringify(ws)} stay only in the backup`
+          )
+          continue
+        }
         const existing = this.readFile(file)
         this.writeFile(file, existing ? mergeLayouts(existing, partition) : partition)
         written.push(ws)

@@ -8,7 +8,7 @@ import {
   type PinnedGroup,
   type PinnedGroupBlueprint
 } from '../store/pinned-store'
-import { useSessionStore } from '../store/session-store'
+import { useSessionStore, markLayoutKeysTaken, dropLayoutKeys } from '../store/session-store'
 
 /** Orchestration layer above the stores. The stores stay import-acyclic
  *  (session→workspace, pinned→workspace); everything that has to touch several
@@ -75,13 +75,84 @@ function enableWorkspacePersistence(): void {
 // ── Identity and the other windows ───────────────────────────────────────────
 
 let subscribed = false
+/** Claims in flight: a `window:workspace-changed` push that lands while this
+ *  window is itself switching must not run the view switch a second time. */
+let claimsInFlight = 0
+/** Resolved once the boot effect has restored its layouts — a key gained
+ *  before that must wait, or the boot restore would replace what it merged. */
+let bootLayoutsDone: () => void = () => {}
+const bootLayoutsReady = new Promise<void>((resolve) => {
+  bootLayoutsDone = resolve
+})
+/** Runtime layout takes, serialized: two identity pushes in a row (a window
+ *  closing, then another) must merge in order. */
+let layoutTakeQueue: Promise<void> = Promise.resolve()
+
+export function markBootLayoutsDone(): void {
+  bootLayoutsDone()
+}
+
+/**
+ * Take over the layouts of workspaces this window just started hosting: read
+ * their files and merge them into the store BEFORE anything could be written
+ * for them. Pruning uses every session that still exists for those
+ * workspaces — in this store, live in another window, or on disk as a record
+ * — so a group whose members live elsewhere (or wait for the next boot) is
+ * kept as a shell rather than dropped and written back as gone.
+ */
+export function takeLayouts(keys: (string | null)[]): Promise<void> {
+  layoutTakeQueue = layoutTakeQueue.then(async () => {
+    await bootLayoutsReady
+    if (keys.length === 0) return
+    const persisted = (await window.electronAPI?.sidebarLayoutLoad?.(keys).catch(() => null)) ?? {
+      groups: [],
+      displayOrder: []
+    }
+    const { activeWorkspaceId } = useWorkspaceStore.getState()
+    const surviving = new Set<string>()
+    for (const s of useSessionStore.getState().sessions) {
+      if (keys.includes(s.workspaceId ?? activeWorkspaceId)) surviving.add(s.id)
+    }
+    const ids = keys.filter((k): k is string => typeof k === 'string')
+    for (const id of ids) {
+      const records = (await window.electronAPI?.listSessionRecords?.(id).catch(() => [])) ?? []
+      for (const r of records) surviving.add(r.id)
+    }
+    const elsewhere = (await window.electronAPI?.liveSessionsElsewhere?.(ids).catch(() => [])) ?? []
+    for (const id of elsewhere) surviving.add(id)
+    useSessionStore
+      .getState()
+      .mergeLayoutForKeys(keys, persisted as { groups: never[]; displayOrder: string[] }, [
+        ...surviving
+      ])
+    markLayoutKeysTaken(keys)
+  })
+  return layoutTakeQueue
+}
 
 function applyIdentity(identity: WindowIdentity): void {
+  const prev = useWorkspaceStore.getState()
+  const before = new Set(prev.hostedWorkspaceIds)
+  const after = new Set(identity.hostedWorkspaceIds)
+  const gained = identity.hostedWorkspaceIds.filter((k) => !before.has(k))
+  const lost = prev.hostedWorkspaceIds.filter((k) => !after.has(k))
   useWorkspaceStore.setState({
     windowId: identity.windowId,
     isPrimary: identity.isPrimary,
     hostedWorkspaceIds: identity.hostedWorkspaceIds
   })
+  // The unscoped (null) partition follows the primary role.
+  if (identity.isPrimary && !prev.isPrimary) gained.push(null as unknown as string)
+  if (!identity.isPrimary && prev.isPrimary) lost.push(null as unknown as string)
+  if (lost.length) dropLayoutKeys(lost as (string | null)[])
+  if (gained.length) void takeLayouts(gained as (string | null)[])
+  // Main is the authority on which workspace this window shows. A change it
+  // made on its own (a later slice's picker or tool) is applied here; a
+  // change this window asked for is applied by the claim that asked.
+  if (claimsInFlight === 0 && identity.workspaceId !== prev.activeWorkspaceId && prev.loaded) {
+    useWorkspaceStore.setState({ activeWorkspaceId: identity.workspaceId })
+    useSessionStore.getState().applyWorkspaceSwitch(prev.activeWorkspaceId, identity.workspaceId)
+  }
 }
 
 /** Fold a change another window made. The registry is taken whole; of the
@@ -95,12 +166,13 @@ function foldExternalState(state: { workspaces: Workspace[]; pins: unknown[] }):
     const mine = s.pinnedGroups.filter((pg) => hostsWorkspace(pg.workspaceId))
     const known = new Map(s.pinnedGroups.map((pg) => [pg.id, pg]))
     const foreign: PinnedGroup[] = blueprints
+      .filter((bp) => typeof bp === 'object' && bp !== null && typeof bp.id === 'string')
       .filter((bp) => !hostsWorkspace(bp.workspaceId))
       .map((bp) => {
         const prev = known.get(bp.id)
         return {
           ...bp,
-          sessions: bp.sessions.map((sess) => ({
+          sessions: (Array.isArray(bp.sessions) ? bp.sessions : []).map((sess) => ({
             ...sess,
             antigravityMode:
               sess.antigravityMode ?? (sess as { geminiMode?: boolean }).geminiMode ?? false
@@ -135,18 +207,30 @@ function subscribeToMain(): void {
  *  store follows and the workspace becomes the last-active one (what the
  *  first window of the next run opens on). Does NOT run the view switch;
  *  callers that need it call applyWorkspaceSwitch themselves. */
-async function claimWorkspace(id: string | null): Promise<boolean> {
-  const res = (await window.electronAPI?.windowSetWorkspace?.(id)) ?? { ok: true as const }
-  if (!res.ok) return false
-  useWorkspaceStore.setState({ activeWorkspaceId: id })
-  void window.electronAPI?.workspaceSetLastActive?.(id)
-  return true
+async function claimWorkspace(
+  id: string | null,
+  options: { focus?: boolean } = {}
+): Promise<boolean> {
+  claimsInFlight++
+  try {
+    const res = (await window.electronAPI?.windowSetWorkspace?.(id, options)) ?? {
+      ok: true as const
+    }
+    if (!res.ok) return false
+    useWorkspaceStore.setState({ activeWorkspaceId: id })
+    void window.electronAPI?.workspaceSetLastActive?.(id)
+    return true
+  } finally {
+    claimsInFlight--
+  }
 }
 
-/** Claim the first candidate main accepts. `null` (unscoped) always succeeds. */
+/** Claim the first candidate main accepts, PROBING (no window is brought
+ *  forward on a refusal — this is a fallback landing, not a user's open).
+ *  `null` (unscoped) always succeeds. */
 async function claimFirstAvailable(candidates: (string | null)[]): Promise<string | null> {
   for (const id of candidates) {
-    if (await claimWorkspace(id)) return id
+    if (await claimWorkspace(id, { focus: false })) return id
   }
   return useWorkspaceStore.getState().activeWorkspaceId
 }

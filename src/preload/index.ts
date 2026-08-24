@@ -289,8 +289,12 @@ const electronAPI = {
     createIpcListener<[unknown]>('window:workspace-changed', callback),
   // Ask main to show a workspace in THIS window; refused (and the other
   // window brought forward) when another window already shows it.
-  windowSetWorkspace: (workspaceId: string | null) =>
-    ipcRenderer.invoke('window:set-workspace', workspaceId),
+  windowSetWorkspace: (workspaceId: string | null, options?: { focus?: boolean }) =>
+    ipcRenderer.invoke('window:set-workspace', workspaceId, options),
+  // Live sessions of these workspaces hosted by OTHER windows — what a window
+  // taking over a workspace's layout must not prune.
+  liveSessionsElsewhere: (workspaceIds: string[]) =>
+    ipcRenderer.invoke('sessions:live-elsewhere', workspaceIds),
   // Show a workspace in a window of its own (focuses an existing one).
   windowOpen: (workspaceId: string) => ipcRenderer.invoke('window:open', workspaceId),
 

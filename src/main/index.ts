@@ -47,10 +47,13 @@ registerPreviewScheme()
  *    hosted by OTHER windows are never touched; ssh and OpenClaw stay up.
  *  - the LAST window closing is today's behavior verbatim.
  */
+let quitting = false
+
 function onWindowClosed(windowId: number): void {
-  const remaining = BrowserWindow.getAllWindows().filter(
-    (w) => !w.isDestroyed() && w.id !== windowId
-  )
+  // Only CLAVE windows count (the registry's), never a stray BrowserWindow a
+  // dialog or a picker might own — or the final close would skip the app's
+  // shutdown.
+  const remaining = windowRegistry.listWindows().filter((w) => w.id !== windowId)
   if (remaining.length === 0) {
     ptyManager.killAll()
     sshManager.disconnectAll()
@@ -61,6 +64,9 @@ function onWindowClosed(windowId: number): void {
   const hosted = windowRegistry.getSessionsForWindow(windowId)
   for (const id of hosted) ptyManager.kill(id, false)
   windowRegistry.unregisterWindow(windowId)
+  // Windows closing one after another inside a quit re-home nothing: the
+  // survivor is about to close too, and the last one runs the full teardown.
+  if (quitting) return
   const host = windowRegistry.getPrimaryWindow()
   if (host && hosted.length > 0) host.webContents.send('session:rehome', hosted)
   broadcastIdentities()
@@ -221,6 +227,7 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  quitting = true
   cleanupClaveWatchers()
   cleanupAutoUpdater()
   cleanupTelemetry()

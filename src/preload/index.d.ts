@@ -476,7 +476,9 @@ export interface ElectronAPI {
     data: { groups: unknown[]; displayOrder: string[] }
   ) => Promise<ScopedWriteResult>
   workspaceLoad: () => Promise<WorkspaceStateFile>
-  workspaceUpdateRegistry: (workspaces: Workspace[]) => Promise<{ ok: true }>
+  workspaceUpdateRegistry: (
+    workspaces: Workspace[]
+  ) => Promise<{ ok: true } | { ok: false; reason: 'invalid' }>
   workspaceUpdatePins: (scope: string | null | 'all', pins: unknown[]) => Promise<ScopedWriteResult>
   workspaceSetLastActive: (workspaceId: string | null) => Promise<{ ok: true }>
   onWorkspaceStateChanged: (
@@ -484,7 +486,11 @@ export interface ElectronAPI {
   ) => () => void
   windowIdentity: () => Promise<WindowIdentity | null>
   onWindowWorkspaceChanged: (callback: (identity: WindowIdentity) => void) => () => void
-  windowSetWorkspace: (workspaceId: string | null) => Promise<SetWorkspaceResult>
+  windowSetWorkspace: (
+    workspaceId: string | null,
+    options?: { focus?: boolean }
+  ) => Promise<SetWorkspaceResult>
+  liveSessionsElsewhere: (workspaceIds: string[]) => Promise<string[]>
   windowOpen: (workspaceId: string) => Promise<{ windowId: number; focusedExisting: boolean }>
   getUsageLimits: () => Promise<UsageLimits | UsageError>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>

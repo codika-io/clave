@@ -58,6 +58,7 @@ export async function launchApp(dir, { settleMs = 4000 } = {}) {
   return { app, win }
 }
 
+
 /** Replace the native folder picker in the MAIN process so a spec can tell
  *  "opened the picker" from "went straight to the workspace root" — a native
  *  modal would otherwise block the run forever. Returns a reader for the count. */
@@ -169,15 +170,29 @@ export function identityOf(page) {
  *  shown somewhere, `focusedExisting` is true and `page` is that window's. */
 export async function openWindow(app, fromPage, workspaceId, { settleMs = 4000 } = {}) {
   const before = new Set(app.windows())
+  // Subscribe BEFORE asking, so a window that appears between the answer and
+  // the wait cannot slip past unobserved.
+  const nextWindow = app.waitForEvent('window', { timeout: 15_000 }).catch(() => null)
   const result = await fromPage.evaluate((ws) => window.electronAPI.windowOpen(ws), workspaceId)
   if (result.focusedExisting) {
     return { ...result, page: await windowFor(app, result.windowId) }
   }
-  let page = app.windows().find((p) => !before.has(p))
-  if (!page) page = await app.waitForEvent('window')
+  const page = app.windows().find((p) => !before.has(p)) ?? (await nextWindow)
+  if (!page)
+    throw new Error(`window:open answered ${JSON.stringify(result)} but no window appeared`)
   await page.waitForLoadState('domcontentloaded')
   await page.waitForTimeout(settleMs)
   return { ...result, page }
+}
+
+/** Poll until `fn` returns a truthy value or the budget runs out. */
+export async function until(fn, { tries = 40, gapMs = 250 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    const v = await fn()
+    if (v) return v
+    await new Promise((r) => setTimeout(r, gapMs))
+  }
+  return null
 }
 
 /** Close a window the way the user does (the BrowserWindow's own close, so
@@ -203,7 +218,9 @@ export function killLeakedE2eTmux() {
       .split('\n')
       .filter(Boolean)
     for (const n of names) {
-      if (n.includes('clave-e2e')) execFileSync('tmux', ['-L', 'clave', 'kill-session', '-t', n])
+      // `=name` is an EXACT target: never a prefix or a glob match.
+      if (n.includes('clave-e2e'))
+        execFileSync('tmux', ['-L', 'clave', 'kill-session', '-t', `=${n}`])
     }
   } catch {
     // No tmux server = nothing leaked.

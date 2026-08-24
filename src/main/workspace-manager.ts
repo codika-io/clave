@@ -132,6 +132,8 @@ function pinPartition(pin: unknown): string | null {
 class WorkspaceManager {
   private filePath: string
   private cache: WorkspaceStateFile | null = null
+  /** realpath is a syscall per call; roots barely change, so cache them. */
+  private normalizedRoots = new Map<string, string>()
 
   constructor() {
     this.filePath = path.join(app.getPath('userData'), 'workspace-state.json')
@@ -160,6 +162,9 @@ class WorkspaceManager {
         },
         lastActive
       )
+      // A file from the previous release carries only the old key: write it
+      // back once with both, so the new key exists from the first boot on.
+      if (typeof data.lastActiveWorkspaceId !== 'string' && lastActive !== null) this.persist()
     } catch {
       // First boot of the workspace model — migrate the retired registry.
       this.cache = migrateLegacyRegistry()
@@ -241,7 +246,11 @@ class WorkspaceManager {
     const real = normalizeDir(cwd)
     let best: { id: string; len: number } | null = null
     for (const ws of this.load().workspaces) {
-      const root = normalizeDir(ws.rootDir)
+      let root = this.normalizedRoots.get(ws.rootDir)
+      if (!root) {
+        root = normalizeDir(ws.rootDir)
+        this.normalizedRoots.set(ws.rootDir, root)
+      }
       if (isInside(root, real) && (!best || root.length > best.len)) {
         best = { id: ws.id, len: root.length }
       }
