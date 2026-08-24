@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Builds the universal mission-control helper into resources/native/.
-# Idempotent: skips when the binary is newer than the Swift source.
+# Builds the universal native helpers (native/<name>/main.swift) into
+# resources/native/<name>-helper. Idempotent: a helper is skipped when its
+# binary is newer than its Swift source.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -10,21 +11,27 @@ if [[ "$(uname)" != "Darwin" ]]; then
   exit 0
 fi
 
-SRC="$ROOT/native/mission-control/main.swift"
-OUT="$ROOT/resources/native/mission-control-helper"
+build_helper() {
+  local name="$1"
+  local src="$ROOT/native/$name/main.swift"
+  local out="$ROOT/resources/native/$name-helper"
 
-if [[ -f "$OUT" && "$OUT" -nt "$SRC" ]]; then
-  echo "native: mission-control-helper up to date"
-  exit 0
-fi
+  if [[ -f "$out" && "$out" -nt "$src" ]]; then
+    echo "native: $name-helper up to date"
+    return 0
+  fi
 
-mkdir -p "$(dirname "$OUT")"
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+  mkdir -p "$(dirname "$out")"
+  local tmp
+  tmp="$(mktemp -d)"
+  echo "native: compiling $name-helper (arm64 + x86_64)"
+  swiftc -O -target arm64-apple-macos11.0 -o "$tmp/arm64" "$src"
+  swiftc -O -target x86_64-apple-macos11.0 -o "$tmp/x86_64" "$src"
+  lipo -create "$tmp/arm64" "$tmp/x86_64" -output "$out"
+  chmod +x "$out"
+  lipo -info "$out"
+  rm -rf "$tmp"
+}
 
-echo "native: compiling mission-control-helper (arm64 + x86_64)"
-swiftc -O -target arm64-apple-macos11.0 -o "$TMP/arm64" "$SRC"
-swiftc -O -target x86_64-apple-macos11.0 -o "$TMP/x86_64" "$SRC"
-lipo -create "$TMP/arm64" "$TMP/x86_64" -output "$OUT"
-chmod +x "$OUT"
-lipo -info "$OUT"
+build_helper mission-control
+build_helper haptic

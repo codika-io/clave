@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import * as fs from 'fs'
 import * as os from 'os'
 import { preferencesManager, type AppIcon } from '../preferences-manager'
+import { hapticTick, type HapticPattern } from '../haptic-manager'
 
 const VALID_ICONS = ['dark', 'light', 'claude'] as const
 
@@ -138,6 +139,14 @@ export function applyPersistedIcon(): void {
 }
 
 export function registerAppHandlers(): void {
+  // Trackpad tick (the sidebar's drop line moving to a new row). Fire-and-
+  // forget: no reply, nothing to await, silent where unsupported.
+  ipcMain.on('haptic:tick', (_event, pattern: unknown) => {
+    const p: HapticPattern =
+      pattern === 'generic' || pattern === 'level' ? pattern : 'alignment'
+    hapticTick(p)
+  })
+
   ipcMain.handle('app:get-username', () => {
     try {
       const info = os.userInfo()

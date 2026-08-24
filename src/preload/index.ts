@@ -227,6 +227,8 @@ const electronAPI = {
     ipcRenderer.invoke('mission-control:set-enabled', enabled),
 
   setAppIcon: (icon: string) => ipcRenderer.invoke('app:set-icon', icon),
+  hapticTick: (pattern?: 'alignment' | 'generic' | 'level') =>
+    ipcRenderer.send('haptic:tick', pattern ?? 'alignment'),
   getUsername: () => ipcRenderer.invoke('app:get-username') as Promise<string | null>,
   saveAvatar: (sourcePath: string) =>
     ipcRenderer.invoke('app:save-avatar', sourcePath) as Promise<string | null>,

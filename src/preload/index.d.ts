@@ -456,6 +456,8 @@ export interface ElectronAPI {
   missionControlGetEnabled: () => Promise<boolean>
   missionControlSetEnabled: (enabled: boolean) => Promise<void>
   setAppIcon: (icon: string) => Promise<void>
+  /** A trackpad haptic (macOS Force Touch); fire-and-forget, no-op elsewhere. */
+  hapticTick: (pattern?: 'alignment' | 'generic' | 'level') => void
   getUsername: () => Promise<string | null>
   getAppVersion: () => Promise<string>
   installUpdate: () => Promise<void>
