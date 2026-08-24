@@ -273,8 +273,7 @@ function persistSidebarLayout(state: {
   // hosting rule; main refuses the rest loudly). Hosted keys with no items
   // still get written, so deleting the last group of a workspace reaches its
   // file.
-  const hosted: (string | null)[] =
-    ws.activeWorkspaceId === null ? [null] : ws.hostedWorkspaceIds
+  const hosted: (string | null)[] = ws.activeWorkspaceId === null ? [null] : ws.hostedWorkspaceIds
   for (const key of new Set<string | null>([...hosted, ...parts.keys()])) {
     if (!hosted.includes(key) || !layoutKeysTaken.has(key)) continue
     const part = parts.get(key) ?? { groups: [], displayOrder: [] }

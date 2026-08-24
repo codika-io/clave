@@ -58,7 +58,6 @@ export async function launchApp(dir, { settleMs = 4000 } = {}) {
   return { app, win }
 }
 
-
 /** Replace the native folder picker in the MAIN process so a spec can tell
  *  "opened the picker" from "went straight to the workspace root" — a native
  *  modal would otherwise block the run forever. Returns a reader for the count. */
