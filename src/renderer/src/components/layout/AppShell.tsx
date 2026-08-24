@@ -42,6 +42,7 @@ import {
 import { promptRestore } from '../../store/restore-prompt-store'
 import { RestorePromptDialog } from '../ui/RestorePromptDialog'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
+import { adoptRecord, adoptRehomed } from '../../lib/adopt-record'
 import { initSecretStore } from '../../store/secret-store'
 import { initCopyOfferStore } from '../../store/copy-offer-store'
 import { ToolbarSecretPopover } from './ToolbarSecretPopover'
@@ -105,6 +106,15 @@ export function AppShell() {
     initMcpDispatcher()
     initSecretStore()
     initCopyOfferStore()
+    // Re-homing (§3.6): adopt sessions handed to this window (a closing
+    // window's, or a workspace pulled here), and drop a tab whose session
+    // re-homed AWAY (moved, not died — never kill the pty).
+    window.electronAPI?.onSessionRehome?.((ids) => {
+      void adoptRehomed(ids, useWorkspaceStore.getState().activeWorkspaceId)
+    })
+    window.electronAPI?.onSessionRemovedForRehome?.((id) => {
+      useSessionStore.getState().removeSessionForRehome(id)
+    })
     // What the agent button relaunches, per workspace. Deliberately NOT in the
     // session-adoption effect below: that one awaits the "restore sessions?"
     // prompt, so anything after it waits on the user answering a dialog — and
@@ -154,85 +164,6 @@ export function AppShell() {
             wsState.isPrimary ? undefined : (activeWorkspaceId ?? undefined)
           )) ?? []
 
-        /** Bring one record back as a tab. Live tmux survivors reattach; dead
-         *  ones (plain, or tmux killed by a reboot) relaunch fresh in the same
-         *  cwd, Claude resuming via claudeSessionId. */
-        const adoptRecord = async (s: (typeof survivors)[number]): Promise<string | null> => {
-          try {
-            const workspaceId = s.workspaceId ?? activeWorkspaceId ?? undefined
-            const info = await window.electronAPI.spawnSession(s.cwd, {
-              claudeMode: s.claudeMode,
-              antigravityMode: s.antigravityMode,
-              codexMode: s.codexMode,
-              claudeAgentsMode: s.claudeAgentsMode,
-              dangerousMode: s.dangerousMode,
-              model: s.model,
-              // Live survivor: MUST go through tmux to reattach. Dead record:
-              // fresh spawn under the current global tmux preference — the
-              // name is still offered so a tmux respawn reuses it (spawn
-              // handles record-key transitions either way).
-              ...(s.live && s.tmuxName
-                ? { tmuxMode: true, adoptTmuxName: s.tmuxName }
-                : s.tmuxName
-                  ? { adoptTmuxName: s.tmuxName }
-                  : {}),
-              // Reuse the original id so lifecycle-hook status routing keeps
-              // working after the session comes back.
-              adoptSessionId: s.id,
-              // Live survivor (quit/reopen): reattach to the running process —
-              // claudeSessionId only drives the header badge, the agent isn't
-              // re-run. Dead record: re-spawn fresh, so pass resumeSessionId to
-              // relaunch Claude with `--resume <id>` and reload the prior
-              // conversation.
-              ...(s.live
-                ? { claudeSessionId: s.claudeSessionId }
-                : s.claudeMode && s.claudeSessionId
-                  ? { resumeSessionId: s.claudeSessionId }
-                  : {}),
-              // Carry the account/profile forward so the badge is restored.
-              configDir: s.configDir,
-              claudeProfileId: s.claudeProfileId,
-              claudeProfileLabel: s.claudeProfileLabel,
-              // Explicit stamp (record value or legacy inference) so the
-              // rewritten record keeps the session's workspace, not the
-              // active one at adoption time.
-              workspaceId
-            })
-            addSession({
-              id: info.id,
-              cwd: info.cwd,
-              folderName: info.folderName,
-              // Restore the label the user last saw. `userRenamed` comes back
-              // too, so an explicit rename keeps its immunity to auto-titling.
-              name: s.displayName || s.folderName,
-              userRenamed: s.userRenamed === true,
-              alive: info.alive,
-              activityStatus: 'idle',
-              promptWaiting: null,
-              claudeMode: s.claudeMode,
-              antigravityMode: s.antigravityMode,
-              codexMode: s.codexMode,
-              claudeAgentsMode: s.claudeAgentsMode,
-              dangerousMode: s.dangerousMode,
-              model: s.model,
-              claudeSessionId: info.claudeSessionId,
-              claudeProfileId: s.claudeProfileId,
-              claudeProfileLabel: s.claudeProfileLabel,
-              claudeConfigDir: s.configDir,
-              sessionType: 'local',
-              workspaceId,
-              // The attached web view comes back with the tab; its hidden
-              // serving session did not survive, so the pane's probe shows
-              // down with a one-click start (serverSessionId stays unset).
-              view: s.view ? { ...s.view } : undefined
-            })
-            return info.id
-          } catch (err) {
-            console.error('Failed to adopt persistent session:', s.tmuxName ?? s.id, err)
-            return null
-          }
-        }
-
         // Reattach = silent, relaunch = ask. Live tmux survivors of EVERY
         // workspace this window hosts re-attach unprompted (the primary hosts
         // all; a workspace hidden here is still hosted), so cross-workspace
@@ -248,13 +179,13 @@ export function AppShell() {
 
         const adoptedIds: string[] = []
         for (const s of liveOnes) {
-          const id = await adoptRecord(s)
+          const id = await adoptRecord(s, activeWorkspaceId)
           if (id) adoptedIds.push(id)
         }
         if (deadOnes.length > 0) {
           if (await promptRestore(deadOnes)) {
             for (const s of deadOnes) {
-              const id = await adoptRecord(s)
+              const id = await adoptRecord(s, activeWorkspaceId)
               if (id) adoptedIds.push(id)
             }
           } else {
@@ -279,6 +210,14 @@ export function AppShell() {
         for (const id of elsewhere) surviving.add(id)
         useSessionStore.getState().mergeLayoutForKeys(layoutKeys, persisted, [...surviving])
         markLayoutKeysTaken(layoutKeys)
+
+        // A SECONDARY window pulls its workspace's live sessions off whichever
+        // window hosts them (the primary), re-homing them here with their
+        // scrollback (§3.6). The primary hosts every unshown workspace, so it
+        // never needs this. The re-homed sessions arrive on `session:rehome`.
+        if (!wsState.isPrimary && activeWorkspaceId) {
+          void window.electronAPI?.rehomeWorkspace?.(activeWorkspaceId)
+        }
       } catch (err) {
         console.error('Failed to restore sessions/groups on launch:', err)
       } finally {

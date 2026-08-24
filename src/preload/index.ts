@@ -65,10 +65,20 @@ const electronAPI = {
 
   discardSessionRecord: (key: string) => ipcRenderer.invoke('records:discard', key),
 
-  // Sessions a closing window hosted, handed to this window to re-adopt
-  // (their ids; the records carry the rest).
+  // Sessions a closing window hosted, or a workspace's sessions pulled here,
+  // handed to this window to re-adopt (their ids; the records carry the rest).
   onSessionRehome: (callback: (sessionIds: string[]) => void) =>
     createIpcListener<[string[]]>('session:rehome', callback),
+  // A session this window hosted just RE-HOMED to another window: drop the tab
+  // without killing the pty (it moved, it did not die).
+  onSessionRemovedForRehome: (callback: (sessionId: string) => void) =>
+    createIpcListener<[string]>('session:removed-for-rehome', callback),
+  // Pull a workspace's live sessions to THIS window (opened/switched to it).
+  rehomeWorkspace: (workspaceId: string) =>
+    ipcRenderer.invoke('window:rehome-workspace', workspaceId),
+  // Release a workspace this window stopped showing back to the primary.
+  releaseWorkspace: (workspaceId: string) =>
+    ipcRenderer.invoke('window:release-workspace', workspaceId),
 
   onSessionData: (id: string, callback: (data: string) => void) =>
     createIpcListener<[string]>(`pty:data:${id}`, callback),

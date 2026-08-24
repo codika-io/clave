@@ -101,6 +101,9 @@ interface SessionState {
   applyWorkspaceSwitch: (fromId: string | null, toId: string | null) => void
   addSession: (session: Session) => void
   removeSession: (id: string) => void
+  /** Remove a tab because its session RE-HOMED to another window — drop it
+   *  from this store WITHOUT killing the pty (it is alive, just moved). */
+  removeSessionForRehome: (id: string) => void
   resetSessions: () => Promise<void>
   /** Replace the layout of the given workspaces (null = unscoped) with the
    *  one read from their files, pruned to `survivingSessionIds` (sessions
@@ -569,6 +572,25 @@ export const useSessionStore = create<SessionState>((set) => ({
       const merged = mergeLayoutForKeys(state, keys, persisted, survivingSessionIds)
       groupCounter = Math.max(groupCounter, merged.groups.length)
       return { ...state, groups: merged.groups, displayOrder: merged.displayOrder }
+    }),
+
+  removeSessionForRehome: (id) =>
+    set((state) => {
+      // The session lives on in another window now; only detach it from THIS
+      // store's tab list, groups, order and selection. Never touch the pty.
+      const sessions = state.sessions.filter((s) => s.id !== id)
+      const groups = state.groups.map((g) => ({
+        ...g,
+        sessionIds: g.sessionIds.filter((sid) => sid !== id),
+        terminals: g.terminals.map((t) => (t.sessionId === id ? { ...t, sessionId: null } : t))
+      }))
+      return {
+        sessions,
+        groups,
+        displayOrder: getDisplayOrder(state).filter((did) => did !== id),
+        selectedSessionIds: state.selectedSessionIds.filter((sid) => sid !== id),
+        focusedSessionId: state.focusedSessionId === id ? null : state.focusedSessionId
+      }
     }),
 
   removeSession: (id) =>

@@ -354,6 +354,9 @@ export interface ElectronAPI {
   listSessionRecords: (workspaceId?: string) => Promise<SessionRecord[]>
   discardSessionRecord: (key: string) => Promise<void>
   onSessionRehome: (callback: (sessionIds: string[]) => void) => () => void
+  onSessionRemovedForRehome: (callback: (sessionId: string) => void) => () => void
+  rehomeWorkspace: (workspaceId: string) => Promise<{ ok: true }>
+  releaseWorkspace: (workspaceId: string) => Promise<{ ok: true }>
   onSessionData: (id: string, callback: (data: string) => void) => () => void
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void

@@ -1,5 +1,4 @@
-import { ipcMain, app, nativeImage } from 'electron'
-import { getMainWindow } from '../window-utils'
+import { ipcMain, app, nativeImage, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { execFileSync } from 'child_process'
 import * as fs from 'fs'
@@ -168,7 +167,7 @@ export function registerAppHandlers(): void {
     }
   })
 
-  ipcMain.handle('app:set-icon', (_event, icon: string) => {
+  ipcMain.handle('app:set-icon', (event, icon: string) => {
     if (!VALID_ICONS.includes(icon as (typeof VALID_ICONS)[number])) return
 
     debugLog(`IPC app:set-icon: icon=${icon}`)
@@ -191,7 +190,7 @@ export function registerAppHandlers(): void {
         app.dock?.setIcon(image)
       }
 
-      const win = getMainWindow()
+      const win = BrowserWindow.fromWebContents(event.sender)
       if (win) {
         win.setIcon(image)
       }

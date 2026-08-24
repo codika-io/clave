@@ -5,6 +5,7 @@ import { windowRegistry, type WindowIdentity } from '../window-registry'
 import { workspaceManager } from '../workspace-manager'
 import { ptyManager, sessionRecordsDir } from '../pty-manager'
 
+
 /** What a renderer learns about itself, and only itself: its window id, the
  *  workspace it shows, whether it is the primary, and the workspaces it
  *  hosts (may write for). Pushed again as `window:workspace-changed` every
@@ -78,7 +79,56 @@ function liveSessionsElsewhere(askerWindowId: number, workspaceIds: string[]): s
   return out
 }
 
+/**
+ * Move every LIVE tmux session of `workspaceId` that another window hosts to
+ * the window `targetWindowId` (§3.6 re-homing). For each such session: detach
+ * its pty (`kill(id, false)` keeps the tmux session and its record alive),
+ * unbind it, tell its OLD host to drop the tab (a MOVE, not a death — the tab
+ * is removed without touching the pty), then hand the ids to the target, whose
+ * renderer re-adopts them (reattaching to the same tmux session, scrollback
+ * intact, the id preserved so MCP addressing and exchange capture survive).
+ * Non-tmux sessions are never re-homed (their pty would die) — they stay
+ * hidden with their current host.
+ */
+export function rehomeWorkspaceToWindow(workspaceId: string, targetWindowId: number): void {
+  const target = windowRegistry.getWindow(targetWindowId)
+  if (!target) return
+  const ids = liveSessionsElsewhere(targetWindowId, [workspaceId])
+  if (ids.length === 0) return
+  for (const id of ids) {
+    const oldHost = windowRegistry.getWindowForSession(id)
+    // Tell the old host to drop the tab FIRST, so its terminal unmounts before
+    // the detach's pty:exit could paint "[Session ended]" on a moving tab.
+    if (oldHost && oldHost.id !== target.id) {
+      oldHost.webContents.send('session:removed-for-rehome', id)
+    }
+    ptyManager.kill(id, false) // detach: tmux session and record survive
+    windowRegistry.unbindSession(id)
+  }
+  target.webContents.send('session:rehome', ids)
+}
+
 export function registerWindowHandlers(deps: WindowHandlerDeps): void {
+  // Pull a workspace's live sessions to the calling window (a fresh window
+  // opened on W, or a window switched to W).
+  ipcMain.handle('window:rehome-workspace', (event, workspaceId: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win && typeof workspaceId === 'string') rehomeWorkspaceToWindow(workspaceId, win.id)
+    return { ok: true as const }
+  })
+
+  // Release a workspace this window stopped showing back to the primary (its
+  // sessions become hidden-hosted there again). No-op when the caller IS the
+  // primary — it hosts every unshown workspace already.
+  ipcMain.handle('window:release-workspace', (event, workspaceId: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win || typeof workspaceId !== 'string') return { ok: true as const }
+    if (windowRegistry.isPrimary(win.id)) return { ok: true as const }
+    const primary = windowRegistry.getPrimaryWindow()
+    if (primary) rehomeWorkspaceToWindow(workspaceId, primary.id)
+    return { ok: true as const }
+  })
+
   ipcMain.handle('window:identity', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     return win ? identityFor(win.id) : null

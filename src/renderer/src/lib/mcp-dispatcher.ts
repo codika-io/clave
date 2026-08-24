@@ -840,6 +840,22 @@ async function handleNotify(payload: {
   return { status, sessionId }
 }
 
+/** Cross-window session resolution (main calls this in EVERY window when an
+ *  MCP subject is a NAME, not an id): does THIS window's store hold a local
+ *  session with that id or exact name? Main collects the hits and routes the
+ *  command to the one window that owns the ref (ambiguity across windows is
+ *  rejected there, as within a window). Never resolves "mine"/"parent" —
+ *  those stay in the caller's window. */
+function handleResolveSessionRef(payload: { ref: string }): unknown {
+  const windowId = useWorkspaceStore.getState().windowId
+  if (payload.ref === 'mine' || payload.ref === 'parent') {
+    return { found: false, windowId }
+  }
+  const sessions = useSessionStore.getState().sessions.filter((s) => s.sessionType === 'local')
+  const found = sessions.find((s) => s.id === payload.ref) ?? sessions.find((s) => s.name === payload.ref)
+  return found ? { found: true, sessionId: found.id, name: found.name, windowId } : { found: false, windowId }
+}
+
 /** Resolve a messaging/readback target: a session id, an exact tab name, or
  *  "parent" (the tab whose agent opened the caller via clave_open_session). */
 function resolveTargetSession(ref: string, callerSessionId: string | undefined): Session {
@@ -878,22 +894,33 @@ function assertCanReach(
   target: Session,
   verb: 'message' | 'read'
 ): void {
-  const state = useSessionStore.getState()
-  const caller = callerSessionId
-    ? state.sessions.find((s) => s.id === callerSessionId)
-    : undefined
-  if (!caller) {
+  // Identity is the token-derived callerSessionId (unforgeable), NOT the
+  // caller's presence in THIS window's store: with several windows the caller
+  // may live in another window's store while its target is hosted here (main
+  // routed the call to the target's window, §3.8). So the id alone proves the
+  // request came from a real tab; the relationship is then judged from
+  // whatever this store can see.
+  if (!callerSessionId) {
     throw new Error(
       `clave_${verb === 'message' ? 'send_to' : 'read'}_session must be called from inside a Clave agent tab — this request has no tab identity.`
     )
   }
-  if (caller.id === target.id) return
+  if (callerSessionId === target.id) return
+  const state = useSessionStore.getState()
+  // The caller record is available only when it lives in this window. The
+  // "I opened target" relationship is verifiable WITHOUT it — `target.spawnedBy`
+  // is set by main at spawn and lives on the target, here — so a tab reaching a
+  // tab it opened works across windows. The "target opened me" (parent) and
+  // "same group" relationships need the caller's own record, so they resolve
+  // only within one window (parent stays caller-window by design, §3.8).
+  const caller = state.sessions.find((s) => s.id === callerSessionId)
   const related =
-    target.id === caller.spawnedBy || // target opened me (my parent)
-    target.spawnedBy === caller.id || // I opened target (my child)
-    state.groups.some(
-      (g) => g.sessionIds.includes(caller.id) && g.sessionIds.includes(target.id)
-    )
+    target.spawnedBy === callerSessionId || // I opened target (my child) — cross-window
+    (!!caller &&
+      (target.id === caller.spawnedBy || // target opened me (my parent) — same window
+        state.groups.some(
+          (g) => g.sessionIds.includes(caller.id) && g.sessionIds.includes(target.id)
+        )))
   if (!related) {
     throw new Error(
       `Refusing to ${verb} tab "${target.name}": it is not related to yours. You can only reach the tab that opened yours ("parent"), tabs you opened, or tabs in the same group. Put both tabs in one group to allow this.`
@@ -1175,6 +1202,8 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
   switch (command) {
     case 'list':
       return handleList(payload as Parameters<typeof handleList>[0])
+    case 'resolveSessionRef':
+      return handleResolveSessionRef(payload as { ref: string })
     case 'createGroup':
       return handleCreateGroup(payload as Parameters<typeof handleCreateGroup>[0])
     case 'openSession':

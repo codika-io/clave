@@ -381,6 +381,18 @@ export async function setActiveWorkspace(id: string): Promise<void> {
 
   if (!(await claimWorkspace(id))) return
   useSessionStore.getState().applyWorkspaceSwitch(activeWorkspaceId, id)
+  // NOTE (§3.6 third bullet, deferred): an IN-WINDOW switch does not re-home
+  // sessions in this slice. Re-homing on switch means the window both GAINS
+  // one workspace's sessions and RELEASES another's to the primary while both
+  // windows' layouts re-home too — the same load-bearing ordering as the
+  // first-workspace transition, and no numbered invariant (§6) requires it
+  // (invariant 11 is the NEW-window case, invariant 3 the window-close case,
+  // both re-homed here). A secondary window switching workspaces keeps its
+  // previous workspace's sessions hidden-hosted in it — fully reachable
+  // (clave_send_to_session, clave_list) — rather than moving them. The
+  // heavy path is left for a follow-up so its risk does not ride into this
+  // slice untested. `setActiveWorkspace` is the only switch entry (the UI and
+  // clave_switch_workspace both call it), so this note governs both.
   // Refresh from files in the background — the switch itself must be instant.
   void refreshWorkspacePins(target)
 }

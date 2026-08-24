@@ -1,5 +1,5 @@
 import { Menu, shell, type MenuItemConstructorOptions } from 'electron'
-import { getMainWindow } from './window-utils'
+import { focusedOrPrimaryWindow } from './window-routing'
 import { checkForUpdatesNow, openUpdaterLog, RELEASES_URL } from './auto-updater'
 
 const REPO_URL = 'https://github.com/codika-io/clave'
@@ -10,7 +10,7 @@ const APP_NAME = 'Clave'
 
 /** Bring the window forward and put the user on a Settings pane. */
 function openSettingsSection(section: string): void {
-  const win = getMainWindow()
+  const win = focusedOrPrimaryWindow()
   if (!win) return
   if (win.isMinimized()) win.restore()
   win.show()
