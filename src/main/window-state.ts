@@ -45,8 +45,6 @@ export function isValidWindowKey(key: unknown): key is string {
 
 export class WindowStateStore {
   private cache: WindowStateFile | null = null
-  /** True when the file did not exist at load — the first boot of this build. */
-  private fresh = false
 
   constructor(private readonly filePath: string) {}
 
@@ -68,8 +66,11 @@ export class WindowStateStore {
       }
       this.cache = { version: 1, windows }
     } catch {
+      // Absent or unreadable: no window to bring back. The entry treats an
+      // empty list as the first boot of this build (it migrates the older
+      // layout files into the first window it mints) — the one decision,
+      // made in one place.
       this.cache = { version: 1, windows: [] }
-      this.fresh = true
     }
     return this.cache
   }
@@ -84,12 +85,6 @@ export class WindowStateStore {
     } catch (err) {
       console.error('[windows] Failed to persist window state:', err)
     }
-  }
-
-  /** True on the first boot of the multi-window build (no file yet). */
-  isFirstBoot(): boolean {
-    this.load()
-    return this.fresh
   }
 
   list(): PersistedWindow[] {
@@ -122,7 +117,6 @@ export class WindowStateStore {
         ...(patch.bounds && isBounds(patch.bounds) ? { bounds: patch.bounds } : {})
       })
     }
-    this.fresh = false
     this.persist()
   }
 

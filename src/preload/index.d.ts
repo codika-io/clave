@@ -24,6 +24,8 @@ export type WriteResult =
 export interface RehomePayload {
   sessionIds: string[]
   layout: { groups: unknown[]; displayOrder: string[] } | null
+  /** A deliberate move takes focus in its new window; a close hand-over does not. */
+  focus: boolean
 }
 
 /** The outcome of moving sessions to another window. */

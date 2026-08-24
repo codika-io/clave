@@ -9,6 +9,9 @@ import { useSessionStore } from '../store/session-store'
  *    now holds — a closing window's sessions handed to the primary, or a tab
  *    (or a whole group) moved here.
  *
+ * Placement is neutral (adoptSessionInPlace): an adopted tab joins the group
+ * that already holds it (the restored or handed-over layout) or the top
+ * level, never the target window's selected group, and never both.
  * Live tmux survivors reattach to the running process (scrollback intact via
  * the tmux repaint); dead records relaunch fresh in the same cwd (Claude
  * resuming via claudeSessionId). The original session id is preserved
@@ -18,7 +21,8 @@ import { useSessionStore } from '../store/session-store'
  */
 export async function adoptRecord(
   s: SessionRecord,
-  activeWorkspaceId: string | null
+  activeWorkspaceId: string | null,
+  options: { focus?: boolean } = {}
 ): Promise<string | null> {
   try {
     const workspaceId = s.workspaceId ?? activeWorkspaceId ?? undefined
@@ -51,7 +55,8 @@ export async function adoptRecord(
       claudeProfileLabel: s.claudeProfileLabel,
       workspaceId
     })
-    useSessionStore.getState().addSession({
+    useSessionStore.getState().adoptSessionInPlace(
+      {
       id: info.id,
       cwd: info.cwd,
       folderName: info.folderName,
@@ -71,9 +76,11 @@ export async function adoptRecord(
       claudeProfileLabel: s.claudeProfileLabel,
       claudeConfigDir: s.configDir,
       sessionType: 'local',
-      workspaceId,
-      view: s.view ? { ...s.view } : undefined
-    })
+        workspaceId,
+        view: s.view ? { ...s.view } : undefined
+      },
+      { focus: options.focus === true }
+    )
     return info.id
   } catch (err) {
     console.error('Failed to adopt session record:', s.tmuxName ?? s.id, err)
@@ -89,13 +96,22 @@ export async function adoptRecord(
  * already in this store, then acknowledges to main so a caller waiting to
  * act on the moved tab here (an MCP move into a group) can proceed.
  */
-export async function adoptRehomed(ids: string[], activeWorkspaceId: string | null): Promise<void> {
+export async function adoptRehomed(
+  ids: string[],
+  activeWorkspaceId: string | null,
+  focus = false
+): Promise<void> {
   if (ids.length === 0) return
   const already = new Set(useSessionStore.getState().sessions.map((s) => s.id))
   const records =
     (await window.electronAPI?.listSessionRecords?.({ ids }).catch(() => [])) ?? []
+  // A deliberate move focuses the FIRST tab that lands (a group's first
+  // member, a single moved tab); the rest arrive quietly beside it.
+  let first = true
   for (const r of records) {
-    if (!already.has(r.id)) await adoptRecord(r, activeWorkspaceId)
+    if (already.has(r.id)) continue
+    const id = await adoptRecord(r, activeWorkspaceId, { focus: focus && first })
+    if (id) first = false
   }
   window.electronAPI?.ackRehomed?.(ids)
 }

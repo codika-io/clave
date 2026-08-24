@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { bringForward } from './window-routing'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -114,11 +115,7 @@ export function createRequest(input: {
       silent: false
     })
     notification.on('click', () => {
-      const w = windowForRequest(input.callerSessionId)
-      if (w) {
-        w.show()
-        w.focus()
-      }
+      bringForward(windowForRequest(input.callerSessionId))
     })
     notification.show()
     if (process.platform === 'darwin') app.dock?.bounce('informational')

@@ -4,7 +4,8 @@ import { workspaceManager } from '../workspace-manager'
 import { windowState } from '../window-state'
 import { ptyManager } from '../pty-manager'
 import { sidebarLayoutManager, type SidebarLayout } from '../sidebar-layout-manager'
-import { TEST_NO_ACTIVATE } from '../test-mode'
+import { rehomeAck } from '../rehome-ack'
+import { bringForward } from '../window-routing'
 
 /** What a renderer learns about itself, and only itself: its window id, its
  *  persisted key, the workspace it shows, whether it is the primary. Pushed
@@ -34,6 +35,9 @@ export interface WindowHandlerDeps {
 export interface RehomePayload {
   sessionIds: string[]
   layout: SidebarLayout | null
+  /** A deliberate move (the user's, an agent's) takes focus in its new
+   *  window like a spawn does; a window-close hand-over stays neutral. */
+  focus: boolean
 }
 
 export interface MoveResult {
@@ -45,46 +49,11 @@ export interface MoveResult {
 
 // ── Re-homing ────────────────────────────────────────────────────────────────
 
-/** Renderers acknowledge `session:rehome` once the adoption ran, so a caller
- *  that must act on the moved session in its new window (an MCP move into a
- *  group there) can wait for it. */
-const rehomeWaiters = new Map<string, (() => void)[]>()
-const rehomed = new Set<string>()
-
+/** Renderers acknowledge `session:rehome` once the adoption ran (see
+ *  rehome-ack.ts for the rule: waiters are registered BEFORE the move is
+ *  dispatched, unsolicited acks are dropped). */
 export function awaitRehomed(sessionIds: string[], timeoutMs = 10_000): Promise<void> {
-  return Promise.all(
-    sessionIds.map(
-      (id) =>
-        new Promise<void>((resolve) => {
-          if (rehomed.delete(id)) return resolve()
-          const timer = setTimeout(() => {
-            const list = rehomeWaiters.get(id) ?? []
-            rehomeWaiters.set(
-              id,
-              list.filter((f) => f !== done)
-            )
-            resolve()
-          }, timeoutMs)
-          const done = (): void => {
-            clearTimeout(timer)
-            resolve()
-          }
-          rehomeWaiters.set(id, [...(rehomeWaiters.get(id) ?? []), done])
-        })
-    )
-  ).then(() => undefined)
-}
-
-function markRehomed(sessionIds: string[]): void {
-  for (const id of sessionIds) {
-    const waiters = rehomeWaiters.get(id)
-    if (waiters && waiters.length > 0) {
-      rehomeWaiters.delete(id)
-      for (const w of waiters) w()
-    } else {
-      rehomed.add(id)
-    }
-  }
+  return rehomeAck.wait(sessionIds, timeoutMs)
 }
 
 /**
@@ -100,7 +69,8 @@ function markRehomed(sessionIds: string[]): void {
 export function moveSessionsToWindow(
   sessionIds: string[],
   targetWindowId: number,
-  layout: SidebarLayout | null = null
+  layout: SidebarLayout | null = null,
+  focus = true
 ): MoveResult {
   const target = windowRegistry.getWindow(targetWindowId)
   const result: MoveResult = { moved: [], refused: [] }
@@ -131,7 +101,7 @@ export function moveSessionsToWindow(
     result.moved.push(id)
   }
   if (result.moved.length > 0 || (layout && layout.groups.length > 0)) {
-    const payload: RehomePayload = { sessionIds: result.moved, layout }
+    const payload: RehomePayload = { sessionIds: result.moved, layout, focus }
     target.webContents.send('session:rehome', payload)
   }
   return result
@@ -190,13 +160,7 @@ export function registerWindowHandlers(deps: WindowHandlerDeps): void {
   ipcMain.handle('window:focus', (_event, windowId: unknown) => {
     const win = typeof windowId === 'number' ? windowRegistry.getWindow(windowId) : null
     if (!win) return { ok: false as const }
-    // Under --test-no-activate the OS-level bring-forward is skipped: a test
-    // instance must never steal the desktop's focus.
-    if (!TEST_NO_ACTIVATE) {
-      if (win.isMinimized()) win.restore()
-      win.show()
-      win.focus()
-    }
+    bringForward(win)
     return { ok: true as const }
   })
 
@@ -213,35 +177,83 @@ export function registerWindowHandlers(deps: WindowHandlerDeps): void {
     }
   )
 
-  // A group moves whole: the target window takes the group object (with its
-  // session ids) into its sidebar, then the live members follow through the
-  // session move. The source renderer drops its copy of the group on the
-  // `ok`; members that could not move are reported so it can keep them.
+  // A group moves whole: its members AND its quick-launch terminals' live
+  // sessions travel (detach + re-adopt), and the target window takes the
+  // group object carrying only what actually moved. The source drops its
+  // copy on `ok`; what could not move (not live, not tmux-backed) stays
+  // there as plain tabs. A group whose members all stayed does not move at
+  // all — `ok: false`, nothing changes anywhere.
   ipcMain.handle(
     'window:move-group',
     (event, group: unknown, targetWindowId: unknown): MoveResult & { ok: boolean } => {
-      const g = group as { id?: unknown; sessionIds?: unknown } | null
+      const g = group as
+        | { id?: unknown; sessionIds?: unknown; terminals?: unknown }
+        | null
       const target = typeof targetWindowId === 'number' ? windowRegistry.getWindow(targetWindowId) : null
       const sender = BrowserWindow.fromWebContents(event.sender)
       if (!target || !g || typeof g.id !== 'string' || (sender && sender.id === target.id)) {
         return { ok: false, moved: [], refused: [] }
       }
-      const ids = Array.isArray(g.sessionIds)
+      const members = Array.isArray(g.sessionIds)
         ? g.sessionIds.filter((x): x is string => typeof x === 'string')
         : []
-      const layout: SidebarLayout = { groups: [group], displayOrder: [g.id] }
-      const outcome = moveSessionsToWindow(ids, target.id, layout)
-      // The source drops its copy of the group; members that could not move
-      // stay behind as plain tabs (the renderer keeps them out of the group).
+      const terminals = Array.isArray(g.terminals)
+        ? (g.terminals as { sessionId?: unknown }[]).filter(
+            (t) => t && typeof t === 'object'
+          )
+        : []
+      const terminalIds = terminals
+        .map((t) => t.sessionId)
+        .filter((x): x is string => typeof x === 'string')
+      const linked = [...members, ...terminalIds]
+      // Decide first, send nothing on a refusal: the detach happens inside
+      // moveSessionsToWindow, so a dry check of the same rules comes first.
+      const movable = linked.filter((id) => {
+        const session = ptyManager.getSession(id)
+        const host = windowRegistry.getWindowForSession(id)
+        return !!session && !!session.tmuxName && (!host || host.id !== target.id)
+      })
+      if (linked.length > 0 && movable.length === 0) {
+        return {
+          ok: false,
+          moved: [],
+          refused: linked.map((id) => ({
+            sessionId: id,
+            reason: ptyManager.getSession(id) ? 'not-tmux' : 'not-live'
+          }))
+        }
+      }
+      const movedSet = new Set(movable)
+      const handed = {
+        ...(group as Record<string, unknown>),
+        sessionIds: members.filter((id) => movedSet.has(id)),
+        terminals: terminals.map((t) => ({
+          ...t,
+          sessionId: typeof t.sessionId === 'string' && movedSet.has(t.sessionId) ? t.sessionId : null
+        }))
+      }
+      const layout: SidebarLayout = { groups: [handed], displayOrder: [g.id] }
+      const outcome = moveSessionsToWindow(movable, target.id, layout)
+      // The source drops its copy of the group; members and terminals that
+      // could not move stay behind as plain tabs (the renderer re-places them).
       if (sender && !sender.isDestroyed()) sender.webContents.send('group:removed-for-move', g.id)
-      return { ok: true, ...outcome }
+      const refused: MoveResult['refused'] = [
+        ...outcome.refused,
+        ...linked
+          .filter((id) => !movedSet.has(id))
+          .map((id) => ({
+            sessionId: id,
+            reason: (ptyManager.getSession(id) ? 'not-tmux' : 'not-live') as 'not-tmux' | 'not-live'
+          }))
+      ]
+      return { ok: true, moved: outcome.moved, refused }
     }
   )
 
   // The renderer's acknowledgement that `session:rehome` was adopted.
   ipcMain.on('window:rehomed', (_event, sessionIds: unknown) => {
     if (Array.isArray(sessionIds)) {
-      markRehomed(sessionIds.filter((x): x is string => typeof x === 'string'))
+      rehomeAck.ack(sessionIds.filter((x): x is string => typeof x === 'string'))
     }
   })
 }

@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { windowRegistry } from './window-registry'
+import { TEST_NO_ACTIVATE } from './test-mode'
 
 /**
  * Main-process routing helpers for multi-window Clave (PRDCT-1703, slice 2).
@@ -28,4 +29,15 @@ export function focusedOrPrimaryWindow(): BrowserWindow | null {
 /** The window hosting a session (its renderer holds the xterm), or null. */
 export function windowForSession(sessionId: string): BrowserWindow | null {
   return windowRegistry.getWindowForSession(sessionId)
+}
+
+/** THE one way to put a window in front of the user: restore, show, focus.
+ *  Under `--test-no-activate` it does nothing at all — a test instance must
+ *  never appear on or take the human's screen, whatever path asks (a menu
+ *  item, a notification click, a secret request, an agent's focus call). */
+export function bringForward(win: BrowserWindow | null | undefined): void {
+  if (!win || win.isDestroyed() || TEST_NO_ACTIVATE) return
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
 }

@@ -306,6 +306,9 @@ async function runCommand(command: string, payload: unknown, caller?: string): P
         const subjectId = p.sessionId === 'mine' ? callerSessionId : p.sessionId
         const target = resolveWindowArg(p.window, callerSessionId)
         if (subjectId && UUID_RE.test(subjectId) && target && target.id !== win?.id) {
+          // The waiter is registered BEFORE the move: the ack can only ever
+          // answer this wait, never a stale one (rehome-ack.ts).
+          const adopted = awaitRehomed([subjectId])
           const outcome = moveSessionsToWindow([subjectId], target.id)
           const refused = outcome.refused.find((r) => r.sessionId === subjectId)
           if (refused) {
@@ -315,7 +318,7 @@ async function runCommand(command: string, payload: unknown, caller?: string): P
                 : `Session ${subjectId} is not live`
             )
           }
-          await awaitRehomed([subjectId])
+          await adopted
           result = await callRenderer<unknown>(command, { ...p, sessionId: subjectId }, target)
           return { content: [{ type: 'text', text: JSON.stringify(result ?? { ok: true }) }] }
         }

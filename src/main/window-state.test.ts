@@ -25,17 +25,14 @@ afterEach(() => {
 })
 
 describe('WindowStateStore', () => {
-  it('is a first boot when the file is absent, and lists nothing', () => {
-    expect(store.isFirstBoot()).toBe(true)
+  it('lists nothing when the file is absent', () => {
     expect(store.list()).toEqual([])
   })
 
   it('upsert creates the file; a second store reads it back in order', () => {
     store.upsert('k1', { workspaceId: 'A' })
     store.upsert('k2', { workspaceId: null, bounds: { x: 1, y: 2, width: 300, height: 200 } })
-    expect(store.isFirstBoot()).toBe(false)
     const again = new WindowStateStore(path.join(dir, 'windows.json'))
-    expect(again.isFirstBoot()).toBe(false)
     expect(again.list()).toEqual([
       { key: 'k1', workspaceId: 'A' },
       { key: 'k2', workspaceId: null, bounds: { x: 1, y: 2, width: 300, height: 200 } }
@@ -82,9 +79,8 @@ describe('WindowStateStore', () => {
     expect(store.list()).toEqual([{ key: 'ok', workspaceId: 'A' }])
   })
 
-  it('an unreadable file counts as a first boot', () => {
+  it('an unreadable file lists nothing (the entry then treats it as a first boot)', () => {
     fs.writeFileSync(path.join(dir, 'windows.json'), '{not json')
-    expect(store.isFirstBoot()).toBe(true)
     expect(store.list()).toEqual([])
   })
 

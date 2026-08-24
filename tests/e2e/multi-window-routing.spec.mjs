@@ -173,6 +173,19 @@ export async function run(t) {
       return l.groups.find((g) => g.id === groupA.groupId)?.sessionIds.includes(childC.sessionId) ? l : null
     })
     t.check('childC is in the target group in window A', !!inGroup, inGroup?.groups)
+    // The SECOND cross-window move of the same tab: a sidebar move back to B
+    // leaves an acknowledgement nobody waited for; the next MCP move must
+    // still wait for its own adoption before placing the tab in the group.
+    const backToB = await winA.evaluate(({ ids, target }) => window.electronAPI.windowMoveSessions(ids, target), { ids: [childC.sessionId], target: idB.windowId })
+    t.check('a sidebar move took childC back to window B', backToB?.moved?.includes(childC.sessionId), backToB)
+    t.check('and it arrived', !!(await until(async () => (idsIn(await callMcpIn(app, idB.windowId, 'list', {})).includes(childC.sessionId) ? true : null))))
+    const movedAgain = await mcpQ.call('clave_move_session', { sessionId: childC.sessionId, groupId: groupA.groupId, window: idA.windowId })
+    t.check('the same cross-window move succeeds a second time', !toolErrored(movedAgain), movedAgain)
+    const inGroupAgain = await until(async () => {
+      const l = await callMcpIn(app, idA.windowId, 'list', {})
+      return l.groups.find((g) => g.id === groupA.groupId)?.sessionIds.includes(childC.sessionId) ? l : null
+    })
+    t.check('and childC is in the target group again', !!inGroupAgain, inGroupAgain?.groups)
 
     // ── clave_open_window ──
     const before = (await windows(app)).length

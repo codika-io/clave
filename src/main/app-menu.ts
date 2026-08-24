@@ -1,5 +1,5 @@
 import { Menu, shell, type MenuItemConstructorOptions } from 'electron'
-import { focusedOrPrimaryWindow } from './window-routing'
+import { focusedOrPrimaryWindow, bringForward } from './window-routing'
 import { windowRegistry } from './window-registry'
 import { workspaceManager } from './workspace-manager'
 import { checkForUpdatesNow, openUpdaterLog, RELEASES_URL } from './auto-updater'
@@ -14,9 +14,7 @@ const APP_NAME = 'Clave'
 function openSettingsSection(section: string): void {
   const win = focusedOrPrimaryWindow()
   if (!win) return
-  if (win.isMinimized()) win.restore()
-  win.show()
-  win.focus()
+  bringForward(win)
   win.webContents.send('menu:open-settings-section', section)
 }
 

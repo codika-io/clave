@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   mergeLayoutForKeys,
   absorbLayout,
+  placeAdopted,
   type LayoutGroupLike,
   type LayoutSessionLike
 } from './sidebar-layout-partition'
@@ -165,5 +166,33 @@ describe("absorbLayout — taking in another window's groups", () => {
 
   it('is a no-op for an empty handover', () => {
     expect(absorbLayout(store, {})).toEqual(store)
+  })
+})
+
+describe('placeAdopted — an adopted tab never lands twice, never in a foreign group', () => {
+  const state = {
+    groups: [g('g1', ['s1'], A, [{ sessionId: 't1' }])],
+    displayOrder: ['g1', 's-free'],
+    sessions: [s('s1'), s('s-free'), { id: 's-viewer', view: { serverSessionId: 'srv' } }]
+  }
+
+  it('appends a tab nothing holds to the top level', () => {
+    expect(placeAdopted(state, 's-new')).toEqual(['g1', 's-free', 's-new'])
+  })
+
+  it("leaves a group's member where it is (no top-level duplicate)", () => {
+    expect(placeAdopted(state, 's1')).toEqual(['g1', 's-free'])
+  })
+
+  it("leaves a group's quick-launch terminal hidden", () => {
+    expect(placeAdopted(state, 't1')).toEqual(['g1', 's-free'])
+  })
+
+  it("leaves a session view's hidden server hidden", () => {
+    expect(placeAdopted(state, 'srv')).toEqual(['g1', 's-free'])
+  })
+
+  it('is idempotent for a tab already at the top level', () => {
+    expect(placeAdopted(state, 's-free')).toEqual(['g1', 's-free'])
   })
 })

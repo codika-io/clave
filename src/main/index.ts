@@ -100,7 +100,7 @@ function onWindowClosed(windowId: number, windowKey: string): void {
       ptyManager.kill(id, false)
     }
   }
-  moveSessionsToWindow(tmuxBacked, primary.id, layout)
+  moveSessionsToWindow(tmuxBacked, primary.id, layout, false)
   broadcastIdentities()
 }
 

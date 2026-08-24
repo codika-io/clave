@@ -155,3 +155,26 @@ export function absorbLayout<G extends LayoutGroupLike>(
   }
   return { groups, displayOrder }
 }
+
+/**
+ * Where an ADOPTED session goes in the sidebar — a survivor at boot, a tab
+ * handed over by another window. Placement-neutral by design: an adoption
+ * never nests a tab into a group it was not in (the fresh-spawn heuristic
+ * that nests into the selected group must not apply — a moved tab would be
+ * swallowed by whatever the target window has selected) and never puts it
+ * at the top level when something already holds it (a group's members, a
+ * group's quick-launch terminal, a session view's hidden server) — that
+ * would show one tab twice. Returns the new top-level order.
+ */
+export function placeAdopted<G extends LayoutGroupLike>(
+  state: { groups: G[]; displayOrder: string[]; sessions: LayoutSessionLike[] },
+  sessionId: string
+): string[] {
+  if (state.displayOrder.includes(sessionId)) return state.displayOrder
+  for (const g of state.groups) {
+    if (g.sessionIds.includes(sessionId)) return state.displayOrder
+    if (g.terminals.some((t) => t.sessionId === sessionId)) return state.displayOrder
+  }
+  if (state.sessions.some((s) => s.view?.serverSessionId === sessionId)) return state.displayOrder
+  return [...state.displayOrder, sessionId]
+}

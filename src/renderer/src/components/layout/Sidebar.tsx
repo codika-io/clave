@@ -991,10 +991,11 @@ export function Sidebar() {
     if (!group) return Promise.resolve()
     // Hand main a plain copy: the store object carries nothing main needs
     // beyond its fields, and the target window re-creates it from these.
+    // Terminal links stay: their live sessions travel with the group.
     const plain = {
       ...group,
       sessionIds: [...group.sessionIds],
-      terminals: group.terminals.map((t) => ({ ...t, sessionId: null }))
+      terminals: group.terminals.map((t) => ({ ...t }))
     }
     return window.electronAPI?.windowMoveGroup?.(plain, targetWindowId) ?? Promise.resolve()
   }, [])

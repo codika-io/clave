@@ -70,8 +70,12 @@ const electronAPI = {
   // Sessions handed to this window to take in — a closing window's (with its
   // groups), or tabs moved here — as ids; the records carry the rest.
   onSessionRehome: (
-    callback: (payload: { sessionIds: string[]; layout: unknown | null }) => void
-  ) => createIpcListener<[{ sessionIds: string[]; layout: unknown | null }]>('session:rehome', callback),
+    callback: (payload: { sessionIds: string[]; layout: unknown | null; focus: boolean }) => void
+  ) =>
+    createIpcListener<[{ sessionIds: string[]; layout: unknown | null; focus: boolean }]>(
+      'session:rehome',
+      callback
+    ),
   // A session this window held just MOVED to another window: drop the tab
   // without touching the pty.
   onSessionRemovedForRehome: (callback: (sessionId: string) => void) =>

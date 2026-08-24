@@ -117,11 +117,11 @@ export function AppShell() {
     // sessions with its groups, a tab or a group moved here — and drop a tab
     // whose session moved AWAY (moved, not died — never kill the pty). The
     // groups land first so the adopted members find their group.
-    window.electronAPI?.onSessionRehome?.(({ sessionIds, layout }) => {
+    window.electronAPI?.onSessionRehome?.(({ sessionIds, layout, focus }) => {
       if (layout) {
         useSessionStore.getState().absorbLayout(layout as { groups: SessionGroup[]; displayOrder: string[] })
       }
-      void adoptRehomed(sessionIds, useWorkspaceStore.getState().activeWorkspaceId)
+      void adoptRehomed(sessionIds, useWorkspaceStore.getState().activeWorkspaceId, focus === true)
     })
     window.electronAPI?.onSessionRemovedForRehome?.((id) => {
       useSessionStore.getState().removeSessionForRehome(id)
