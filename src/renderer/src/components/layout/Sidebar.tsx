@@ -1379,6 +1379,14 @@ export function Sidebar() {
         />
       </div>
 
+      {/* The seam the list scrolls under. The switcher above is pinned, so the
+          cards pass BEHIND it — and with nothing between them they slid up into
+          its bottom border, which made the panel read as the first row of the
+          list rather than as the chrome the list runs under. The launcher and
+          the switcher are held apart by 4px; this is the same 4px, closed by a
+          hairline that gives the scroll somewhere to end. */}
+      <div className="sidebar-list-seam flex-shrink-0" />
+
       {/* Single scrollable area for all sections */}
       <ScrollArea
         viewportRef={scrollContainerRef}

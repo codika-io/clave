@@ -1076,36 +1076,6 @@ body,
   min-width: 4px;
 }
 
-/* The `+` row at the bottom of a group: launches a session into that group,
-   with the group's own default prompt. Quieter than a session row — it is an
-   affordance, not a tab — and it takes the group's colour on hover so it reads
-   as belonging to the group rather than to the list. */
-.group-add-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;           /* gap-1.5 */
-  height: var(--sidebar-row-h);
-  padding: 0 var(--sidebar-row-px);
-  border-radius: var(--radius-lg);
-  /* 13px: the 12px it used to be read as a mistake next to the sessions above
-     it, and matching them outright (13.5px) made it shout for a control that
-     should whisper. Its quietness comes from colour and opacity, not size. */
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text-tertiary);
-  opacity: 0.75;
-  transition: color 150ms, background-color 150ms, opacity 150ms;
-}
-.group-add-row:hover {
-  color: var(--text-primary);
-  background-color: var(--group-hover-bg, var(--surface-200));
-  opacity: 1;
-}
-.group-add-row:disabled {
-  opacity: 0.4;
-}
-
 /* ── Groups ── */
 
 /* A group is a tinted card, and every state it has is drawn from the colour it
