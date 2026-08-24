@@ -26,7 +26,6 @@ import {
   openWindow,
   windows,
   killLeakedE2eTmux,
-  until,
   mcpHttpClient,
   mcpEndpoint,
   spawnAgentTabIn,

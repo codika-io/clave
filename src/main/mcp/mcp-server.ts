@@ -186,7 +186,9 @@ async function aggregateList(
   callerSessionId: string | undefined
 ): Promise<unknown> {
   const replies = await callRendererAll<Record<string, unknown>>('list', payload)
-  const ok = replies.filter((r) => r.ok && r.result).map((r) => ({ windowId: r.windowId, r: r.result! }))
+  const ok = replies
+    .filter((r) => r.ok && r.result)
+    .map((r) => ({ windowId: r.windowId, r: r.result! }))
   if (ok.length === 0) {
     const firstErr = replies.find((r) => !r.ok)?.error
     throw new Error(firstErr ?? 'Clave window not available')
@@ -271,7 +273,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .string()
           .optional()
           .describe(
-            'Workspace (id or name) the group belongs to. Default: your own tab\'s workspace, else the active one.'
+            "Workspace (id or name) the group belongs to. Default: your own tab's workspace, else the active one."
           )
       }
     },
@@ -325,7 +327,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .string()
           .optional()
           .describe(
-            'Workspace (id or name) the new tab belongs to — lets you open work in another workspace WITHOUT switching the user\'s view. Default: the target group\'s workspace, else your own tab\'s, else the active one.'
+            "Workspace (id or name) the new tab belongs to — lets you open work in another workspace WITHOUT switching the user's view. Default: the target group's workspace, else your own tab's, else the active one."
           )
       }
     },
@@ -352,7 +354,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_switch_workspace',
     {
       description:
-        'Switch the app\'s ACTIVE workspace — the user\'s whole visible world (sidebar sessions, groups, templates, toolbar) flips to that workspace; hidden workspaces\' sessions keep running. Prefer opening background work with clave_open_session\'s workspace parameter instead; switch only when the user should actually look at the other workspace.',
+        "Switch the app's ACTIVE workspace — the user's whole visible world (sidebar sessions, groups, templates, toolbar) flips to that workspace; hidden workspaces' sessions keep running. Prefer opening background work with clave_open_session's workspace parameter instead; switch only when the user should actually look at the other workspace.",
       inputSchema: {
         workspace: z.string().describe('Workspace id or name to activate')
       }
@@ -442,7 +444,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_set_group_view',
     {
       description:
-        "Attach a web view to a Clave group: the page the user sees in the main pane when they click the group, instead of the tiled session mosaic. Point it at a local dev server (a live dashboard, a docs site, a design preview — e.g. a workstream viewer or a Slideless dev server) or at an absolute .html file path rendered in-app. Optionally link the group terminal that serves the URL (terminalId from clave_add_group_terminal) so a down server shows a one-click start action. Attaching never switches what the user is currently looking at — they see the view on their next group click. Pass url: null to detach. Returns { groupId, view }.",
+        'Attach a web view to a Clave group: the page the user sees in the main pane when they click the group, instead of the tiled session mosaic. Point it at a local dev server (a live dashboard, a docs site, a design preview — e.g. a workstream viewer or a Slideless dev server) or at an absolute .html file path rendered in-app. Optionally link the group terminal that serves the URL (terminalId from clave_add_group_terminal) so a down server shows a one-click start action. Attaching never switches what the user is currently looking at — they see the view on their next group click. Pass url: null to detach. Returns { groupId, view }.',
       inputSchema: {
         groupId: z.string().describe('Target group: a group id, an exact group name, or "mine"'),
         url: z
@@ -470,7 +472,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_set_session_view',
     {
       description:
-        "Attach a web view to a single Clave session (tab): a dashboard icon appears on the session's row in the sidebar, and clicking it shows the page in the main pane — clicking the row itself still shows the terminal. The groupless counterpart of clave_set_group_view, for a page belonging to ONE tab (e.g. a fast-lane workstream dashboard). Point it at an http(s) URL or an absolute .html file path. Pass `command` (http(s) URLs only) to have Clave spawn a hidden serving terminal immediately — it launches at attach, and its command doubles as the view's one-click start action when the server is down (after an app restart, say). The serving terminal is invisible in the sidebar and dies with its session. Attaching never switches what the user is looking at. Pass url: null to detach (the serving terminal is killed). Pass sessionId \"mine\" to attach to your own tab. Returns { sessionId, view }.",
+        'Attach a web view to a single Clave session (tab): a dashboard icon appears on the session\'s row in the sidebar, and clicking it shows the page in the main pane — clicking the row itself still shows the terminal. The groupless counterpart of clave_set_group_view, for a page belonging to ONE tab (e.g. a fast-lane workstream dashboard). Point it at an http(s) URL or an absolute .html file path. Pass `command` (http(s) URLs only) to have Clave spawn a hidden serving terminal immediately — it launches at attach, and its command doubles as the view\'s one-click start action when the server is down (after an app restart, say). The serving terminal is invisible in the sidebar and dies with its session. Attaching never switches what the user is looking at. Pass url: null to detach (the serving terminal is killed). Pass sessionId "mine" to attach to your own tab. Returns { sessionId, view }.',
       inputSchema: {
         sessionId: z.string().describe('Target session id, or "mine" for the calling tab'),
         url: z
@@ -557,9 +559,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       description:
         "Read the last N rendered lines of a tab's terminal without interrupting it — check what a delegated agent is doing, read a dev server's logs, or inspect a sibling's state. Works for any tab, plain terminals included. Returns scrollback for normal-buffer output (most CLIs, including claude/codex inline); for a full-screen/alternate-screen program (e.g. a pager or a TUI that took over the screen) it returns only the currently visible screen, so a large `lines` value may come back shorter. Target by session id, exact tab name, or \"parent\".",
       inputSchema: {
-        sessionId: z
-          .string()
-          .describe('Target: a session id, an exact tab name, or "parent"'),
+        sessionId: z.string().describe('Target: a session id, an exact tab name, or "parent"'),
         lines: z
           .number()
           .int()
@@ -581,7 +581,10 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         path: z
           .string()
           .describe("File path — absolute, or relative to the calling tab's working directory"),
-        name: z.string().optional().describe('Display name for the tab (defaults to the file name)'),
+        name: z
+          .string()
+          .optional()
+          .describe('Display name for the tab (defaults to the file name)'),
         view: z
           .enum(['rendered', 'source'])
           .optional()
@@ -687,22 +690,28 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_offer_copy',
     {
       description:
-        'Hand the user a value to copy with ONE CLICK — the outbound mirror of clave_request_secret. Use it whenever the user will paste something you produced somewhere else (a command for another machine, a config snippet, a URL, a message for Slack/email): selecting text in a terminal mangles lines, this preserves the exact bytes. A copy button appears in your tab\'s header listing every value you have offered; one call per value, with a short label so the user knows what they are copying. Returns immediately — you are not told if or when the user copies. Set sensitive:true for values that should not be previewed on screen (the user can still copy them). For long-running work, pair with clave_notify so the user knows a value is waiting.',
+        "Hand the user a value to copy with ONE CLICK — the outbound mirror of clave_request_secret. Use it whenever the user will paste something you produced somewhere else (a command for another machine, a config snippet, a URL, a message for Slack/email): selecting text in a terminal mangles lines, this preserves the exact bytes. A copy button appears in your tab's header listing every value you have offered; one call per value, with a short label so the user knows what they are copying. Returns immediately — you are not told if or when the user copies. Set sensitive:true for values that should not be previewed on screen (the user can still copy them). For long-running work, pair with clave_notify so the user knows a value is waiting.",
       inputSchema: {
         label: z
           .string()
           .min(1)
           .max(120)
-          .describe('Short human-readable name for the value, e.g. "Webhook URL for the Stripe dashboard"'),
+          .describe(
+            'Short human-readable name for the value, e.g. "Webhook URL for the Stripe dashboard"'
+          ),
         value: z
           .string()
           .min(1)
           .max(262144)
-          .describe('The exact text to place on the clipboard — newlines and formatting are preserved byte-for-byte'),
+          .describe(
+            'The exact text to place on the clipboard — newlines and formatting are preserved byte-for-byte'
+          ),
         sensitive: z
           .boolean()
           .default(false)
-          .describe('Mask the on-screen preview (for values like tokens that should not be shoulder-surfable)')
+          .describe(
+            'Mask the on-screen preview (for values like tokens that should not be shoulder-surfable)'
+          )
       }
     },
     async (args) => {

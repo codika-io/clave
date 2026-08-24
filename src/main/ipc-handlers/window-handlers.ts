@@ -5,7 +5,6 @@ import { windowRegistry, type WindowIdentity } from '../window-registry'
 import { workspaceManager } from '../workspace-manager'
 import { ptyManager, sessionRecordsDir } from '../pty-manager'
 
-
 /** What a renderer learns about itself, and only itself: its window id, the
  *  workspace it shows, whether it is the primary, and the workspaces it
  *  hosts (may write for). Pushed again as `window:workspace-changed` every

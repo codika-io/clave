@@ -316,7 +316,6 @@ export async function spyPtySpawn(app) {
   return async () => app.evaluate(() => globalThis.__e2eSpawns ?? [])
 }
 
-
 // ── MCP over HTTP (PRDCT-1703 slice 2 routing) ───────────────────────────────
 // The real transport: mcp-server resolves WHICH window runs each call from the
 // caller's per-session token, so routing (§3.8) is only exercised over HTTP,
@@ -342,7 +341,10 @@ export function mcpHttpClient(url, token) {
     const text = await res.text()
     const payloads =
       text.startsWith('event:') || text.includes('\ndata:') || text.startsWith('data:')
-        ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim())
+        ? text
+            .split('\n')
+            .filter((l) => l.startsWith('data:'))
+            .map((l) => l.slice(5).trim())
         : [text]
     const parsed = payloads.filter(Boolean).map((p) => JSON.parse(p))
     return parsed[parsed.length - 1] ?? null
@@ -353,13 +355,22 @@ export function mcpHttpClient(url, token) {
         jsonrpc: '2.0',
         id: nextId++,
         method: 'initialize',
-        params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'clave-e2e', version: '0.0.0' } }
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'clave-e2e', version: '0.0.0' }
+        }
       })
       await post({ jsonrpc: '2.0', method: 'notifications/initialized' })
       return res
     },
     async call(name, args) {
-      return post({ jsonrpc: '2.0', id: nextId++, method: 'tools/call', params: { name, arguments: args } })
+      return post({
+        jsonrpc: '2.0',
+        id: nextId++,
+        method: 'tools/call',
+        params: { name, arguments: args }
+      })
     }
   }
 }
@@ -392,7 +403,9 @@ export function mcpEndpoint(dir) {
  *  return its clave session id + per-session MCP bearer token, once minted.
  *  Agent tabs mint an mcp-config under <dir>/mcp-configs/<claveId>.json. */
 export async function spawnAgentTabIn(app, page, dir, { until: untilFn = until } = {}) {
-  const before = new Set(existsSync(path.join(dir, 'mcp-configs')) ? readdirSync(path.join(dir, 'mcp-configs')) : [])
+  const before = new Set(
+    existsSync(path.join(dir, 'mcp-configs')) ? readdirSync(path.join(dir, 'mcp-configs')) : []
+  )
   await page.click('.launcher-split .launcher-btn')
   const cfg = await untilFn(() => {
     const d = path.join(dir, 'mcp-configs')
@@ -401,6 +414,8 @@ export async function spawnAgentTabIn(app, page, dir, { until: untilFn = until }
     return f ? { claveId: f.replace(/\.json$/, ''), file: path.join(d, f) } : null
   })
   if (!cfg) return null
-  const token = JSON.parse(readFileSync(cfg.file, 'utf-8')).mcpServers?.clave?.headers?.Authorization?.replace(/^Bearer /, '')
+  const token = JSON.parse(
+    readFileSync(cfg.file, 'utf-8')
+  ).mcpServers?.clave?.headers?.Authorization?.replace(/^Bearer /, '')
   return { sessionId: cfg.claveId, token }
 }

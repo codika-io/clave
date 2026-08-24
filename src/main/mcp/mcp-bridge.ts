@@ -19,7 +19,12 @@ interface PendingRequest {
 
 const pending = new Map<string, PendingRequest>()
 
-function dispatch<T>(win: BrowserWindow, command: string, payload: unknown, timeoutMs: number): Promise<T> {
+function dispatch<T>(
+  win: BrowserWindow,
+  command: string,
+  payload: unknown,
+  timeoutMs: number
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const requestId = randomUUID()
     const timer = setTimeout(() => {
@@ -74,7 +79,11 @@ export async function callRendererAll<T>(
         const result = await dispatch<T>(win, command, payload, timeoutMs)
         return { windowId: win.id, ok: true, result }
       } catch (err) {
-        return { windowId: win.id, ok: false, error: err instanceof Error ? err.message : String(err) }
+        return {
+          windowId: win.id,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err)
+        }
       }
     })
   )
