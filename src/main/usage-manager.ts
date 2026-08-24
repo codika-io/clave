@@ -1,4 +1,7 @@
-import { execFileSync } from 'child_process'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+
+const execFileAsync = promisify(execFile)
 
 // Single source of truth for rate-limit usage — the same OAuth endpoint Claude Code
 // itself queries to populate the `rate_limits` block of its statusline JSON. The
@@ -6,11 +9,21 @@ import { execFileSync } from 'child_process'
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage'
 const KEYCHAIN_SERVICE = 'Claude Code-credentials'
 const OAUTH_BETA = 'oauth-2025-04-20'
+// A keychain read that has not answered in this long is a prompt nobody is
+// looking at. Give up and report it rather than hang the caller forever.
+const KEYCHAIN_TIMEOUT_MS = 10_000
 
 // One usage window (5-hour block or a weekly cap), normalized for the UI.
 export interface UsageWindow {
   key: string
   label: string
+  // The service's own kind — 'session', 'weekly_all', 'weekly_scoped', or
+  // whatever it invents next. Carried through so a consumer can pick a window
+  // by what it IS rather than by parsing the composite key or the prose label.
+  kind: string
+  // What a scoped limit is scoped to ('Fable', 'Opus'), else null. The short
+  // name for a cap, which is what a one-line readout has room for.
+  scope: string | null
   // 0–100, already a percentage of the cap consumed.
   usedPercentage: number
   // Unix epoch milliseconds when this window resets, or null if unknown.
@@ -72,19 +85,20 @@ interface RawUsageBody {
   limits?: RawLimit[] | null
 }
 
-function readAccessToken(): string | null {
+// ASYNC, and it must stay async. `security` can block: macOS puts up an access
+// prompt when the keychain item's ACL does not already cover this binary, and it
+// answers at whatever speed a human does. execFileSync would hold the ENTIRE
+// main process for that — every window, every PTY, every IPC reply — behind a
+// dialog that may be sitting behind the app. `security` lives at a fixed system
+// path, so execFile (not exec) still avoids the login-shell dance.
+async function readAccessToken(): Promise<string | null> {
   try {
-    // `security` lives at a fixed system path — no PATH resolution needed, so
-    // execFileSync (not execSync) is safe here and avoids the login-shell dance.
-    const raw = execFileSync('/usr/bin/security', [
-      'find-generic-password',
-      '-s',
-      KEYCHAIN_SERVICE,
-      '-w'
-    ])
-      .toString()
-      .trim()
-    const parsed = JSON.parse(raw)
+    const { stdout } = await execFileAsync(
+      '/usr/bin/security',
+      ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-w'],
+      { timeout: KEYCHAIN_TIMEOUT_MS }
+    )
+    const parsed = JSON.parse(stdout.trim())
     const oauth = parsed.claudeAiOauth ?? parsed
     return typeof oauth.accessToken === 'string' ? oauth.accessToken : null
   } catch {
@@ -108,12 +122,17 @@ function humanizeKind(kind: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
+// A scoped limit is named by what it's scoped to — the model (Fable, Opus) or,
+// failing that, the surface — which is the only place a new per-model cap surfaces.
+function scopeOf(limit: RawLimit): string {
+  return (
+    limit.scope?.model?.display_name?.trim() || limit.scope?.surface?.display_name?.trim() || ''
+  )
+}
+
 function labelForLimit(limit: RawLimit): string {
   const kind = limit.kind ?? ''
-  // A scoped limit is named by what it's scoped to — the model (Fable, Opus) or,
-  // failing that, the surface — which is the only place a new per-model cap surfaces.
-  const scopeName =
-    limit.scope?.model?.display_name?.trim() || limit.scope?.surface?.display_name?.trim() || ''
+  const scopeName = scopeOf(limit)
 
   if (kind === 'session') return 'Current session (5h)'
   if (kind === 'weekly_all') return 'Weekly · all models'
@@ -140,6 +159,8 @@ function normalizeLimits(limits: RawLimit[]): UsageWindow[] {
       window: {
         key,
         label,
+        kind,
+        scope: scopeOf(limit) || null,
         usedPercentage: Math.max(0, Math.min(100, limit.percent)),
         resetsAt: parseResetsAt(limit.resets_at),
         severity: parseSeverity(limit.severity)
@@ -160,6 +181,9 @@ function normalizeLegacyWindows(raw: Record<string, RawWindow | null>): UsageWin
     windows.push({
       key,
       label,
+      // The legacy keys ARE the kind, and only one of them is scoped.
+      kind: key === 'five_hour' ? 'session' : key === 'seven_day' ? 'weekly_all' : 'weekly_scoped',
+      scope: key === 'seven_day_opus' ? 'Opus' : null,
       usedPercentage: Math.max(0, Math.min(100, w.utilization)),
       resetsAt: parseResetsAt(w.resets_at),
       severity: null
@@ -178,7 +202,7 @@ function normalize(body: RawUsageBody): UsageWindow[] {
 
 class UsageManager {
   async getLimits(): Promise<UsageLimits | UsageError> {
-    const token = readAccessToken()
+    const token = await readAccessToken()
     if (!token) {
       return { error: 'Sign in to Claude Code to see usage limits.' }
     }

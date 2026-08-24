@@ -2,6 +2,7 @@
 @import "@fontsource/geist-sans/400.css";
 @import "@fontsource/geist-sans/500.css";
 @import "@fontsource/geist-sans/600.css";
+
 /* MDXEditor base styles (markdown page editor). Imported here, before the
    design system, so .markdown-page-editor overrides below win the cascade. */
 @import "@mdxeditor/editor/style.css";
@@ -759,6 +760,169 @@ body,
   color: var(--text-tertiary);
   opacity: 0.7;
   white-space: nowrap;
+}
+
+/* ── The wordmark ── */
+
+/* "Clave", beside the traffic lights. An SVG of outlined glyphs, not text in a
+   face — see components/layout/Wordmark.tsx for why (the licence forbids
+   shipping the font file, and the string never changes). Nothing here may
+   reintroduce a font-family: there is no second face in this app.
+
+   Sized by height, width following the viewBox ratio, because the height is
+   what has to land on the traffic lights' centre line. Sits at the app's
+   quietest ink — it is a mark on the window, not a heading, and it must not
+   compete with the launcher panel two rows below it. */
+.wordmark {
+  --wordmark-h: 12.2px; /* the ink height the design was drawn at (0.762em of 16px) */
+  height: var(--wordmark-h);
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  user-select: none;
+  transition: color 200ms;
+}
+
+/* ── The sidebar's foot ── */
+
+/* The card material at the foot of the sidebar, cut from the same cloth as the
+   launcher and the switcher panels at the top of it, so the list is bracketed
+   by chrome instead of trailing off into loose rows of different shapes. Two
+   things wear it: the foot panel itself (who you are, how long you have worked,
+   the doors) and the announcement cards that stack above it.
+
+   `isolation` because a field canvas inside sits at z-index 0 and everything
+   else stacks over it; `overflow: hidden` because that field is painted
+   full-bleed and the panel's own radius is what crops it. */
+.sidebar-panel {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background-color: color-mix(in srgb, var(--surface-0) 70%, transparent);
+  overflow: hidden;
+}
+
+/* The user's own field, the panel's actual ground.
+   No CSS opacity on it and no mask across it: it is quietened in the paint
+   itself — the gradient veiled back toward --surface-0, the film grain then
+   laid over that at full strength — which is why it reads as weather on the
+   panel rather than as a grey wash behind it. The dials live on the component
+   (BrandField's veil / grainAlpha in SidebarFooter), not here, because both
+   are canvas operations and neither has a CSS equivalent that keeps the grain.
+
+   Nothing here to scope per theme either: the veil is made of the app's own
+   ground, so it follows light, dark and coffee by construction. */
+.sidebar-footer-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* One line of the panel. The rows are the panel's own padding rather than
+   .sidebar-item's: this is chrome, like the launcher, not list. */
+.sidebar-footer-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0 0.375rem;
+  min-width: 0;
+}
+
+/* The identity row, tall enough to carry the avatar with air around it. */
+.sidebar-footer-row--user {
+  height: 2.875rem; /* 46px = 32px avatar + 7px above and below */
+}
+
+/* The second line: time worked on the left, the doors on the right. Shorter
+   than the row above it, because it is a footnote to it. */
+.sidebar-footer-row--meta {
+  height: var(--control-h-md);
+}
+
+/* The hairline between them. Inset from the panel's edges so it reads as a
+   fold inside the card rather than as the card being cut in two. */
+.sidebar-footer-sep {
+  position: relative;
+  z-index: 1;
+  height: 1px;
+  margin: 0 0.375rem;
+  background-color: var(--color-border);
+}
+
+/* The headroom meter on the foot panel's second line. A track and a fill, and
+   the fill is what is LEFT rather than what is spent: the line answers "can I
+   keep going", so the bar has to drain, not fill. Narrow on purpose — it is the
+   glanceable half of a readout whose exact number is right beside it, and the
+   row still has a name and a chat icon to seat. */
+.usage-meter {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: var(--surface-200);
+}
+
+.usage-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 300ms var(--ease-out-expo), background-color 200ms;
+}
+.usage-meter-fill--normal {
+  background-color: var(--color-accent);
+}
+.usage-meter-fill--warning {
+  background-color: var(--color-wellbeing-gentle);
+}
+.usage-meter-fill--critical {
+  background-color: var(--color-wellbeing-strong);
+}
+
+/* An icon target inside the panel — the settings gear, the feedback door.
+   Same size and the same hover fill as the launcher's trailing buttons, so the
+   two panels answer to the same touch. */
+.sidebar-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-h-md);
+  height: var(--control-h-md);
+  border-radius: var(--radius-lg);
+  color: var(--text-tertiary);
+  transition: color 150ms, background-color 150ms;
+}
+.sidebar-footer-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-100);
+}
+
+/* The name. Its own hover target — clicking it opens settings — but no fill of
+   its own: inside a panel the pointer and the gear already say it is live. */
+.sidebar-footer-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 150ms;
+}
+.sidebar-footer-name:hover {
+  color: var(--color-accent);
 }
 
 /* ── Side panel bars ── */

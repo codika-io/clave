@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { type Theme, useSessionStore } from '../../store/session-store'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
-import { useUserStore, USER_ICONS, USER_ICON_COLORS } from '../../store/user-store'
+import { useUserStore, USER_ICONS } from '../../store/user-store'
+import { PALETTE_KEYS, PALETTE_LABELS, fieldInk } from '../../lib/brand-field'
+import { BrandField } from '../ui/BrandField'
 import { useWorkspaceStore } from '../../store/workspace-store'
 import {
   addWorkspace,
@@ -14,7 +16,7 @@ import {
 import { useClaudeProfileStore, DEFAULT_CLAUDE_PROFILE_ID } from '../../store/claude-profile-store'
 import { UserIconDisplay, ICON_MAP } from '../ui/UserIconDisplay'
 import { CheckIcon } from '@heroicons/react/24/solid'
-import { TrashIcon, PlusIcon, PencilIcon, FolderIcon, ShieldCheckIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { TrashIcon, PlusIcon, PencilIcon, FolderIcon, ShieldCheckIcon, ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { LocationsTab } from './LocationsTab'
 import { UpdatesTab } from './UpdatesTab'
 import { UsagePanel } from '../usage/UsagePanel'
@@ -39,13 +41,19 @@ const themes: { id: Theme; label: string; colors: { bg: string; surface: string;
   }
 ]
 
+/** One seed for every swatch in the field picker: the row is a comparison of
+ *  palettes, and twelve different draws would compare the draws instead. */
+const PREVIEW_SEED = 976086463
+
 function ProfileSection() {
   const name = useUserStore((s) => s.name)
   const avatarIcon = useUserStore((s) => s.avatarIcon)
-  const avatarColor = useUserStore((s) => s.avatarColor)
+  const avatarField = useUserStore((s) => s.avatarField)
+  const avatarSeed = useUserStore((s) => s.avatarSeed)
   const setName = useUserStore((s) => s.setName)
   const setAvatarIcon = useUserStore((s) => s.setAvatarIcon)
-  const setAvatarColor = useUserStore((s) => s.setAvatarColor)
+  const setAvatarField = useUserStore((s) => s.setAvatarField)
+  const reseedAvatar = useUserStore((s) => s.reseedAvatar)
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -67,7 +75,7 @@ function ProfileSection() {
         {/* Identity row: avatar + editable name */}
         <div className="settings-row">
           <div className="flex items-center gap-3 min-w-0">
-            <UserIconDisplay icon={avatarIcon} color={avatarColor} size="md" />
+            <UserIconDisplay icon={avatarIcon} field={avatarField} seed={avatarSeed} size="md" />
             {editing ? (
               <input
                 ref={inputRef}
@@ -92,8 +100,11 @@ function ProfileSection() {
           </div>
         </div>
 
+        {/* Twelve of each, laid out as two rows of six rather than left to
+            wrap where the panel happens to end: the icons and the fields are
+            the same kind of choice and should read as the same grid. */}
         <SettingsRow label="Icon">
-          <div className="flex flex-wrap justify-end gap-1 max-w-[280px]">
+          <div className="grid grid-cols-6 gap-1.5">
             {USER_ICONS.map((iconName) => {
               const Icon = ICON_MAP[iconName]
               const isSelected = avatarIcon === iconName
@@ -108,27 +119,69 @@ function ProfileSection() {
                   }`}
                   title={iconName}
                 >
-                  <Icon className="w-3 h-3" style={{ color: isSelected ? avatarColor : 'var(--text-secondary)' }} />
+                  <Icon
+                    className="w-3 h-3"
+                    style={{ color: isSelected ? 'var(--color-accent)' : 'var(--text-secondary)' }}
+                  />
                 </button>
               )
             })}
           </div>
         </SettingsRow>
 
-        <SettingsRow label="Color">
-          <div className="flex flex-wrap justify-end gap-1.5 max-w-[280px]">
-            {USER_ICON_COLORS.map((color) => (
-              <button
-                key={color}
-                onClick={() => setAvatarColor(color)}
-                className="relative w-4 h-4 rounded-full hover:scale-110 transition-transform flex items-center justify-center"
-                style={{ backgroundColor: color }}
-                title={color}
-              >
-                {avatarColor === color && <CheckIcon className="w-2.5 h-2.5 text-white" />}
-              </button>
-            ))}
+        {/* The field, not a colour. Each swatch is the palette actually
+            painted — same engine, same grain, one seed for all twelve so they
+            differ by palette alone and the row reads as a spectrum. Choosing by
+            looking at the thing is the whole point: these are Antasphere
+            fields, and no hex describes one. */}
+        <SettingsRow label="Field">
+          <div className="grid grid-cols-6 gap-1.5">
+            {PALETTE_KEYS.map((key) => {
+              const isSelected = avatarField === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => setAvatarField(key)}
+                  className="relative w-6 h-6 rounded-md overflow-hidden hover:scale-110 transition-transform flex items-center justify-center"
+                  style={{
+                    boxShadow: isSelected
+                      ? '0 0 0 1.5px var(--color-accent)'
+                      : 'inset 0 0 0 1px rgba(0,0,0,0.2)'
+                  }}
+                  title={PALETTE_LABELS[key]}
+                >
+                  <BrandField
+                    palette={key}
+                    seed={PREVIEW_SEED}
+                    className="absolute inset-0 w-full h-full"
+                  />
+                  {isSelected && (
+                    <CheckIcon
+                      className="relative w-3 h-3"
+                      style={{
+                        color: fieldInk(key),
+                        filter:
+                          fieldInk(key) === '#1C1915'
+                            ? 'drop-shadow(0 0 2px rgba(255,255,255,0.6))'
+                            : 'drop-shadow(0 0 2px rgba(0,0,0,0.5))'
+                      }}
+                    />
+                  )}
+                </button>
+              )
+            })}
           </div>
+        </SettingsRow>
+
+        <SettingsRow label="Draw">
+          <button
+            onClick={reseedAvatar}
+            className="btn-secondary inline-flex items-center gap-1.5"
+            title="Draw the field again"
+          >
+            <ArrowPathIcon className="w-3.5 h-3.5" />
+            Redraw
+          </button>
         </SettingsRow>
       </SettingsCard>
     </SettingsSection>
