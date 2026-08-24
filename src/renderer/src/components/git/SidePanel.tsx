@@ -12,7 +12,6 @@ import { shortenPath } from '../../lib/utils'
 import { HelpPanel } from '../help/HelpPanel'
 import { Tooltip, TooltipTrigger, TooltipContent, IconButton } from '../ui/tooltip'
 import {
-  QuestionMarkCircleIcon,
   InformationCircleIcon,
   ChevronLeftIcon,
   FolderOpenIcon,
@@ -64,7 +63,6 @@ export function SidePanel() {
     return useLocationStore.getState().locations.find((l) => l.id === remoteLocationId)?.name ?? null
   }, [remoteLocationId])
 
-  const prevTabRef = useRef<'files' | 'git'>('files')
   const [customCwd, _setCustomCwd] = useState<string | null>(null)
   const navMapRef = useRef(new Map<string, string>())        // sessionId -> current customCwd
   const navStackRef = useRef(new Map<string, string[]>())    // sessionId -> back stack
@@ -259,13 +257,16 @@ export function SidePanel() {
         className="flex flex-col gap-1 px-2 pt-2 pb-1 flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* Row 1 — which tab, and the controls that belong to BOTH of them.
-            The folder the panel is pointed at and collapse-all used to be
-            duplicated per tab (one collapse-all in the file tree's filter row,
-            another in the git toolbar); hoisting them here is what makes the
-            two tabs read as one panel with two views rather than two panels. */}
+        {/* Row 1 — which tab, and nothing else. The controls that used to sit
+            out here (the folder picker, collapse-all, help) have gone: the first
+            two belong to WHERE the panel is pointed, which is the row below, and
+            help was a button in the panel's corner for a panel that is not
+            about help — ⌘? still opens it. What is left is the one choice this
+            row was ever for, so the bar is the width of that choice and sits
+            centred, rather than a full-width box with two buttons adrift in
+            it. */}
         <div
-          className="panel-bar"
+          className="panel-bar panel-bar--hug"
           data-panel-bar="tabs"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
@@ -296,99 +297,94 @@ export function SidePanel() {
               <span>Git</span>
             </button>
           )}
-          <span className="panel-bar-spacer" />
-          <span className="panel-sep" aria-hidden="true" />
-          <IconButton
-            onClick={handleChangeFolder}
-            className="panel-icon-btn"
-            aria-label="Open another folder"
-            tooltip="Open another folder"
-          >
-            <FolderOpenIcon className="w-3.5 h-3.5" />
-          </IconButton>
-          <CollapseAllButton />
-          <span className="panel-sep" aria-hidden="true" />
-          <IconButton
-            onClick={() => {
-              if (effectiveTab === 'help') {
-                setSidePanelTab(prevTabRef.current)
-              } else {
-                prevTabRef.current = sidePanelTab === 'help' ? 'files' : (sidePanelTab as 'files' | 'git')
-                setSidePanelTab('help')
-              }
-            }}
-            className="panel-icon-btn"
-            data-active={effectiveTab === 'help' ? 'true' : undefined}
-            aria-label={effectiveTab === 'help' ? 'Close help' : 'Help'}
-            tooltip={effectiveTab === 'help' ? 'Close help' : 'Help'}
-          >
-            <QuestionMarkCircleIcon className="w-3.5 h-3.5" />
-          </IconButton>
         </div>
 
-        {/* Row 2 — where you are. The back arrow and the way home flank the
-            path because all three are the same subject: this row's job is the
-            location, the bar above it is the panel's. */}
-        {effectiveTab !== 'help' && <div className="relative flex items-center gap-0.5 px-1 min-w-0">
-          {canGoBack && (
+        {/* Row 2 — where you are, as one control. The folder picker opens it, the
+            path names it and drops the parents, the back arrow and the way home
+            flank it, and collapse-all closes what it opened: every one of them is
+            about the folder this panel is pointed at, so they are one bar rather
+            than a naked line of text with its own controls stranded a row above.
+            It does not wrap — a long path truncates, which is what a path is for;
+            wrapping would drop collapse-all onto a second line at every width. */}
+        {effectiveTab !== 'help' && (
+          <div
+            className="panel-bar panel-bar--nowrap relative"
+            data-panel-bar="path"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            {canGoBack && (
+              <IconButton
+                onClick={goBack}
+                className="panel-icon-btn"
+                aria-label="Go back"
+                tooltip="Go back"
+              >
+                <ChevronLeftIcon className="w-3.5 h-3.5" />
+              </IconButton>
+            )}
             <IconButton
-              onClick={goBack}
+              onClick={handleChangeFolder}
               className="panel-icon-btn"
-              aria-label="Go back"
-              tooltip="Go back"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              aria-label="Open another folder"
+              tooltip="Open another folder"
             >
-              <ChevronLeftIcon className="w-3.5 h-3.5" />
+              <FolderOpenIcon className="w-3.5 h-3.5" />
             </IconButton>
-          )}
-          <div className="flex-1 min-w-0">
-            {isRemoteSession && locationName ? (
-              <div
-                className="flex items-center gap-1.5 text-xs font-medium text-text-secondary truncate"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              >
-                <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                <span className="truncate">{locationName}</span>
-                {effectiveCwd && (
-                  <>
-                    <span className="text-text-tertiary">:</span>
-                    <span className="text-text-tertiary truncate">{effectiveCwd}</span>
-                  </>
-                )}
-              </div>
-            ) : isNavigatedSubfolder ? (
-              <div
-                className="flex items-center gap-0.5 text-xs font-medium min-w-0 overflow-hidden"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                onDoubleClick={() => setCustomCwd(null)}
-                title="Double-click to reset to session folder"
-              >
-                {breadcrumbSegments.map((seg, i) => (
-                  <span key={seg.path} className="flex items-center min-w-0">
-                    {i > 0 && (
-                      <span className="text-text-tertiary mx-0.5 flex-shrink-0">/</span>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (seg.path === sessionCwd) {
-                          setCustomCwd(null)
-                        } else {
-                          setCustomCwd(seg.path)
-                        }
-                      }}
-                      className={`truncate hover:text-text-primary transition-colors ${
-                        i === breadcrumbSegments.length - 1
-                          ? 'text-text-primary'
-                          : 'text-text-tertiary hover:underline'
-                      }`}
-                    >
-                      {seg.label}
-                    </button>
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <>
+            {/* The slack beside a truncated path is the window's drag band —
+                it was one before the row became a box, and it is the only one
+                left at this corner of the window now that both bars opt out.
+                Everything readable inside it opts back in, the way every other
+                control in the panel's chrome does. */}
+            <div
+              className="flex-1 min-w-0 px-0.5"
+              style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+            >
+              {isRemoteSession && locationName ? (
+                <div
+                  className="flex items-center gap-1.5 text-xs font-medium text-text-secondary truncate"
+                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                >
+                  <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                  <span className="truncate">{locationName}</span>
+                  {effectiveCwd && (
+                    <>
+                      <span className="text-text-tertiary">:</span>
+                      <span className="text-text-tertiary truncate">{effectiveCwd}</span>
+                    </>
+                  )}
+                </div>
+              ) : isNavigatedSubfolder ? (
+                <div
+                  className="flex items-center gap-0.5 text-xs font-medium min-w-0 overflow-hidden"
+                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                  onDoubleClick={() => setCustomCwd(null)}
+                  title="Double-click to reset to session folder"
+                >
+                  {breadcrumbSegments.map((seg, i) => (
+                    <span key={seg.path} className="flex items-center min-w-0">
+                      {i > 0 && (
+                        <span className="text-text-tertiary mx-0.5 flex-shrink-0">/</span>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (seg.path === sessionCwd) {
+                            setCustomCwd(null)
+                          } else {
+                            setCustomCwd(seg.path)
+                          }
+                        }}
+                        className={`truncate hover:text-text-primary transition-colors ${
+                          i === breadcrumbSegments.length - 1
+                            ? 'text-text-primary'
+                            : 'text-text-tertiary hover:underline'
+                        }`}
+                      >
+                        {seg.label}
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
                 <button
                   ref={pathButtonRef}
                   onClick={() => cwd && setPathMenuOpen((v) => !v)}
@@ -398,63 +394,65 @@ export function SidePanel() {
                 >
                   {displayPath}
                 </button>
-                {pathMenuOpen && parentPaths.length > 0 && (
-                  <div
-                    ref={pathMenuRef}
-                    className="fixed z-50 min-w-[180px] max-w-[320px] max-h-[60vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
-                    style={{
-                      top: (pathButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
-                      right:
-                        document.documentElement.clientWidth -
-                        (pathButtonRef.current?.getBoundingClientRect().right ?? 0)
+              )}
+            </div>
+
+            {isCustom && (
+              <IconButton
+                onClick={handleResetFolder}
+                className="panel-icon-btn"
+                aria-label="Back to the session's folder"
+                tooltip="Back to the session's folder"
+              >
+                <ArrowUturnLeftIcon className="w-3.5 h-3.5" />
+              </IconButton>
+            )}
+            <span className="panel-sep" aria-hidden="true" />
+            <CollapseAllButton />
+
+            {pathMenuOpen && parentPaths.length > 0 && (
+              <div
+                ref={pathMenuRef}
+                className="fixed z-50 min-w-[180px] max-w-[320px] max-h-[60vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
+                style={{
+                  top: (pathButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                  right:
+                    document.documentElement.clientWidth -
+                    (pathButtonRef.current?.getBoundingClientRect().right ?? 0)
+                }}
+              >
+                {parentPaths.map((item) => (
+                  <button
+                    key={item.path}
+                    onClick={() => {
+                      setCustomCwd(item.path)
+                      setPathMenuOpen(false)
                     }}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium hover:bg-surface-200 transition-colors ${
+                      item.path === cwd ? 'text-accent' : 'text-text-primary'
+                    }`}
                   >
-                    {parentPaths.map((item) => (
-                      <button
-                        key={item.path}
-                        onClick={() => {
-                          setCustomCwd(item.path)
-                          setPathMenuOpen(false)
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium hover:bg-surface-200 transition-colors ${
-                          item.path === cwd ? 'text-accent' : 'text-text-primary'
-                        }`}
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                          className="flex-shrink-0"
-                        >
-                          <path
-                            d="M1.5 2.5a1 1 0 0 1 1-1h2.172a1 1 0 0 1 .707.293L6.5 2.914a1 1 0 0 0 .707.293H9.5a1 1 0 0 1 1 1v5.293a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V2.5Z"
-                            stroke="currentColor"
-                            strokeWidth="1.1"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        <span className="truncate">{item.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      className="flex-shrink-0"
+                    >
+                      <path
+                        d="M1.5 2.5a1 1 0 0 1 1-1h2.172a1 1 0 0 1 .707.293L6.5 2.914a1 1 0 0 0 .707.293H9.5a1 1 0 0 1 1 1v5.293a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V2.5Z"
+                        stroke="currentColor"
+                        strokeWidth="1.1"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="truncate">{item.name}</span>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-
-          {isCustom && (
-            <IconButton
-              onClick={handleResetFolder}
-              className="panel-icon-btn"
-              aria-label="Back to the session's folder"
-              tooltip="Back to the session's folder"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            >
-              <ArrowUturnLeftIcon className="w-3.5 h-3.5" />
-            </IconButton>
-          )}
-        </div>}
+        )}
       </div>
 
       {/* The git tab's own bar. Same panel as the tab bar above it, so the two

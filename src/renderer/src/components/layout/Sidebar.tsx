@@ -109,6 +109,34 @@ function shouldShowGapBefore(
 }
 
 
+/**
+ * Whether a scroll viewport has more in it than fits — the question the foot
+ * seam is the answer to. Measured rather than inferred from the session count:
+ * a group unfolding, a banner appearing, or the window shrinking all change it
+ * without changing what is in the list.
+ *
+ * Both the viewport AND the content wrapper Radix puts inside it are observed.
+ * The viewport alone catches the window resizing and nothing else — its own box
+ * does not move when a group unfolds three sessions inside it, which is exactly
+ * the case the seam has to appear for.
+ */
+function useOverflows(ref: React.RefObject<HTMLDivElement | null>): boolean {
+  const [overflows, setOverflows] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    // A sub-pixel difference is a rounding artefact, not something to scroll.
+    const measure = (): void => setOverflows(el.scrollHeight - el.clientHeight > 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    const content = el.firstElementChild
+    if (content) observer.observe(content)
+    return () => observer.disconnect()
+  }, [ref])
+  return overflows
+}
+
 export function Sidebar() {
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
@@ -214,6 +242,9 @@ export function Sidebar() {
   // Scroll container ref for DnD
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const pinnedZoneRef = useRef<HTMLDivElement>(null)
+  // Whether the list runs past the bottom of its viewport — what decides the
+  // seam at the foot (see the rule under </ScrollArea>).
+  const listOverflows = useOverflows(scrollContainerRef)
 
   // Handle drop on pinned zone
   const handlePinnedDrop = useCallback((groupId: string) => {
@@ -1734,6 +1765,14 @@ export function Sidebar() {
           </>
         }
       </ScrollArea>
+
+      {/* The seam at the foot of the list, the one at the top mirrored: the
+          hairline first, then the 4px, because down here the line is the edge
+          the list disappears at and the space is what holds the foot panel off
+          it. Only when the list actually runs past its viewport — with nothing
+          scrolling under the foot there is no edge for a seam to be, and the
+          rule would read as a line lying in empty sidebar. */}
+      {listOverflows && <div className="sidebar-list-seam sidebar-list-seam--foot flex-shrink-0" />}
 
       {/* Announcements — above the foot panel. The feedback card joins them
           while it is still expanded; once collapsed it lives on as an icon

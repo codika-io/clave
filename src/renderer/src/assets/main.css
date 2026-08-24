@@ -820,6 +820,16 @@ body,
   background-color: var(--border-subtle-color);
 }
 
+/* The same seam at the FOOT, mirrored. At the top the air is above the line and
+   the list starts right under it; at the bottom the list ends right on the line
+   and the air is below, holding the banners and the foot panel off it. Same
+   hairline, same 4px, same gutter — one seam drawn twice, so the list reads as
+   passing behind chrome at both ends rather than as running out at one of them.
+   Only rendered when the list overflows: see the caller. */
+.sidebar-list-seam--foot {
+  margin: 0 0.5rem 4px;
+}
+
 /* A group's identity in one 6px dot — the folder icon the list uses is too
    wide to repeat once several chips share a row. Colourless groups get a
    muted dot rather than none, so every chip keeps the same shape. */
@@ -1058,6 +1068,17 @@ body,
 }
 .panel-icon-btn:disabled {
   opacity: 0.4;
+}
+
+/* The tab bar holds one control and nothing else — Files | Git — so the BAR
+   hugs it and centres itself, rather than running the panel's full width with
+   its contents floated into the middle. A full-width box around two buttons
+   reads as a row whose other half went missing; a box the width of the choice
+   reads as the choice. Only bars holding a single cluster take this: the moment
+   a bar has a trailing group, the spacer is what places it. */
+.panel-bar--hug {
+  align-self: center;
+  flex-wrap: nowrap;
 }
 
 /* The git bar opts out of wrapping: its controls are a fixed cluster and its

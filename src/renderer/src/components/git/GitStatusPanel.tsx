@@ -986,14 +986,20 @@ function RepoGlyph(): React.JSX.Element {
 }
 
 /**
- * The hairline that closes one block of the repo tree and opens the next.
+ * The hairline between two rows of the repo tree.
  *
- * Drawn at the head of a block rather than at its foot, which is the fix for
- * what the old foot-drawn rule got wrong: only a repo drew one, so a tree of
- * repos and the plain folders holding them came out ruled under every repo and
- * under nothing else — a line above the first folder, a line below the last
- * repo inside it, and nothing between the folders themselves. A block knows its
- * own depth; the block that happens to precede it does not.
+ * Drawn at the depth of the row BELOW it rather than the one above, which is
+ * the fix for what the old foot-drawn rule got wrong: only a repo drew one, so
+ * a tree of repos and the plain folders holding them came out ruled under every
+ * repo and under nothing else — a line above the first folder, a line below the
+ * last repo inside it, and nothing between the folders themselves. A row knows
+ * its own depth; the row that happens to precede it does not.
+ *
+ * Every row takes one but the first, a folder's first child included. That
+ * pairing used to be exempt on the theory that a line there cuts a folder off
+ * from its own contents; in the panel it read as the one place the ruling gave
+ * out, so the exemption is gone — here and in the Files tab, which rules by the
+ * same sentence.
  *
  * `data-tree-rule` carries that depth for the E2E spec, which asserts on the
  * boundaries rather than on pixels.
@@ -1535,16 +1541,12 @@ export function MultiRepoGitPanel({
   )
 
   /**
-   * Where a rule goes. A row opens a new block — and so closes the one above
-   * it — when it is no deeper than the row before it; a row DEEPER than its
-   * predecessor is that predecessor's own child, and ruling a folder off from
-   * its first repo would be the opposite of what the line is for. The first row
-   * closes nothing, and the root repo above the tree is closed by the dock
-   * separator instead.
+   * Where a rule goes: above every row but the first, at that row's own depth —
+   * a folder and its first repo included. The first row closes nothing, and the
+   * root repo above the tree is closed by the dock separator instead.
    */
   const renderTreeRow = (row: FlatRepoRow, index: number): React.JSX.Element | null => {
-    const prev = index > 0 ? treeRows![index - 1] : null
-    const rule = prev !== null && row.depth <= prev.depth
+    const rule = index > 0
     if (row.node.type === 'dir') {
       return (
         <RepoDirRow

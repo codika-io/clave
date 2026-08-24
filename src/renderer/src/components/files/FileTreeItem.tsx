@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { FileIcon } from './file-icons'
+import { TREE_INDENT_PX, TREE_ROW_PAD_PX, TREE_CHEVRON_PX } from './tree-metrics'
 import type { FlatTreeNode } from '../../hooks/use-file-tree'
 
 const DOUBLE_CLICK_MS = 300
@@ -77,53 +78,62 @@ export function FileTreeItem({
   return (
     <div
       data-tree-item
-      className={`relative flex items-center h-[var(--panel-row-h)] px-2 cursor-pointer select-none transition-colors text-sm ${
+      data-tree-depth={node.depth}
+      data-tree-name={node.name}
+      data-tree-expanded={node.type === 'directory' ? String(!!node.expanded) : undefined}
+      className={`relative flex items-center gap-1.5 h-[var(--panel-row-h)] pr-3 cursor-pointer select-none transition-colors text-sm ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       } ${node.ignored ? 'opacity-40' : ''}`}
-      style={{ paddingLeft: `${8 + node.depth * 8}px` }}
+      style={{ paddingLeft: `${TREE_ROW_PAD_PX + node.depth * TREE_INDENT_PX}px` }}
       title={node.name}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       draggable
       onDragStart={handleDragStart}
     >
-      {/* Tree indent guides */}
+      {/* Tree indent guides — one per level, down the middle of that level's
+          chevron column. */}
       {Array.from({ length: node.depth }, (_, i) => (
         <span
           key={i}
           className="tree-guide"
-          style={{ left: `${8 + i * 8 + 6}px` }}
+          style={{ left: `${TREE_ROW_PAD_PX + i * TREE_INDENT_PX + TREE_CHEVRON_PX / 2}px` }}
         />
       ))}
 
-      {/* Chevron for directories */}
+      {/* Chevron for directories — a bare glyph on the row's gap, the way the
+          git tree's rows carry theirs. A file holds the same column open with
+          a spacer so the names line up. */}
       {node.type === 'directory' ? (
-        <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-[color:var(--sidebar-icon-color)]">
-          {node.loading ? (
-            <svg width="12" height="12" viewBox="0 0 12 12" className="animate-spin">
-              <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeDasharray="20" strokeDashoffset="10" />
-            </svg>
-          ) : (
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              fill="none"
-              className={`transition-transform duration-100 ${node.expanded ? 'rotate-90' : ''}`}
-            >
-              <path d="M3 1.5L7 5L3 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </span>
+        node.loading ? (
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 12 12"
+            className="flex-shrink-0 animate-spin text-[color:var(--sidebar-icon-color)]"
+          >
+            <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeDasharray="20" strokeDashoffset="10" />
+          </svg>
+        ) : (
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            className={`flex-shrink-0 text-[color:var(--sidebar-icon-color)] transition-transform duration-100 ${node.expanded ? 'rotate-90' : ''}`}
+          >
+            <path d="M3 1.5L7 5L3 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )
       ) : (
-        <span className="w-4 flex-shrink-0" />
+        <span className="w-2.5 flex-shrink-0" />
       )}
 
       <FileIcon
         name={node.name}
         isDirectory={node.type === 'directory'}
         isOpen={node.expanded}
-        className="flex-shrink-0 text-[color:var(--sidebar-icon-color)] ml-0.5 mr-1.5"
+        className="flex-shrink-0 text-[color:var(--sidebar-icon-color)]"
       />
 
       <span className="truncate text-xs font-medium">
