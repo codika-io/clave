@@ -6,13 +6,25 @@
  * 1. The rules in the git tab's repo tree. They used to be drawn at the FOOT of
  *    a block and only by a repo, so a folder full of repos came out ruled under
  *    every repo and under nothing else — a line under the last repo inside a
- *    folder, none between the folders themselves. They are drawn at the HEAD of
- *    a block now, at the depth of the row that opens it, which is the only
- *    depth that is knowable at the boundary.
+ *    folder, none between the folders themselves. Every row but the first
+ *    carries one now, at that row's own depth — a folder and its first repo
+ *    included, which was the last pairing left exempt and read as ruling that
+ *    gives out halfway down.
  * 2. The chrome. The two tabs each had their own collapse-all and the file tab
- *    its own folder picker; those are one bar over both tabs now, and each tab's
- *    own controls sit in a second bar of the same material. That bar must not
- *    wrap at the panel's default width — the whole point of the cluster.
+ *    its own folder picker; those are shared now, and each tab's own controls
+ *    sit in a bar of the same material. That bar must not wrap at the panel's
+ *    default width — the whole point of the cluster.
+ * 3. Where the shared controls live. The folder picker and collapse-all are on
+ *    the PATH bar, beside the path they act on, not out on the tab bar; the tab
+ *    bar carries the tabs and nothing else, centred; and the help button that
+ *    used to sit in the panel's corner is gone (⌘? still opens the panel).
+ * 4. The rules in the FILE tab's tree, drawn by the same sentence as the git
+ *    tab's: above every row but the first, at that row's own depth, files and
+ *    first children included.
+ * 5. The two trees' horizontal geometry. The file tree used to run on an 8px
+ *    gutter against the git tree's 12px, so beside it the same names read as a
+ *    denser, smaller list. One gutter, one indent, and guides down the middle
+ *    of the chevron column in both.
  *
  * The fixture is a folder that is NOT itself a repo holding repos at several
  * depths, some directly, some under plain folders. That mixture is the case the
@@ -124,6 +136,29 @@ function seedBehindUpstream() {
   git(repo, 'fetch', '-q')
 }
 
+/**
+ * The FILE tree's rows and rules in document order. Its rows carry
+ * `data-tree-item` and its rules `data-file-tree-rule`, both distinct from the
+ * git tree's attributes on purpose: the file tree stays MOUNTED behind the git
+ * tab so folder state survives a tab switch, and a shared attribute would have
+ * it answering the git tree's queries from off screen.
+ */
+function readFileTree(win) {
+  return win.evaluate(() =>
+    [...document.querySelectorAll('[data-tree-item], [data-file-tree-rule]')].map((el) =>
+      el.hasAttribute('data-file-tree-rule')
+        ? { kind: 'rule', depth: Number(el.getAttribute('data-file-tree-rule')) }
+        : {
+            kind: 'row',
+            depth: Number(el.getAttribute('data-tree-depth')),
+            dir: el.hasAttribute('data-tree-expanded'),
+            expanded: el.getAttribute('data-tree-expanded') === 'true',
+            name: el.getAttribute('data-tree-name')
+          }
+    )
+  )
+}
+
 /** The tree's rows and rules in document order — shape, not pixels. */
 function readTree(win) {
   return win.evaluate(() =>
@@ -152,16 +187,29 @@ export async function run(t) {
     await win.click('button[title^="File tree"]')
     await win.waitForTimeout(1200)
 
-    // ── The tab bar carries what both tabs share ──────────────────────────
+    // ── The tab bar carries the tabs, and nothing else ────────────────────
     const bar = await win.evaluate(() => {
       const el = document.querySelector('[data-panel-bar="tabs"]')
       if (!el) return null
       const label = (sel) => !!el.querySelector(sel)
+      const barBox = el.getBoundingClientRect()
+      const tabEls = [...el.querySelectorAll('.panel-tab')]
+      const first = tabEls[0]?.getBoundingClientRect()
+      const last = tabEls[tabEls.length - 1]?.getBoundingClientRect()
       return {
-        tabs: [...el.querySelectorAll('.panel-tab')].map((b) => b.textContent.trim()),
+        tabs: tabEls.map((b) => b.textContent.trim()),
         folder: label('[aria-label="Open another folder"]'),
         collapse: label('[aria-label="Collapse all"]'),
-        help: label('[aria-label="Help"]')
+        help: label('[aria-label="Help"]'),
+        // The bar hugs its two tabs — its width is theirs plus its own padding,
+        // not the panel's — and centres itself in the panel. Asserted as
+        // relations so the numbers can move with the padding.
+        leftSlack: first ? first.left - barBox.left : null,
+        rightSlack: last ? barBox.right - last.right : null,
+        barWidth: barBox.width,
+        parentWidth: el.parentElement.getBoundingClientRect().width,
+        barLeftGap: barBox.left - el.parentElement.getBoundingClientRect().left,
+        barRightGap: el.parentElement.getBoundingClientRect().right - barBox.right
       }
     })
     t.check('the panel has one tab bar', bar !== null, bar)
@@ -170,9 +218,51 @@ export async function run(t) {
       JSON.stringify(bar?.tabs) === JSON.stringify(['Files', 'Git']),
       bar?.tabs
     )
-    t.check('the folder picker is shared, not per tab', bar?.folder === true)
-    t.check('collapse-all is shared, not per tab', bar?.collapse === true)
-    t.check('help is in the bar', bar?.help === true)
+    t.check(
+      'the bar is the width of the two tabs, not the panel’s',
+      bar !== null && bar.barWidth < bar.parentWidth - 20,
+      { barWidth: bar?.barWidth, parentWidth: bar?.parentWidth }
+    )
+    t.check(
+      'and it centres itself in the panel',
+      bar !== null && Math.abs(bar.barLeftGap - bar.barRightGap) <= 1 && bar.barLeftGap > 4,
+      { barLeftGap: bar?.barLeftGap, barRightGap: bar?.barRightGap }
+    )
+    t.check(
+      'the tabs sit tight inside it — no slack of its own',
+      bar !== null && bar.leftSlack <= 3 && bar.rightSlack <= 3,
+      { leftSlack: bar?.leftSlack, rightSlack: bar?.rightSlack }
+    )
+    t.check('the folder picker is not on the tab bar', bar?.folder === false)
+    t.check('collapse-all is not on the tab bar', bar?.collapse === false)
+    t.check('the help button is gone from the tab bar', bar?.help === false)
+
+    // ── The path bar is where you are, as one control ─────────────────────
+    // The folder picker opens the folder, the path names it, collapse-all
+    // closes what it opened: all three act on the same subject, so they are one
+    // bar. They used to be split across two rows, the path a bare line of text.
+    const pathBar = await win.evaluate(() => {
+      const el = document.querySelector('[data-panel-bar="path"]')
+      if (!el) return null
+      return {
+        boxed: getComputedStyle(el).borderTopWidth !== '0px',
+        folder: !!el.querySelector('[aria-label="Open another folder"]'),
+        collapse: !!el.querySelector('[aria-label="Collapse all"]'),
+        text: el.textContent.trim()
+      }
+    })
+    t.check('the path sits in a bar of its own', pathBar !== null, pathBar)
+    t.check('drawn as a box like the panel’s other bars', pathBar?.boxed === true, pathBar)
+    t.check('the folder picker is on it', pathBar?.folder === true, pathBar)
+    t.check('collapse-all is on it', pathBar?.collapse === true, pathBar)
+    t.check('and it names the folder the panel is pointed at', pathBar?.text.length > 0, pathBar)
+
+    // The help button is gone from the panel entirely, not merely moved.
+    t.equal(
+      'no help button anywhere in the panel',
+      await win.evaluate(() => document.querySelectorAll('[aria-label="Help"]').length),
+      0
+    )
 
     // Neither tab may keep a second copy of a shared control — asserted once per
     // tab, WHILE that tab is mounted. Checking both selectors from the file tab
@@ -216,13 +306,28 @@ export async function run(t) {
     )
 
     // ── Collapse-all reaches the file tree from the shared bar ────────────
-    await win.evaluate(() => {
-      const dir = [...document.querySelectorAll('[data-tree-item]')].find((r) =>
-        r.textContent.includes('labs')
-      )
-      dir?.click()
-    })
-    await win.waitForTimeout(1200)
+    // Deep, not one level: `labs` opens a block, `products` INSIDE it is that
+    // block's first child opening a block of its own, and `beta-core` inside
+    // THAT holds files. A tree one level deep cannot tell a rule placed at
+    // every block head from one placed at every row that is not deeper than its
+    // predecessor — the two agree until a folder's first child is itself a
+    // folder — and a tree of nothing but folders cannot tell "rule the folders"
+    // from "rule every row".
+    const openDir = async (name) => {
+      await win.evaluate((n) => {
+        const dir = [...document.querySelectorAll('[data-tree-item]')].find(
+          (r) => r.getAttribute('data-tree-name') === n && r.getAttribute('data-tree-expanded') === 'false'
+        )
+        dir?.click()
+      }, name)
+      await win.waitForTimeout(1200)
+    }
+    await openDir('labs')
+    await openDir('products')
+    // Three levels, and the third holds FILES — the fixture has to contain a
+    // run of leaves under a folder, or "files among files take no rule" is a
+    // claim the sweep never gets to judge.
+    await openDir('beta-core')
     const expandedFiles = await win.evaluate(
       () => document.querySelectorAll('[data-tree-item]').length
     )
@@ -230,6 +335,119 @@ export async function run(t) {
       expandedFiles,
       rowsBeforeFilter
     })
+
+    // ── The file tree carries the git tree's rules ────────────────────────
+    // Same hairline, same sentence: above every row but the first, at that
+    // row's own depth. Files included, and a folder's first child included —
+    // holding back at either was what made the ruling look like it gave out
+    // partway down the panel.
+    //
+    // Asserted over the whole sequence rather than by counting lines, which is
+    // what lets it fail on a rule in the wrong PLACE and not merely on a
+    // missing one.
+    const fileSeq = await readFileTree(win)
+    const fileRuleProblems = []
+    let fPrev = null
+    let fPending = null
+    for (let i = 0; i < fileSeq.length; i++) {
+      const entry = fileSeq[i]
+      if (entry.kind === 'rule') {
+        if (fPending !== null) fileRuleProblems.push(`two rules in a row at ${entry.depth}`)
+        fPending = entry.depth
+        continue
+      }
+      if (fPrev === null) {
+        if (fPending !== null) fileRuleProblems.push(`rule above the first row (${entry.name})`)
+      } else if (fPending === null) {
+        fileRuleProblems.push(
+          `no rule between ${fPrev.name}(${fPrev.depth}) and ${entry.name}(${entry.depth})`
+        )
+      } else if (fPending !== entry.depth) {
+        fileRuleProblems.push(`rule above ${entry.name} at depth ${fPending}, wanted ${entry.depth}`)
+      }
+      fPending = null
+      fPrev = entry
+    }
+    t.check(
+      'the file tree rules every pair of rows, at the lower row’s depth',
+      fileRuleProblems.length === 0,
+      fileRuleProblems
+    )
+    // The fixture has to contain the shapes being judged, or the sweep above
+    // passes over a tree with no boundaries in it at all.
+    const fileRules = fileSeq.filter((e) => e.kind === 'rule')
+    const fileRows = fileSeq.filter((e) => e.kind === 'row')
+    t.equal('one rule per row but the first', fileRules.length, Math.max(0, fileRows.length - 1))
+    t.check(
+      'the tree under test holds files as well as folders',
+      fileRows.some((r) => !r.dir) && fileRows.some((r) => r.dir),
+      fileRows.map((r) => `${r.name}${r.dir ? '/' : ''}`)
+    )
+    // The pairing that was exempt until last.
+    const ruledFirstChild = fileSeq.some(
+      (e, i) =>
+        e.kind === 'rule' &&
+        fileSeq[i - 1]?.kind === 'row' &&
+        fileSeq[i + 1]?.kind === 'row' &&
+        fileSeq[i + 1].depth > fileSeq[i - 1].depth
+    )
+    t.check('a folder and its first child are ruled apart too', ruledFirstChild, fileSeq)
+
+    // ── The file tree's own geometry, kept for the git tree to be judged
+    //    against once that tab is on screen ──────────────────────────────────
+    const filePads = await win.evaluate(() => {
+      const out = {}
+      for (const el of document.querySelectorAll('[data-tree-item]')) {
+        const d = Number(el.getAttribute('data-tree-depth'))
+        if (!(d in out)) out[d] = parseFloat(getComputedStyle(el).paddingLeft)
+      }
+      return out
+    })
+
+    // A guide runs down the MIDDLE of its level's chevron column — the claim
+    // that breaks the moment the gutter is named in two files and one of them
+    // moves. Measured against the real chevron of a real row at that level, not
+    // against the arithmetic that placed it.
+    const guideOnColumn = await win.evaluate(() => {
+      const rows = [...document.querySelectorAll('[data-tree-item]')]
+      const at = (d) => rows.find((r) => Number(r.getAttribute('data-tree-depth')) === d)
+      const parent = at(0)
+      const child = at(1)
+      if (!parent || !child) return null
+      const chevron = parent.querySelector('svg')
+      const guide = child.querySelector('.tree-guide')
+      if (!chevron || !guide) return null
+      const c = chevron.getBoundingClientRect()
+      const g = guide.getBoundingClientRect()
+      return {
+        chevronCentre: Math.round(c.left + c.width / 2),
+        guideCentre: Math.round(g.left + g.width / 2),
+        guidesOnChild: child.querySelectorAll('.tree-guide').length
+      }
+    })
+    t.check('a level-1 row draws one guide', guideOnColumn?.guidesOnChild === 1, guideOnColumn)
+    t.check(
+      'and it runs down the middle of its parent’s chevron column',
+      guideOnColumn !== null &&
+        Math.abs(guideOnColumn.guideCentre - guideOnColumn.chevronCentre) <= 1,
+      guideOnColumn
+    )
+    // Drawn on the block's own indentation, not full-bleed across the tree.
+    const ruleInsets = await win.evaluate(() =>
+      [...document.querySelectorAll('[data-file-tree-rule]')].map((el) => ({
+        depth: Number(el.getAttribute('data-file-tree-rule')),
+        left: el.getBoundingClientRect().left
+      }))
+    )
+    const byDepth = new Map()
+    for (const r of ruleInsets) byDepth.set(r.depth, r.left)
+    t.check(
+      'a deeper rule is inset further than a shallower one',
+      [...byDepth.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .every(([d, left], i, all) => i === 0 || left > all[i - 1][1]),
+      [...byDepth.entries()]
+    )
 
     // ── The indent guides are the faintest line in the panel ──────────────
     // They used to be drawn on --border, the structural weight, once per level
@@ -292,7 +510,7 @@ export async function run(t) {
       guideSweep.themes
     )
 
-    await win.click('[data-panel-bar="tabs"] [aria-label="Collapse all"]')
+    await win.click('[data-panel-bar="path"] [aria-label="Collapse all"]')
     await win.waitForTimeout(800)
     t.equal(
       'the shared collapse-all folds the file tree',
@@ -411,6 +629,28 @@ export async function run(t) {
     await win.click('[data-panel-bar="git"] [aria-label="List view"]')
     await win.waitForTimeout(1500)
 
+    // ── One geometry for both trees ───────────────────────────────────────
+    // The file tree ran on an 8px gutter and 8px per level against the git
+    // tree's 12px, which beside it read as a denser, smaller list rather than
+    // as the same tree showing different things. Both measured from rendered
+    // rows, because the numbers live in two files and drifting apart is exactly
+    // what they did.
+    const gitPads = await win.evaluate(() => {
+      const out = {}
+      for (const el of document.querySelectorAll('[data-tree-row]')) {
+        const d = Number(el.getAttribute('data-tree-row'))
+        if (!(d in out)) out[d] = parseFloat(getComputedStyle(el).paddingLeft)
+      }
+      return out
+    })
+    const step = (m) => (m[0] !== undefined && m[1] !== undefined ? m[1] - m[0] : null)
+    t.equal('both trees start on the same gutter', filePads[0], gitPads[0])
+    t.check(
+      'and step in by the same indent per level',
+      step(filePads) !== null && step(filePads) === step(gitPads),
+      { filePads, gitPads }
+    )
+
     // ── The tones: modified is not a warning ──────────────────────────────
     // Orange is reserved for the one row that is actually a heads-up (a file an
     // incoming change and the working tree both touch). A modified file and an
@@ -479,10 +719,10 @@ export async function run(t) {
       tones.badges
     )
 
-    // ── The rules: one at every block boundary, none anywhere else ────────
-    // A row opens a new block — and closes the one above it — exactly when it
-    // is no deeper than the row before it. A DEEPER row is the previous row's
-    // own child, and a rule there would cut a folder off from its first repo.
+    // ── The rules: one between every pair of rows, none anywhere else ─────
+    // Every row but the first is ruled off from the one above it, at its OWN
+    // depth — the depth of the row below a line is the only one knowable at the
+    // boundary, since the row above it sits wherever its subtree ended.
     const problems = []
     let prev = null
     let pendingRule = null
@@ -495,16 +735,11 @@ export async function run(t) {
       if (prev === null) {
         if (pendingRule !== null) problems.push(`rule above the first row (${entry.name})`)
       } else {
-        const wanted = entry.depth <= prev.depth
-        if (wanted && pendingRule === null) {
+        if (pendingRule === null) {
           problems.push(
             `no rule between ${prev.name}(${prev.depth}) and ${entry.name}(${entry.depth})`
           )
-        }
-        if (!wanted && pendingRule !== null) {
-          problems.push(`rule between ${prev.name} and its child ${entry.name}`)
-        }
-        if (wanted && pendingRule !== null && pendingRule !== entry.depth) {
+        } else if (pendingRule !== entry.depth) {
           problems.push(`rule above ${entry.name} at depth ${pendingRule}, wanted ${entry.depth}`)
         }
       }
@@ -512,10 +747,21 @@ export async function run(t) {
       prev = entry
     }
     t.check(
-      'every block boundary carries a rule, at the new block’s depth',
+      'every pair of rows is ruled apart, at the lower row’s depth',
       problems.length === 0,
       problems
     )
+    // The pairing that was exempt until last: a folder and the first repo
+    // inside it. Asserted as its own claim, because the sweep above would also
+    // pass on a tree that happened to have no first child in it.
+    const ruledFirstChildGit = seq.some(
+      (e, i) =>
+        e.kind === 'rule' &&
+        seq[i - 1]?.kind !== 'rule' &&
+        seq[i + 1] &&
+        seq[i + 1].depth > (seq[i - 1]?.depth ?? -1)
+    )
+    t.check('a folder’s first child is ruled off from it too', ruledFirstChildGit, seq)
 
     // The bug in one assertion: folders never got a rule at all, so a mixed
     // tree ruled under repos and nowhere else.
@@ -526,7 +772,7 @@ export async function run(t) {
 
     // ── Collapse-all reaches the repo tree from the same button ───────────
     const rowsExpanded = (await readTree(win)).filter((e) => e.kind !== 'rule').length
-    await win.click('[data-panel-bar="tabs"] [aria-label="Collapse all"]')
+    await win.click('[data-panel-bar="path"] [aria-label="Collapse all"]')
     await win.waitForTimeout(1200)
     const afterCollapse = (await readTree(win)).filter((e) => e.kind !== 'rule')
     t.check('the shared collapse-all folds the repo tree', afterCollapse.length < rowsExpanded, {
@@ -554,7 +800,7 @@ export async function run(t) {
     // hand needs a reload, and a reloaded window has no focused session, so the
     // panel has no folder to be paused about.)
     await stubFolderDialog(app, { returns: BIG_ROOT })
-    await win.click('[data-panel-bar="tabs"] [aria-label="Open another folder"]')
+    await win.click('[data-panel-bar="path"] [aria-label="Open another folder"]')
     await win.waitForTimeout(9000)
 
     const note = await win.evaluate(() => {
@@ -576,7 +822,7 @@ export async function run(t) {
       () => document.querySelector('[data-panel-bar="tabs"]')?.parentElement?.textContent ?? ''
     )
     t.check(
-      'the folder picker in the tab bar navigates the panel',
+      'the folder picker in the path bar navigates the panel',
       landedOn.includes('side-panel-big'),
       landedOn.slice(0, 80)
     )

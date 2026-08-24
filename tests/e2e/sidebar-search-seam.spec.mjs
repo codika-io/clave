@@ -14,8 +14,13 @@
  *    the launcher and the switcher apart, a hairline, and the scroll viewport
  *    starting under it — because "there is a divider element" is true of a
  *    divider that renders as nothing.
+ *
+ * 3. The same seam at the FOOT of the list, mirrored, and only while the list
+ *    overflows. Driven by resizing the window rather than by seeding rows: the
+ *    seam is a fact about whether the list fits, so the test that means
+ *    anything is making it stop fitting and watching the line arrive.
  */
-import { launchApp, seedWorkspaces, seedTrustedRoots, userDataDir } from './harness.mjs'
+import { launchApp, seedWorkspaces, seedTrustedRoots, userDataDir, callMcp } from './harness.mjs'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 const DIR = userDataDir('sidebar-search-seam')
@@ -83,6 +88,77 @@ export async function run(t) {
       t.check('the rule actually paints', seam.painted, seam)
       t.check('the scroll viewport begins under the rule', seam.viewportUnderRule, seam)
     }
+
+    // ── The foot seam: mirrored, and conditional ──────────────────────────
+    // Rows first: the `.clave` above declares PINNED groups, which are chips in
+    // the switcher and nothing in the list, so the list it leaves behind cannot
+    // overflow at any window size. Five open sessions is a list with a height.
+    for (let i = 0; i < 5; i++) {
+      await callMcp(app, 'openSession', { cwd: ROOT, mode: 'terminal', name: `row-${i}` })
+    }
+    await win.waitForTimeout(3000)
+
+    // Then shrink the window until the list cannot fit. The seam has to arrive;
+    // the sidebar has to be able to lose it again when the room comes back.
+    const setWindowHeight = async (height) => {
+      await app.evaluate(async ({ BrowserWindow }, h) => {
+        const w = BrowserWindow.getAllWindows()[0]
+        const b = w.getBounds()
+        w.setBounds({ ...b, height: h })
+      }, height)
+      await win.waitForTimeout(900)
+    }
+
+    const readFootSeam = () =>
+      win.evaluate(() => {
+        const rule = document.querySelector('.sidebar-list-seam--foot')
+        const viewport = document.querySelector('[data-radix-scroll-area-viewport]')
+        const top = document.querySelector('.sidebar-list-seam:not(.sidebar-list-seam--foot)')
+        if (!rule || !viewport) return { present: false }
+        const r = rule.getBoundingClientRect()
+        const v = viewport.getBoundingClientRect()
+        const t = top?.getBoundingClientRect()
+        const style = getComputedStyle(rule)
+        // What sits under the seam — a banner if one is showing, else the foot
+        // panel. Whichever it is, the 4px is between the line and it.
+        const below = rule.nextElementSibling
+        const belowBox = below?.getBoundingClientRect()
+        return {
+          present: true,
+          height: Math.round(r.height),
+          painted:
+            style.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
+            style.backgroundColor !== 'transparent',
+          // The list ends ON the line — the edge it disappears at.
+          underViewport: Math.round(r.top) >= Math.round(v.bottom) - 1,
+          gapBelow: belowBox ? Math.round(belowBox.top - r.bottom) : null,
+          // Same gutter as the seam at the top, so the two line up.
+          sameGutterAsTop: t ? Math.round(r.left) === Math.round(t.left) &&
+            Math.round(r.width) === Math.round(t.width) : null
+        }
+      })
+
+    const tallBounds = await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].getBounds()
+    )
+    await setWindowHeight(500)
+    const cramped = await readFootSeam()
+    t.check('a list that cannot fit grows a seam at its foot', cramped.present === true, cramped)
+    if (cramped.present) {
+      t.equal('it is the same hairline', cramped.height, 1)
+      t.check('and it actually paints', cramped.painted, cramped)
+      t.check('the list ends on it', cramped.underViewport, cramped)
+      t.equal('4px of air under it, the top seam’s 4px mirrored', cramped.gapBelow, 4)
+      t.check('drawn on the same gutter as the seam at the top', cramped.sameGutterAsTop, cramped)
+    }
+
+    await setWindowHeight(tallBounds.height)
+    const roomy = await readFootSeam()
+    t.check(
+      'and it goes again once the list fits — no line lying in empty sidebar',
+      roomy.present === false,
+      roomy
+    )
 
     // ── Typing: the first chip left standing reads as pre-selected ──
     await win.fill('[data-sidebar-search]', 'lane')

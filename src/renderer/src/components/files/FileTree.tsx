@@ -3,6 +3,7 @@ import { useSessionStore } from '../../store/session-store'
 import { openSessionProgrammatically } from '../../lib/mcp-dispatcher'
 import { useFileTree, type FlatTreeNode } from '../../hooks/use-file-tree'
 import { FileTreeItem } from './FileTreeItem'
+import { TREE_INDENT_PX, TREE_ROW_PAD_PX } from './tree-metrics'
 import { ContextMenu } from '../ui/ContextMenu'
 import {
   EyeIcon,
@@ -94,16 +95,16 @@ function InlineCreateInput({
 
   return (
     <div
-      className="flex items-center h-7 px-2"
-      style={{ paddingLeft: `${8 + depth * 12}px` }}
+      className="flex items-center gap-1.5 h-7 pr-3"
+      style={{ paddingLeft: `${TREE_ROW_PAD_PX + depth * TREE_INDENT_PX}px` }}
     >
-      <span className="w-4 flex-shrink-0" />
+      <span className="w-2.5 flex-shrink-0" />
       <svg
         width="14"
         height="14"
         viewBox="0 0 14 14"
         fill="none"
-        className="flex-shrink-0 text-text-tertiary ml-0.5 mr-1.5"
+        className="flex-shrink-0 text-text-tertiary"
       >
         {state.type === 'file' ? (
           <path
@@ -142,6 +143,32 @@ function InlineCreateInput({
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * The hairline between two rows of the file tree. The git tab's tree is ruled
+ * the same way and for the same reason (see `TreeRule` in GitStatusPanel): the
+ * two tabs are one panel with two views, so a boundary has to look the same in
+ * both.
+ *
+ * Every row takes one but the first — a folder and the first thing inside it
+ * included. That pairing used to be exempt on the theory that a line there cuts
+ * a folder off from its own contents; in the panel it read as the one place the
+ * ruling gave out, so the exemption is gone from both trees.
+ *
+ * Drawn at the depth of the row BELOW it, so it lines up with what it
+ * introduces rather than with whatever the row above happened to be: a
+ * full-bleed line cuts across the indentation and costs the reader the sense of
+ * the tree.
+ */
+function TreeRule({ depth }: { depth: number }): React.JSX.Element {
+  return (
+    <div
+      className="tree-rule"
+      data-file-tree-rule={depth}
+      style={{ marginLeft: TREE_ROW_PAD_PX + depth * TREE_INDENT_PX, marginRight: 12 }}
+    />
   )
 }
 
@@ -371,7 +398,17 @@ export function FileTree({ cwd, onNavigateToFolder }: {
   const renderList = useCallback(() => {
     const elements: React.ReactNode[] = []
 
-    for (const node of flatList) {
+    for (let i = 0; i < flatList.length; i++) {
+      const node = flatList[i]
+      // Every row but the first is ruled off from the one above it, at its own
+      // depth — files included, and a folder's first child included. The git
+      // tab's tree rules the same way; the two used to hold back at exactly the
+      // boundaries a reader looks for (a folder and its first child, one file
+      // and the next), which showed as ruling that gives out halfway down.
+      // The first row closes nothing, so it takes none.
+      if (i > 0) {
+        elements.push(<TreeRule key={`rule:${node.path}`} depth={node.depth} />)
+      }
       elements.push(
         <FileTreeItem
           key={node.path}
