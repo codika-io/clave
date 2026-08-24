@@ -128,7 +128,9 @@ export function takeLayouts(keys: (string | null)[]): Promise<void> {
     for (const id of elsewhere) surviving.add(id)
     useSessionStore
       .getState()
-      .mergeLayoutForKeys(keys, persisted as { groups: never[]; displayOrder: string[] }, [...surviving])
+      .mergeLayoutForKeys(keys, persisted as { groups: never[]; displayOrder: string[] }, [
+        ...surviving
+      ])
     markLayoutKeysTaken(keys)
   })
   return layoutTakeQueue
