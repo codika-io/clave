@@ -25,6 +25,19 @@
   --color-accent: #5e6ad2;
   --color-accent-hover: #6e79dd;
 
+  /* Git status tones. Two of them deliberately leave git's convention behind.
+     Orange means "careful", and it was painted on the two things in a repo that
+     least deserve it: a file you modified, and a commit waiting on the remote.
+     A healthy repo showed a wall of warnings for doing exactly what it is for.
+     Modified takes the app's own accent family — work in progress is yours, not
+     a fault — and incoming goes plainly informational. Green, red and blue keep
+     their conventional meanings, where the convention is actually saying
+     something. Orange survives in one place only, the warning glyph on a file
+     that an incoming change and your working tree both touch: a real heads-up,
+     and now the only one, so it reads. */
+  --color-git-modified: #a78bfa;
+  --color-git-incoming: #38bdf8;
+
   --color-wellbeing-gentle: oklch(0.75 0.15 85);
   --color-wellbeing-gentle-bg: oklch(0.25 0.03 85);
   --color-wellbeing-gentle-border: oklch(0.4 0.06 85);
@@ -80,6 +93,16 @@
      folder's roll-up only shows while it is collapsed, and a repo's ↓ clears
      on pull — so the row is fixed rather than content-sized. */
   --git-tree-row-h: 1.875rem; /* 30px = 18px badge + 12px of padding */
+
+  /* Height of a leaf row in either side-panel tree — a file or a folder in the
+     Files tab, a file or a folder inside a repo in the Git tab. One token
+     because they are one list to the eye: you read the same names, at the same
+     indentation, in the same column, and a repo's contents packed tighter than
+     the file tree above it read as clutter rather than as density. The repo and
+     directory rows of the git tree stay one notch taller (--git-tree-row-h):
+     they carry the sync badges, and they are the level you scan, not the level
+     you read. */
+  --panel-row-h: 1.75rem; /* 28px */
 
   /* Height of a tab row in the sidebar list — a session, a file tab, a group
      header, a group's `+`. Deliberately its own token rather than
@@ -140,6 +163,14 @@
      around a panel, this one appears between every block down a scroll, and at
      the subtle border's weight a dozen repos read as ruled paper. */
   --rule-color: rgba(255, 255, 255, 0.045);
+  /* The vertical indent guides down a file tree. Softer again than --rule-color,
+     which is already the softest horizontal line we draw — and deliberately so.
+     A rule appears once between two blocks; a guide is repeated once per level
+     on EVERY row, so at any weight you can actually see it the tree comes out
+     caged in grid lines. It only has to be enough that the eye can follow a
+     column of children back to its parent, which takes far less ink than
+     reading it as a line. Change it here and every tree in the app follows. */
+  --tree-guide-color: rgba(255, 255, 255, 0.035);
   --text-primary: rgba(255, 255, 255, 0.95);
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-tertiary: rgba(255, 255, 255, 0.4);
@@ -195,6 +226,7 @@
   --border-color: rgba(0, 0, 0, 0.1);
   --border-subtle-color: rgba(0, 0, 0, 0.05);
   --rule-color: rgba(0, 0, 0, 0.035);
+  --tree-guide-color: rgba(0, 0, 0, 0.03);
   --text-primary: #1b1b18;
   --text-secondary: #6c6c65;
   --text-tertiary: #9b9b94;
@@ -251,6 +283,7 @@
   --border-color: rgba(120, 100, 80, 0.15);
   --border-subtle-color: rgba(120, 100, 80, 0.08);
   --rule-color: rgba(120, 100, 80, 0.055);
+  --tree-guide-color: rgba(120, 100, 80, 0.05);
   --text-primary: #1b1610;
   --text-secondary: #756e66;
   --text-tertiary: #9b9590;
@@ -619,18 +652,44 @@ body,
   gap: 2px;
 }
 
-/* The chips, wrapping under the head row across as many lines as they need. */
+/* The chips, wrapping under the head row across as many lines as they need —
+   and gone altogether when there are none. A workspace with nothing running,
+   or a search that matched no group, used to hold this row open around a line
+   of placeholder text; an empty strip under every sidebar is clutter that says
+   what the empty panel already said. Collapsed, the panel sits at exactly its
+   min-height (the head row), so nothing below it moves until a chip arrives.
+
+   A grid track rather than a height is what makes the arrival animatable:
+   0fr → 1fr transitions, height: auto does not. The inner .group-switcher-chips
+   is the flex box that used to be here, and the thing the track clips. */
 .group-switcher-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 220ms var(--ease-out-expo),
+    margin-top 220ms var(--ease-out-expo),
+    opacity 150ms var(--ease-out-expo);
+}
+.group-switcher-wrap[data-empty="true"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.group-switcher-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
-  min-height: var(--control-h-md);
+  min-height: 0;
+  overflow: hidden;
 }
 /* Only when there is a head row above them — the margin would otherwise open a
-   gap at the top of the panel. */
+   gap at the top of the panel — and it goes with the row on the way out, so the
+   collapse lands on nothing rather than on a 2px seam. */
 .group-switcher-head + .group-switcher-wrap {
   margin-top: 2px;
+}
+.group-switcher-head + .group-switcher-wrap[data-empty="true"] {
+  margin-top: 0;
 }
 
 .group-switcher-add {
@@ -721,6 +780,21 @@ body,
   color: var(--text-primary);
   background-color: var(--surface-100);
 }
+/* The chip Enter would act on while a search is running: the hover state,
+   without the pointer. Typing already narrows and reorders the chips, and Enter
+   already takes the first one — but nothing said WHICH, so the key was a guess
+   you confirmed by pressing it. Deliberately the hover fill rather than a state
+   of its own: hovering a chip is how you say "this one", and Enter is saying the
+   same thing about the same object. It sits above the selected rule so a chip
+   that is both stays filled — selected is a fact about the list, the Enter
+   target only a preview of the next click. */
+.group-switcher-chip[data-enter-target="true"] {
+  color: var(--text-primary);
+  background-color: var(--surface-100);
+}
+.group-switcher-chip[data-idle="true"][data-enter-target="true"] {
+  opacity: 1;
+}
 /* Selected reads as filled rather than merely brighter: this chip is the reason
    the list below is short, so it has to be obvious at a glance which one is on.
    A group with a colour overrides the fill inline with its own tint. */
@@ -728,6 +802,22 @@ body,
 .panel-tab[data-selected="true"] {
   color: var(--text-primary);
   background-color: var(--surface-200);
+}
+
+/* The seam between the sidebar's pinned chrome and the list that scrolls under
+   it. The launcher and the switcher are held apart by 4px of the sidebar's own
+   surface; the list below got none, so a card scrolling up died flush against
+   the switcher's bottom border and the panel read as the top of the list rather
+   than as the thing the list passes behind. The same 4px, then a hairline: the
+   edge the list disappears at. Inset to the gutter the panels and the cards
+   share, so all three line up down the sidebar instead of the rule running out
+   past both. Quieter than the panel frames above it (--border-subtle rather
+   than --color-border) — a second full-strength line 4px under the switcher's
+   own border reads as a double border, not as a seam. */
+.sidebar-list-seam {
+  height: 1px;
+  margin: 4px 0.5rem 0;
+  background-color: var(--border-subtle-color);
 }
 
 /* A group's identity in one 6px dot — the folder icon the list uses is too
@@ -752,14 +842,6 @@ body,
 }
 .group-switcher-chip[data-selected="true"] .group-switcher-dot {
   box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 12%, transparent);
-}
-
-.group-switcher-empty {
-  padding: 0 0.5rem;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  opacity: 0.7;
-  white-space: nowrap;
 }
 
 /* ── The wordmark ── */
@@ -1490,6 +1572,11 @@ body,
   .group-picker-panel {
     animation: none;
   }
+  /* The switcher's chip row still appears and disappears, it just stops
+     sliding: the collapse is layout, not decoration. */
+  .group-switcher-wrap {
+    transition: none;
+  }
 }
 
 /* ── Buttons ── */
@@ -1771,6 +1858,20 @@ body,
   flex-shrink: 0;
 }
 
+/* The label above a block of rows inside a repo — STAGED / MODIFIED /
+   UNTRACKED / INCOMING / OUTGOING. Sized like the rows it introduces, with a
+   gap above so consecutive blocks read as blocks instead of as one
+   uninterrupted list. The first one sits flush: the gap belongs between
+   sections, not at the top of the panel. */
+.git-section-header {
+  height: var(--panel-row-h);
+  flex-shrink: 0;
+  margin-top: 0.375rem;
+}
+.git-section-header:first-child {
+  margin-top: 0;
+}
+
 /* The hairline that closes one block of the repo tree and opens the next — a
    repo and everything it unfolded, or a directory and its whole subtree. Drawn
    ABOVE a row rather than below it, because only the row that starts a new
@@ -1784,6 +1885,18 @@ body,
   height: 1px;
   flex-shrink: 0;
   background-color: var(--rule-color);
+}
+
+/* One vertical hairline per indent level, drawn down the full height of a row
+   so consecutive rows join into a continuous column. On --tree-guide-color
+   rather than --border: see the token — it used to share the structural border
+   weight and read as a table's gridlines rather than as a guide. */
+.tree-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--tree-guide-color);
 }
 
 /* ── Git sync badges ── */
@@ -1843,6 +1956,89 @@ body,
 }
 .git-sync-action:disabled {
   opacity: 0.4;
+}
+
+/* ── The git panel's footnote ── */
+
+/* Why the panel is not auto-refreshing, at the foot of it. Quiet on purpose:
+   this is a fact about the folder, not a fault, and it used to be a warning
+   strip across the top of the list you came to read. Tertiary text, a hairline
+   above it, and the panel's own surface — it should be findable, not loud. */
+.git-footnote {
+  flex-shrink: 0;
+  border-top: 1px solid var(--rule-color);
+  background-color: color-mix(in oklab, var(--surface-100) 40%, transparent);
+}
+
+.git-footnote-line {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  height: var(--control-h-md);
+}
+
+/* The whole collapsed line is the disclosure — a 12px chevron is not a target. */
+.git-footnote-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0.25rem;
+  border-radius: var(--radius-md);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  transition: color 150ms;
+}
+.git-footnote-summary:hover {
+  color: var(--text-secondary);
+}
+
+.git-footnote-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: var(--radius-md);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  transition: color 150ms, background-color 150ms;
+}
+.git-footnote-action:hover:not(:disabled) {
+  color: var(--text-primary);
+  background-color: var(--surface-200);
+}
+.git-footnote-action:disabled {
+  opacity: 0.6;
+}
+
+.git-footnote-body {
+  padding: 0 0.75rem 0.625rem;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  animation: fade-in 150ms var(--ease-out-expo);
+}
+
+.git-footnote-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.git-footnote-link {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 150ms;
+}
+.git-footnote-link:hover {
+  color: var(--text-primary);
 }
 
 /* The field the git panel shows in place of a file list when there is nothing

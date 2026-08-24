@@ -24,27 +24,10 @@ import { FeedbackBanner, FeedbackDialogHost } from '../help/FeedbackBanner'
 import { SessionLauncher } from './SessionLauncher'
 import { GroupSwitcher, type SwitcherEntry } from './GroupSwitcher'
 import { launchSession } from '../../lib/launch-session'
-import {
-  agentAcceptsPrompt,
-  getLastAgentSetup,
-  useLaunchPrefsStore
-} from '../../store/launch-prefs'
+import { agentAcceptsPrompt, getLastAgentSetup, useLaunchPrefsStore } from '../../store/launch-prefs'
 import { RemoteDirectoryPicker } from '../ui/RemoteDirectoryPicker'
 import { useAgentStore } from '../../store/agent-store'
-import {
-  usePinnedStore,
-  substituteTokens,
-  pinGroupFromCurrent,
-  removePinnedGroupWithCleanup,
-  resyncPinnedGroup,
-  findPinnedByGroupId,
-  isPinnedOutOfSync,
-  getHiddenGroupIds,
-  revealGroup,
-  spawnTemplate,
-  exportClaveFile,
-  getExportFileName
-} from '../../store/pinned-store'
+import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, revealGroup, spawnTemplate, exportClaveFile, getExportFileName } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
 import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
@@ -74,24 +57,11 @@ import {
 interface ContextMenuState {
   x: number
   y: number
-  items: {
-    label: string
-    onClick: () => void
-    shortcut?: string
-    disabled?: boolean
-    icon?: React.ReactNode
-    danger?: boolean
-  }[]
+  items: { label: string; onClick: () => void; shortcut?: string; disabled?: boolean; icon?: React.ReactNode; danger?: boolean }[]
   header?: React.ReactNode
 }
 
-function GroupColorPickerHeader({
-  groupId,
-  initialColor
-}: {
-  groupId: string
-  initialColor: GroupTerminalColor | null
-}) {
+function GroupColorPickerHeader({ groupId, initialColor }: { groupId: string; initialColor: GroupTerminalColor | null }) {
   const setGroupColor = useSessionStore((s) => s.setGroupColor)
   const currentColor = useSessionStore((s) => s.groups.find((g) => g.id === groupId)?.color ?? null)
 
@@ -134,10 +104,10 @@ function shouldShowGapBefore(
 ): boolean {
   if (!dropIndicator) return false
   if (dropIndicator.targetId === itemId && dropIndicator.position === 'before') return true
-  if (prevItemId && dropIndicator.targetId === prevItemId && dropIndicator.position === 'after')
-    return true
+  if (prevItemId && dropIndicator.targetId === prevItemId && dropIndicator.position === 'after') return true
   return false
 }
+
 
 export function Sidebar() {
   const sessions = useSessionStore((s) => s.sessions)
@@ -186,57 +156,50 @@ export function Sidebar() {
     codexMode: boolean
   } | null>(null)
 
-  const spawnRemoteSession = useCallback(
-    async (
-      locationId: string,
-      cwd: string,
-      claudeMode: boolean,
-      antigravityMode?: boolean,
-      codexMode?: boolean
-    ) => {
-      try {
-        const shellId = await window.electronAPI.sshOpenShell(locationId, cwd)
+  const spawnRemoteSession = useCallback(async (
+    locationId: string, cwd: string, claudeMode: boolean, antigravityMode?: boolean, codexMode?: boolean
+  ) => {
+    try {
+      const shellId = await window.electronAPI.sshOpenShell(locationId, cwd)
 
-        if (antigravityMode) {
-          setTimeout(() => {
-            window.electronAPI.sshShellWrite(shellId, 'agy\r')
-          }, 500)
-        } else if (codexMode) {
-          setTimeout(() => {
-            window.electronAPI.sshShellWrite(shellId, 'codex\r')
-          }, 500)
-        } else if (claudeMode) {
-          // Write claude command after shell initializes (login shell needs time)
-          setTimeout(() => {
-            window.electronAPI.sshShellWrite(shellId, 'claude\r')
-          }, 500)
-        }
-
-        const folderName = cwd.split('/').filter(Boolean).pop() || cwd
-
-        addSession({
-          id: shellId,
-          cwd,
-          folderName,
-          name: folderName,
-          alive: true,
-          activityStatus: 'idle',
-          promptWaiting: null,
-          claudeMode: antigravityMode || codexMode ? false : claudeMode,
-          antigravityMode: antigravityMode ?? false,
-          codexMode: codexMode ?? false,
-          dangerousMode: false,
-          claudeSessionId: null,
-          locationId,
-          shellId,
-          sessionType: claudeMode ? 'remote-claude' : 'remote-terminal'
-        })
-      } catch (err) {
-        console.error('Failed to create remote session:', err)
+      if (antigravityMode) {
+        setTimeout(() => {
+          window.electronAPI.sshShellWrite(shellId, 'agy\r')
+        }, 500)
+      } else if (codexMode) {
+        setTimeout(() => {
+          window.electronAPI.sshShellWrite(shellId, 'codex\r')
+        }, 500)
+      } else if (claudeMode) {
+        // Write claude command after shell initializes (login shell needs time)
+        setTimeout(() => {
+          window.electronAPI.sshShellWrite(shellId, 'claude\r')
+        }, 500)
       }
-    },
-    [addSession]
-  )
+
+      const folderName = cwd.split('/').filter(Boolean).pop() || cwd
+
+      addSession({
+        id: shellId,
+        cwd,
+        folderName,
+        name: folderName,
+        alive: true,
+        activityStatus: 'idle',
+        promptWaiting: null,
+        claudeMode: (antigravityMode || codexMode) ? false : claudeMode,
+        antigravityMode: antigravityMode ?? false,
+        codexMode: codexMode ?? false,
+        dangerousMode: false,
+        claudeSessionId: null,
+        locationId,
+        shellId,
+        sessionType: claudeMode ? 'remote-claude' : 'remote-terminal'
+      })
+    } catch (err) {
+      console.error('Failed to create remote session:', err)
+    }
+  }, [addSession])
 
   const resetSessions = useSessionStore((s) => s.resetSessions)
 
@@ -262,13 +225,12 @@ export function Sidebar() {
   }, [])
 
   // Pointer-based DnD
-  const { isDragging, draggedIds, dropIndicator, isOverPinnedZone, handlePointerDown } =
-    useSidebarDnd({
-      containerRef: scrollContainerRef,
-      moveItems,
-      pinnedZoneRef,
-      onPinnedDrop: handlePinnedDrop
-    })
+  const { isDragging, draggedIds, dropIndicator, isOverPinnedZone, handlePointerDown } = useSidebarDnd({
+    containerRef: scrollContainerRef,
+    moveItems,
+    pinnedZoneRef,
+    onPinnedDrop: handlePinnedDrop
+  })
 
   // Determine if dragging a group (for pinned zone drop target)
   const draggedGroupId = useMemo(() => {
@@ -329,9 +291,7 @@ export function Sidebar() {
   // Load Claude account profiles. (Workspace boot + .clave file watchers moved
   // to AppShell's sequential boot effect — adoption needs the registry first.)
   useEffect(() => {
-    import('../../store/claude-profile-store').then(({ loadClaudeProfiles }) =>
-      loadClaudeProfiles()
-    )
+    import('../../store/claude-profile-store').then(({ loadClaudeProfiles }) => loadClaudeProfiles())
   }, [])
 
   // Detect file drag over window (for showing pinned section as drop target).
@@ -434,7 +394,9 @@ export function Sidebar() {
     for (const pg of pinnedGroups) {
       if (!inActiveWorkspace(pg, activeWorkspaceId)) continue
       const live =
-        pg.activeGroupId && groups.some((g) => g.id === pg.activeGroupId) ? pg.activeGroupId : null
+        pg.activeGroupId && groups.some((g) => g.id === pg.activeGroupId)
+          ? pg.activeGroupId
+          : null
       if (live) claimed.add(live)
       entries.push({
         key: `pin:${pg.id}`,
@@ -586,34 +548,27 @@ export function Sidebar() {
         if (fileTabs.some((f) => f.id === id)) return { type: 'fileTab' as const, fileTabId: id }
         return null
       })
-      .filter((item): item is NonNullable<typeof item> => {
-        if (item === null) return false
-        if (item.type === 'session') {
-          const session = sessions.find((s) => s.id === item.sessionId)
-          return !!session && inActiveWorkspace(session, activeWorkspaceId)
+      .filter(
+        (item): item is NonNullable<typeof item> => {
+          if (item === null) return false
+          if (item.type === 'session') {
+            const session = sessions.find((s) => s.id === item.sessionId)
+            return !!session && inActiveWorkspace(session, activeWorkspaceId)
+          }
+          // File tabs are lightweight viewers, deliberately global.
+          if (item.type === 'fileTab') return true
+          if (item.type === 'group') {
+            const group = groups.find((g) => g.id === item.groupId)
+            if (!group || group.sessionIds.length === 0) return false
+            // Hide groups toggled off via pinned buttons
+            if (hiddenGroupIds.has(item.groupId)) return false
+            if (!inActiveWorkspace(group, activeWorkspaceId)) return false
+            return true
+          }
+          return false
         }
-        // File tabs are lightweight viewers, deliberately global.
-        if (item.type === 'fileTab') return true
-        if (item.type === 'group') {
-          const group = groups.find((g) => g.id === item.groupId)
-          if (!group || group.sessionIds.length === 0) return false
-          // Hide groups toggled off via pinned buttons
-          if (hiddenGroupIds.has(item.groupId)) return false
-          if (!inActiveWorkspace(group, activeWorkspaceId)) return false
-          return true
-        }
-        return false
-      })
-  }, [
-    displayOrder,
-    sessions,
-    groups,
-    fileTabs,
-    filteredSessions,
-    hiddenGroupIds,
-    activeWorkspaceId,
-    linkedHiddenIds
-  ])
+      )
+  }, [displayOrder, sessions, groups, fileTabs, filteredSessions, hiddenGroupIds, activeWorkspaceId, linkedHiddenIds])
 
   // A filter pointing at a group that has gone away — closed, emptied, or left
   // behind by a workspace switch — falls back to All rather than showing an
@@ -683,9 +638,7 @@ export function Sidebar() {
     if (!group) return
     const workspaceId = useWorkspaceStore.getState().activeWorkspaceId
     const root = getWorkspaceById(workspaceId)?.rootDir ?? null
-    const cwd = group.cwd
-      ? ({ kind: 'path', path: group.cwd } as const)
-      : ({ kind: 'workspace-root' } as const)
+    const cwd = group.cwd ? ({ kind: 'path', path: group.cwd } as const) : ({ kind: 'workspace-root' } as const)
     await launchSession({
       setup: getLastAgentSetup(workspaceId),
       cwd,
@@ -719,19 +672,12 @@ export function Sidebar() {
 
   // Spawn a group terminal and auto-focus it
   const spawnGroupTerminal = useCallback(
-    async (
-      groupId: string,
-      terminalId: string,
-      command: string,
-      commandMode: 'prefill' | 'auto',
-      cwdOverride?: string | null
-    ) => {
+    async (groupId: string, terminalId: string, command: string, commandMode: 'prefill' | 'auto', cwdOverride?: string | null) => {
       const state = useSessionStore.getState()
       const group = state.groups.find((g) => g.id === groupId)
       if (!group) return
 
-      const cwd =
-        cwdOverride || group.cwd || state.sessions.find((s) => group.sessionIds.includes(s.id))?.cwd
+      const cwd = cwdOverride || group.cwd || state.sessions.find((s) => group.sessionIds.includes(s.id))?.cwd
       if (!cwd) return
 
       try {
@@ -793,9 +739,12 @@ export function Sidebar() {
   )
 
   // Click the grey/+ add icon: open dialog in "add" mode
-  const handleAddTerminalClick = useCallback((groupId: string) => {
-    setTerminalDialogState({ groupId, terminalId: null })
-  }, [])
+  const handleAddTerminalClick = useCallback(
+    (groupId: string) => {
+      setTerminalDialogState({ groupId, terminalId: null })
+    },
+    []
+  )
 
   // Right-click a terminal icon: show edit/delete context menu
   const handleTerminalIconContextMenu = useCallback(
@@ -904,14 +853,11 @@ export function Sidebar() {
       } else {
         // Local session
         try {
-          const dupOtherProvider =
-            session.antigravityMode || session.codexMode || session.claudeAgentsMode
+          const dupOtherProvider = session.antigravityMode || session.codexMode || session.claudeAgentsMode
           // Re-prime the clone with the same one-shot prompt (agent modes only;
           // `claude agents` rejects a positional prompt). Undefined for a normal
           // (un-primed) session → same as today.
-          const initialPrompt = session.claudeAgentsMode
-            ? undefined
-            : session.initialPrompt || undefined
+          const initialPrompt = session.claudeAgentsMode ? undefined : session.initialPrompt || undefined
           const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
             claudeMode: dupOtherProvider ? false : session.claudeMode,
             antigravityMode: session.antigravityMode,
@@ -1007,9 +953,7 @@ export function Sidebar() {
    *  workspace. A move keeps the tab's id and scrollback (tmux-backed tabs
    *  only — main refuses the rest, and the tab simply stays). */
   const moveToWindowItems = useCallback(
-    async (
-      move: (targetWindowId: number) => Promise<unknown>
-    ): Promise<ContextMenuState['items']> => {
+    async (move: (targetWindowId: number) => Promise<unknown>): Promise<ContextMenuState['items']> => {
       const api = window.electronAPI
       if (!api?.windowList) return []
       const { windowId: mine, workspaces } = useWorkspaceStore.getState()
@@ -1043,9 +987,7 @@ export function Sidebar() {
   )
 
   const moveSessionToWindow = useCallback((sessionId: string, targetWindowId: number) => {
-    return (
-      window.electronAPI?.windowMoveSessions?.([sessionId], targetWindowId) ?? Promise.resolve()
-    )
+    return window.electronAPI?.windowMoveSessions?.([sessionId], targetWindowId) ?? Promise.resolve()
   }, [])
 
   const moveGroupToWindow = useCallback((groupId: string, targetWindowId: number) => {
@@ -1148,15 +1090,7 @@ export function Sidebar() {
         })
       }
     },
-    [
-      createGroup,
-      handleDeleteSession,
-      handleDuplicateSession,
-      handleResumeSession,
-      hideAgentSession,
-      moveToWindowItems,
-      moveSessionToWindow
-    ]
+    [createGroup, handleDeleteSession, handleDuplicateSession, handleResumeSession, hideAgentSession, moveToWindowItems, moveSessionToWindow]
   )
 
   const handleGroupContextMenu = useCallback(
@@ -1168,7 +1102,12 @@ export function Sidebar() {
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
-        header: <GroupColorPickerHeader groupId={groupId} initialColor={currentColor} />,
+        header: (
+          <GroupColorPickerHeader
+            groupId={groupId}
+            initialColor={currentColor}
+          />
+        ),
         items: [
           existingPin
             ? isPinnedOutOfSync(groupId)
@@ -1227,25 +1166,13 @@ export function Sidebar() {
           current && current.x === x && current.y === y
             ? {
                 ...current,
-                items: [
-                  ...current.items.slice(0, -1),
-                  ...extra,
-                  current.items[current.items.length - 1]
-                ]
+                items: [...current.items.slice(0, -1), ...extra, current.items[current.items.length - 1]]
               }
             : current
         )
       })
     },
-    [
-      ungroupSessions,
-      handleDeleteGroup,
-      setGroupColor,
-      setGroupView,
-      setActiveGroupView,
-      moveToWindowItems,
-      moveGroupToWindow
-    ]
+    [ungroupSessions, handleDeleteGroup, setGroupColor, setGroupView, setActiveGroupView, moveToWindowItems, moveGroupToWindow]
   )
 
   const handleFileTabContextMenu = useCallback(
@@ -1391,15 +1318,12 @@ export function Sidebar() {
   const clearRenaming = useCallback(() => setRenamingId(null), [])
 
   // Get the top-level item ID for gap calculation
-  const getItemId = useCallback(
-    (item: { type: string; sessionId?: string; fileTabId?: string; groupId?: string }) => {
-      if (item.type === 'session') return item.sessionId ?? ''
-      if (item.type === 'fileTab') return item.fileTabId ?? ''
-      if (item.type === 'group') return item.groupId ?? ''
-      return ''
-    },
-    []
-  )
+  const getItemId = useCallback((item: { type: string; sessionId?: string; fileTabId?: string; groupId?: string }) => {
+    if (item.type === 'session') return item.sessionId ?? ''
+    if (item.type === 'fileTab') return item.fileTabId ?? ''
+    if (item.type === 'group') return item.groupId ?? ''
+    return ''
+  }, [])
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
@@ -1444,7 +1368,6 @@ export function Sidebar() {
       <div className="px-2 pt-1 flex-shrink-0">
         <GroupSwitcher
           entries={shownSwitcherEntries}
-          totalCount={switcherEntries.length}
           value={activeGroupFilter}
           onPick={handleSwitcherPick}
           onAll={handleSwitcherAll}
@@ -1457,7 +1380,10 @@ export function Sidebar() {
       </div>
 
       {/* Single scrollable area for all sections */}
-      <ScrollArea viewportRef={scrollContainerRef} className="flex-1 min-h-0">
+      <ScrollArea
+        viewportRef={scrollContainerRef}
+        className="flex-1 min-h-0"
+      >
         {
           <>
             {/* Sessions section — the group picker opens full screen from the
@@ -1485,10 +1411,7 @@ export function Sidebar() {
             <div>
               {/* 6px between top-level items: room for the drop line to sit
                   between two cards with air on both sides of it. */}
-              <div
-                className="px-2 space-y-1.5"
-                style={{ '--drop-seam': '6px' } as React.CSSProperties}
-              >
+              <div className="px-2 space-y-1.5" style={{ '--drop-seam': '6px' } as React.CSSProperties}>
                 {filteredSessions ? (
                   <>
                     {filteredSessions.length === 0 && idleSearchMatches.length === 0 ? (
@@ -1564,8 +1487,7 @@ export function Sidebar() {
                       const itemId = getItemId(item)
                       const prevItemId = index > 0 ? getItemId(visibleItems[index - 1]) : null
                       const isLastItem = index === visibleItems.length - 1
-                      const gapBefore =
-                        isDragging && shouldShowGapBefore(dropIndicator, itemId, prevItemId)
+                      const gapBefore = isDragging && shouldShowGapBefore(dropIndicator, itemId, prevItemId)
 
                       if (item.type === 'fileTab') {
                         const fileTab = fileTabs.find((f) => f.id === item.fileTabId)
@@ -1587,11 +1509,7 @@ export function Sidebar() {
                             {isLastItem && (
                               <DropGap
                                 edge="after"
-                                active={
-                                  isDragging &&
-                                  dropIndicator?.targetId === itemId &&
-                                  dropIndicator?.position === 'after'
-                                }
+                                active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
                               />
                             )}
                           </div>
@@ -1617,11 +1535,7 @@ export function Sidebar() {
                             {isLastItem && (
                               <DropGap
                                 edge="after"
-                                active={
-                                  isDragging &&
-                                  dropIndicator?.targetId === itemId &&
-                                  dropIndicator?.position === 'after'
-                                }
+                                active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
                               />
                             )}
                           </div>
@@ -1652,34 +1566,25 @@ export function Sidebar() {
                               // do by fighting CSS, and the grey button fills within
                               // had no way to learn the colour at all. A colourless
                               // group publishes nothing and the fallbacks hold.
-                              style={
-                                groupColorHex
-                                  ? ({
-                                      '--group-bg': `${groupColorHex}10`,
-                                      '--group-bg-hover': `${groupColorHex}24`,
-                                      '--group-bg-selected': `${groupColorHex}35`,
-                                      '--group-border': `${groupColorHex}30`,
-                                      '--group-border-selected': `${groupColorHex}60`,
-                                      '--group-hover-bg': `${groupColorHex}2e`,
-                                      '--group-active-bg': `${groupColorHex}4d`
-                                    } as React.CSSProperties)
-                                  : undefined
-                              }
+                              style={groupColorHex ? ({
+                                '--group-bg': `${groupColorHex}10`,
+                                '--group-bg-hover': `${groupColorHex}24`,
+                                '--group-bg-selected': `${groupColorHex}35`,
+                                '--group-border': `${groupColorHex}30`,
+                                '--group-border-selected': `${groupColorHex}60`,
+                                '--group-hover-bg': `${groupColorHex}2e`,
+                                '--group-active-bg': `${groupColorHex}4d`
+                              } as React.CSSProperties) : undefined}
                             >
-                              {dropIndicator?.targetId === group.id &&
-                                dropIndicator?.position === 'inside' && (
-                                  <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10 transition-opacity duration-150" />
-                                )}
+                              {dropIndicator?.targetId === group.id && dropIndicator?.position === 'inside' && (
+                                <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10 transition-opacity duration-150" />
+                              )}
                               <SessionGroupItem
                                 group={group}
                                 onClick={(modifiers) => handleGroupClick(group.id, modifiers)}
                                 onContextMenu={(e) => handleGroupContextMenu(e, group.id)}
-                                onTerminalIconClick={(tid) =>
-                                  handleTerminalIconClick(group.id, tid)
-                                }
-                                onTerminalIconContextMenu={(tid, e) =>
-                                  handleTerminalIconContextMenu(group.id, tid, e)
-                                }
+                                onTerminalIconClick={(tid) => handleTerminalIconClick(group.id, tid)}
+                                onTerminalIconContextMenu={(tid, e) => handleTerminalIconContextMenu(group.id, tid, e)}
                                 onAddTerminalClick={() => handleAddTerminalClick(group.id)}
                                 onNewSession={() => void handleGroupNewSession(group.id)}
                                 newSessionTitle={
@@ -1701,11 +1606,7 @@ export function Sidebar() {
                               />
                               <div
                                 className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
-                                style={{
-                                  gridTemplateRows: group.collapsed ? '0fr' : '1fr',
-                                  opacity: group.collapsed ? 0 : 1,
-                                  transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)'
-                                }}
+                                style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
                               >
                                 <div className="overflow-hidden">
                                   {/* px-1 narrows the child-tab highlight so it doesn't touch the group border.
@@ -1721,18 +1622,14 @@ export function Sidebar() {
                                     data-group-collapsed={group.collapsed ? 'true' : undefined}
                                     style={
                                       groupColorHex
-                                        ? ({
-                                            '--group-rail-color': groupColorHex
-                                          } as React.CSSProperties)
+                                        ? ({ '--group-rail-color': groupColorHex } as React.CSSProperties)
                                         : undefined
                                     }
                                   >
                                     {group.sessionIds.map((sid, sIdx) => {
                                       const prevSid = sIdx > 0 ? group.sessionIds[sIdx - 1] : null
                                       const isLastInGroup = sIdx === group.sessionIds.length - 1
-                                      const childGapBefore =
-                                        isDragging &&
-                                        shouldShowGapBefore(dropIndicator, sid, prevSid)
+                                      const childGapBefore = isDragging && shouldShowGapBefore(dropIndicator, sid, prevSid)
 
                                       // Check if this is a file tab
                                       const fileTab = fileTabs.find((f) => f.id === sid)
@@ -1743,33 +1640,20 @@ export function Sidebar() {
                                             <FileTabItem
                                               fileTab={fileTab}
                                               isSelected={selectedSessionIds.includes(fileTab.id)}
-                                              dimmed={
-                                                hasSelection &&
-                                                !selectedSessionIds.includes(fileTab.id)
-                                              }
-                                              onClick={(modifiers) =>
-                                                handleSessionClick(fileTab.id, modifiers)
-                                              }
-                                              onContextMenu={(e) =>
-                                                handleFileTabContextMenu(e, fileTab.id)
-                                              }
+                                              dimmed={hasSelection && !selectedSessionIds.includes(fileTab.id)}
+                                              onClick={(modifiers) => handleSessionClick(fileTab.id, modifiers)}
+                                              onContextMenu={(e) => handleFileTabContextMenu(e, fileTab.id)}
                                               grouped
                                               groupSelected={allGroupSelected}
                                               forceEditing={renamingId === fileTab.id}
                                               onEditingDone={clearRenaming}
-                                              onPointerDown={(e) =>
-                                                handlePointerDown(e, fileTab.id, false)
-                                              }
+                                              onPointerDown={(e) => handlePointerDown(e, fileTab.id, false)}
                                               isDragging={draggedIds.includes(fileTab.id)}
                                             />
                                             {isLastInGroup && (
                                               <DropGap
-                                                edge="after"
-                                                active={
-                                                  isDragging &&
-                                                  dropIndicator?.targetId === sid &&
-                                                  dropIndicator?.position === 'after'
-                                                }
+                                edge="after"
+                                                active={isDragging && dropIndicator?.targetId === sid && dropIndicator?.position === 'after'}
                                               />
                                             )}
                                           </div>
@@ -1783,35 +1667,22 @@ export function Sidebar() {
                                           <SessionItem
                                             session={session}
                                             isSelected={selectedSessionIds.includes(session.id)}
-                                            dimmed={
-                                              hasSelection &&
-                                              !selectedSessionIds.includes(session.id)
-                                            }
-                                            onClick={(modifiers) =>
-                                              handleSessionClick(session.id, modifiers)
-                                            }
-                                            onContextMenu={(e) =>
-                                              handleSessionContextMenu(e, session.id)
-                                            }
+                                            dimmed={hasSelection && !selectedSessionIds.includes(session.id)}
+                                            onClick={(modifiers) => handleSessionClick(session.id, modifiers)}
+                                            onContextMenu={(e) => handleSessionContextMenu(e, session.id)}
                                             grouped
                                             groupSelected={allGroupSelected}
                                             groupColorHex={groupColorHex}
                                             forceEditing={renamingId === session.id}
                                             onEditingDone={clearRenaming}
-                                            onPointerDown={(e) =>
-                                              handlePointerDown(e, session.id, false)
-                                            }
+                                            onPointerDown={(e) => handlePointerDown(e, session.id, false)}
                                             isDragging={draggedIds.includes(session.id)}
                                             onDelete={() => setDeleteConfirmSessionId(session.id)}
                                           />
                                           {isLastInGroup && (
                                             <DropGap
-                                              edge="after"
-                                              active={
-                                                isDragging &&
-                                                dropIndicator?.targetId === sid &&
-                                                dropIndicator?.position === 'after'
-                                              }
+                                edge="after"
+                                              active={isDragging && dropIndicator?.targetId === sid && dropIndicator?.position === 'after'}
                                             />
                                           )}
                                         </div>
@@ -1839,11 +1710,7 @@ export function Sidebar() {
                             {isLastItem && (
                               <DropGap
                                 edge="after"
-                                active={
-                                  isDragging &&
-                                  dropIndicator?.targetId === itemId &&
-                                  dropIndicator?.position === 'after'
-                                }
+                                active={isDragging && dropIndicator?.targetId === itemId && dropIndicator?.position === 'after'}
                               />
                             )}
                           </div>
@@ -1870,7 +1737,7 @@ export function Sidebar() {
         <FeedbackBanner />
       </div>
 
-      {/* The foot: one panel — avatar, name, the day's hours, the doors. */}
+      {/* The foot: one panel — avatar, name, the agent's headroom, the doors. */}
       <div className="flex-shrink-0 px-2 pb-2">
         <SidebarFooter />
       </div>
@@ -1913,31 +1780,20 @@ export function Sidebar() {
         isOpen={terminalDialogState !== null}
         initialCommand={
           terminalDialogState?.terminalId
-            ? groups
-                .find((g) => g.id === terminalDialogState.groupId)
-                ?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.command
+            ? groups.find((g) => g.id === terminalDialogState.groupId)?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.command
             : undefined
         }
         initialMode={
           terminalDialogState?.terminalId
-            ? (groups
-                .find((g) => g.id === terminalDialogState.groupId)
-                ?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.commandMode ??
-              'prefill')
+            ? groups.find((g) => g.id === terminalDialogState.groupId)?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.commandMode ?? 'prefill'
             : 'prefill'
         }
         initialColor={(() => {
           if (terminalDialogState?.terminalId) {
-            return (
-              groups
-                .find((g) => g.id === terminalDialogState.groupId)
-                ?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.color ?? 'blue'
-            )
+            return groups.find((g) => g.id === terminalDialogState.groupId)?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.color ?? 'blue'
           }
           // Next unused color
-          const group = terminalDialogState
-            ? groups.find((g) => g.id === terminalDialogState.groupId)
-            : null
+          const group = terminalDialogState ? groups.find((g) => g.id === terminalDialogState.groupId) : null
           const used = new Set(group?.terminals.map((t) => t.color) ?? [])
           return (GROUP_TERMINAL_COLORS.find((c) => !used.has(c)) ?? 'blue') as GroupTerminalColor
         })()}
@@ -1952,10 +1808,7 @@ export function Sidebar() {
         })()}
         initialIcon={
           terminalDialogState?.terminalId
-            ? (groups
-                .find((g) => g.id === terminalDialogState.groupId)
-                ?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.icon ??
-              'terminal')
+            ? groups.find((g) => g.id === terminalDialogState.groupId)?.terminals.find((t) => t.id === terminalDialogState.terminalId)?.icon ?? 'terminal'
             : 'terminal'
         }
         onSave={async (command, mode, color, cwd, icon) => {
@@ -1969,24 +1822,11 @@ export function Sidebar() {
 
           if (terminalId) {
             // Editing existing
-            useSessionStore.getState().updateGroupTerminal(groupId, terminalId, {
-              command,
-              commandMode: mode,
-              color,
-              icon,
-              cwd: terminalCwd
-            })
+            useSessionStore.getState().updateGroupTerminal(groupId, terminalId, { command, commandMode: mode, color, icon, cwd: terminalCwd })
           } else {
             // Adding new — add config, then spawn immediately
             const newId = `term-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-            addGroupTerminal(groupId, {
-              id: newId,
-              command,
-              commandMode: mode,
-              color,
-              icon,
-              cwd: terminalCwd
-            })
+            addGroupTerminal(groupId, { id: newId, command, commandMode: mode, color, icon, cwd: terminalCwd })
             setTerminalDialogState(null)
             await spawnGroupTerminal(groupId, newId, command, mode, cwd)
             return
@@ -2001,9 +1841,7 @@ export function Sidebar() {
                 const { groupId, terminalId } = terminalDialogState
                 if (terminalId) {
                   // Kill the session if alive
-                  const config = groups
-                    .find((g) => g.id === groupId)
-                    ?.terminals.find((t) => t.id === terminalId)
+                  const config = groups.find((g) => g.id === groupId)?.terminals.find((t) => t.id === terminalId)
                   if (config?.sessionId) {
                     window.electronAPI.killSession(config.sessionId).catch(() => {})
                   }
@@ -2021,13 +1859,7 @@ export function Sidebar() {
           locationId={remotePickerState.locationId}
           locationName={remotePickerState.locationName}
           onSelect={(path) => {
-            spawnRemoteSession(
-              remotePickerState.locationId,
-              path,
-              remotePickerState.claudeMode,
-              remotePickerState.antigravityMode,
-              remotePickerState.codexMode
-            )
+            spawnRemoteSession(remotePickerState.locationId, path, remotePickerState.claudeMode, remotePickerState.antigravityMode, remotePickerState.codexMode)
             setRemotePickerState(null)
           }}
           onCancel={() => setRemotePickerState(null)}
@@ -2110,9 +1942,7 @@ function PinnedSection({
       )}
       <ExportClaveDialog
         isOpen={exportDialogPinnedId !== null}
-        defaultFileName={
-          exportDialogPinnedId ? getExportFileName(exportDialogPinnedId) : 'group.clave'
-        }
+        defaultFileName={exportDialogPinnedId ? getExportFileName(exportDialogPinnedId) : 'group.clave'}
         onExport={async (folder, fileName, keepSynced) => {
           if (exportDialogPinnedId) {
             await exportClaveFile(exportDialogPinnedId, folder, fileName, keepSynced)

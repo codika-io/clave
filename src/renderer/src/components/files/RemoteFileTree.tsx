@@ -96,7 +96,7 @@ function RemoteFileTreeRow({
       {Array.from({ length: node.depth }, (_, i) => (
         <span
           key={i}
-          className="absolute top-0 bottom-0 w-px bg-border"
+          className="tree-guide"
           style={{ left: `${8 + i * 8 + 6}px` }}
         />
       ))}

@@ -31,7 +31,7 @@ function relativeTime(isoDate: string): string {
 function commitFileStatusColor(status: GitCommitFileStatus['status']): string {
   switch (status) {
     case 'A': return 'text-green-400'
-    case 'M': case 'T': return 'text-orange-400'
+    case 'M': case 'T': return 'text-git-modified'
     case 'D': return 'text-red-400'
     case 'R': case 'C': return 'text-blue-400'
   }
