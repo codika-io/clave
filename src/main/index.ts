@@ -2,6 +2,7 @@
 // captures app.getPath('userData') at module-import time.
 import './user-data-override'
 import { app, BrowserWindow, shell, nativeImage, nativeTheme } from 'electron'
+import { TEST_NO_ACTIVATE } from './test-mode'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipc-handlers'
@@ -31,6 +32,12 @@ import { registerPreviewScheme, installPreviewProtocol } from './preview-protoco
 
 // Scheme privileges must be declared before app ready.
 registerPreviewScheme()
+
+// `--test-no-activate` (see test-mode.ts): become an accessory app BEFORE ready,
+// so the instance never activates even once. Off-flag this block does nothing.
+if (TEST_NO_ACTIVATE && process.platform === 'darwin') {
+  app.setActivationPolicy('accessory')
+}
 
 /**
  * The teardown ladder (PRDCT-1703). One window closing used to run the whole
@@ -103,12 +110,17 @@ function createWindow(workspaceId: string | null): BrowserWindow {
   // In dev mode, set dock icon from PNG. In packaged mode, let macOS
   // render from the .icon bundle (which supports Tahoe glass effect).
   // applyPersistedIcon() handles copying the right .icon bundle on startup.
-  if (process.platform === 'darwin' && !app.isPackaged) {
+  // Skipped under --test-no-activate: there is no Dock tile to set under the
+  // accessory policy, and setIcon throws on a hidden dock.
+  if (process.platform === 'darwin' && !app.isPackaged && !TEST_NO_ACTIVATE) {
     app.dock?.setIcon(icon)
   }
 
   win.on('ready-to-show', () => {
-    win.show()
+    // showInactive() puts the window on screen without making it — or the app —
+    // key, which is the whole point of --test-no-activate.
+    if (TEST_NO_ACTIVATE) win.showInactive()
+    else win.show()
   })
 
   attachMissionControlWindow(win)
@@ -174,6 +186,12 @@ export function openWorkspaceWindow(workspaceId: string): {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.clave.app')
+
+  // The Dock tile is created at ready; hide it here so the test instance shows
+  // none. Paired with the accessory policy set above.
+  if (TEST_NO_ACTIVATE && process.platform === 'darwin') {
+    app.dock?.hide()
+  }
 
   // Pre-cache login shell env asynchronously so PTY spawns don't block the main thread
   preloadLoginShellEnv()
