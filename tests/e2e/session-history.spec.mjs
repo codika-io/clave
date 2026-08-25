@@ -251,6 +251,17 @@ export async function run(t) {
       codexUser('foreign codex thread')
     ])
   )
+  // A thread whose meta carries NO cwd cannot be scoped to any workspace:
+  // unlisted, never shown in every one.
+  writeFileSync(
+    path.join(codexDay, 'rollout-2026-08-25T08-15-00-cx-nocwd.jsonl'),
+    transcript([codexMeta({ id: 'cx-nocwd', cwd: undefined }), codexUser('unattributable thread')])
+  )
+  // A second rollout carrying the SAME thread id: one conversation, one row.
+  writeFileSync(
+    path.join(codexDay, 'rollout-2026-08-25T09-00-00-cx-dup.jsonl'),
+    transcript([codexMeta({}), codexUser('the duplicated codex thread')])
+  )
 
   const { app, win } = await launchApp(DIR, {
     env: { CLAVE_TRANSCRIPTS_ROOT: TRANSCRIPTS, CLAVE_CODEX_ROOT: CODEX }
@@ -429,7 +440,15 @@ export async function run(t) {
     await win.fill('[data-history-filter]', 'Beta things')
     r = await searched()
     t.equal('a group search never reads outside the group', JSON.stringify(r?.rows), JSON.stringify([]))
-    t.check('and it read exactly the group\'s transcripts', (r?.footer ?? '').endsWith('0 hits in 0 of 2 transcripts'), r?.footer)
+    t.check('and it read exactly the group\'s transcripts', (r?.footer ?? '').includes('0 hits in 0 of 2 transcripts'), r?.footer)
+
+    // The union: a query matching only the rows' OWN text (a group name)
+    // keeps those rows on screen while the transcript search finds nothing,
+    // and the footer says both truths.
+    await win.fill('[data-history-filter]', 'Alpha')
+    r = await searched()
+    t.equal('a row-text match shows through a hitless transcript search', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-2', 'cc-alpha-1', 'cc-alpha-gone']))
+    t.check('and the footer carries the hit count AND the shown count', /0 hits in 0 of \d+ transcripts? · 3 shown/.test(r?.footer ?? ''), r?.footer)
 
     await win.fill('[data-history-filter]', '')
     await win.click('[data-history-chip="all"]')
@@ -535,6 +554,8 @@ export async function run(t) {
     t.check("never the app's own tab-title helper calls", !allIds.includes('cc-titlegen'), allIds)
     t.check('the codex user thread is listed beside the claude ones', allIds.includes('cx-0001'), allIds)
     t.check('never a codex subagent thread, nor a foreign-root one', !allIds.includes('cx-sub') && !allIds.includes('cx-foreign'), allIds)
+    t.check('a cwd-less codex thread is unlisted, never shown in every workspace', !allIds.includes('cx-nocwd'), allIds)
+    t.equal('two rollouts with one thread id are ONE row', allIds.filter((id) => id === 'cx-0001').length, 1)
     t.equal('the codex row wears its provider', await win.evaluate(() => document.querySelector('[data-history-row="cx-0001"]')?.getAttribute('data-history-provider')), 'codex')
     t.equal('titled by its first human message', await win.evaluate(() => document.querySelector('[data-history-row="cx-0001"] .history-row-title')?.textContent), 'Sweep the codex garden please')
     const footerCounts = await win.evaluate(() => document.querySelector('[data-history-footer]')?.textContent ?? '')

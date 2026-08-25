@@ -174,6 +174,11 @@ export function listHistory(): {
   // by the scanner), titled by the first human message, inert to resume.
   for (const c of listCodexSessions(codexRoot(), codexCache)) {
     if (known.has(c.id)) continue
+    known.add(c.id)
+    // A thread whose meta carries no absolute cwd cannot be scoped to any
+    // workspace (codex has no per-project store dir to fall back on, the
+    // way a claude transcript does): unlisted, never shown in every one.
+    if (!c.cwd) continue
     pathById.set(c.id, c.path)
     const firstSeenAt = c.firstAt ?? c.modifiedAt ?? ''
     const lastAt = c.modifiedAt ?? firstSeenAt

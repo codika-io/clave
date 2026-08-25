@@ -358,7 +358,9 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
         return `${countsLine} · searching ${searchIds.length} transcript${searchIds.length === 1 ? '' : 's'}…`
       if (searchState.status === 'done') {
         const n = [...hits.values()].reduce((a, b) => a + b.length, 0)
-        return `${countsLine} · ${n} hit${n === 1 ? '' : 's'} in ${hits.size} of ${searchState.files} transcript${searchState.files === 1 ? '' : 's'}${searchState.truncated ? ' · stopped at the cap' : ''}`
+        // "· N shown" keeps the line honest: the instant text match can show
+        // rows the transcript search found nothing in.
+        return `${countsLine} · ${n} hit${n === 1 ? '' : 's'} in ${hits.size} of ${searchState.files} transcript${searchState.files === 1 ? '' : 's'}${searchState.truncated ? ' · stopped at the cap' : ''} · ${rows.length} shown`
       }
       return countsLine
     }
