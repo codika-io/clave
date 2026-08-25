@@ -1,5 +1,11 @@
 import { ipcMain } from 'electron'
-import { cancelSearch, listHistory, searchHistory, stampHistory } from '../session-history/service'
+import {
+  cancelSearch,
+  getConversation,
+  listHistory,
+  searchHistory,
+  stampHistory
+} from '../session-history/service'
 
 /** Session-history IPC (PRDCT-1738). `history:stamp` is fire-and-forget
  *  (`send`, not `invoke`): the renderer writes a ledger row whenever a tab's
@@ -12,6 +18,8 @@ export function registerHistoryHandlers(): void {
     stampHistory(row)
   })
   ipcMain.handle('history:list', () => listHistory())
+  // The message trail's read: a live tab's conversation as turns.
+  ipcMain.handle('history:conversation', (_event, request: unknown) => getConversation(request))
   ipcMain.handle('history:search', (event, request: unknown) =>
     searchHistory(request, (progress) => {
       if (!event.sender.isDestroyed()) event.sender.send('history:search-hits', progress)

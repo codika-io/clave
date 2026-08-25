@@ -27,6 +27,11 @@ export function FileContent({
   const { fileData, filename, content, setContent, canEdit, isImage, loadError, save } = editor
   const isMarkdown = filePath ? isMarkdownFile(filename) : false
   const isHtml = filePath ? isHtmlFile(filename) : false
+  // An empty file has nothing to click: the page editor's entire target is one
+  // blank line, and a code editor's is one blank gutter row. The only way a
+  // file is empty on this surface is that it was just created, so it opens with
+  // the caret already in it — you name a document and you type.
+  const autoFocus = !!fileData && !fileData.binary && content === ''
 
   if (loadError) {
     return (
@@ -86,6 +91,7 @@ export function FileContent({
           content={content}
           onChange={setContent}
           onSave={save}
+          autoFocus={autoFocus}
         />
       </div>
     )
@@ -112,6 +118,7 @@ export function FileContent({
       filename={filename}
       readOnly={!canEdit}
       onSave={save}
+      autoFocus={autoFocus && canEdit}
       className="flex-1 min-h-0"
     />
   )

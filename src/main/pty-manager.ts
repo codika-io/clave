@@ -208,6 +208,35 @@ export function isTmuxAvailable(): boolean {
   return detectTmux() !== null
 }
 
+/**
+ * Jump a tmux-backed pane to a past message (the message trail's click):
+ * enter copy-mode and search upward for the text, `fromBottom` times — the
+ * way a repeated prompt ("continue") is told apart from its newer twins.
+ * tmux owns the scrollback for these sessions (xterm's buffer only ever held
+ * the visible screen), so this is the one way to scroll them; the search also
+ * highlights the match, and scrolling back down exits copy-mode like the
+ * wheel does. tmux exits 0 whether or not the text was found, so the return
+ * only says the command was issued.
+ */
+export function scrollTmuxSessionToText(tmuxName: string, needle: string, fromBottom: number): boolean {
+  const tmuxPath = detectTmux()
+  if (!tmuxPath) return false
+  // Literal text search; strip control characters, and leading dashes so the
+  // needle can never be read as a flag. A substring still matches.
+  // eslint-disable-next-line no-control-regex
+  const text = needle.replace(/[\x00-\x1f\x7f]/g, ' ').replace(/^[-\s]+/, '').trim().slice(0, 120)
+  if (text.length < 3) return false
+  const times = Math.max(1, Math.min(50, Math.floor(fromBottom)))
+  const args = ['-L', TMUX_SOCKET, 'copy-mode', '-e', '-t', tmuxName]
+  for (let i = 0; i < times; i++) {
+    args.push(';', 'send-keys', '-t', tmuxName, '-X', 'search-backward-text', text)
+  }
+  execFile(tmuxPath, args, (err) => {
+    if (err) console.error('[pty] tmux scroll-to-text failed', err)
+  })
+  return true
+}
+
 /** Minimal, predictable config for embedded agent terminals. Passed via `-f`
  *  so the user's ~/.tmux.conf can't change behaviour (no surprise keybindings,
  *  no `destroy-unattached on` killing our sessions, no status bar stealing a
@@ -996,6 +1025,12 @@ class PtyManager {
     const session = this.sessions.get(id)
     if (!session) return null
     return session.tmuxName ?? id
+  }
+
+  /** The backing tmux session's name, or null for plain (non-tmux) tabs —
+   *  which is also the answer to "who owns this tab's scrollback". */
+  tmuxNameOf(id: string): string | null {
+    return this.sessions.get(id)?.tmuxName ?? null
   }
 
   setSessionDisplayName(id: string, displayName: string | null, userRenamed: boolean): void {

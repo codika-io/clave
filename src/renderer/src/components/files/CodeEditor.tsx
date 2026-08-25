@@ -20,6 +20,8 @@ interface CodeEditorProps {
   readOnly?: boolean
   /** Called on Cmd/Ctrl+S while the editor is focused. */
   onSave?: () => void
+  /** Put the caret in the editor at mount — a file with nothing in it. */
+  autoFocus?: boolean
   className?: string
 }
 
@@ -33,6 +35,7 @@ export function CodeEditor({
   filename,
   readOnly = false,
   onSave,
+  autoFocus = false,
   className
 }: CodeEditorProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -80,6 +83,9 @@ export function CodeEditor({
       })
     })
     viewRef.current = view
+    // Read from the creating render, which is the only one that matters: the
+    // caret belongs in a file that opened empty, not in one emptied by editing.
+    if (autoFocus) view.focus()
     return () => {
       view.destroy()
       viewRef.current = null

@@ -13,6 +13,30 @@ export const THEMES = ['dark', 'charcoal', 'light', 'coffee'] as const
 export type Theme = (typeof THEMES)[number]
 
 /**
+ * How heavily a tree draws the hairlines between its rows — the Files tab, the
+ * git panel's repo tree, the changed files inside a repo. One setting for all
+ * of them: a multiplier on whatever alpha the current theme picked for
+ * `--rule-color`, so a theme still says what colour its hairline is and this
+ * says how much of it to draw. `off` removes the rules from every tree at once.
+ *
+ * Ids are stored, not numbers: the multipliers are a design call and can be
+ * retuned without stranding what is in a user's localStorage.
+ */
+export const TREE_RULE_INTENSITIES = [
+  { id: 'off', label: 'Off', multiplier: 0 },
+  { id: 'soft', label: 'Soft', multiplier: 0.55 },
+  { id: 'normal', label: 'Normal', multiplier: 1 },
+  { id: 'strong', label: 'Strong', multiplier: 1.9 }
+] as const
+
+export type TreeRuleIntensity = (typeof TREE_RULE_INTENSITIES)[number]['id']
+
+/** The multiplier a level draws at; unknown ids fall back to the default. */
+export function treeRuleMultiplier(intensity: TreeRuleIntensity): number {
+  return TREE_RULE_INTENSITIES.find((i) => i.id === intensity)?.multiplier ?? 1
+}
+
+/**
  * The themes that paint on a dark ground. The one place that answers it.
  *
  * Every `theme === 'dark'` in the app was really a light/dark test written when

@@ -1,6 +1,6 @@
 import { emitTabClosed } from '../../lib/exchange-capture'
-import { useCallback, useState } from 'react'
-import { ArrowTopRightOnSquareIcon, PlayIcon, ArrowDownTrayIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
+import { useCallback, useState, type ReactElement } from 'react'
+import { ArrowTopRightOnSquareIcon, PlayIcon, ArrowDownTrayIcon, DocumentTextIcon, ChatBubbleBottomCenterTextIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
 import { useClaudeProfileStore } from '../../store/claude-profile-store'
 import { cn, safePort } from '../../lib/utils'
@@ -11,11 +11,13 @@ interface TerminalHeaderProps {
   sessionId: string
 }
 
-export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
+export function TerminalHeader({ sessionId }: TerminalHeaderProps): ReactElement | null {
   const session = useSessionStore((s) => s.sessions.find((sess) => sess.id === sessionId))
   const multiProfile = useClaudeProfileStore((s) => s.profiles.length > 1)
   const removeSession = useSessionStore((s) => s.removeSession)
   const setSessionServerStatus = useSessionStore((s) => s.setSessionServerStatus)
+  const messageTrailEnabled = useSessionStore((s) => s.messageTrailEnabled)
+  const setMessageTrailEnabled = useSessionStore((s) => s.setMessageTrailEnabled)
   const [showConfirm, setShowConfirm] = useState(false)
 
   const handleKill = useCallback(async () => {
@@ -57,7 +59,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
 
   return (
     <>
-      <div className="flex items-center justify-between px-3 py-1.5 bg-surface-0 border-b border-border-subtle flex-shrink-0">
+      <div className="flex items-center justify-between pl-3 pr-1 py-0.5 bg-surface-0 border-b border-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span
             className={cn(
@@ -118,20 +120,28 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
               {serverStatus === 'running' && (
                 <button
                   onClick={handleServerStop}
-                  className="btn-icon btn-icon-xs hover:text-red-400 hover:bg-red-400/10"
+                  className="panel-icon-btn hover:!text-red-400"
                   title="Stop server (Ctrl+C)"
                 >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" />
-                  </svg>
+                  <StopIcon className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-0.5 flex-shrink-0">
           <SessionCopyOffers sessionId={sessionId} />
+          {session.claudeSessionId && (
+            <button
+              onClick={() => setMessageTrailEnabled(!messageTrailEnabled)}
+              className="panel-icon-btn"
+              data-active={messageTrailEnabled ? 'true' : undefined}
+              title={messageTrailEnabled ? 'Hide message trail' : 'Show message trail'}
+            >
+              <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
+            </button>
+          )}
           {session.claudeMode && session.claudeSessionId && (
             <>
               <button
@@ -141,10 +151,10 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
                     locationId: session.locationId ?? null
                   })
                 }
-                className="btn-icon btn-icon-sm hover:bg-surface-300"
+                className="panel-icon-btn"
                 title="Save discussion"
               >
-                <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                <ArrowDownTrayIcon className="w-4 h-4" />
               </button>
               {session.planFilePath && (
                 <button
@@ -154,27 +164,20 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
                       locationId: session.locationId ?? null
                     })
                   }
-                  className="btn-icon btn-icon-sm hover:bg-surface-300"
+                  className="panel-icon-btn"
                   title="Save plan"
                 >
-                  <DocumentTextIcon className="w-3.5 h-3.5" />
+                  <DocumentTextIcon className="w-4 h-4" />
                 </button>
               )}
             </>
           )}
           <button
             onClick={() => setShowConfirm(true)}
-            className="btn-icon btn-icon-sm hover:bg-surface-300"
+            className="panel-icon-btn"
             title="Kill session"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path
-                d="M2.5 2.5l7 7M9.5 2.5l-7 7"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <XMarkIcon className="w-4 h-4" />
           </button>
         </div>
       </div>
