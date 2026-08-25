@@ -653,7 +653,14 @@ export function SidePanel() {
           old loose row running toward the edge did not. */}
       {isGitTabActive && !isRemoteSession && multiRepo.result.mode !== 'none' && multiRepo.result.mode !== 'loading' && (
         <div className="px-2 pb-1.5 flex-shrink-0">
-          <div className="panel-bar panel-bar--nowrap" data-panel-bar="git">
+          <div className="panel-bar" data-panel-bar="git">
+            {/* Everything that NAMES the repo is one flex item, and the controls
+                are the other. That is what makes the bar wrap into two readable
+                lines instead of three ragged ones: the label group takes the
+                slack on its line and truncates inside it, so a long branch name
+                never claims a line of its own and never pushes the badges off
+                the one it is on. */}
+            <span className="panel-bar-label">
             {/* Branch name (single-repo only). The badges sit outside the
                 truncating name so a long branch never clips them away — they are
                 the toolbar's controls, the name is only a label. */}
@@ -726,14 +733,16 @@ export function SidePanel() {
                   </Tooltip>
                 </span>
               )}
+            </span>
             {/* Three segments, hairlined apart: what reaches the remote, what
                 opens a panel over the repo, what changes how the list is drawn.
                 Collapse-all is gone from here — it is in the tab bar above,
                 where the file tree can reach it too. */}
-            <span className="panel-bar-spacer" />
-            <span className="panel-sep" aria-hidden="true" />
-            {/* One cluster that never breaks apart — see .panel-bar--nowrap. */}
-            <span className="flex items-center gap-0.5 flex-shrink-0">
+            {/* One cluster that never breaks apart: it wraps to the next line
+                whole, or not at all. The hairline that used to lead it is gone
+                with the spacer — on one line the label group's slack separates
+                them, and on two the line break already has. */}
+            <span className="panel-bar-controls">
               <MagicPullButton repoPaths={allRepoPaths} onDone={gitRefresh} />
               <MagicSyncButton repoPaths={allRepoPaths} onDone={gitRefresh} />
               <span className="panel-sep" aria-hidden="true" />

@@ -713,7 +713,7 @@ export function AppShell() {
             >
               <button
                 onClick={toggleSidebar}
-                className="btn-icon btn-icon-sm"
+                className="btn-icon btn-icon-md"
                 title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
               >
                 <Bars3BottomLeftIcon className="w-4 h-4" />
@@ -733,7 +733,7 @@ export function AppShell() {
               {/* File palette button */}
               <button
                 onClick={toggleFilePalette}
-                className="btn-icon btn-icon-sm flex-shrink-0"
+                className="btn-icon btn-icon-md flex-shrink-0"
                 title="Search files (Cmd+P)"
               >
                 <MagnifyingGlassIcon className="w-4 h-4" />
@@ -741,7 +741,7 @@ export function AppShell() {
               {/* File tree button */}
               <button
                 onClick={toggleFileTree}
-                className={cn('btn-icon btn-icon-sm flex-shrink-0', fileTreeOpen && '!text-accent')}
+                className={cn('btn-icon btn-icon-md flex-shrink-0', fileTreeOpen && '!text-accent')}
                 title="File tree (Cmd+E)"
               >
                 <Bars3BottomLeftIcon className="w-4 h-4 scale-x-[-1]" />
@@ -880,7 +880,7 @@ function ToolbarQuickActions() {
                         e.preventDefault()
                         api.openTerminalOnly()
                       }}
-                      className="relative p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
+                      className="btn-icon btn-icon-md relative"
                       style={{ color: colorHex }}
                       title={api.title}
                     >
@@ -899,7 +899,7 @@ function ToolbarQuickActions() {
                   )
                 ) : (
                   <button
-                    className="p-1.5 rounded-lg hover:bg-surface-200 transition-colors"
+                    className="btn-icon btn-icon-md"
                     style={{ color: colorHex }}
                     title={t.command || 'Shell'}
                   >

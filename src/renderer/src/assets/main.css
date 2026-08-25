@@ -68,8 +68,21 @@
   --radius-xl: 0.625rem;    /* 10px (was 12px) — cards, groups, pinned */
   --radius-2xl: 0.875rem;   /* 14px (was 16px) */
 
+  /* The radius of a control sitting INSIDE a --radius-xl panel — every button,
+     chip, tab and field in the toolbar, the sidebar's launcher and switcher, and
+     the side panel's bars. It is not a taste value, it is the nesting arithmetic:
+     concentric corners only look concentric when the inner radius is the outer
+     one minus the gap between them, and that gap is 3px everywhere here (the
+     panel's own 1px border plus the 2px it insets its contents by). 10 − 3 = 7.
+     At --radius-lg the inner corner was a pixel too tight and the control read
+     as squarer than the box around it — visible on every hover fill in the app.
+     Controls that do NOT sit in such a panel (dialog buttons, settings inputs,
+     menu rows) stay on --radius-lg: they have no outer corner to answer to. */
+  --radius-control: 0.4375rem; /* 7px — a control inside a --radius-xl panel */
+
   /* Control height scale — single source of truth for row/button/input heights.
      Components reference these via var(--control-h-*) so a change here propagates everywhere. */
+  --control-h-xs: 1.25rem; /* 20px — row-level affordances (a file row's stage/discard) */
   --control-h-sm: 1.5rem;  /* 24px — extra compact */
   --control-h-md: 1.75rem; /* 28px — default rows, buttons, compact inputs */
   --control-h-lg: 2rem;    /* 32px — inputs */
@@ -635,7 +648,7 @@ body,
   padding: 0 0.5rem;       /* px-2 — the panels stay on their own padding: they
                               are chrome, not list, and a sidebar dragged narrow
                               squeezes this row first */
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
@@ -671,7 +684,7 @@ body,
   padding: 0 0.25rem;      /* px-1 — the panel's own hairlines already frame the
                               segment, so the caret needs less air than it did
                               when it carried a divider of its own */
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
@@ -691,7 +704,7 @@ body,
   flex-shrink: 0;
   width: var(--control-h-md);
   height: var(--control-h-md);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, opacity 150ms, scale 120ms var(--ease-out-expo);
 }
@@ -794,7 +807,7 @@ body,
   min-width: 0;
   height: var(--control-h-md);
   padding: 0 0.375rem;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   background-color: color-mix(in srgb, var(--surface-100) 60%, transparent);
   transition: background-color 150ms, box-shadow 150ms, color 150ms;
@@ -853,7 +866,7 @@ body,
   max-width: 100%;         /* a long group name wraps the row, never the panel */
   height: var(--control-h-md);
   padding: 0 0.5rem;       /* px-2 — see .launcher-btn */
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
@@ -1198,17 +1211,21 @@ body,
   background-color: color-mix(in srgb, var(--surface-0) 70%, transparent);
 }
 
-/* The icon buttons inside a .panel-bar — the launcher's .launcher-icon-btn one
-   size down. The right panel is 240px by default and its git bar carries six of
-   them beside a branch name, so 28px squares would wrap the row at every width. */
+/* The icon buttons inside a .panel-bar — the same square as the launcher's
+   .launcher-icon-btn and the panel's own tabs, because they are the same kind of
+   thing sitting in the same kind of box. They used to be a size down, to keep
+   the git bar's six controls on one line at 240px; they did not, the bar ran off
+   the panel's edge anyway, and the price was a path bar whose buttons floated
+   5px inside a box whose tabs sat 3px in. The bar's width is the bar's problem
+   to solve (it wraps) — it was never worth two button sizes in one panel. */
 .panel-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: var(--control-h-sm);
-  height: var(--control-h-sm);
-  border-radius: var(--radius-lg);
+  width: var(--control-h-md);
+  height: var(--control-h-md);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, opacity 150ms, scale 120ms var(--ease-out-expo);
 }
@@ -1268,26 +1285,55 @@ body,
    its contents floated into the middle. A full-width box around two buttons
    reads as a row whose other half went missing; a box the width of the choice
    reads as the choice. Only bars holding a single cluster take this: the moment
-   a bar has a trailing group, the spacer is what places it. */
+   a bar has a trailing group, the label group is what places it. */
 .panel-bar--hug {
   align-self: center;
   flex-wrap: nowrap;
 }
 
-/* The git bar opts out of wrapping: its controls are a fixed cluster and its
-   label is a branch name or a repo count, so the honest response to a narrow
-   panel is to truncate the label — not to drop one orphan icon onto a second
-   line, which is what wrapping does the moment the bar is a few pixels short. */
+/* Opting a bar out of wrapping, for the path bar: it is a line of text with a
+   control at each end, and a path is a thing that truncates. The git bar used
+   to take this too, on the theory that wrapping drops one orphan icon onto a
+   second line — but its controls are a single flex-shrink-0 cluster, so they
+   wrap as one block or not at all, and holding them on one line only meant
+   running them off the panel's edge at the default 240px. It wraps again. */
 .panel-bar--nowrap {
   flex-wrap: nowrap;
 }
 
-/* The panel bar's flexible gap. A plain flex-1 span would collapse to nothing
-   once the bar wraps, which is what puts the trailing controls hard against the
-   tabs on the second line. */
-.panel-bar-spacer {
+/* A panel bar's LABEL half — everything that says what the bar is about, as one
+   flex item: the git bar's branch glyph, its branch name, its sync badges, its
+   parent-repo notice. Being one item is what lets the bar wrap into two lines
+   rather than three: `flex: 1 1 0` makes it lay out at nothing and grow into
+   whatever its line has left, so it truncates inside itself instead of claiming
+   a line for the name and leaving the badges to find their own. Growing is also
+   how it does the old spacer's job — the controls sit at the far end of the bar
+   because the label pushed them there, not because a strut did. */
+/* A panel bar's CONTROL half. It prefers to stay whole, and the flex algorithm
+   is what gives it that preference for free: a wrapping container places items
+   on a line before it shrinks any of them, so the cluster moves to the next line
+   INTACT rather than squeezing on the current one. Only when a whole line is
+   still not enough — the side panel can be dragged to 180px, where six controls
+   do not fit end to end — does it shrink, and then it wraps inside itself. That
+   is the last resort on purpose: an icon on a second row is awkward, an icon
+   outside the panel cannot be clicked at all, and that is what used to happen.
+   Right-aligned so a partial row reads as the end of a block, not the start. */
+.panel-bar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.panel-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   flex: 1 1 auto;
-  min-width: 4px;
+  min-width: 5.5rem;
+  overflow: hidden;
 }
 
 /* ── Groups ── */
@@ -1952,13 +1998,28 @@ body,
   background-color: var(--surface-100);
 }
 
-/* Icon button: three sizes sharing the same base */
+/* Icon button: three sizes sharing the same base.
+ *
+ * The sizes are BOXES, not paddings. They were paddings, and that is why no two
+ * icon buttons in the app were the same size: the box came out as whatever the
+ * glyph inside it happened to be plus the padding, so one `.btn-icon-sm` was
+ * 24px next to a 16px icon, 22px next to a 14px one and 20px next to a 12px
+ * one — three different buttons wearing one class name, sitting on the same row
+ * of the same header. A fixed square makes the class mean a size again and lets
+ * a glyph be chosen for how it reads rather than for the box it will produce.
+ *
+ * Consequence worth knowing: this design system is unlayered while Tailwind's
+ * utilities live in @layer utilities, so these dimensions beat a `w-5 h-5` on
+ * the element. A call site that wants a different box picks another size class.
+ */
 .btn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: var(--radius-lg);
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
@@ -1967,13 +2028,16 @@ body,
   background-color: var(--surface-200);
 }
 .btn-icon-xs {
-  padding: 2px;            /* p-0.5 */
+  width: var(--control-h-xs);
+  height: var(--control-h-xs);
 }
 .btn-icon-sm {
-  padding: 4px;            /* p-1 */
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
 }
 .btn-icon-md {
-  padding: 6px;            /* p-1.5 */
+  width: var(--control-h-md);
+  height: var(--control-h-md);
 }
 
 /* Press feedback for the button family — a 3% dip the frame the pointer goes

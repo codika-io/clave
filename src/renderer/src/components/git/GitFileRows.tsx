@@ -109,7 +109,7 @@ export function FileRow({
       {!readOnly && (
         <div className="ml-auto flex-shrink-0 flex items-center gap-0.5">
           <button
-            className="btn-icon btn-icon-sm w-5 h-5 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
+            className="btn-icon btn-icon-xs opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               onDiscard?.()
@@ -119,7 +119,7 @@ export function FileRow({
             <ArrowUturnLeftIcon className="w-3 h-3" />
           </button>
           <button
-            className="btn-icon btn-icon-sm w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="btn-icon btn-icon-xs opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               onStageToggle?.()
@@ -297,7 +297,7 @@ export function GitTreeFileRow({
       {!readOnly && (
         <div className="ml-auto flex-shrink-0 flex items-center gap-0.5">
           <button
-            className="btn-icon btn-icon-sm w-5 h-5 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
+            className="btn-icon btn-icon-xs opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               onDiscard?.()
@@ -307,7 +307,7 @@ export function GitTreeFileRow({
             <ArrowUturnLeftIcon className="w-3 h-3" />
           </button>
           <button
-            className="btn-icon btn-icon-sm w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="btn-icon btn-icon-xs opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               onStageToggle?.()
