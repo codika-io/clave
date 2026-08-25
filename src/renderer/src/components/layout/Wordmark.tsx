@@ -79,8 +79,16 @@ export function Wordmark(): React.ReactElement {
  * lands on the window and drags it.
  */
 
-/** The house, with the app named as the source. */
-export const ANTASPHERE_URL = 'https://antasphere.com/?utm_source=clave'
+/** The house, with the app named as the source.
+ *
+ *  `clave-app` and not `clave`: the source names the SURFACE a visit came from,
+ *  and the house has more than one thing called Clave pointing at it — the
+ *  website and the plugin among them. Retagged deliberately, on the product
+ *  owner's ask, and worth the series break it costs: everything before this
+ *  reads `clave`, so a chart spanning the change has two lines to add up.
+ *  `tests/e2e/sidebar-foot.spec.mjs` pins the value, which is what makes this a
+ *  decision rather than a typo — change one and the other fails. */
+export const ANTASPHERE_URL = 'https://antasphere.com/?utm_source=clave-app'
 
 export function WordmarkBy(): React.ReactElement {
   return (

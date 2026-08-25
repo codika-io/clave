@@ -1,7 +1,7 @@
 /**
- * The session history (PRDCT-1738), end to end.
+ * The session history (PRDCT-1738, reframed by PRDCT-1766), end to end.
  *
- * What is really being guarded is the LINK between a closed session and the
+ * Two things are being guarded. The LINK between a closed session and the
  * group it lived in, which nothing durable used to hold: the ledger row is
  * written AT THE PLACEMENT (a tab opened in a group, then moved out and back
  * in, leaves three rows carrying three groups), and the dialog reads that
@@ -11,8 +11,15 @@
  * resume assertion taps the pty:spawn boundary (PRDCT-1677's spy): the UI
  * can look right while nothing is handed on.
  *
- * Transcripts are seeded under a private root through CLAVE_TRANSCRIPTS_ROOT,
- * never in the real ~/.claude/projects.
+ * And the UNIVERSE: the dialog opens on the whole store — every claude
+ * transcript this Mac holds plus the codex rollouts, workspace-scoped by
+ * each conversation's own cwd — with groups as mere filters over it, the
+ * footer counting by provider, the search toggles (Human and Agent on by
+ * default, Tools off) searching inside whatever is in scope, and codex rows
+ * listed, searchable and inert.
+ *
+ * Transcripts are seeded under private roots through CLAVE_TRANSCRIPTS_ROOT
+ * and CLAVE_CODEX_ROOT, never in the real ~/.claude or ~/.codex.
  */
 import {
   launchApp,
@@ -30,6 +37,7 @@ import path from 'node:path'
 const DIR = userDataDir('session-history')
 const ROOT = '/tmp/clave-e2e-history-root'
 const TRANSCRIPTS = '/tmp/clave-e2e-history-transcripts'
+const CODEX = '/tmp/clave-e2e-history-codex'
 const WS = {
   id: 'eeeeeeee-0000-4000-8000-00000000000e',
   name: 'History',
@@ -137,6 +145,57 @@ export async function run(t) {
       { type: 'last-prompt', lastPrompt: 'Now wire the CSV download' }
     ])
   )
+  // A conversation Clave never ran (no ledger row), in this workspace's
+  // root — the Everything toggle's material — and one in a FOREIGN root,
+  // which the workspace scoping must keep out even under Everything.
+  writeFileSync(
+    path.join(pdir, 'cc-outside.jsonl'),
+    transcript([
+      { type: 'user', timestamp: '2026-08-24T08:00:00.000Z', cwd: ROOT, message: { content: 'Ran from a plain terminal' } },
+      { type: 'ai-title', aiTitle: 'Outside conversation' },
+      { type: 'last-prompt', lastPrompt: 'Ran from a plain terminal' }
+    ])
+  )
+  const foreignDir = path.join(TRANSCRIPTS, projectDir('/tmp/clave-e2e-foreign-root'))
+  mkdirSync(foreignDir, { recursive: true })
+  writeFileSync(
+    path.join(foreignDir, 'cc-foreign.jsonl'),
+    transcript([
+      { type: 'user', timestamp: '2026-08-24T08:00:00.000Z', cwd: '/tmp/clave-e2e-foreign-root', message: { content: 'Foreign workspace' } },
+      { type: 'ai-title', aiTitle: 'Foreign conversation' },
+      { type: 'last-prompt', lastPrompt: 'Foreign workspace' }
+    ])
+  )
+  // A transcript with NO cwd anywhere: scoped by its store dir name, never
+  // resumable. One in our dir (listed, inert) and one in the foreign dir
+  // (never listed here).
+  writeFileSync(
+    path.join(pdir, 'cc-nocwd.jsonl'),
+    transcript([
+      { type: 'mode', mode: 'default' },
+      { type: 'ai-title', aiTitle: 'Folder unknown' },
+      { type: 'last-prompt', lastPrompt: 'no cwd anywhere' }
+    ])
+  )
+  writeFileSync(
+    path.join(foreignDir, 'cc-nocwd-foreign.jsonl'),
+    transcript([
+      { type: 'mode', mode: 'default' },
+      { type: 'ai-title', aiTitle: 'Foreign folder unknown' },
+      { type: 'last-prompt', lastPrompt: 'foreign no cwd' }
+    ])
+  )
+  // The same stem under TWO project dirs (a resume-from-a-subdir stub): one
+  // conversation, one row, the larger transcript wins.
+  writeFileSync(path.join(foreignDir, 'cc-dup.jsonl'), transcript([{ type: 'mode', mode: 'default' }]))
+  writeFileSync(
+    path.join(pdir, 'cc-dup.jsonl'),
+    transcript([
+      { type: 'user', timestamp: '2026-08-23T07:00:00.000Z', cwd: ROOT, message: { content: 'The duplicated conversation' } },
+      { type: 'ai-title', aiTitle: 'Duplicated stem' },
+      { type: 'last-prompt', lastPrompt: 'The duplicated conversation, big copy' }
+    ])
+  )
   writeFileSync(
     path.join(pdir, 'cc-beta-1.jsonl'),
     transcript([
@@ -145,8 +204,68 @@ export async function run(t) {
       { type: 'last-prompt', lastPrompt: 'Beta things' }
     ])
   )
+  // One of Clave's OWN tab-title helper calls (`claude -p` leaves a
+  // transcript like any conversation): the app's plumbing, never a row.
+  writeFileSync(
+    path.join(pdir, 'cc-titlegen.jsonl'),
+    transcript([
+      { type: 'user', timestamp: '2026-08-24T09:00:00.000Z', cwd: ROOT, message: { content: 'Generate a short 2-4 word title for this Claude Code terminal session based on what the user asked.\nRules:\n- Return ONLY the title' } },
+      { type: 'last-prompt', lastPrompt: 'Generate a short 2-4 word title for this Claude Code terminal session based on what the user asked.\nRules:\n- Return ONLY the title' }
+    ])
+  )
+  // The codex store: a user thread in this workspace's root (listed, inert),
+  // a subagent thread (an inner thread, never a row), and a user thread in a
+  // foreign root (kept out by the workspace scoping).
+  rmSync(CODEX, { recursive: true, force: true })
+  const codexDay = path.join(CODEX, '2026', '08', '25')
+  mkdirSync(codexDay, { recursive: true })
+  const codexMeta = (over) => ({
+    timestamp: '2026-08-25T08:00:00.000Z',
+    type: 'session_meta',
+    payload: {
+      id: 'cx-0001',
+      timestamp: '2026-08-25T08:00:00.000Z',
+      cwd: ROOT,
+      originator: 'codex-tui',
+      thread_source: 'user',
+      ...over
+    }
+  })
+  const codexUser = (text) => ({
+    timestamp: '2026-08-25T08:01:00.000Z',
+    type: 'response_item',
+    payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] }
+  })
+  writeFileSync(
+    path.join(codexDay, 'rollout-2026-08-25T08-00-00-cx-0001.jsonl'),
+    transcript([codexMeta({}), codexUser('Sweep the codex garden please')])
+  )
+  writeFileSync(
+    path.join(codexDay, 'rollout-2026-08-25T08-05-00-cx-sub.jsonl'),
+    transcript([codexMeta({ id: 'cx-sub', thread_source: 'subagent' }), codexUser('inner thread')])
+  )
+  writeFileSync(
+    path.join(codexDay, 'rollout-2026-08-25T08-10-00-cx-foreign.jsonl'),
+    transcript([
+      codexMeta({ id: 'cx-foreign', cwd: '/tmp/clave-e2e-foreign-root' }),
+      codexUser('foreign codex thread')
+    ])
+  )
+  // A thread whose meta carries NO cwd cannot be scoped to any workspace:
+  // unlisted, never shown in every one.
+  writeFileSync(
+    path.join(codexDay, 'rollout-2026-08-25T08-15-00-cx-nocwd.jsonl'),
+    transcript([codexMeta({ id: 'cx-nocwd', cwd: undefined }), codexUser('unattributable thread')])
+  )
+  // A second rollout carrying the SAME thread id: one conversation, one row.
+  writeFileSync(
+    path.join(codexDay, 'rollout-2026-08-25T09-00-00-cx-dup.jsonl'),
+    transcript([codexMeta({}), codexUser('the duplicated codex thread')])
+  )
 
-  const { app, win } = await launchApp(DIR, { env: { CLAVE_TRANSCRIPTS_ROOT: TRANSCRIPTS } })
+  const { app, win } = await launchApp(DIR, {
+    env: { CLAVE_TRANSCRIPTS_ROOT: TRANSCRIPTS, CLAVE_CODEX_ROOT: CODEX }
+  })
   try {
     // --- The ledger is written at the placement, whatever the mutator ---
     const created = await callMcp(app, 'createGroup', { name: 'Alpha' })
@@ -233,17 +352,13 @@ export async function run(t) {
     t.equal('the ledger name stands in when there is no transcript', state.titles[2], 'gone session')
     t.equal('a cleaned-up transcript is greyed', JSON.stringify(state.missing), JSON.stringify(['cc-alpha-gone']))
 
-    // --- Sort and filter ---
-    await win.click('[data-history-sort="opened"]')
-    const byOpened = await win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')))
-    t.equal('sorting by Opened orders by first sighting', JSON.stringify(byOpened), JSON.stringify(['cc-alpha-1', 'cc-alpha-2', 'cc-alpha-gone']))
-    await win.click('[data-history-sort="last"]')
-    await win.fill('[data-history-filter]', 'csv')
-    const filtered = await win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')))
-    t.equal('the filter matches the last prompt', JSON.stringify(filtered), JSON.stringify(['cc-alpha-2']))
+    // --- The filter, instant over the rows' own text ---
+    await win.fill('[data-history-filter]', 'zzz-no-such-thing')
+    const noMatch = await win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')))
+    t.equal('a query nothing matches empties the list instantly', JSON.stringify(noMatch), JSON.stringify([]))
     await win.fill('[data-history-filter]', '')
 
-    // --- The transcript search: each scope reads only its own kind of text ---
+    // --- The transcript search: independent toggles, Human + Agent on by default ---
     const rowsAndHits = () =>
       win.evaluate(() => ({
         rows: [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')),
@@ -251,41 +366,59 @@ export async function run(t) {
         footer: document.querySelector('[data-history-footer]')?.textContent ?? ''
       }))
     // Wait for THIS search: the debounce has to fire and the footer must
-    // settle on a hit count, or the empty state must name this scope and
-    // query — the previous search's message would otherwise be read as an
-    // answer.
-    const searched = async (scope, q) => {
+    // settle on a hit count — while a search runs it says "searching …".
+    const searched = async () => {
       await win.waitForTimeout(400)
       return until(async () => {
         const r = await rowsAndHits()
-        if (/Searching/.test(r.footer)) return null
-        const listText = await win.evaluate(() => document.querySelector('[data-history-list]')?.textContent ?? '')
-        if (/\d+ hits? in/.test(r.footer) && r.rows.length > 0) return r
-        if (listText.includes(`Nothing in the ${scope} messages matches "${q}"`)) return r
-        return null
+        return /\d+ hits? in/.test(r.footer) ? r : null
       })
     }
-    await win.click('[data-history-scope="human"]')
+    const toggleState = () =>
+      win.evaluate(() =>
+        Object.fromEntries(
+          [...document.querySelectorAll('[data-history-scope]')].map((el) => [
+            el.getAttribute('data-history-scope'),
+            el.getAttribute('data-selected') === 'true'
+          ])
+        )
+      )
+    t.equal('Human and Agent are on by default, Tools off', JSON.stringify(await toggleState()), JSON.stringify({ human: true, agent: true, tools: false }))
+
+    await win.click('[data-history-scope="agent"]')
+    t.equal('a toggle turns off on a click, the others untouched', JSON.stringify(await toggleState()), JSON.stringify({ human: true, agent: false, tools: false }))
     await win.fill('[data-history-filter]', 'csv')
-    let r = await searched('human', 'csv')
-    t.equal('Human scope: the query is found in what the human typed', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-2']))
+    let r = await searched()
+    t.equal('Human toggle: the query is found in what the human typed', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-2']))
     t.check('the row shows the matching excerpt', (r?.hits ?? []).some((h) => h?.includes('CSV download')), r?.hits)
     t.check('the footer counts the hits', /1 hit in 1 of \d+ transcripts?/.test(r?.footer ?? ''), r?.footer)
 
     await win.fill('[data-history-filter]', 'papaparse')
-    r = await searched('human', 'papaparse')
+    r = await searched()
     t.equal('a word only the agent said is not a Human hit', JSON.stringify(r?.rows), JSON.stringify([]))
     await win.click('[data-history-scope="agent"]')
-    r = await searched('agent', 'papaparse')
-    t.equal('Agent scope finds it (in the answer, never the thinking)', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-2']))
+    r = await searched()
+    t.equal('the Agent toggle back on finds it (in the answer, never the thinking)', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-2']))
     t.check('with the excerpt marked', (r?.hits ?? []).some((h) => h?.includes('papaparse')), r?.hits)
 
     await win.fill('[data-history-filter]', 'passkey-guard')
-    r = await searched('agent', 'passkey-guard')
-    t.equal('a path only in a tool input is not an Agent hit', JSON.stringify(r?.rows), JSON.stringify([]))
+    r = await searched()
+    t.equal('a path only in a tool input is neither a Human nor an Agent hit', JSON.stringify(r?.rows), JSON.stringify([]))
     await win.click('[data-history-scope="tools"]')
-    r = await searched('tools', 'passkey-guard')
-    t.equal('Tools scope finds it', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-1']))
+    r = await searched()
+    t.equal('the Tools toggle finds it', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-1']))
+    await win.click('[data-history-scope="tools"]')
+
+    // Every toggle off: the field is a plain filter, nothing is searched.
+    await win.click('[data-history-scope="human"]')
+    await win.click('[data-history-scope="agent"]')
+    await win.fill('[data-history-filter]', 'csv')
+    await win.waitForTimeout(600)
+    const plain = await rowsAndHits()
+    t.equal('with every toggle off the field still filters by the row text', JSON.stringify(plain.rows), JSON.stringify(['cc-alpha-2']))
+    t.check('and nothing was searched: the footer just counts what is shown', /· 1 shown$/.test(plain.footer), plain.footer)
+    await win.click('[data-history-scope="human"]')
+    await win.click('[data-history-scope="agent"]')
 
     // A superseded search is cancelled: the dialog sends history:search-cancel
     // with its per-window request id the moment the query changes.
@@ -304,13 +437,19 @@ export async function run(t) {
     // Bounded to the rows in scope: a word only in Beta's transcript is not
     // found while the Alpha chip is selected, and only Alpha's two
     // transcripts were read (the gone one has none).
-    await win.click('[data-history-scope="human"]')
     await win.fill('[data-history-filter]', 'Beta things')
-    r = await searched('human', 'Beta things')
+    r = await searched()
     t.equal('a group search never reads outside the group', JSON.stringify(r?.rows), JSON.stringify([]))
-    t.equal('and it read exactly the group\'s transcripts', r?.footer, '0 hits in 0 of 2 transcripts')
+    t.check('and it read exactly the group\'s transcripts', (r?.footer ?? '').includes('0 hits in 0 of 2 transcripts'), r?.footer)
 
-    await win.click('[data-history-scope="titles"]')
+    // The union: a query matching only the rows' OWN text (a group name)
+    // keeps those rows on screen while the transcript search finds nothing,
+    // and the footer says both truths.
+    await win.fill('[data-history-filter]', 'Alpha')
+    r = await searched()
+    t.equal('a row-text match shows through a hitless transcript search', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-2', 'cc-alpha-1', 'cc-alpha-gone']))
+    t.check('and the footer carries the hit count AND the shown count', /0 hits in 0 of \d+ transcripts? · 3 shown/.test(r?.footer ?? ''), r?.footer)
+
     await win.fill('[data-history-filter]', '')
     await win.click('[data-history-chip="all"]')
     const all = await win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')))
@@ -375,12 +514,15 @@ export async function run(t) {
     t.check('and leaves the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
 
     // --- Escape with a row's menu open dismisses the menu, not the dialog ---
+    // `.menu-item` narrows to an actual MENU: the message trail floats a
+    // `.menu-surface` over a live tab's terminal at all times, so the bare
+    // class no longer means "a menu is open".
     await win.click('[data-history-row="cc-alpha-1"]', { button: 'right' })
     await win.waitForTimeout(350)
-    t.check('the row menu opened above the dialog', await win.evaluate(() => !!document.querySelector('.menu-surface')))
+    t.check('the row menu opened above the dialog', await win.evaluate(() => !!document.querySelector('.menu-surface .menu-item')))
     await win.keyboard.press('Escape')
     await win.waitForTimeout(400)
-    t.check('Escape closed the menu', await win.evaluate(() => !document.querySelector('.menu-surface')))
+    t.check('Escape closed the menu', await win.evaluate(() => !document.querySelector('.menu-surface .menu-item')))
     t.check('and left the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
 
     // --- From All, a resume lands in the group the conversation last lived in ---
@@ -402,6 +544,95 @@ export async function run(t) {
       })
       t.check('its ledger rows name that group only', !!rows && rows.every((r) => r.groupId === liveGroupId), rows?.map((r) => r.groupName))
     }
+
+    // --- The whole store IS the default universe, scoped by each conversation's own cwd ---
+    await win.keyboard.press('Meta+Shift+H')
+    await win.waitForSelector('[data-history-row]', { timeout: 5000 })
+    const rowIds = () => win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')))
+    await win.waitForSelector('[data-history-row="cc-outside"]', { timeout: 10000 })
+    const allIds = await rowIds()
+    t.check('the conversation Clave never ran is listed by default', allIds.includes('cc-outside'))
+    t.check('but not one whose own cwd is another root', !allIds.includes('cc-foreign'), allIds)
+    t.check('a cwd-less transcript is scoped by its store dir: ours listed, the foreign one not', allIds.includes('cc-nocwd') && !allIds.includes('cc-nocwd-foreign'), allIds)
+    t.check("never the app's own tab-title helper calls", !allIds.includes('cc-titlegen'), allIds)
+    t.check('the codex user thread is listed beside the claude ones', allIds.includes('cx-0001'), allIds)
+    t.check('never a codex subagent thread, nor a foreign-root one', !allIds.includes('cx-sub') && !allIds.includes('cx-foreign'), allIds)
+    t.check('a cwd-less codex thread is unlisted, never shown in every workspace', !allIds.includes('cx-nocwd'), allIds)
+    t.equal('two rollouts with one thread id are ONE row', allIds.filter((id) => id === 'cx-0001').length, 1)
+    t.equal('the codex row wears its provider', await win.evaluate(() => document.querySelector('[data-history-row="cx-0001"]')?.getAttribute('data-history-provider')), 'codex')
+    t.equal('titled by its first human message', await win.evaluate(() => document.querySelector('[data-history-row="cx-0001"] .history-row-title')?.textContent), 'Sweep the codex garden please')
+    const footerCounts = await win.evaluate(() => document.querySelector('[data-history-footer]')?.textContent ?? '')
+    t.check('the footer counts by provider, literally', /^\d+ claude sessions · 1 codex ·/.test(footerCounts), footerCounts)
+    const dupEntries = await win.evaluate(() =>
+      window.electronAPI.historyList().then((r) => r.entries.filter((e) => e.claudeSessionId === 'cc-dup').length)
+    )
+    t.equal('one stem under two dirs is ONE entry from the service (not a React key collapse)', dupEntries, 1)
+    t.equal('and the larger transcript is the one shown', await win.evaluate(() => document.querySelector('[data-history-row="cc-dup"] .history-row-title')?.textContent), 'Duplicated stem')
+    t.equal('titled by its own ai-title', await win.evaluate(() => document.querySelector('[data-history-row="cc-outside"] .history-row-title')?.textContent), 'Outside conversation')
+    t.check('every closed row wears the hollow dot', await win.evaluate(() => [...document.querySelectorAll('[data-history-row]:not([data-live])')].every((el) => el.getAttribute('data-state') === 'closed')))
+
+    // --- Open: only conversations open as a tab right now ---
+    await win.click('[data-history-open]')
+    await win.waitForTimeout(300)
+    const openRows = await win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => ({ id: el.getAttribute('data-history-row'), live: el.hasAttribute('data-live') })))
+    t.check('the Open filter keeps only live rows', openRows.every((r) => r.live), openRows)
+    t.check('and the closed store-only conversation is gone', !openRows.some((r) => r.id === 'cc-outside'))
+    await win.click('[data-history-open]')
+    await win.waitForTimeout(200)
+
+    // --- Search reaches inside store-only and codex transcripts too ---
+    await win.fill('[data-history-filter]', 'plain terminal')
+    r = await searched()
+    t.check('the transcript search finds a word inside a store-only conversation', (r?.hits ?? []).some((h) => h?.includes('plain terminal')), r?.hits)
+    // A store update while the query is unchanged must not cancel the search.
+    const cancelsBefore = (await app.evaluate(() => globalThis.__e2eCancels?.length ?? 0))
+    await callMcp(app, 'rename', { target: 'session', id: tabId, name: 'renamed mid-search' })
+    await callMcp(app, 'rename', { target: 'session', id: tabId, name: 'renamed again' })
+    await win.waitForTimeout(700)
+    const cancelsAfter = (await app.evaluate(() => globalThis.__e2eCancels?.length ?? 0))
+    t.equal('an unrelated session-store update never cancels or restarts the search', cancelsAfter, cancelsBefore)
+    await win.fill('[data-history-filter]', 'codex garden')
+    r = await searched()
+    t.check('and inside a codex rollout, through the same toggles', (r?.hits ?? []).some((h) => h?.includes('codex garden')), r?.hits)
+    await win.fill('[data-history-filter]', '')
+
+    // --- A codex row is inert: listed for the record, nothing spawns ---
+    const codexBefore = (await readSpawns()).length
+    await win.click('[data-history-row="cx-0001"]')
+    await win.waitForTimeout(400)
+    t.equal('clicking a codex row spawns nothing', (await readSpawns()).length, codexBefore)
+    t.check('and leaves the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
+    await win.click('[data-history-row="cx-0001"]', { button: 'right' })
+    await win.waitForTimeout(350)
+    const codexMenu = await win.evaluate(() =>
+      [...document.querySelectorAll('.menu-surface .menu-item')].map((el) => [el.textContent?.trim(), el.getAttribute('data-disabled') !== null || el.getAttribute('aria-disabled') === 'true'])
+    )
+    t.check('its menu disables both Resume entries', codexMenu.filter(([l]) => l?.startsWith('Resume')).every(([, d]) => d), codexMenu)
+    await win.keyboard.press('Escape')
+    await win.waitForTimeout(300)
+
+    // --- A cwd-less row has nothing to resume ---
+    const inertBefore = (await readSpawns()).length
+    await win.click('[data-history-row="cc-nocwd"]')
+    await win.waitForTimeout(400)
+    t.equal('clicking a cwd-less row spawns nothing', (await readSpawns()).length, inertBefore)
+    t.check('and leaves the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
+    await win.click('[data-history-row="cc-nocwd"]', { button: 'right' })
+    await win.waitForTimeout(350)
+    const menuState = await win.evaluate(() =>
+      [...document.querySelectorAll('.menu-surface .menu-item')].map((el) => [el.textContent?.trim(), el.getAttribute('data-disabled') !== null || el.getAttribute('aria-disabled') === 'true'])
+    )
+    t.check('its menu disables both Resume entries', menuState.filter(([l]) => l?.startsWith('Resume')).every(([, d]) => d), menuState)
+    await win.keyboard.press('Escape')
+    await win.waitForTimeout(300)
+
+    // --- A store-only conversation resumes like any other ---
+    const spawnsBefore = (await readSpawns()).length
+    await win.click('[data-history-row="cc-outside"]')
+    await win.waitForTimeout(800)
+    const outsideSpawn = (await readSpawns())[spawnsBefore]
+    t.equal('clicking it resumes the outside conversation', outsideSpawn?.resumeSessionId, 'cc-outside')
+    t.equal("in the conversation's own folder", outsideSpawn?.cwd, ROOT)
 
     await win.keyboard.press('Meta+Shift+H')
     await win.waitForSelector('[data-history-dialog]', { timeout: 5000 })

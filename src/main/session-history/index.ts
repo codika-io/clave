@@ -146,3 +146,34 @@ export function foldHistory(rows: LedgerRow[]): HistoryEntry[] {
   }
   return [...byId.values()]
 }
+
+/** The opening line of Clave's OWN tab-title helper prompt — the
+ *  title-generator builds its prompt from this constant, so the two can
+ *  never drift. Those `claude -p` one-shots land in the transcript store
+ *  like any conversation, and the history must never list the app's own
+ *  plumbing as one. */
+export const TITLE_HELPER_MARKER =
+  'Generate a short 2-4 word title for this Claude Code terminal session'
+
+/** Is a store-only transcript one of Clave's own title-helper calls? Judged
+ *  by the prompt the helper itself sent, read back off the tail. */
+export function isTitleHelperConversation(lastPrompt: string | null): boolean {
+  return lastPrompt !== null && lastPrompt.trimStart().startsWith(TITLE_HELPER_MARKER)
+}
+
+/** The transcripts the ledger does not know: every stem in the store's index
+ *  that no folded entry claims — the whole-store universe's material. The `-`
+ *  project dir is Claude Code's own one-shot helpers, never a conversation. */
+export function unknownStems(
+  index: ReadonlyMap<string, ReadonlySet<string>>,
+  known: ReadonlySet<string>
+): { dir: string; stem: string }[] {
+  const out: { dir: string; stem: string }[] = []
+  for (const [dir, stems] of index) {
+    if (dir === '-') continue
+    for (const stem of stems) {
+      if (!known.has(stem)) out.push({ dir, stem })
+    }
+  }
+  return out
+}

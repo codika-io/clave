@@ -12,13 +12,20 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SessionLedger, normalizeLedgerRow, type LedgerRow } from './ledger'
-import { captureEventsToRows, foldHistory } from './index'
+import {
+  captureEventsToRows,
+  foldHistory,
+  isTitleHelperConversation,
+  TITLE_HELPER_MARKER,
+  unknownStems
+} from './index'
 import { entryInGroup } from '../../shared/history-group-match'
 import {
   indexTranscripts,
   locateTranscript,
   peekTranscript,
   PeekCache,
+  scanHead,
   scanTail,
   transcriptPath
 } from './transcript-peek'
@@ -237,6 +244,43 @@ const TAIL = [
   'this line is not json'
 ].join('\n')
 
+describe('the dir encoding', () => {
+  it("the shared copy and the contract's pinned copy agree", async () => {
+    const { encodeProjectDir } = await import('../../shared/project-dir')
+    const { transcriptProjectDirName } =
+      await import('../exchange-capture/contract/workstream-events')
+    for (const cwd of ['/tmp/proj', '/a/b.c/d-e', '/Users/x/.antasphere/labs']) {
+      expect(encodeProjectDir(cwd)).toBe(transcriptProjectDirName(cwd))
+    }
+  })
+})
+
+describe('unknownStems', () => {
+  it("lists what the ledger does not know, skipping Claude Code's own helper dir", () => {
+    const index = new Map([
+      ['-proj-a', new Set(['cc-1', 'cc-2'])],
+      ['-', new Set(['helper-1'])],
+      ['-proj-b', new Set(['cc-3'])]
+    ])
+    expect(unknownStems(index, new Set(['cc-1']))).toEqual([
+      { dir: '-proj-a', stem: 'cc-2' },
+      { dir: '-proj-b', stem: 'cc-3' }
+    ])
+    expect(unknownStems(index, new Set(['cc-1', 'cc-2', 'cc-3']))).toEqual([])
+  })
+})
+
+describe('isTitleHelperConversation', () => {
+  it("recognizes the app's own tab-title helper by the prompt it sent", () => {
+    expect(isTitleHelperConversation(`${TITLE_HELPER_MARKER} based on what the user asked.`)).toBe(
+      true
+    )
+    expect(isTitleHelperConversation(`  ${TITLE_HELPER_MARKER}…`)).toBe(true)
+    expect(isTitleHelperConversation('Generate a title for my landing page')).toBe(false)
+    expect(isTitleHelperConversation(null)).toBe(false)
+  })
+})
+
 describe('transcript peek', () => {
   it('scanTail reads the title, the last prompt and the last HUMAN timestamp', () => {
     const scan = scanTail(TAIL)
@@ -292,6 +336,84 @@ describe('transcript peek', () => {
     const peek = peekTranscript(file)
     expect(peek.title).toBe('head title')
     expect(peek.lastHumanAt).toBe('2026-08-25T08:00:00.000Z')
+  })
+
+  it('the FIRST cwd and the FIRST timestamp win, even when the break never fires', () => {
+    // Two cwd-only records (no timestamp): the early break cannot end the
+    // scan, only the first-wins guards keep /a.
+    const cwdOnly = [
+      JSON.stringify({ type: 'x', cwd: '/a' }),
+      JSON.stringify({ type: 'x', cwd: '/b' })
+    ].join('\n')
+    expect(scanHead(cwdOnly)).toEqual({ cwd: '/a', firstAt: null })
+    const tsOnly = [
+      JSON.stringify({ type: 'x', timestamp: 't1' }),
+      JSON.stringify({ type: 'x', timestamp: 't2' })
+    ].join('\n')
+    expect(scanHead(tsOnly)).toEqual({ cwd: null, firstAt: 't1' })
+  })
+
+  it('a cwd past the first 64 KB is found by the wider second head read', () => {
+    const file = join(tmp, 'latecwd.jsonl')
+    const filler = JSON.stringify({ type: 'mode', mode: 'default' })
+    const lines: string[] = []
+    for (let i = 0; i < 3000; i++) lines.push(filler) // ~90 KB of cwd-less records
+    lines.push(
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-08-25T06:00:00.000Z',
+        cwd: '/tmp/late-root',
+        message: { content: 'hi' }
+      })
+    )
+    lines.push(TAIL)
+    writeFileSync(file, lines.join('\n') + '\n')
+    expect(peekTranscript(file).cwd).toBe('/tmp/late-root')
+  })
+
+  it("scanHead reads the conversation's own cwd and start, first record wins", () => {
+    const head = [
+      JSON.stringify({ type: 'ai-title', aiTitle: 'no cwd here' }),
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-08-25T08:00:00.000Z',
+        cwd: '/tmp/real-root',
+        message: { content: 'hi' }
+      }),
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-08-25T09:00:00.000Z',
+        cwd: '/tmp/other',
+        message: { content: 'later' }
+      }),
+      'not json'
+    ].join('\n')
+    expect(scanHead(head)).toEqual({ cwd: '/tmp/real-root', firstAt: '2026-08-25T08:00:00.000Z' })
+    expect(scanHead(JSON.stringify({ cwd: 'relative-not-absolute' }))).toEqual({
+      cwd: null,
+      firstAt: null
+    })
+    expect(scanHead('')).toEqual({ cwd: null, firstAt: null })
+  })
+
+  it('peekTranscript carries the head fields alongside the tail ones', () => {
+    const file = join(tmp, 'head.jsonl')
+    writeFileSync(
+      file,
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-08-25T07:00:00.000Z',
+        cwd: '/tmp/proj',
+        message: { content: 'the ask' }
+      }) +
+        '\n' +
+        TAIL +
+        '\n'
+    )
+    const peek = peekTranscript(file)
+    expect(peek.cwd).toBe('/tmp/proj')
+    expect(peek.firstAt).toBe('2026-08-25T07:00:00.000Z')
+    expect(peek.title).toBe('Login bug fix')
   })
 
   it('a missing transcript is exists:false, never a throw', () => {

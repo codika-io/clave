@@ -1,5 +1,10 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { ptyManager, isTmuxAvailable, type PtySpawnOptions } from '../pty-manager'
+import {
+  ptyManager,
+  isTmuxAvailable,
+  scrollTmuxSessionToText,
+  type PtySpawnOptions
+} from '../pty-manager'
 import { getPreference } from './clave-file-handlers'
 import { workspaceManager } from '../workspace-manager'
 import { windowRegistry } from '../window-registry'
@@ -146,6 +151,24 @@ export function registerPtyHandlers(): void {
     if (typeof id !== 'string' || typeof claudeSessionId !== 'string') return
     ptyManager.setSessionClaudeSessionId(id, claudeSessionId)
   })
+
+  // The message trail's click-to-scroll. Who owns the tab's scrollback decides
+  // the path: a tmux-backed session is driven here (copy-mode + text search);
+  // a plain one answers `tmux: false` and the renderer scans xterm's buffer.
+  ipcMain.handle(
+    'session:scroll-to-text',
+    (_event, id: string, needle: string, fromBottom: number): { tmux: boolean } => {
+      if (typeof id !== 'string' || typeof needle !== 'string') return { tmux: false }
+      const tmuxName = ptyManager.tmuxNameOf(id)
+      if (!tmuxName) return { tmux: false }
+      const issued = scrollTmuxSessionToText(
+        tmuxName,
+        needle,
+        typeof fromBottom === 'number' ? fromBottom : 1
+      )
+      return { tmux: issued }
+    }
+  )
 
   // A session's attached web view, persisted like its display name. The shape
   // is re-picked field by field: the renderer object crosses the IPC boundary

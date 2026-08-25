@@ -10,8 +10,11 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import {
   SessionHistoryDiff,
+  dotStateOf,
+  encodeProjectDir,
   resumeTargetGroup,
   tabSessions,
+  visibleInWorkspace,
   type LayoutState
 } from './session-history-diff'
 import type { Session, SessionGroup } from '../store/session-types'
@@ -219,5 +222,53 @@ describe('resumeTargetGroup', () => {
   it('else the top level — never the ambient selection', () => {
     expect(resumeTargetGroup([{ id: 'g-old', name: 'Gamma' }], null, shown)).toBeNull()
     expect(resumeTargetGroup([], null, shown)).toBeNull()
+  })
+})
+
+describe('visibleInWorkspace', () => {
+  it('a stamped entry goes by its workspace id', () => {
+    expect(visibleInWorkspace({ workspaceId: 'ws-1', cwd: '/x' }, 'ws-1', '/root')).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: 'ws-2', cwd: '/root/x' }, 'ws-1', '/root')).toBe(false)
+  })
+  it('an unstamped one goes by its own cwd against the root', () => {
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/root/proj' }, 'ws-1', '/root')).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/root' }, 'ws-1', '/root')).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/rootling/proj' }, 'ws-1', '/root')).toBe(
+      false
+    )
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/elsewhere' }, 'ws-1', '/root')).toBe(
+      false
+    )
+  })
+  it('no workspace: everything shows, stamped or not, root known or not', () => {
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/anything' }, null, null)).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: 'ws-1', cwd: '/x' }, null, '/root')).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/elsewhere' }, 'ws-1', null)).toBe(true)
+  })
+  it('no cwd anywhere: the store dir name is the fallback, with its lossy prefix test', () => {
+    expect(encodeProjectDir('/tmp/my.root')).toBe('-tmp-my-root')
+    const e = (projectDir: string): { workspaceId: null; cwd: string; projectDir: string } => ({
+      workspaceId: null,
+      cwd: '',
+      projectDir
+    })
+    expect(visibleInWorkspace(e('-tmp-my-root'), 'ws-1', '/tmp/my.root')).toBe(true)
+    expect(visibleInWorkspace(e('-tmp-my-root-sub'), 'ws-1', '/tmp/my.root')).toBe(true)
+    expect(visibleInWorkspace(e('-tmp-other'), 'ws-1', '/tmp/my.root')).toBe(false)
+    expect(visibleInWorkspace(e('-tmp-my-rootling'), 'ws-1', '/tmp/my.root')).toBe(false)
+    // No dir either: nothing to scope by, shown rather than hidden.
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '' }, 'ws-1', '/root')).toBe(true)
+  })
+})
+
+describe('dotStateOf', () => {
+  it("speaks the sidebar's words", () => {
+    expect(dotStateOf(false, undefined)).toBe('closed')
+    expect(dotStateOf(false, 'working')).toBe('closed')
+    expect(dotStateOf(true, 'working')).toBe('working')
+    expect(dotStateOf(true, 'blocked')).toBe('blocked')
+    expect(dotStateOf(true, 'idle')).toBe('open')
+    expect(dotStateOf(true, 'done')).toBe('open')
+    expect(dotStateOf(true, undefined)).toBe('open')
   })
 })

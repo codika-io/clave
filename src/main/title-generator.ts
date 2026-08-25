@@ -4,6 +4,7 @@ import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { BrowserWindow } from 'electron'
 import { getLoginShellEnv } from './pty-manager'
+import { TITLE_HELPER_MARKER } from './session-history'
 
 // --- Session tracking ---
 
@@ -296,7 +297,7 @@ function generateTitle(sessionId: string, userMessage: string): Promise<string> 
 }
 
 function runTitleGeneration(sessionId: string, userMessage: string): Promise<string> {
-  const prompt = `Generate a short 2-4 word title for this Claude Code terminal session based on what the user asked.
+  const prompt = `${TITLE_HELPER_MARKER} based on what the user asked.
 Rules:
 - Return ONLY the title, no quotes, no explanation
 - Be specific about what the user is working on

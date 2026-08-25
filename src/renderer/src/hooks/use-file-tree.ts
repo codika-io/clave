@@ -29,6 +29,41 @@ function applyIgnored(nodes: TreeNode[], ignoredSet: Set<string>): TreeNode[] {
   })
 }
 
+/** Which of these paths git ignores. */
+async function resolveIgnored(rootCwd: string, nodes: TreeNode[]): Promise<Set<string>> {
+  const paths = nodes.map((n) => n.path)
+  if (paths.length === 0) return new Set()
+  const ignored = await window.electronAPI?.gitCheckIgnored(rootCwd, paths)
+  return new Set(ignored ?? [])
+}
+
+/**
+ * Decide a fresh listing's ignored flags BEFORE it is handed to React.
+ *
+ * These used to be filled in afterwards, by a second pass that re-rendered the
+ * rows once git answered — so every row arrived at full strength and then went
+ * grey a moment later. On a folder of build output that is the whole listing
+ * flashing black. The status is part of what a row IS, not an embellishment on
+ * it, so it is resolved with the listing and the row is painted once.
+ *
+ * The parent's flag short-circuits it: git does not descend into an ignored
+ * directory, so everything inside one is ignored too. That saves the round trip
+ * exactly where the listing is longest — an ignored output or cache directory
+ * used to ask git about every path inside it to be told what its parent already
+ * knew. (The very worst offenders never arrive here at all: node_modules, .git
+ * and friends are dropped from every listing by IGNORED_DIRECTORIES in main.)
+ */
+async function withIgnored(
+  rootCwd: string,
+  children: TreeNode[],
+  parentIgnored: boolean
+): Promise<TreeNode[]> {
+  if (parentIgnored) return children.map((c) => ({ ...c, ignored: true }))
+  const set = await resolveIgnored(rootCwd, children)
+  if (set.size === 0) return children.map((c) => ({ ...c, ignored: false }))
+  return children.map((c) => ({ ...c, ignored: set.has(c.path) }))
+}
+
 /** Batch-check which paths are gitignored, then mark them in the tree */
 async function enrichWithIgnored(
   rootCwd: string,
@@ -137,6 +172,10 @@ export function useFileTree(cwd: string | null) {
   const [filter, setFilter] = useState('')
   const [allFiles, setAllFiles] = useState<string[] | null>(null)
   const expansionCache = useRef(new Map<string, Set<string>>())
+  /** The current tree, readable from callbacks that must not depend on it —
+   *  loadChildren is memoised on [] so it can recurse without re-creating. */
+  const nodesRef = useRef<TreeNode[]>([])
+  nodesRef.current = rootNodes
 
   // Load root directory when cwd changes
   useEffect(() => {
@@ -167,10 +206,11 @@ export function useFileTree(cwd: string | null) {
           children: e.type === 'directory' ? undefined : undefined
         }))
 
-        setRootNodes(nodes)
-
-        // Check gitignore status (async, non-blocking)
-        enrichWithIgnored(cwd, nodes, setRootNodes)
+        // Same rule at the root: decided before it is drawn. The root itself is
+        // the folder you opened, so nothing above it can be ignored.
+        const marked = await withIgnored(cwd, nodes, false)
+        if (cancelled) return
+        setRootNodes(marked)
 
         // Auto-expand previously expanded dirs
         for (const node of nodes) {
@@ -303,13 +343,20 @@ export function useFileTree(cwd: string | null) {
           depth: 0
         }))
 
+        // Resolved BEFORE the rows are handed over, so a row is painted once
+        // rather than at full strength and then grey. Costs one git call that
+        // used to happen a beat later anyway — and none at all inside an
+        // already-ignored directory.
+        const marked = await withIgnored(
+          rootCwd,
+          children,
+          !!findNode(nodesRef.current, dirPath)?.ignored
+        )
+
         setRootNodes((prev) => {
           const nodes = currentNodes ?? prev
-          return updateNodeChildren(nodes, dirPath, children)
+          return updateNodeChildren(nodes, dirPath, marked)
         })
-
-        // Check gitignore status for children (async, non-blocking)
-        enrichWithIgnored(rootCwd, children, setRootNodes, dirPath)
 
         // Recursively load children for subdirectories that were previously expanded
         for (const child of children) {
@@ -385,8 +432,7 @@ export function useFileTree(cwd: string | null) {
           loading: false,
           depth: 0
         }))
-        setRootNodes(nodes)
-        enrichWithIgnored(cwd, nodes, setRootNodes)
+        setRootNodes(await withIgnored(cwd, nodes, false))
         for (const node of nodes) {
           if (node.type === 'directory' && expanded.has(node.path)) {
             loadChildren(cwd, node.path, nodes)

@@ -23,6 +23,12 @@ import { transcriptProjectDirName } from '../exchange-capture/contract/workstrea
 export interface TranscriptPeek {
   exists: boolean
   path: string
+  /** The conversation's working directory, read from the transcript's own
+   *  head records — the project DIR NAME is a lossy encoding, the records
+   *  carry the truth. Null when the head holds none. */
+  cwd: string | null
+  /** The first timestamped record: when the conversation started. */
+  firstAt: string | null
   /** `ai-title`, when the tail carries one. */
   title: string | null
   /** `last-prompt`, when the tail carries one. */
@@ -37,6 +43,8 @@ export interface TranscriptPeek {
 
 const TAIL_FIRST = 64 * 1024
 const TAIL_SECOND = 1024 * 1024
+const HEAD_FIRST = 64 * 1024
+const HEAD_SECOND = 1024 * 1024
 
 /** The transcript's expected location under a projects root. Same encoding
  *  the export handlers and the capture use (`transcriptProjectDirName`). */
@@ -148,6 +156,54 @@ interface TailScan {
   lastHumanAt: string | null
 }
 
+interface HeadScan {
+  cwd: string | null
+  firstAt: string | null
+}
+
+/** Scan head text for the conversation's own cwd and start time: the first
+ *  record carrying each wins. Stops as soon as both are known. */
+export function scanHead(text: string): HeadScan {
+  const out: HeadScan = { cwd: null, firstAt: null }
+  for (const line of text.split('\n')) {
+    if (out.cwd !== null && out.firstAt !== null) break
+    if (line === '') continue
+    if (!line.includes('"cwd"') && !line.includes('"timestamp"')) continue
+    let entry: any
+    try {
+      entry = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (out.cwd === null && typeof entry?.cwd === 'string' && entry.cwd.startsWith('/')) {
+      out.cwd = entry.cwd
+    }
+    if (out.firstAt === null && typeof entry?.timestamp === 'string') {
+      out.firstAt = entry.timestamp
+    }
+  }
+  return out
+}
+
+function readHead(filePath: string, bytes: number): string {
+  const fd = fs.openSync(filePath, 'r')
+  try {
+    const stat = fs.fstatSync(fd)
+    const length = Math.min(bytes, stat.size)
+    const buf = Buffer.alloc(length)
+    fs.readSync(fd, buf, 0, length, 0)
+    let text = buf.toString('utf-8')
+    // Cut the trailing partial line unless the read covered the whole file.
+    if (length < stat.size) {
+      const nl = text.lastIndexOf('\n')
+      text = nl === -1 ? '' : text.slice(0, nl)
+    }
+    return text
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
 /** Scan tail text for the three signals. Last occurrence wins for each. */
 export function scanTail(text: string): TailScan {
   const out: TailScan = { title: null, lastPrompt: null, lastHumanAt: null }
@@ -184,6 +240,8 @@ export function peekTranscript(filePath: string | null): TranscriptPeek {
     return {
       exists: false,
       path: '',
+      cwd: null,
+      firstAt: null,
       title: null,
       lastPrompt: null,
       lastHumanAt: null,
@@ -198,6 +256,8 @@ export function peekTranscript(filePath: string | null): TranscriptPeek {
     return {
       exists: false,
       path: filePath,
+      cwd: null,
+      firstAt: null,
       title: null,
       lastPrompt: null,
       lastHumanAt: null,
@@ -218,9 +278,25 @@ export function peekTranscript(filePath: string | null): TranscriptPeek {
       // The first read answered; the second is best-effort.
     }
   }
+  let head: HeadScan = { cwd: null, firstAt: null }
+  try {
+    head = scanHead(readHead(filePath, HEAD_FIRST))
+    // A transcript can open with dozens of KB of cwd-less records (mode,
+    // permission-mode, injected context); on the real store 7% carried no
+    // cwd in the first 16 KB and a handful none in the first 64 KB. One
+    // wider read recovers all but the files that truly carry none.
+    if (head.cwd === null && tail.size > HEAD_FIRST) {
+      const wider = scanHead(readHead(filePath, HEAD_SECOND))
+      head = { cwd: wider.cwd, firstAt: head.firstAt ?? wider.firstAt }
+    }
+  } catch {
+    // The tail answered; the head is best-effort.
+  }
   return {
     exists: true,
     path: filePath,
+    cwd: head.cwd,
+    firstAt: head.firstAt,
     title: scan.title,
     lastPrompt: scan.lastPrompt,
     lastHumanAt: scan.lastHumanAt,

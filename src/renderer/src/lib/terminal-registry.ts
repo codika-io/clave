@@ -21,3 +21,19 @@ export function unregisterTerminal(sessionId: string, terminal: Terminal): void 
 export function getRegisteredTerminal(sessionId: string): Terminal | undefined {
   return terminals.get(sessionId)
 }
+
+declare global {
+  interface Window {
+    /** E2E seam, read-only: a hidden test window never syncs xterm's DOM
+     *  viewport, so the specs assert a scroll against the MODEL's position —
+     *  the same "assert Clave-internal state" rule as focus under
+     *  --test-no-activate. */
+    __claveViewportY?: (sessionId: string) => number | null
+  }
+}
+if (typeof window !== 'undefined') {
+  window.__claveViewportY = (sessionId: string): number | null => {
+    const t = terminals.get(sessionId)
+    return t ? t.buffer.active.viewportY : null
+  }
+}
