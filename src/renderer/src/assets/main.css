@@ -1679,9 +1679,18 @@ body,
   gap: 2px;
   min-width: 0;
 }
-.history-chips--sort {
+/* The search's scope toggles, right-aligned and quieter than the group
+   chips: a whispered label, then Human / Agent / Tools as on/off switches. */
+.history-chips--toggles {
   flex-shrink: 0;
+  flex-wrap: nowrap;
   margin-left: auto;
+}
+.history-toggles-label {
+  margin-right: 0.25rem;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
 }
 /* One conversation: title line (dot, title, group, time), then what the
    human last said. Inset and rounded like a menu row, never full-bleed. */

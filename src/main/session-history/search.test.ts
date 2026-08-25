@@ -10,7 +10,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { excerptAround, scopedTexts, searchLines, searchTranscripts } from './search'
+import {
+  codexScopedTexts,
+  excerptAround,
+  scopedTexts,
+  searchLines,
+  searchTranscripts
+} from './search'
 
 let tmp: string
 beforeEach(() => {
@@ -96,6 +102,71 @@ describe('scopedTexts', () => {
   })
 })
 
+const CODEX_ENTRIES = [
+  {
+    type: 'response_item',
+    timestamp: 'c1',
+    payload: {
+      type: 'message',
+      role: 'user',
+      content: [{ type: 'input_text', text: 'fix the login page' }]
+    }
+  },
+  {
+    type: 'response_item',
+    timestamp: 'c2',
+    payload: {
+      type: 'message',
+      role: 'user',
+      content: [
+        { type: 'input_text', text: '<environment_context>login env</environment_context>' }
+      ]
+    }
+  },
+  {
+    type: 'response_item',
+    timestamp: 'c3',
+    payload: {
+      type: 'message',
+      role: 'assistant',
+      content: [{ type: 'output_text', text: 'The login flow is fixed.' }]
+    }
+  },
+  {
+    type: 'response_item',
+    timestamp: 'c4',
+    payload: { type: 'function_call', name: 'shell', arguments: '{"cmd":"grep login"}' }
+  },
+  {
+    type: 'response_item',
+    timestamp: 'c5',
+    payload: { type: 'custom_tool_call_output', output: 'login.ts: 3 matches' }
+  }
+]
+
+describe('codexScopedTexts', () => {
+  it('human = codex user input_text, injected context excluded', () => {
+    expect(codexScopedTexts(CODEX_ENTRIES[0], 'human')).toEqual(['fix the login page'])
+    expect(codexScopedTexts(CODEX_ENTRIES[1], 'human')).toEqual([])
+    expect(codexScopedTexts(CODEX_ENTRIES[2], 'human')).toEqual([])
+  })
+  it('agent = codex assistant output_text', () => {
+    expect(codexScopedTexts(CODEX_ENTRIES[2], 'agent')).toEqual(['The login flow is fixed.'])
+    expect(codexScopedTexts(CODEX_ENTRIES[0], 'agent')).toEqual([])
+  })
+  it('tools = function/custom calls and their outputs', () => {
+    expect(codexScopedTexts(CODEX_ENTRIES[3], 'tools')).toEqual(['shell {"cmd":"grep login"}'])
+    expect(codexScopedTexts(CODEX_ENTRIES[4], 'tools')).toEqual(['login.ts: 3 matches'])
+    expect(codexScopedTexts(CODEX_ENTRIES[0], 'tools')).toEqual([])
+  })
+  it('the two extractors never cross: claude lines are nothing to codex and back', () => {
+    for (const scope of ['human', 'agent', 'tools'] as const) {
+      for (const e of ENTRIES) expect(codexScopedTexts(e, scope)).toEqual([])
+      for (const e of CODEX_ENTRIES) expect(scopedTexts(e, scope)).toEqual([])
+    }
+  })
+})
+
 describe('excerptAround', () => {
   it('windows the first case-insensitive match and marks the cuts', () => {
     const long = `${'a'.repeat(200)} The LOGIN page ${'b'.repeat(200)}`
@@ -111,28 +182,65 @@ describe('excerptAround', () => {
 
 describe('searchLines', () => {
   it('finds each scope in its own entries, once per entry, with timestamps', async () => {
-    const human = await searchLines(LINES, 'cc', 'login', 'human', 10)
+    const human = await searchLines(LINES, 'cc', 'login', ['human'], 10)
     expect(human.hits.map((h) => h.ts)).toEqual(['t1'])
-    const agent = await searchLines(LINES, 'cc', 'login', 'agent', 10)
+    const agent = await searchLines(LINES, 'cc', 'login', ['agent'], 10)
     // t9 has TWO matching blocks and yields ONE hit: once per entry.
     expect(agent.hits.map((h) => h.ts)).toEqual(['t4', 't9'])
-    const tools = await searchLines(LINES, 'cc', 'login', 'tools', 10)
+    const tools = await searchLines(LINES, 'cc', 'login', ['tools'], 10)
     expect(tools.hits.map((h) => h.ts)).toEqual(['t5', 't6'])
     expect(tools.hits[0].excerpt).toContain('/src/auth/login.ts')
   })
   it('is case-insensitive and honours the per-session cap', async () => {
-    const r = await searchLines(LINES, 'cc', 'LOGIN', 'tools', 1)
+    const r = await searchLines(LINES, 'cc', 'LOGIN', ['tools'], 1)
     expect(r.hits).toHaveLength(1)
   })
   it('an abort stops between lines and is reported', async () => {
     const ac = new AbortController()
     ac.abort()
-    const r = await searchLines(LINES, 'cc', 'login', 'human', 10, ac.signal)
+    const r = await searchLines(LINES, 'cc', 'login', ['human'], 10, ac.signal)
     expect(r).toEqual({ hits: [], aborted: true })
   })
   it('skips lines that are not JSON', async () => {
-    const r = await searchLines(['login but not json', LINES[0]], 'cc', 'login', 'human', 10)
+    const r = await searchLines(['login but not json', LINES[0]], 'cc', 'login', ['human'], 10)
     expect(r.hits).toHaveLength(1)
+  })
+  it('toggled scopes search together in one pass, one hit per line', async () => {
+    const r = await searchLines(LINES, 'cc', 'login', ['human', 'agent'], 10)
+    expect(r.hits.map((h) => [h.ts, h.scope])).toEqual([
+      ['t1', 'human'],
+      ['t4', 'agent'],
+      ['t9', 'agent']
+    ])
+    // A line matching several toggles yields ONE hit, first toggle wins.
+    const twoScoped = JSON.stringify({
+      type: 'assistant',
+      timestamp: 'tx',
+      message: {
+        content: [
+          { type: 'text', text: 'Reading the login module.' },
+          { type: 'tool_use', name: 'Read', input: { file_path: '/src/login.ts' } }
+        ]
+      }
+    })
+    const both = await searchLines([twoScoped], 'cc', 'login', ['agent', 'tools'], 10)
+    expect(both.hits.map((h) => h.scope)).toEqual(['agent'])
+    const reversed = await searchLines([twoScoped], 'cc', 'login', ['tools', 'agent'], 10)
+    expect(reversed.hits.map((h) => h.scope)).toEqual(['tools'])
+  })
+  it('no toggles on = nothing searched', async () => {
+    const r = await searchLines(LINES, 'cc', 'login', [], 10)
+    expect(r.hits).toEqual([])
+  })
+  it('codex lines answer to the same toggles', async () => {
+    const lines = CODEX_ENTRIES.map((e) => JSON.stringify(e))
+    const r = await searchLines(lines, 'cx', 'login', ['human', 'agent', 'tools'], 10)
+    expect(r.hits.map((h) => [h.ts, h.scope])).toEqual([
+      ['c1', 'human'],
+      ['c3', 'agent'],
+      ['c4', 'tools'],
+      ['c5', 'tools']
+    ])
   })
 })
 
@@ -152,7 +260,7 @@ describe('searchTranscripts (files)', () => {
         { claudeSessionId: 'gone', path: join(tmp, 'gone.jsonl') },
         { claudeSessionId: 'B', path: b }
       ],
-      { query: 'login', scope: 'human', onHits: (h) => batches.push(h.length) }
+      { query: 'login', scopes: ['human'], onHits: (h) => batches.push(h.length) }
     )
     expect(r.hits.map((h) => h.claudeSessionId)).toEqual(['A', 'B'])
     expect(batches).toEqual([1, 1])
@@ -167,7 +275,7 @@ describe('searchTranscripts (files)', () => {
         { claudeSessionId: 'A', path: a },
         { claudeSessionId: 'B', path: a }
       ],
-      { query: 'login', scope: 'tools', maxHits: 2 }
+      { query: 'login', scopes: ['tools'], maxHits: 2 }
     )
     expect(r.hits).toHaveLength(2)
     expect(r.truncated).toBe(true)
@@ -177,13 +285,13 @@ describe('searchTranscripts (files)', () => {
     writeFileSync(a, LINES.join('\n') + '\n')
     const r = await searchTranscripts([{ claudeSessionId: 'A', path: a }], {
       query: '  ',
-      scope: 'human'
+      scopes: ['human']
     })
     expect(r).toEqual({ hits: [], filesSearched: 0, truncated: false })
     // And the query is trimmed before matching.
     const t = await searchTranscripts([{ claudeSessionId: 'A', path: a }], {
       query: '  login  ',
-      scope: 'human'
+      scopes: ['human']
     })
     expect(t.hits).toHaveLength(1)
   })

@@ -23,39 +23,33 @@ import type {
 } from '../../../../preload/index.d'
 
 /**
- * The session history (PRDCT-1738): every Claude conversation that lived in
- * this workspace's tabs, past and present, one row each — Claude Code's own
- * title for it, the group it sat in, when the human last spoke, what they
- * said — sorted by that last human message. A group chip narrows the list to
- * the sessions that lived in that group, matched by id OR name (group ids
- * are minted at every launch; the name is how you think of the group).
- * Click resumes the conversation into the selected group, or focuses the tab
- * when it is still open; a session whose transcript Claude Code has cleaned
- * up stays listed, greyed, with nothing to resume.
+ * The session history (PRDCT-1738, reframed by PRDCT-1766): EVERY
+ * conversation this Mac holds, one row each, scoped to the active workspace
+ * by each conversation's own folder — the whole claude transcript store plus
+ * the codex one, whether or not Clave ever ran it. The footer counts them by
+ * provider, literally. Groups are FILTERS over that universe: a chip narrows
+ * the list to the sessions that lived in that group (matched by id OR name —
+ * group ids are minted at every launch), which the ledger knows. Click
+ * resumes a claude conversation into the selected group, or focuses the tab
+ * when it is still open; codex rows are listed and searchable but inert (no
+ * resume exists today); a transcript Claude Code cleaned up stays listed,
+ * greyed, with nothing to resume.
  *
- * The field filters the rows instantly (title, last prompt, folder, group).
- * Switching its scope to Human, Agent or Tools turns it into a search INSIDE
- * the transcripts of the rows in scope — streamed from the main process,
- * cancelled the moment the query or the scope changes — and each row then
- * shows the excerpts that matched.
+ * One field does both depths: it filters the rows instantly (title, last
+ * prompt, folder, group) and — when at least one scope toggle is on — also
+ * searches INSIDE the transcripts of the rows in scope, streamed from the
+ * main process, cancelled the moment the query or a toggle changes. Human
+ * and Agent are on by default, Tools off; each is an independent toggle. A
+ * row that matched only by text shows the excerpts that matched.
  *
  * Opened from a group's context menu (that group preselected) or ⌘⇧H (All).
  * Same surface as the group picker: a scrim, a panel, a search field in the
- * header. The panel is keyed on the store's open counter, so every open is a
- * fresh read with the preset chip and an empty filter.
+ * header, ONE quiet row of controls. The panel is keyed on the store's open
+ * counter, so every open is a fresh read with the preset chip and an empty
+ * filter.
  */
 
-type SortKey = 'last' | 'opened' | 'title'
-type Scope = 'titles' | HistorySearchScope
-
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'last', label: 'Last message' },
-  { key: 'opened', label: 'Opened' },
-  { key: 'title', label: 'Title' }
-]
-
-const SCOPES: { key: Scope; label: string; title: string }[] = [
-  { key: 'titles', label: 'Titles', title: 'Filter the rows: title, last message, folder, group' },
+const TOGGLES: { key: HistorySearchScope; label: string; title: string }[] = [
   { key: 'human', label: 'Human', title: 'Search what you typed, inside the transcripts' },
   { key: 'agent', label: 'Agent', title: 'Search what the agent answered' },
   { key: 'tools', label: 'Tools', title: 'Search the tools it called: names, inputs, results' }
@@ -126,10 +120,10 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   const [entries, setEntries] = useState<HistoryListEntry[] | null>(null)
   const [groupId, setGroupId] = useState<string | null>(presetGroupId)
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<SortKey>('last')
-  const [scope, setScope] = useState<Scope>('titles')
-  /** Everything: the whole transcript store, not only what the ledger knows. */
-  const [all, setAll] = useState(false)
+  /** The search's independent scope toggles: Human and Agent on by default. */
+  const [scopes, setScopes] = useState<ReadonlySet<HistorySearchScope>>(
+    () => new Set<HistorySearchScope>(['human', 'agent'])
+  )
   /** Open tabs only. */
   const [openOnly, setOpenOnly] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; entry: HistoryListEntry } | null>(null)
@@ -145,12 +139,11 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   >({ status: 'idle' })
   const requestRef = useRef<string | null>(null)
 
-  // One read per open (and per Everything toggle): the ledger and the
-  // transcripts moved since last time.
+  // One read per open: the ledger, the whole claude store, the codex store.
   useEffect(() => {
     let cancelled = false
     window.electronAPI
-      .historyList(all ? { all: true } : undefined)
+      .historyList()
       .then((r) => {
         if (!cancelled) setEntries(r.entries)
       })
@@ -161,7 +154,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     return () => {
       cancelled = true
     }
-  }, [all])
+  }, [])
 
   // Escape closes the row's context menu when one is open (Radix dismisses
   // it on the same key), and only otherwise the dialog.
@@ -221,12 +214,12 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   )
 
   // The rows in SCOPE: workspace and group, before any text. This is what a
-  // transcript search reads, and what the title filter narrows.
+  // transcript search reads, and what the field narrows.
   const inScope = useMemo(() => {
     if (!entries) return []
     return entries.filter((e) => {
-      // A stamped entry by its workspace; an unstamped one (the seed, an
-      // Everything transcript) by its own cwd against the workspace root.
+      // A stamped entry by its workspace; an unstamped one (the seed, a
+      // store-only transcript) by its own cwd against the workspace root.
       if (!visibleInWorkspace(e, activeWorkspaceId, activeRoot)) return false
       if (selectedGroup && !entryInGroup(e.groups, selectedGroup)) return false
       if (openOnly && !liveStates.has(e.claudeSessionId)) return false
@@ -234,12 +227,28 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     })
   }, [entries, selectedGroup, activeWorkspaceId, activeRoot, openOnly, liveStates])
 
+  /** The literal counts line's numbers, over the rows in scope. */
+  const counts = useMemo(() => {
+    let claude = 0
+    let codex = 0
+    let antigravity = 0
+    for (const e of inScope) {
+      if (e.provider === 'codex') codex++
+      else if (e.provider === 'antigravity') antigravity++
+      else claude++
+    }
+    return { claude, codex, antigravity }
+  }, [inScope])
+
   const trimmed = query.trim()
-  const searching = scope !== 'titles' && trimmed.length >= SEARCH_MIN_CHARS
+  const searching = scopes.size > 0 && trimmed.length >= SEARCH_MIN_CHARS
   const searchIds = useMemo(
     () => inScope.filter((e) => e.transcript.exists).map((e) => e.claudeSessionId),
     [inScope]
   )
+  /** The toggles as one stable string, so the search effect restarts only
+   *  when the SET changes, never on a re-render. */
+  const scopesKey = useMemo(() => [...scopes].sort().join(','), [scopes])
 
   // Hits arrive per file; only the current request's land.
   useEffect(() => {
@@ -254,8 +263,9 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     })
   }, [])
 
-  // Start (debounced) or stop the transcript search as the query, the scope
-  // or the rows in scope change; a change mid-search cancels the running one.
+  // Start (debounced) or stop the transcript search as the query, the
+  // toggles or the rows in scope change; a change mid-search cancels the
+  // running one.
   useEffect(() => {
     const cancelRunning = (): void => {
       if (requestRef.current) {
@@ -265,6 +275,8 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     }
     if (!searching) {
       cancelRunning()
+      setHits(new Map())
+      setSearchState({ status: 'idle' })
       return
     }
     const timer = setTimeout(() => {
@@ -274,7 +286,12 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
       setHits(new Map())
       setSearchState({ status: 'searching' })
       window.electronAPI
-        .historySearch({ requestId, query: trimmed, scope, claudeSessionIds: searchIds })
+        .historySearch({
+          requestId,
+          query: trimmed,
+          scopes: scopesKey.split(',') as HistorySearchScope[],
+          claudeSessionIds: searchIds
+        })
         .then((done) => {
           if (requestRef.current !== requestId) return
           setSearchState({ status: 'done', files: done.filesSearched, truncated: done.truncated })
@@ -289,37 +306,34 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
       cancelRunning()
     }
     // searchIds changes identity only when the scope's membership changes.
-  }, [searching, trimmed, scope, searchIds])
+  }, [searching, trimmed, scopesKey, searchIds])
+
+  /** The instant text match: title, last prompt, folder, group names. */
+  const instantMatch = useCallback((e: HistoryListEntry, q: string): boolean => {
+    if (!q) return true
+    return [e.title, e.name, e.transcript.lastPrompt ?? '', e.cwd, ...e.groups.map((g) => g.name)]
+      .join('\n')
+      .toLowerCase()
+      .includes(q)
+  }, [])
 
   const rows = useMemo(() => {
     const q = trimmed.toLowerCase()
-    const list = searching
-      ? inScope.filter((e) => hits.has(e.claudeSessionId))
-      : inScope.filter((e) => {
-          if (!q) return true
-          const hay = [
-            e.title,
-            e.name,
-            e.transcript.lastPrompt ?? '',
-            e.cwd,
-            ...e.groups.map((g) => g.name)
-          ]
-            .join('\n')
-            .toLowerCase()
-          return hay.includes(q)
-        })
-    const cmp: Record<SortKey, (a: HistoryListEntry, b: HistoryListEntry) => number> = {
-      last: (a, b) => b.lastHumanAt.localeCompare(a.lastHumanAt),
-      opened: (a, b) => b.firstSeenAt.localeCompare(a.firstSeenAt),
-      title: (a, b) => a.title.localeCompare(b.title)
-    }
-    return list.sort(cmp[sort])
-  }, [inScope, trimmed, searching, hits, sort])
+    // Typing narrows instantly by the row's own text; a running transcript
+    // search ADDS the rows whose insides matched. With every toggle off the
+    // field is a plain filter.
+    const list = inScope.filter(
+      (e) => instantMatch(e, q) || (searching && hits.has(e.claudeSessionId))
+    )
+    return list.sort((a, b) => b.lastHumanAt.localeCompare(a.lastHumanAt))
+  }, [inScope, trimmed, searching, hits, instantMatch])
 
   const resume = useCallback(
     (entry: HistoryListEntry, dangerousMode: boolean) => {
-      // Nothing to resume (transcript gone or folder unknown, tab not
-      // open): the dialog stays, the row's own title says why.
+      // Nothing to resume: a codex conversation (no resume exists), or a
+      // claude one whose transcript or folder is gone while its tab is not
+      // open. The dialog stays, the row's own title says why.
+      if (entry.provider !== 'claude') return
       if (!liveStates.has(entry.claudeSessionId) && (!entry.transcript.exists || !entry.cwd)) return
       closeHistory()
       void resumeHistoryEntry(entry, { groupId: selectedGroup?.id ?? null, dangerousMode })
@@ -330,18 +344,26 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   const latestGroupName = (e: HistoryListEntry): string | null =>
     e.groups.length > 0 ? e.groups[e.groups.length - 1].name || null : null
 
+  const countsLine = ((): string => {
+    const parts = [`${counts.claude} claude session${counts.claude === 1 ? '' : 's'}`]
+    parts.push(`${counts.codex} codex`)
+    if (counts.antigravity > 0) parts.push(`${counts.antigravity} antigravity`)
+    return parts.join(' · ')
+  })()
+
   const footer = ((): string => {
     if (!entries) return ' '
     if (searching) {
       if (searchState.status === 'searching')
-        return `Searching ${searchIds.length} transcript${searchIds.length === 1 ? '' : 's'}…`
+        return `${countsLine} · searching ${searchIds.length} transcript${searchIds.length === 1 ? '' : 's'}…`
       if (searchState.status === 'done') {
         const n = [...hits.values()].reduce((a, b) => a + b.length, 0)
-        return `${n} hit${n === 1 ? '' : 's'} in ${rows.length} of ${searchState.files} transcript${searchState.files === 1 ? '' : 's'}${searchState.truncated ? ' · stopped at the cap' : ''}`
+        return `${countsLine} · ${n} hit${n === 1 ? '' : 's'} in ${hits.size} of ${searchState.files} transcript${searchState.files === 1 ? '' : 's'}${searchState.truncated ? ' · stopped at the cap' : ''}`
       }
-      return ' '
+      return countsLine
     }
-    return `${rows.length} of ${inScope.length} session${inScope.length === 1 ? '' : 's'} · click to resume, ⌥-click to skip permissions`
+    if (trimmed) return `${countsLine} · ${rows.length} shown`
+    return `${countsLine} · click to resume, ⌥-click to skip permissions`
   })()
 
   return createPortal(
@@ -368,11 +390,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && rows[0]) resume(rows[0], e.altKey)
               }}
-              placeholder={
-                scope === 'titles'
-                  ? 'Filter by title, last message, folder…'
-                  : `Search ${scope === 'human' ? 'what you said' : scope === 'agent' ? 'what the agent said' : 'tool calls and results'}…`
-              }
+              placeholder="Search every conversation…"
               className="input-compact input-compact-icon-right w-full"
               data-history-filter
             />
@@ -407,21 +425,6 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                   {g.name}
                 </button>
               ))}
-            </div>
-            <div className="history-chips history-chips--sort" aria-label="Which conversations">
-              <button
-                type="button"
-                className="group-switcher-chip"
-                data-history-all
-                data-selected={all ? 'true' : undefined}
-                title="Every Claude Code conversation on this Mac, Clave or not — scoped to this workspace by each conversation's own folder"
-                onClick={() => {
-                  setAll((v) => !v)
-                  setEntries(null)
-                }}
-              >
-                Everything
-              </button>
               <button
                 type="button"
                 className="group-switcher-chip"
@@ -433,34 +436,28 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                 Open
               </button>
             </div>
-          </div>
-          <div className="history-controls-row">
-            <div className="history-chips" role="radiogroup" aria-label="Search in">
-              {SCOPES.map((s) => (
+            <div className="history-chips history-chips--toggles" aria-label="Search inside">
+              <span className="history-toggles-label">Search in</span>
+              {TOGGLES.map((t) => (
                 <button
-                  key={s.key}
+                  key={t.key}
                   type="button"
+                  role="switch"
+                  aria-checked={scopes.has(t.key)}
                   className="group-switcher-chip"
-                  data-history-scope={s.key}
-                  data-selected={s.key === scope ? 'true' : undefined}
-                  title={s.title}
-                  onClick={() => setScope(s.key)}
+                  data-history-scope={t.key}
+                  data-selected={scopes.has(t.key) ? 'true' : undefined}
+                  title={t.title}
+                  onClick={() =>
+                    setScopes((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(t.key)) next.delete(t.key)
+                      else next.add(t.key)
+                      return next
+                    })
+                  }
                 >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-            <div className="history-chips history-chips--sort" role="radiogroup" aria-label="Sort">
-              {SORTS.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  className="group-switcher-chip"
-                  data-history-sort={s.key}
-                  data-selected={s.key === sort ? 'true' : undefined}
-                  onClick={() => setSort(s.key)}
-                >
-                  {s.label}
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -473,11 +470,11 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
           ) : rows.length === 0 ? (
             <p className="py-10 text-center text-xs text-text-tertiary">
               {entries.length === 0
-                ? 'No sessions yet. Claude sessions appear here as they run.'
+                ? 'No conversations yet. Sessions appear here as they run.'
                 : searching && searchState.status === 'searching'
                   ? 'Searching…'
                   : searching
-                    ? `Nothing in the ${scope} messages matches "${trimmed}".`
+                    ? `Nothing matches "${trimmed}".`
                     : selectedGroup
                       ? `No sessions in "${selectedGroup.name}"${query ? ' match' : ''}.`
                       : 'No matching sessions.'}
@@ -487,6 +484,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
               const live = liveStates.has(e.claudeSessionId)
               const dotState = dotStateOf(live, liveStates.get(e.claudeSessionId))
               const missing = !e.transcript.exists
+              const inert = e.provider !== 'claude'
               const prompt = excerpt(e.transcript.lastPrompt)
               const gname =
                 latestGroupName(e) ??
@@ -498,6 +496,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                   type="button"
                   className="history-row"
                   data-history-row={e.claudeSessionId}
+                  data-history-provider={e.provider}
                   data-live={live ? 'true' : undefined}
                   data-state={dotState}
                   data-missing={missing ? 'true' : undefined}
@@ -508,11 +507,13 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                     setMenu({ x: ev.clientX, y: ev.clientY, entry: e })
                   }}
                   title={
-                    missing
-                      ? 'Transcript no longer on disk — Claude Code cleaned it up; nothing to resume.'
-                      : live
-                        ? 'Open — click to focus the tab'
-                        : `Resume in ${selectedGroup?.name ?? 'the sidebar'} · ⌥-click to skip permissions`
+                    inert
+                      ? `A ${e.provider} conversation — listed for the record; resume exists for claude sessions only.`
+                      : missing
+                        ? 'Transcript no longer on disk — Claude Code cleaned it up; nothing to resume.'
+                        : live
+                          ? 'Open — click to focus the tab'
+                          : `Resume in ${selectedGroup?.name ?? 'the sidebar'} · ⌥-click to skip permissions`
                   }
                 >
                   <span className="flex items-center gap-2 min-w-0">
@@ -522,12 +523,13 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                       aria-label={dotState}
                     />
                     <span className="history-row-title truncate">{e.title}</span>
+                    {inert && <span className="history-row-group flex-shrink-0">{e.provider}</span>}
                     {gname && <span className="history-row-group truncate">{gname}</span>}
                     <span className="history-row-time tabular-nums">
                       {relativeTime(e.lastHumanAt)}
                     </span>
                   </span>
-                  {searching ? (
+                  {searching && rowHits.length > 0 ? (
                     rowHits.slice(0, HITS_PER_ROW).map((h, i) => (
                       <span key={i} className="history-hit truncate" data-history-hit>
                         <Highlight text={h.excerpt} query={trimmed} />
@@ -572,14 +574,18 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
               label: 'Resume',
               icon: <PlayIcon className="w-3.5 h-3.5" />,
               disabled:
-                (!menu.entry.transcript.exists || !menu.entry.cwd) &&
-                !liveStates.has(menu.entry.claudeSessionId),
+                menu.entry.provider !== 'claude' ||
+                ((!menu.entry.transcript.exists || !menu.entry.cwd) &&
+                  !liveStates.has(menu.entry.claudeSessionId)),
               onClick: () => resume(menu.entry, false)
             },
             {
               label: 'Resume (skip permissions)',
               icon: <ShieldExclamationIcon className="w-3.5 h-3.5" />,
-              disabled: !menu.entry.transcript.exists || !menu.entry.cwd,
+              disabled:
+                menu.entry.provider !== 'claude' ||
+                !menu.entry.transcript.exists ||
+                !menu.entry.cwd,
               onClick: () => resume(menu.entry, true)
             },
             {

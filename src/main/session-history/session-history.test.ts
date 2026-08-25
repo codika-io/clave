@@ -12,7 +12,13 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SessionLedger, normalizeLedgerRow, type LedgerRow } from './ledger'
-import { captureEventsToRows, foldHistory, unknownStems } from './index'
+import {
+  captureEventsToRows,
+  foldHistory,
+  isTitleHelperConversation,
+  TITLE_HELPER_MARKER,
+  unknownStems
+} from './index'
 import { entryInGroup } from '../../shared/history-group-match'
 import {
   indexTranscripts,
@@ -261,6 +267,17 @@ describe('unknownStems', () => {
       { dir: '-proj-b', stem: 'cc-3' }
     ])
     expect(unknownStems(index, new Set(['cc-1', 'cc-2', 'cc-3']))).toEqual([])
+  })
+})
+
+describe('isTitleHelperConversation', () => {
+  it("recognizes the app's own tab-title helper by the prompt it sent", () => {
+    expect(isTitleHelperConversation(`${TITLE_HELPER_MARKER} based on what the user asked.`)).toBe(
+      true
+    )
+    expect(isTitleHelperConversation(`  ${TITLE_HELPER_MARKER}…`)).toBe(true)
+    expect(isTitleHelperConversation('Generate a title for my landing page')).toBe(false)
+    expect(isTitleHelperConversation(null)).toBe(false)
   })
 })
 

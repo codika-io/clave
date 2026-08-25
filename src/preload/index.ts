@@ -56,8 +56,10 @@ const electronAPI = {
 
   setSessionDisplayName: (id: string, displayName: string | null, userRenamed: boolean) =>
     ipcRenderer.invoke('session:set-display-name', id, displayName, userRenamed),
-  setSessionViewRecord: (id: string, view: { url: string; title?: string; command?: string; cwd?: string } | null) =>
-    ipcRenderer.invoke('session:set-view', id, view),
+  setSessionViewRecord: (
+    id: string,
+    view: { url: string; title?: string; command?: string; cwd?: string } | null
+  ) => ipcRenderer.invoke('session:set-view', id, view),
 
   setSessionWorkspace: (id: string, workspaceId: string | null) =>
     ipcRenderer.invoke('session:set-workspace', id, workspaceId),
@@ -112,7 +114,11 @@ const electronAPI = {
 
   onMcpCommand: (
     callback: (msg: { requestId: string; command: string; payload: unknown }) => void
-  ) => createIpcListener<[{ requestId: string; command: string; payload: unknown }]>('mcp:command', callback),
+  ) =>
+    createIpcListener<[{ requestId: string; command: string; payload: unknown }]>(
+      'mcp:command',
+      callback
+    ),
 
   mcpRespond: (response: { requestId: string; ok: boolean; result?: unknown; error?: string }) =>
     ipcRenderer.send('mcp:response', response),
@@ -150,11 +156,11 @@ const electronAPI = {
   // Session history (PRDCT-1738): the ledger row is fire-and-forget like the
   // capture above; the list is the dialog's one read.
   historyStamp: (row: unknown) => ipcRenderer.send('history:stamp', row),
-  historyList: (options?: { all?: boolean }) => ipcRenderer.invoke('history:list', options),
+  historyList: () => ipcRenderer.invoke('history:list'),
   historySearch: (request: {
     requestId: string
     query: string
-    scope: string
+    scopes: string[]
     claudeSessionIds: string[]
   }) => ipcRenderer.invoke('history:search', request),
   historySearchCancel: (requestId: string) => ipcRenderer.send('history:search-cancel', requestId),
@@ -487,8 +493,7 @@ const electronAPI = {
     ipcRenderer.invoke('clave:trust-root', root) as Promise<void>,
   untrustWorkspaceRoot: (root: string) =>
     ipcRenderer.invoke('clave:untrust-root', root) as Promise<void>,
-  listTrustedRoots: () =>
-    ipcRenderer.invoke('clave:list-trusted-roots') as Promise<string[]>,
+  listTrustedRoots: () => ipcRenderer.invoke('clave:list-trusted-roots') as Promise<string[]>,
 
   // ── Extensions (inventory of installed plugins/skills/MCP + management) ──
   extensionsGetInventory: (configDir?: string) =>

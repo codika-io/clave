@@ -4,10 +4,14 @@ import * as readline from 'readline'
 /**
  * The scoped transcript search (PRDCT-1738, slice 2): a substring hunt
  * through the transcripts of the sessions the dialog currently lists, one
- * line at a time, in one of three scopes — what the HUMAN said, what the
- * AGENT answered, or the TOOLS it called (a tool_use's name and input, a
- * tool_result's content). Bounded by construction: the caller names the
- * files (a group's worth, tens of megabytes), never the whole store.
+ * line at a time, in any subset of three scopes — what the HUMAN said, what
+ * the AGENT answered, or the TOOLS it called (a tool_use's name and input, a
+ * tool_result's content). The scopes are independent toggles (PRDCT-1766):
+ * one pass reads each line once and tries every requested scope on it.
+ * Codex rollout files are searched through the same scopes — their record
+ * shapes differ, so each line is offered to both extractors and the wrong
+ * one returns nothing. Bounded by construction: the caller names the files
+ * (a workspace's worth), never a store it did not list.
  *
  * Streaming, cancellable, capped: each file is read through `readline` so a
  * multi-megabyte transcript costs memory for one line; the search stops at
@@ -37,7 +41,7 @@ export interface SearchFile {
 
 export interface SearchOptions {
   query: string
-  scope: SearchScope
+  scopes: SearchScope[]
   maxHits?: number
   maxHitsPerSession?: number
   signal?: AbortSignal
@@ -123,6 +127,36 @@ function safeJson(v: unknown): string {
   }
 }
 
+/** The searchable texts of one CODEX rollout record in one scope. A claude
+ *  entry (or anything else) returns nothing: the two extractors are both
+ *  offered every line and the wrong one is a cheap no. */
+export function codexScopedTexts(entry: any, scope: SearchScope): string[] {
+  if (!entry || typeof entry !== 'object' || entry.type !== 'response_item') return []
+  const p = entry.payload
+  if (!p || typeof p !== 'object') return []
+  switch (scope) {
+    case 'human': {
+      if (p.type !== 'message' || p.role !== 'user') return []
+      return textBlocks(p.content, 'input_text').filter((t) => t.trim() !== '' && !isInjected(t))
+    }
+    case 'agent': {
+      if (p.type !== 'message' || p.role !== 'assistant') return []
+      return textBlocks(p.content, 'output_text')
+    }
+    case 'tools': {
+      if (p.type === 'function_call' || p.type === 'custom_tool_call') {
+        const args =
+          typeof p.arguments === 'string' ? p.arguments : safeJson(p.arguments ?? p.input)
+        return [`${typeof p.name === 'string' ? p.name : ''} ${args}`]
+      }
+      if (p.type === 'function_call_output' || p.type === 'custom_tool_call_output') {
+        return [typeof p.output === 'string' ? p.output : safeJson(p.output)]
+      }
+      return []
+    }
+  }
+}
+
 /** A window of text around the first case-insensitive match, whitespace
  *  collapsed, with ellipses where it was cut. Null when no match. */
 export function excerptAround(text: string, query: string): string | null {
@@ -141,7 +175,7 @@ export async function searchLines(
   lines: AsyncIterable<string> | Iterable<string>,
   claudeSessionId: string,
   query: string,
-  scope: SearchScope,
+  scopes: SearchScope[],
   limit: number,
   signal?: AbortSignal
 ): Promise<{ hits: SearchHit[]; aborted: boolean }> {
@@ -159,16 +193,20 @@ export async function searchLines(
     } catch {
       continue
     }
-    for (const text of scopedTexts(entry, scope)) {
-      const excerpt = excerptAround(text, query)
-      if (excerpt === null) continue
-      hits.push({
-        claudeSessionId,
-        ts: typeof entry.timestamp === 'string' ? entry.timestamp : null,
-        scope,
-        excerpt
-      })
-      break
+    // One hit per line at most, stamped with the first scope that matched:
+    // a line is one record, however many toggles are on.
+    line_scopes: for (const scope of scopes) {
+      for (const text of [...scopedTexts(entry, scope), ...codexScopedTexts(entry, scope)]) {
+        const excerpt = excerptAround(text, query)
+        if (excerpt === null) continue
+        hits.push({
+          claudeSessionId,
+          ts: typeof entry.timestamp === 'string' ? entry.timestamp : null,
+          scope,
+          excerpt
+        })
+        break line_scopes
+      }
     }
   }
   return { hits, aborted: false }
@@ -184,7 +222,8 @@ export async function searchTranscripts(
   const all: SearchHit[] = []
   let filesSearched = 0
   const query = options.query.trim()
-  if (query === '') return { hits: [], filesSearched: 0, truncated: false }
+  if (query === '' || options.scopes.length === 0)
+    return { hits: [], filesSearched: 0, truncated: false }
   for (const file of files) {
     if (options.signal?.aborted) return { hits: all, filesSearched, truncated: true }
     if (all.length >= maxHits) return { hits: all, filesSearched, truncated: true }
@@ -202,7 +241,7 @@ export async function searchTranscripts(
         rl,
         file.claudeSessionId,
         query,
-        options.scope,
+        options.scopes,
         Math.min(perSession, maxHits - all.length),
         options.signal
       )

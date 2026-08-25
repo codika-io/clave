@@ -45,6 +45,8 @@ export interface HistorySearchHit {
 
 export interface HistoryListEntry {
   source: 'ledger' | 'transcript'
+  /** Which CLI's conversation this is; resume exists for claude only. */
+  provider: 'claude' | 'codex' | 'antigravity'
   projectDir?: string
   claudeSessionId: string
   sessionId: string
@@ -488,15 +490,13 @@ export interface ElectronAPI {
   /** Session history (PRDCT-1738). A ledger row per placement change,
    *  fire-and-forget; the folded list for the dialog. */
   historyStamp: (row: HistoryLedgerRow) => void
-  historyList: (options?: {
-    all?: boolean
-  }) => Promise<{ entries: HistoryListEntry[]; skippedLines: number }>
+  historyList: () => Promise<{ entries: HistoryListEntry[]; skippedLines: number }>
   /** A scoped substring search through the named sessions' transcripts;
    *  hits stream through `onHistorySearchHits`, the promise carries the end. */
   historySearch: (request: {
     requestId: string
     query: string
-    scope: HistorySearchScope
+    scopes: HistorySearchScope[]
     claudeSessionIds: string[]
   }) => Promise<{ requestId: string; filesSearched: number; truncated: boolean }>
   historySearchCancel: (requestId: string) => void

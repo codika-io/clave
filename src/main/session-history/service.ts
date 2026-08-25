@@ -3,13 +3,20 @@ import { homedir } from 'os'
 import { app } from 'electron'
 import { CaptureStore } from '../exchange-capture/store'
 import { SessionLedger, normalizeLedgerRow } from './ledger'
-import { captureEventsToRows, foldHistory, unknownStems, type HistoryEntry } from './index'
+import {
+  captureEventsToRows,
+  foldHistory,
+  isTitleHelperConversation,
+  unknownStems,
+  type HistoryEntry
+} from './index'
 import {
   indexTranscripts,
   locateTranscript,
   PeekCache,
   type TranscriptPeek
 } from './transcript-peek'
+import { CodexCache, codexRoot, listCodexSessions } from './codex'
 import { searchTranscripts, type SearchHit, type SearchScope } from './search'
 
 /**
@@ -24,6 +31,13 @@ import { searchTranscripts, type SearchHit, type SearchScope } from './search'
  * the file is still on disk (Claude Code cleans transcripts after
  * `cleanupPeriodDays`, 30 by default; a cleaned session stays listed, greyed).
  *
+ * The list's universe is the WHOLE transcript store (PRDCT-1766), not only
+ * what the ledger knows: every unclaimed stem under the claude store is
+ * synthesized into an entry, and the codex store's rollout files join with
+ * `provider: 'codex'` — listed, counted and searchable, resumable only where
+ * a resume exists (claude today). The ledger's contribution is the group
+ * placements the chips filter by.
+ *
  * The transcripts root is `~/.claude/projects` unless `CLAVE_TRANSCRIPTS_ROOT`
  * names another directory — the E2E harness's way of seeding transcripts
  * without touching the real store. Peeks are cached per (path, size, mtime)
@@ -33,8 +47,11 @@ import { searchTranscripts, type SearchHit, type SearchScope } from './search'
 
 export interface HistoryListEntry extends HistoryEntry {
   /** Where the entry comes from: the ledger (a conversation Clave ran), or
-   *  a transcript the store holds that Clave never saw ("Everything"). */
+   *  a transcript a store holds that Clave never saw. */
   source: 'ledger' | 'transcript'
+  /** Which CLI's conversation this is — the counts line's word. Resume
+   *  exists for claude only today; the others are listed and searchable. */
+  provider: 'claude' | 'codex' | 'antigravity'
   /** The store dir a synthesized entry was found under — the workspace
    *  fallback when its transcript carries no cwd at all. */
   projectDir?: string
@@ -50,6 +67,7 @@ export interface HistoryListEntry extends HistoryEntry {
 let ledger: SessionLedger | null = null
 let capture: CaptureStore | null = null
 const peekCache = new PeekCache()
+const codexCache = new CodexCache()
 /** Transcript path per session as of the last list — what a search reads. */
 const pathById = new Map<string, string | null>()
 const searches = new Map<string, AbortController>()
@@ -82,7 +100,7 @@ export function stampHistory(input: unknown): void {
   }
 }
 
-export function listHistory(options?: { all?: boolean }): {
+export function listHistory(): {
   entries: HistoryListEntry[]
   skippedLines: number
 } {
@@ -92,7 +110,7 @@ export function listHistory(options?: { all?: boolean }): {
   const index = indexTranscripts(root)
   const entries = foldHistory([...seed, ...rows])
     // Nothing to resume without a Claude transcript: `claude agents` tabs
-    // and the other CLIs never make a row.
+    // and the other CLIs never make a ledger row.
     .filter((e) => e.mode === 'claude')
     .map((e): HistoryListEntry => {
       const file = locateTranscript(root, e.cwd, e.claudeSessionId, index)
@@ -101,61 +119,109 @@ export function listHistory(options?: { all?: boolean }): {
       return {
         ...e,
         source: 'ledger' as const,
+        provider: 'claude' as const,
         transcript,
         title: transcript.title ?? e.name,
         lastHumanAt:
           transcript.lastHumanAt ?? e.lastSeenAt ?? transcript.modifiedAt ?? e.firstSeenAt
       }
     })
-  if (options?.all) {
-    const known = new Set(entries.map((e) => e.claudeSessionId))
-    // One stem can live under TWO project dirs (`claude --resume` run from a
-    // subdirectory writes a stub beside the real transcript): same
-    // conversation, one row — the larger file wins, and it is also the one
-    // the search reads.
-    const synthAt = new Map<string, number>()
-    for (const { dir, stem } of unknownStems(index, known)) {
-      const file = path.join(root, dir, `${stem}.jsonl`)
-      const transcript = peekCache.get(file)
-      if (!transcript.exists) continue
-      const existingAt = synthAt.get(stem)
-      if (existingAt !== undefined) {
-        if (entries[existingAt].transcript.sizeBytes >= transcript.sizeBytes) continue
-        entries.splice(existingAt, 1)
-        synthAt.delete(stem)
-        for (const [k, v] of synthAt) if (v > existingAt) synthAt.set(k, v - 1)
-      }
-      pathById.set(stem, file)
-      const firstSeenAt = transcript.firstAt ?? transcript.modifiedAt ?? ''
-      const lastHumanAt = transcript.lastHumanAt ?? transcript.modifiedAt ?? firstSeenAt
-      synthAt.set(stem, entries.length)
-      entries.push({
-        projectDir: dir,
-        claudeSessionId: stem,
-        sessionId: '',
-        name: '',
-        cwd: transcript.cwd ?? '',
-        mode: 'claude',
-        model: null,
-        workspaceId: null,
-        groups: [],
-        firstSeenAt,
-        lastSeenAt: lastHumanAt,
-        closedAt: null,
-        source: 'transcript',
-        transcript,
-        title: transcript.title ?? `Conversation ${stem.slice(0, 8)}`,
-        lastHumanAt
-      })
+  const known = new Set(entries.map((e) => e.claudeSessionId))
+  // One stem can live under TWO project dirs (`claude --resume` run from a
+  // subdirectory writes a stub beside the real transcript): same
+  // conversation, one row — the larger file wins, and it is also the one
+  // the search reads.
+  const synthAt = new Map<string, number>()
+  for (const { dir, stem } of unknownStems(index, known)) {
+    const file = path.join(root, dir, `${stem}.jsonl`)
+    const transcript = peekCache.get(file)
+    if (!transcript.exists) continue
+    // The app's own tab-title helper calls (`claude -p`) leave transcripts
+    // too; its own plumbing is never a conversation.
+    if (isTitleHelperConversation(transcript.lastPrompt)) continue
+    const existingAt = synthAt.get(stem)
+    if (existingAt !== undefined) {
+      if (entries[existingAt].transcript.sizeBytes >= transcript.sizeBytes) continue
+      entries.splice(existingAt, 1)
+      synthAt.delete(stem)
+      for (const [k, v] of synthAt) if (v > existingAt) synthAt.set(k, v - 1)
     }
+    pathById.set(stem, file)
+    const firstSeenAt = transcript.firstAt ?? transcript.modifiedAt ?? ''
+    const lastHumanAt = transcript.lastHumanAt ?? transcript.modifiedAt ?? firstSeenAt
+    synthAt.set(stem, entries.length)
+    entries.push({
+      projectDir: dir,
+      claudeSessionId: stem,
+      sessionId: '',
+      name: '',
+      cwd: transcript.cwd ?? '',
+      mode: 'claude',
+      model: null,
+      workspaceId: null,
+      groups: [],
+      firstSeenAt,
+      lastSeenAt: lastHumanAt,
+      closedAt: null,
+      source: 'transcript',
+      provider: 'claude',
+      transcript,
+      title: transcript.title ?? `Conversation ${stem.slice(0, 8)}`,
+      lastHumanAt
+    })
+  }
+  // The codex store: one row per user thread (subagent threads folded away
+  // by the scanner), titled by the first human message, inert to resume.
+  for (const c of listCodexSessions(codexRoot(), codexCache)) {
+    if (known.has(c.id)) continue
+    pathById.set(c.id, c.path)
+    const firstSeenAt = c.firstAt ?? c.modifiedAt ?? ''
+    const lastAt = c.modifiedAt ?? firstSeenAt
+    entries.push({
+      claudeSessionId: c.id,
+      sessionId: '',
+      name: '',
+      cwd: c.cwd ?? '',
+      mode: 'codex',
+      model: null,
+      workspaceId: null,
+      groups: [],
+      firstSeenAt,
+      lastSeenAt: lastAt,
+      closedAt: null,
+      source: 'transcript',
+      provider: 'codex',
+      transcript: {
+        exists: true,
+        path: c.path,
+        cwd: c.cwd,
+        firstAt: c.firstAt,
+        title: null,
+        lastPrompt: null,
+        lastHumanAt: null,
+        modifiedAt: c.modifiedAt,
+        sizeBytes: c.sizeBytes
+      },
+      title: firstLine(c.firstUserText) ?? `Codex conversation ${c.id.slice(0, 8)}`,
+      lastHumanAt: lastAt
+    })
   }
   return { entries, skippedLines }
+}
+
+/** The first line of a codex opening message, cut to a title's length. */
+function firstLine(text: string | null): string | null {
+  if (!text) return null
+  const one = text.split('\n')[0].replace(/\s+/g, ' ').trim()
+  if (!one) return null
+  return one.length > 80 ? `${one.slice(0, 79)}…` : one
 }
 
 export interface SearchRequest {
   requestId: string
   query: string
-  scope: SearchScope
+  /** The toggled scopes, any subset; an empty set searches nothing. */
+  scopes: SearchScope[]
   /** The sessions in the dialog's current scope; unknown ids and sessions
    *  whose transcript is gone are skipped. */
   claudeSessionIds: string[]
@@ -184,11 +250,13 @@ export async function searchHistory(
   const r = input as Partial<SearchRequest> | null
   const requestId = typeof r?.requestId === 'string' ? r.requestId : ''
   const query = typeof r?.query === 'string' ? r.query : ''
-  const scope = typeof r?.scope === 'string' && SCOPES.has(r.scope) ? r.scope : null
+  const scopes = Array.isArray(r?.scopes)
+    ? (r.scopes.filter((s): s is SearchScope => typeof s === 'string' && SCOPES.has(s)) ?? [])
+    : []
   const ids = Array.isArray(r?.claudeSessionIds)
     ? r.claudeSessionIds.filter((id): id is string => typeof id === 'string')
     : []
-  if (!requestId || !scope) return { requestId, filesSearched: 0, truncated: false }
+  if (!requestId || scopes.length === 0) return { requestId, filesSearched: 0, truncated: false }
   cancelSearch(requestId)
   const ac = new AbortController()
   searches.set(requestId, ac)
@@ -198,7 +266,7 @@ export async function searchHistory(
       .filter((f): f is { claudeSessionId: string; path: string } => f.path !== null)
     const result = await searchTranscripts(files, {
       query,
-      scope,
+      scopes,
       signal: ac.signal,
       onHits: (hits) => {
         if (!ac.signal.aborted) onHits({ requestId, hits })
