@@ -188,6 +188,14 @@
      off-black themes a black hairline is invisible, and on a lifted ground it
      is a black outline drawn around the one row you are looking at. */
   --selected-ring: rgba(0, 0, 0, 0.12);
+  /* The disclosure chevron on a tree row. Derived from the icon colour rather
+     than set per theme, so it follows every skin for free — and a step back
+     from it, because the chevron is not an icon: it says which way a row is
+     facing, which the row's indentation and its open folder already say too.
+     At the icon's full strength it read as a third mark competing with the
+     folder and the name, hardest in light mode where the icon ink is a solid
+     mid grey rather than a translucent white. */
+  --tree-chevron-color: color-mix(in srgb, var(--sidebar-icon-color) 60%, transparent);
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
   /* The ONE modal scrim (dialogs, the group picker) and the two overlay shadow
@@ -2253,6 +2261,62 @@ body,
   height: 1px;
   flex-shrink: 0;
   background-color: var(--rule-color);
+}
+
+/* A row ARRIVING in the file tree unfolds rather than appearing. Opening a
+   folder used to insert its children between one frame and the next: the rows
+   below jumped down their combined height, and nothing connected the jump to
+   the folder you clicked. The rows now grow from nothing, fade up, and settle —
+   160ms, which is under the threshold where an animation starts costing you
+   time and over the one where it reads as a glitch.
+
+   Height and opacity only, and only on the way IN. Height because that is what
+   makes the list below GLIDE instead of jump, which was the actual complaint;
+   nothing here transforms, so a long tree opening a deep folder is still one
+   cheap composite. On the way in only, because a flat list unmounts its rows
+   the instant a folder closes — animating that needs the tree to keep rows it
+   has already dropped, and a state machine that can hold rows past their own
+   removal is a lot of machinery to spend on the direction nobody complained
+   about. Closing stays instant.
+
+   Keyed on mount, which is exactly right: React keys these rows by path, so a
+   row that was already on screen when you typed in the filter does not
+   re-animate, and only rows genuinely arriving do. */
+@keyframes tree-row-in {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--panel-row-h);
+    opacity: 1;
+  }
+}
+@keyframes tree-rule-in {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: 1px;
+    opacity: 1;
+  }
+}
+[data-tree-item] {
+  overflow: hidden;
+  animation: tree-row-in 160ms var(--ease-out-expo);
+}
+.tree-rule[data-file-tree-rule] {
+  animation: tree-rule-in 160ms var(--ease-out-expo);
+}
+/* A reader who has asked the OS for less motion gets the old instant insert,
+   which is the honest answer: there is nothing to convey here that the layout
+   does not already say. */
+@media (prefers-reduced-motion: reduce) {
+  [data-tree-item],
+  .tree-rule[data-file-tree-rule] {
+    animation: none;
+  }
 }
 
 /* ── Git sync badges ── */

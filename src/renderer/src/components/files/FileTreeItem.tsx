@@ -100,7 +100,7 @@ export function FileTreeItem({
             width="10"
             height="10"
             viewBox="0 0 12 12"
-            className="flex-shrink-0 animate-spin text-[color:var(--sidebar-icon-color)]"
+            className="flex-shrink-0 animate-spin text-[color:var(--tree-chevron-color)]"
           >
             <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeDasharray="20" strokeDashoffset="10" />
           </svg>
@@ -110,7 +110,7 @@ export function FileTreeItem({
             height="10"
             viewBox="0 0 10 10"
             fill="none"
-            className={`flex-shrink-0 text-[color:var(--sidebar-icon-color)] transition-transform duration-100 ${node.expanded ? 'rotate-90' : ''}`}
+            className={`flex-shrink-0 text-[color:var(--tree-chevron-color)] transition-transform duration-100 ${node.expanded ? 'rotate-90' : ''}`}
           >
             <path d="M3 1.5L7 5L3 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
