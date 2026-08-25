@@ -60,6 +60,19 @@ const AGENT_LABELS: Record<AgentKind, string> = {
   codex: 'Codex'
 }
 
+/** The caret's menu drops straight DOWN from the panel — the chevron says so —
+ *  and its rows line up with the panel's own controls rather than with the
+ *  caret. A .menu-item's icon sits 13px inside the menu (1px border + 4px
+ *  padding + 8px item padding) against 11px for a .launcher-btn's icon inside
+ *  the panel (1px border + 2px row padding + 8px button padding), so the menu's
+ *  left edge lands 2px left of the panel's. Measured at open time, because the
+ *  caret's own x moves with the agent label's width. */
+const MENU_ICON_INSET = 2
+
+/** Caret bottom → panel bottom is 3px (a 28px control centred in a 34px panel);
+ *  the other 6px is the gap the menu leaves under the panel. */
+const MENU_SIDE_OFFSET = 9
+
 /** The sentence the button's tooltip says, so the remembered setup is legible
  *  without launching it — the whole point of remembering is that one click is
  *  enough, which only works if you can see what that click will do. */
@@ -89,7 +102,9 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
   const [menuOpen, setMenuOpen] = useState(false)
   const [agentPickerOpen, setAgentPickerOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [menuAlignOffset, setMenuAlignOffset] = useState(0)
   const caretRef = useRef<HTMLButtonElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
 
   const agents = useAgentStore((s) => s.agents)
   const locations = useLocationStore((s) => s.locations)
@@ -114,6 +129,17 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
     multiProfile && (setup.kind === 'claude' || setup.kind === 'claude-agents')
       ? profiles.find((p) => p.id === (setup.claudeProfileId ?? selectedProfileId))?.label
       : undefined
+
+  /** Opening measures the panel so the menu hangs off its left edge, not the
+   *  caret's — see MENU_ICON_INSET. */
+  const openMenu = useCallback((open: boolean) => {
+    if (open && panelRef.current && caretRef.current) {
+      const panel = panelRef.current.getBoundingClientRect()
+      const caret = caretRef.current.getBoundingClientRect()
+      setMenuAlignOffset(Math.round(panel.left - caret.left - MENU_ICON_INSET))
+    }
+    setMenuOpen(open)
+  }, [])
 
   const run = useCallback(async (request: Parameters<typeof launchSession>[0]) => {
     setBusy(true)
@@ -178,7 +204,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
 
   return (
     <div className="relative">
-      <div className="launcher-panel">
+      <div className="launcher-panel" ref={panelRef}>
         <div className="launcher-row">
           <button
             disabled={busy}
@@ -208,7 +234,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
                 />
               )}
             </button>
-            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenu open={menuOpen} onOpenChange={openMenu}>
               <DropdownMenuTrigger asChild>
                 <button
                   ref={(el) => {
@@ -226,10 +252,10 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
               <DropdownMenuContent
                 animated
                 open={menuOpen}
-                side="right"
+                side="bottom"
                 align="start"
-                sideOffset={16}
-                alignOffset={6}
+                sideOffset={MENU_SIDE_OFFSET}
+                alignOffset={menuAlignOffset}
               >
                 {hasRemoteLocations && <DropdownMenuLabel>This Mac</DropdownMenuLabel>}
 
