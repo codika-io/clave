@@ -68,8 +68,21 @@
   --radius-xl: 0.625rem;    /* 10px (was 12px) — cards, groups, pinned */
   --radius-2xl: 0.875rem;   /* 14px (was 16px) */
 
+  /* The radius of a control sitting INSIDE a --radius-xl panel — every button,
+     chip, tab and field in the toolbar, the sidebar's launcher and switcher, and
+     the side panel's bars. It is not a taste value, it is the nesting arithmetic:
+     concentric corners only look concentric when the inner radius is the outer
+     one minus the gap between them, and that gap is 3px everywhere here (the
+     panel's own 1px border plus the 2px it insets its contents by). 10 − 3 = 7.
+     At --radius-lg the inner corner was a pixel too tight and the control read
+     as squarer than the box around it — visible on every hover fill in the app.
+     Controls that do NOT sit in such a panel (dialog buttons, settings inputs,
+     menu rows) stay on --radius-lg: they have no outer corner to answer to. */
+  --radius-control: 0.4375rem; /* 7px — a control inside a --radius-xl panel */
+
   /* Control height scale — single source of truth for row/button/input heights.
      Components reference these via var(--control-h-*) so a change here propagates everywhere. */
+  --control-h-xs: 1.25rem; /* 20px — row-level affordances (a file row's stage/discard) */
   --control-h-sm: 1.5rem;  /* 24px — extra compact */
   --control-h-md: 1.75rem; /* 28px — default rows, buttons, compact inputs */
   --control-h-lg: 2rem;    /* 32px — inputs */
@@ -170,6 +183,19 @@
   --sidebar-item-text: rgba(255, 255, 255, 0.78);
   /* Resting color for sidebar tab icons — more opaque than --text-tertiary */
   --sidebar-icon-color: rgba(255, 255, 255, 0.6);
+  /* The 0.5px ring under a selected row or group card. A token because it was
+     literal rgba(0,0,0,0.12) in the rules, which no theme could reach — on the
+     off-black themes a black hairline is invisible, and on a lifted ground it
+     is a black outline drawn around the one row you are looking at. */
+  --selected-ring: rgba(0, 0, 0, 0.12);
+  /* The disclosure chevron on a tree row. Derived from the icon colour rather
+     than set per theme, so it follows every skin for free — and a step back
+     from it, because the chevron is not an icon: it says which way a row is
+     facing, which the row's indentation and its open folder already say too.
+     At the icon's full strength it read as a third mark competing with the
+     folder and the name, hardest in light mode where the icon ink is a solid
+     mid grey rather than a translucent white. */
+  --tree-chevron-color: color-mix(in srgb, var(--sidebar-icon-color) 60%, transparent);
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
   /* The ONE modal scrim (dialogs, the group picker) and the two overlay shadow
@@ -217,12 +243,16 @@
   --surface-400: #c9c8c5;
   --border-color: rgba(0, 0, 0, 0.1);
   --border-subtle-color: rgba(0, 0, 0, 0.05);
-  --rule-color: rgba(0, 0, 0, 0.035);
+  /* Lighter than the dark theme's equivalent alpha on purpose: black on a warm
+     off-white reads harder than white on off-black, so the same number is a
+     darker line here. Kept a shade under what the eye would call a border. */
+  --rule-color: rgba(0, 0, 0, 0.022);
   --text-primary: #1b1b18;
   --text-secondary: #6c6c65;
   --text-tertiary: #9b9b94;
   --sidebar-item-text: #45453f;
   --sidebar-icon-color: #6c6c65;
+  --selected-ring: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.22);
   --scrim-color: rgb(27 27 24 / 0.25);
@@ -279,6 +309,7 @@
   --text-tertiary: #9b9590;
   --sidebar-item-text: #4d4840;
   --sidebar-icon-color: #756e66;
+  --selected-ring: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb: rgba(120, 100, 80, 0.18);
   --scrollbar-thumb-hover: rgba(120, 100, 80, 0.3);
   --scrim-color: rgb(43 34 24 / 0.25);
@@ -317,6 +348,103 @@
   --cm-tag: #3a6b35;
   --cm-operator: #756e66;
   --cm-punctuation: #756e66;
+}
+
+/* Charcoal theme — the soft dark. The default dark theme is off-black, which
+   reads as a hole cut in the screen; this is the same architecture painted on
+   warm charcoal instead, with nothing on it pure black and nothing pure white.
+
+   Three things carry it, and none of them is a brightness change:
+
+   1. A warm hue held at low chroma through the WHOLE ramp — every surface,
+      every ink, every hairline is oklch hue 68 at chroma ~0.010, so the greys
+      are ash and not slate. A ramp that warms only its darkest rungs goes
+      muddy at the top; holding one hue is what makes it read as a material.
+   2. Bigger steps between the rungs than dark uses. On off-black a 1px border
+      does the separating and the fills barely need to differ; lift the ground
+      and that border stops carrying it, so tone has to. Selected-against-chrome
+      is 1.43:1 here where dark gets away with 1.18:1 — which is the point of
+      the skin, not a side effect: soft ground, firm structure.
+   3. Nothing in it may be black. Not the ramp, and not the four places a theme
+      normally leaves on the default: the modal scrim, the two overlay shadows,
+      the terminal's own ANSI black, and the hairline ring under a selected row
+      — that last one was literal rgba(0,0,0,0.12) in a rule no theme could
+      reach, which is invisible on off-black and an outline here.
+
+   The layer order is the app's, unchanged: --surface-0 is the card (terminal,
+   toolbar, the panels inside the sidebar) and sits a step BELOW --surface-50,
+   the chrome that the window ground and the sidebar share. Cards are wells
+   here exactly as they are in dark. */
+[data-theme="charcoal"] {
+  --surface-0: #2b2722;
+  --surface-50: #34302c;
+  --surface-100: #3e3a35;
+  --surface-200: #4c4743;
+  --surface-300: #5a5651;
+  --surface-400: #6a6560;
+  /* Warm white rather than #fff: a neutral hairline over a warm ground reads
+     blue, and at these alphas that tint is the whole difference between ash
+     and slate. The same alphas dark uses, which is not the same line: a white
+     hairline loses relative contrast as the fill under it rises, so holding
+     the number is what keeps the border where dark has it. */
+  --border-color: rgba(255, 243, 232, 0.1);
+  --border-subtle-color: rgba(255, 243, 232, 0.058);
+  --rule-color: rgba(255, 243, 232, 0.045);
+  /* Ink as explicit warm greys, not white-at-alpha. Over a warm ground white
+     alpha composites toward neutral as it gets more opaque, so the body text —
+     the most opaque ink there is — would be the one thing in the theme that
+     went cold. */
+  --text-primary: #efece9;
+  --text-secondary: #a39f9b;
+  --text-tertiary: #84807b;
+  --sidebar-item-text: #c7c3c0;
+  --sidebar-icon-color: #9f9a96;
+  --selected-ring: rgba(255, 243, 232, 0.07);
+  --scrollbar-thumb: rgba(255, 243, 232, 0.14);
+  --scrollbar-thumb-hover: rgba(255, 243, 232, 0.26);
+  --scrim-color: rgb(24 18 13 / 0.46);
+  /* A shade heavier than dark's. A shadow is the difference between the
+     overlay and what is under it, and what is under it here is 12 points
+     lighter — the same shadow would simply be less shadow. */
+  --overlay-shadow: 0 6px 16px rgb(9 6 4 / 0.34), 0 1px 4px rgb(9 6 4 / 0.22);
+  --overlay-shadow-lg: 0 12px 28px rgb(9 6 4 / 0.42), 0 3px 8px rgb(9 6 4 / 0.3);
+  --danger-toggle-bg: rgba(255, 243, 232, 0.07);
+  --danger-toggle-active: rgba(229, 64, 64, 0.2);
+  --danger-toggle-glow: rgba(229, 64, 64, 0.26);
+  --danger-toggle-icon: #e54040;
+  --claude-toggle-bg: rgba(255, 243, 232, 0.07);
+  --claude-toggle-active: rgba(217, 119, 87, 0.2);
+  --claude-toggle-glow: rgba(217, 119, 87, 0.26);
+  --heatmap-0: #3a3631;
+  --heatmap-1: rgba(94, 106, 210, 0.3);
+  --heatmap-2: rgba(94, 106, 210, 0.5);
+  --heatmap-3: rgba(94, 106, 210, 0.7);
+  --heatmap-4: rgba(94, 106, 210, 0.95);
+  /* Lifted off dark's 0.25 backgrounds: those were solved against off-black and
+     land almost on this theme's own surface, so the chip would lose its edge. */
+  --color-wellbeing-gentle: oklch(0.78 0.14 85);
+  --color-wellbeing-gentle-bg: oklch(0.36 0.035 85);
+  --color-wellbeing-gentle-border: oklch(0.5 0.06 85);
+  --color-wellbeing-strong: oklch(0.73 0.15 50);
+  --color-wellbeing-strong-bg: oklch(0.36 0.035 50);
+  --color-wellbeing-strong-border: oklch(0.5 0.07 50);
+  /* CodeMirror syntax tokens — dark's github-dark family, desaturated a notch
+     for the lifted ground and with the two greys (comment, punctuation) taken
+     off their cool #8b949e onto the theme's own warm axis. */
+  --cm-selection: rgba(94, 106, 210, 0.32);
+  --cm-active-line: rgba(255, 243, 232, 0.052);
+  --cm-keyword: #ff8b7e;
+  --cm-comment: #8a8279;
+  --cm-string: #a8d4f5;
+  --cm-number: #8fc6ff;
+  --cm-constant: #8fc6ff;
+  --cm-function: #d8b0ff;
+  --cm-variable: #efece9;
+  --cm-type: #f0a86a;
+  --cm-property: #8fc6ff;
+  --cm-tag: #8ce89a;
+  --cm-operator: #8a8279;
+  --cm-punctuation: #8a8279;
 }
 
 @keyframes pulse-dot {
@@ -460,7 +588,7 @@ body,
 .sidebar-item[data-selected="true"] {
   color: var(--text-primary);
   background-color: var(--surface-200);
-  box-shadow: 0 0 0.5px rgba(0,0,0,0.12);
+  box-shadow: 0 0 0.5px var(--selected-ring);
 }
 
 /* Leading icon on sidebar tabs (session/file/group). Sizes both the wrapper
@@ -528,7 +656,7 @@ body,
   padding: 0 0.5rem;       /* px-2 — the panels stay on their own padding: they
                               are chrome, not list, and a sidebar dragged narrow
                               squeezes this row first */
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
@@ -564,7 +692,7 @@ body,
   padding: 0 0.25rem;      /* px-1 — the panel's own hairlines already frame the
                               segment, so the caret needs less air than it did
                               when it carried a divider of its own */
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
@@ -584,7 +712,7 @@ body,
   flex-shrink: 0;
   width: var(--control-h-md);
   height: var(--control-h-md);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, opacity 150ms, scale 120ms var(--ease-out-expo);
 }
@@ -687,7 +815,7 @@ body,
   min-width: 0;
   height: var(--control-h-md);
   padding: 0 0.375rem;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   background-color: color-mix(in srgb, var(--surface-100) 60%, transparent);
   transition: background-color 150ms, box-shadow 150ms, color 150ms;
@@ -746,7 +874,7 @@ body,
   max-width: 100%;         /* a long group name wraps the row, never the panel */
   height: var(--control-h-md);
   padding: 0 0.5rem;       /* px-2 — see .launcher-btn */
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
@@ -851,8 +979,10 @@ body,
    so the query answers the one question worth asking — is there room left for
    the second word. */
 .wordmark-strip {
-  /* Clave's INK height — what has to land on the traffic lights' centre line.
-     Declared HERE, on the strip, rather than on .wordmark: the gap between the
+  /* Clave's INK height. Where it lands is the strip's business (Sidebar.tsx
+     pads the lockup down off the geometric middle, which reads high once the
+     shared frame's descender room is counted); this is only how tall the mark
+     is. Declared HERE, on the strip, rather than on .wordmark: the gap between the
      two words is derived from it too, and a custom property set on the SVGs
      themselves is invisible to the flex container holding them apart. */
   --wordmark-h: 14px;
@@ -1089,17 +1219,21 @@ body,
   background-color: color-mix(in srgb, var(--surface-0) 70%, transparent);
 }
 
-/* The icon buttons inside a .panel-bar — the launcher's .launcher-icon-btn one
-   size down. The right panel is 240px by default and its git bar carries six of
-   them beside a branch name, so 28px squares would wrap the row at every width. */
+/* The icon buttons inside a .panel-bar — the same square as the launcher's
+   .launcher-icon-btn and the panel's own tabs, because they are the same kind of
+   thing sitting in the same kind of box. They used to be a size down, to keep
+   the git bar's six controls on one line at 240px; they did not, the bar ran off
+   the panel's edge anyway, and the price was a path bar whose buttons floated
+   5px inside a box whose tabs sat 3px in. The bar's width is the bar's problem
+   to solve (it wraps) — it was never worth two button sizes in one panel. */
 .panel-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: var(--control-h-sm);
-  height: var(--control-h-sm);
-  border-radius: var(--radius-lg);
+  width: var(--control-h-md);
+  height: var(--control-h-md);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, opacity 150ms, scale 120ms var(--ease-out-expo);
 }
@@ -1159,26 +1293,55 @@ body,
    its contents floated into the middle. A full-width box around two buttons
    reads as a row whose other half went missing; a box the width of the choice
    reads as the choice. Only bars holding a single cluster take this: the moment
-   a bar has a trailing group, the spacer is what places it. */
+   a bar has a trailing group, the label group is what places it. */
 .panel-bar--hug {
   align-self: center;
   flex-wrap: nowrap;
 }
 
-/* The git bar opts out of wrapping: its controls are a fixed cluster and its
-   label is a branch name or a repo count, so the honest response to a narrow
-   panel is to truncate the label — not to drop one orphan icon onto a second
-   line, which is what wrapping does the moment the bar is a few pixels short. */
+/* Opting a bar out of wrapping, for the path bar: it is a line of text with a
+   control at each end, and a path is a thing that truncates. The git bar used
+   to take this too, on the theory that wrapping drops one orphan icon onto a
+   second line — but its controls are a single flex-shrink-0 cluster, so they
+   wrap as one block or not at all, and holding them on one line only meant
+   running them off the panel's edge at the default 240px. It wraps again. */
 .panel-bar--nowrap {
   flex-wrap: nowrap;
 }
 
-/* The panel bar's flexible gap. A plain flex-1 span would collapse to nothing
-   once the bar wraps, which is what puts the trailing controls hard against the
-   tabs on the second line. */
-.panel-bar-spacer {
+/* A panel bar's LABEL half — everything that says what the bar is about, as one
+   flex item: the git bar's branch glyph, its branch name, its sync badges, its
+   parent-repo notice. Being one item is what lets the bar wrap into two lines
+   rather than three: `flex: 1 1 0` makes it lay out at nothing and grow into
+   whatever its line has left, so it truncates inside itself instead of claiming
+   a line for the name and leaving the badges to find their own. Growing is also
+   how it does the old spacer's job — the controls sit at the far end of the bar
+   because the label pushed them there, not because a strut did. */
+/* A panel bar's CONTROL half. It prefers to stay whole, and the flex algorithm
+   is what gives it that preference for free: a wrapping container places items
+   on a line before it shrinks any of them, so the cluster moves to the next line
+   INTACT rather than squeezing on the current one. Only when a whole line is
+   still not enough — the side panel can be dragged to 180px, where six controls
+   do not fit end to end — does it shrink, and then it wraps inside itself. That
+   is the last resort on purpose: an icon on a second row is awkward, an icon
+   outside the panel cannot be clicked at all, and that is what used to happen.
+   Right-aligned so a partial row reads as the end of a block, not the start. */
+.panel-bar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.panel-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   flex: 1 1 auto;
-  min-width: 4px;
+  min-width: 5.5rem;
+  overflow: hidden;
 }
 
 /* ── Groups ── */
@@ -1208,7 +1371,7 @@ body,
 .group-scope[data-selected="true"] {
   background-color: var(--group-bg-selected, color-mix(in srgb, var(--surface-200) 60%, transparent));
   border-color: var(--group-border-selected, var(--color-border));
-  box-shadow: 0 0 0.5px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0.5px var(--selected-ring);
 }
 /* Selected AND hovered still moves — a card that stops responding once selected
    reads as disabled. */
@@ -1843,13 +2006,28 @@ body,
   background-color: var(--surface-100);
 }
 
-/* Icon button: three sizes sharing the same base */
+/* Icon button: three sizes sharing the same base.
+ *
+ * The sizes are BOXES, not paddings. They were paddings, and that is why no two
+ * icon buttons in the app were the same size: the box came out as whatever the
+ * glyph inside it happened to be plus the padding, so one `.btn-icon-sm` was
+ * 24px next to a 16px icon, 22px next to a 14px one and 20px next to a 12px
+ * one — three different buttons wearing one class name, sitting on the same row
+ * of the same header. A fixed square makes the class mean a size again and lets
+ * a glyph be chosen for how it reads rather than for the box it will produce.
+ *
+ * Consequence worth knowing: this design system is unlayered while Tailwind's
+ * utilities live in @layer utilities, so these dimensions beat a `w-5 h-5` on
+ * the element. A call site that wants a different box picks another size class.
+ */
 .btn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: var(--radius-lg);
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
 }
@@ -1858,13 +2036,16 @@ body,
   background-color: var(--surface-200);
 }
 .btn-icon-xs {
-  padding: 2px;            /* p-0.5 */
+  width: var(--control-h-xs);
+  height: var(--control-h-xs);
 }
 .btn-icon-sm {
-  padding: 4px;            /* p-1 */
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
 }
 .btn-icon-md {
-  padding: 6px;            /* p-1.5 */
+  width: var(--control-h-md);
+  height: var(--control-h-md);
 }
 
 /* Press feedback for the button family — a 3% dip the frame the pointer goes
@@ -2080,6 +2261,62 @@ body,
   height: 1px;
   flex-shrink: 0;
   background-color: var(--rule-color);
+}
+
+/* A row ARRIVING in the file tree unfolds rather than appearing. Opening a
+   folder used to insert its children between one frame and the next: the rows
+   below jumped down their combined height, and nothing connected the jump to
+   the folder you clicked. The rows now grow from nothing, fade up, and settle —
+   160ms, which is under the threshold where an animation starts costing you
+   time and over the one where it reads as a glitch.
+
+   Height and opacity only, and only on the way IN. Height because that is what
+   makes the list below GLIDE instead of jump, which was the actual complaint;
+   nothing here transforms, so a long tree opening a deep folder is still one
+   cheap composite. On the way in only, because a flat list unmounts its rows
+   the instant a folder closes — animating that needs the tree to keep rows it
+   has already dropped, and a state machine that can hold rows past their own
+   removal is a lot of machinery to spend on the direction nobody complained
+   about. Closing stays instant.
+
+   Keyed on mount, which is exactly right: React keys these rows by path, so a
+   row that was already on screen when you typed in the filter does not
+   re-animate, and only rows genuinely arriving do. */
+@keyframes tree-row-in {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--panel-row-h);
+    opacity: 1;
+  }
+}
+@keyframes tree-rule-in {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: 1px;
+    opacity: 1;
+  }
+}
+[data-tree-item] {
+  overflow: hidden;
+  animation: tree-row-in 160ms var(--ease-out-expo);
+}
+.tree-rule[data-file-tree-rule] {
+  animation: tree-rule-in 160ms var(--ease-out-expo);
+}
+/* A reader who has asked the OS for less motion gets the old instant insert,
+   which is the honest answer: there is nothing to convey here that the layout
+   does not already say. */
+@media (prefers-reduced-motion: reduce) {
+  [data-tree-item],
+  .tree-rule[data-file-tree-rule] {
+    animation: none;
+  }
 }
 
 /* ── Git sync badges ── */

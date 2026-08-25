@@ -94,7 +94,7 @@ function RemoteFileTreeRow({
     >
       {/* Chevron for directories */}
       {node.type === 'directory' ? (
-        <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-[color:var(--sidebar-icon-color)]">
+        <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-[color:var(--tree-chevron-color)]">
           {node.loading ? (
             <svg width="12" height="12" viewBox="0 0 12 12" className="animate-spin">
               <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeDasharray="20" strokeDashoffset="10" />

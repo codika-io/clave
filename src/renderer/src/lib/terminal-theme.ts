@@ -75,7 +75,45 @@ export const COFFEE_THEME = {
   brightWhite: '#9b9590'
 }
 
+/** The soft-dark palette. Dark's ANSI set desaturated a notch and pulled warm,
+ *  because on a lifted charcoal ground the tailwind-400s read as neon. The
+ *  greys are the theme's own warm axis, so dim output sits IN the surface
+ *  rather than on a cool film above it. */
+export const CHARCOAL_THEME = {
+  background: '#2b2722',
+  foreground: '#efece9',
+  cursor: 'rgba(255, 243, 232, 0.8)',
+  cursorAccent: '#2b2722',
+  selectionBackground: 'rgba(255, 243, 232, 0.18)',
+  selectionForeground: undefined,
+  black: '#3d3834',
+  red: '#f0857c',
+  green: '#8fce87',
+  yellow: '#e6c068',
+  blue: '#7fb0ea',
+  magenta: '#c49bef',
+  cyan: '#6cc9d4',
+  white: '#d7d3d0',
+  brightBlack: '#736f6b',
+  brightRed: '#f7a9a1',
+  brightGreen: '#b0e0a4',
+  brightYellow: '#f2d68a',
+  brightBlue: '#a6c9f5',
+  brightMagenta: '#d9bcf7',
+  brightCyan: '#98dfe6',
+  brightWhite: '#faf8f6'
+}
+
+/** Exhaustive by construction: a Record keyed on Theme, so adding a theme to
+ *  the union without a palette is a type error instead of a silently
+ *  light-on-charcoal terminal. */
+const XTERM_THEMES: Record<Theme, typeof DARK_THEME> = {
+  dark: DARK_THEME,
+  charcoal: CHARCOAL_THEME,
+  light: LIGHT_THEME,
+  coffee: COFFEE_THEME
+}
+
 export function getXtermTheme(theme: Theme): typeof DARK_THEME {
-  if (theme === 'coffee') return COFFEE_THEME
-  return theme === 'dark' ? DARK_THEME : LIGHT_THEME
+  return XTERM_THEMES[theme] ?? DARK_THEME
 }

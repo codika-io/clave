@@ -126,7 +126,7 @@ export function AddLocationDialog({ onClose }: AddLocationDialogProps) {
             onClick={handleRemoveOnCancel}
             className="btn-icon btn-icon-sm"
           >
-            <XMarkIcon className="w-5 h-5" />
+            <XMarkIcon className="w-4 h-4" />
           </button>
         </div>
 

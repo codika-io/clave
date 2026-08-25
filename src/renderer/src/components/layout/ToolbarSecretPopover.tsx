@@ -33,7 +33,7 @@ export function ToolbarSecretPopover(): React.JSX.Element | null {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className="btn-icon btn-icon-sm flex-shrink-0 relative"
+          className="btn-icon btn-icon-md flex-shrink-0 relative"
           title={pendingCount > 0 ? `${pendingCount} secret request(s) waiting` : 'Secret requests'}
           style={pendingCount > 0 ? { color: 'var(--color-status-waiting)' } : undefined}
         >

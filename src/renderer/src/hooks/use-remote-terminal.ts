@@ -1,7 +1,12 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { useSessionStore, type Theme } from '../store/session-store'
+import { useSessionStore } from '../store/session-store'
+// The one xterm palette table. This hook used to carry its own copy, and it
+// had already drifted: its LIGHT_THEME was still the pre-warm #ffffff set, so
+// a remote terminal in the light theme sat on pure white inside a #fbfbf9
+// card. A fourth theme would have been a fourth chance to drift.
+import { getXtermTheme } from '../lib/terminal-theme'
 import { safePort } from '../lib/utils'
 import { stripAnsi, detectLocalhostUrl } from '../lib/localhost-url'
 import '@xterm/xterm/css/xterm.css'
@@ -12,86 +17,6 @@ function detectPrompt(buffer: string): string | null {
   if (/Allow/i.test(tail) && /Deny/i.test(tail)) return 'is asking for permission'
   if (/\(Y\/n\)|\[Y\/n\]|\(y\/N\)|\[y\/N\]/i.test(tail)) return 'is asking a question'
   return null
-}
-
-const DARK_THEME = {
-  background: '#0e0d0c',
-  foreground: 'rgba(255, 255, 255, 0.9)',
-  cursor: 'rgba(255, 255, 255, 0.8)',
-  cursorAccent: '#0e0d0c',
-  selectionBackground: 'rgba(255, 255, 255, 0.15)',
-  selectionForeground: undefined,
-  black: '#1a1a1a',
-  red: '#f87171',
-  green: '#4ade80',
-  yellow: '#facc15',
-  blue: '#60a5fa',
-  magenta: '#c084fc',
-  cyan: '#22d3ee',
-  white: '#e5e5e5',
-  brightBlack: '#404040',
-  brightRed: '#fca5a5',
-  brightGreen: '#86efac',
-  brightYellow: '#fde047',
-  brightBlue: '#93bbfd',
-  brightMagenta: '#d8b4fe',
-  brightCyan: '#67e8f9',
-  brightWhite: '#ffffff'
-}
-
-const LIGHT_THEME = {
-  background: '#ffffff',
-  foreground: 'rgba(0, 0, 0, 0.85)',
-  cursor: 'rgba(0, 0, 0, 0.7)',
-  cursorAccent: '#ffffff',
-  selectionBackground: 'rgba(0, 0, 0, 0.12)',
-  selectionForeground: undefined,
-  black: '#000000',
-  red: '#dc2626',
-  green: '#16a34a',
-  yellow: '#ca8a04',
-  blue: '#2563eb',
-  magenta: '#9333ea',
-  cyan: '#0891b2',
-  white: '#d4d4d4',
-  brightBlack: '#737373',
-  brightRed: '#ef4444',
-  brightGreen: '#22c55e',
-  brightYellow: '#eab308',
-  brightBlue: '#3b82f6',
-  brightMagenta: '#a855f7',
-  brightCyan: '#06b6d4',
-  brightWhite: '#525252'
-}
-
-const COFFEE_THEME = {
-  background: '#f5f1eb',
-  foreground: '#1b1610',
-  cursor: 'rgba(27, 22, 16, 0.7)',
-  cursorAccent: '#f5f1eb',
-  selectionBackground: 'rgba(120, 100, 80, 0.15)',
-  selectionForeground: undefined,
-  black: '#1b1610',
-  red: '#c53030',
-  green: '#2f855a',
-  yellow: '#b7791f',
-  blue: '#2b6cb0',
-  magenta: '#805ad5',
-  cyan: '#0e7490',
-  white: '#d0cbc3',
-  brightBlack: '#756e66',
-  brightRed: '#e53e3e',
-  brightGreen: '#38a169',
-  brightYellow: '#d69e2e',
-  brightBlue: '#3182ce',
-  brightMagenta: '#9f7aea',
-  brightCyan: '#0891b2',
-  brightWhite: '#9b9590'
-}
-
-function getXtermTheme(theme: Theme) {
-  if (theme === 'coffee') return COFFEE_THEME
-  return theme === 'dark' ? DARK_THEME : LIGHT_THEME
 }
 
 export function useRemoteTerminal(shellId: string) {

@@ -523,17 +523,36 @@ export async function run(t) {
     })
     await win.waitForTimeout(6000)
 
-    const gitBar = await win.evaluate(() => {
-      const el = document.querySelector('[data-panel-bar="git"]')
-      return el ? { height: el.offsetHeight, width: el.clientWidth } : null
-    })
+    // What the bar owes at any width: every control it draws is INSIDE it. The
+    // old promise here was "one line", and the bar kept it the dishonest way —
+    // its six controls are a flex-shrink-0 cluster, so holding them on one line
+    // at 240px simply ran the last two off the panel and out of the window.
+    // Reach is the assertion; the line count is the bar's business, capped at
+    // two so a regression that stacks its parts is still caught.
+    const readGitBar = () =>
+      win.evaluate(() => {
+        const el = document.querySelector('[data-panel-bar="git"]')
+        if (!el) return null
+        const box = el.getBoundingClientRect()
+        const spill = [...el.querySelectorAll('button')]
+          .map((b) => b.getBoundingClientRect())
+          .filter((r) => r.right > box.right + 0.5 || r.left < box.left - 0.5).length
+        return { height: el.offsetHeight, width: el.clientWidth, spill }
+      })
+
+    const gitBar = await readGitBar()
     t.check('the git tab has a bar of its own', gitBar !== null)
     t.equal('the git tab keeps no collapse-all of its own', await straysIn('git'), 0)
-    t.check('the git bar is one line at the default width', (gitBar?.height ?? 99) <= 36, gitBar)
+    t.check(
+      'at the default width every git control is inside the bar',
+      gitBar?.spill === 0,
+      gitBar
+    )
+    t.check('and the bar is at most two lines', (gitBar?.height ?? 99) <= 64, gitBar)
 
     // The real test of the cluster: drag the panel to its 180px minimum, where
-    // the bar's contents no longer fit. It must truncate its label, not drop an
-    // orphan icon onto a second line — which is exactly what it did before.
+    // the bar's contents no longer fit on one line. The cluster must move down
+    // whole — never spill past the panel, never drop one orphan icon.
     const narrowed = await (async () => {
       const box = await win.evaluate(() => {
         const el = document
@@ -548,16 +567,22 @@ export async function run(t) {
       await win.mouse.move(box.x + 200, box.y + box.height / 2, { steps: 8 })
       await win.mouse.up()
       await win.waitForTimeout(1200)
-      return win.evaluate(() => {
-        const el = document.querySelector('[data-panel-bar="git"]')
-        return { height: el.offsetHeight, width: el.clientWidth }
-      })
+      return readGitBar()
     })()
     t.check('the panel actually narrowed', narrowed.width < (gitBar?.width ?? 0), {
       gitBar,
       narrowed
     })
-    t.check('the git bar stays on one line at the minimum width', narrowed.height <= 36, narrowed)
+    t.check(
+      'at the minimum width every git control is still inside the bar',
+      narrowed.spill === 0,
+      narrowed
+    )
+    // Three rows is allowed HERE and nowhere else: at 180px six controls do not
+    // fit end to end on any single line, so the cluster wraps inside itself. A
+    // third row is the price of every control staying reachable, which is the
+    // assertion above and the one that matters.
+    t.check('and it takes a third row at most to do it', narrowed.height <= 96, narrowed)
 
     const seq = await readTree(win)
     const rows = seq.filter((e) => e.kind !== 'rule')

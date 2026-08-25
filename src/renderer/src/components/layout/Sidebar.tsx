@@ -1411,7 +1411,15 @@ export function Sidebar() {
           {
             height: 'var(--content-top-offset)',
             paddingLeft: fullScreen ? '16px' : '84px',
-            paddingBottom: '2px',
+            // Optical, not geometric. The lockup's box is 905 frame units deep
+            // against Clave's 761 of ink — the rest is descender room the
+            // attribution's y and p need and the name never uses — so the ink's
+            // mass sits 1.3px above the middle of its own box. Centre the box
+            // and you centre the wrong thing: the mark read high in the strip
+            // for as long as it has existed. 3px of top padding buys the
+            // descender back and lands Clave's ink centre on 25px, the middle
+            // of the 50px band the launcher panel starts under.
+            paddingTop: '3px',
             WebkitAppRegion: 'drag'
           } as React.CSSProperties
         }
