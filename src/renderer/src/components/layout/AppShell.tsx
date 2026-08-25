@@ -9,6 +9,7 @@ import {
   enableSidebarPersistence
 } from '../../store/session-store'
 import type { SessionGroup, SettingsSection } from '../../store/session-store'
+import { treeRuleMultiplier } from '../../store/session-types'
 import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
 import { useFullScreen } from '../../hooks/use-fullscreen'
@@ -86,6 +87,7 @@ export function AppShell() {
   const toggleSidebar = useSessionStore((s) => s.toggleSidebar)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const theme = useSessionStore((s) => s.theme)
+  const treeRuleIntensity = useSessionStore((s) => s.treeRuleIntensity)
   const toggleFilePalette = useSessionStore((s) => s.toggleFilePalette)
   const fileTreeOpen = useSessionStore((s) => s.fileTreeOpen)
   const fileTreeWidth = useSessionStore((s) => s.fileTreeWidth)
@@ -492,6 +494,17 @@ export function AppShell() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  // The weight of every tree's row rules, as a multiplier on the theme's own
+  // --rule-alpha. One property on the root element is the whole mechanism: the
+  // Files tab, the git repo tree and the changed files inside a repo all draw
+  // .tree-rule, so they move together and nothing has to be told about it.
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--rule-intensity',
+      String(treeRuleMultiplier(treeRuleIntensity))
+    )
+  }, [treeRuleIntensity])
 
   // Updater: subscribe to main's state and pull the current truth on mount.
   // The pull is the point — a push-only updater loses the "an update exists"

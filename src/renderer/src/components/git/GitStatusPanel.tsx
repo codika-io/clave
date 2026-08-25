@@ -201,9 +201,10 @@ function RangeSection({
           overlapPaths={localPaths}
         />
       ) : (
-        files.map((f) => (
+        files.map((f, i) => (
           <FileRow
             key={`${direction}-${f.path}`}
+            rule={i > 0}
             indentPx={fileIndentPx}
             file={f}
             cwd={cwd}
@@ -728,9 +729,10 @@ function RepoSection({
                 disabled={operating}
               />
             ) : (
-              staged.map((f) => (
+              staged.map((f, i) => (
                 <FileRow
                   key={`s-${f.path}`}
+                  rule={i > 0}
                   indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}
@@ -777,9 +779,10 @@ function RepoSection({
                 disabled={operating}
               />
             ) : (
-              unstaged.map((f) => (
+              unstaged.map((f, i) => (
                 <FileRow
                   key={`u-${f.path}`}
+                  rule={i > 0}
                   indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}
@@ -826,9 +829,10 @@ function RepoSection({
                 disabled={operating}
               />
             ) : (
-              untracked.map((f) => (
+              untracked.map((f, i) => (
                 <FileRow
                   key={`t-${f.path}`}
+                  rule={i > 0}
                   indentPx={fileIndentPx}
                   file={f}
                   cwd={repoRoot}

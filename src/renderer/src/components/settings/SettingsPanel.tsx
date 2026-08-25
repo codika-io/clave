@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
-import { type Theme, useSessionStore } from '../../store/session-store'
+import { type Theme, TREE_RULE_INTENSITIES, useSessionStore } from '../../store/session-store'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { useUserStore, USER_ICONS } from '../../store/user-store'
 import { PALETTE_KEYS, PALETTE_LABELS, fieldInk } from '../../lib/brand-field'
@@ -283,10 +283,67 @@ function AppearanceSettings() {
           </SettingsCard>
         </SettingsSection>
 
+        <TreeSeparatorsSection />
         <SidebarWidgetsSection />
         <MissionControlSection />
       </div>
     </>
+  )
+}
+
+/**
+ * The weight of the hairlines every tree rules its rows with. One control for
+ * all of them — the Files tab, the git panel's repo tree, the changed files
+ * inside a repo — because they are one list at different depths of the same
+ * window, and a tree ruled harder than the tree beside it reads as a bug.
+ *
+ * The sample under the control is the point of it: these lines are deliberately
+ * near the floor of what the eye picks up, and a setting whose whole range is
+ * invisible from the settings pane is a setting nobody can judge.
+ */
+function TreeSeparatorsSection(): React.JSX.Element {
+  const treeRuleIntensity = useSessionStore((s) => s.treeRuleIntensity)
+  const setTreeRuleIntensity = useSessionStore((s) => s.setTreeRuleIntensity)
+
+  return (
+    <SettingsSection
+      title="Tree separators"
+      description="The hairlines between rows in the Files tab and in the git panel — the repo tree and the changed files inside it. Off draws none of them."
+    >
+      <SettingsCard>
+        <SettingsRow label="Weight" description="Applies to every tree in the app at once.">
+          <div className="segmented">
+            {TREE_RULE_INTENSITIES.map((level) => (
+              <button
+                key={level.id}
+                onClick={() => setTreeRuleIntensity(level.id)}
+                data-active={treeRuleIntensity === level.id}
+                className="segmented-item"
+              >
+                {level.label}
+              </button>
+            ))}
+          </div>
+        </SettingsRow>
+        <div className="settings-row">
+          <div className="w-full rounded-lg bg-surface-0 py-1" aria-hidden>
+            {['src', 'components', 'main.css'].map((name, i) => (
+              <div key={name}>
+                {i > 0 && (
+                  <div className="tree-rule" style={{ marginLeft: 12 + i * 12, marginRight: 12 }} />
+                )}
+                <div
+                  className="h-6 flex items-center text-[11px] text-text-tertiary"
+                  style={{ paddingLeft: 12 + i * 12 }}
+                >
+                  {name}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </SettingsCard>
+    </SettingsSection>
   )
 }
 

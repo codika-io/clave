@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import type {
   Theme,
   AppIcon,
+  TreeRuleIntensity,
   ActivityStatus,
   GroupTerminalConfig,
   GroupTerminalColor,
@@ -38,13 +39,16 @@ export type {
   ActiveView,
   SettingsSection,
   ExtensionsSection,
-  SessionType
+  SessionType,
+  TreeRuleIntensity
 }
 export {
   GROUP_TERMINAL_COLORS,
   GROUP_TERMINAL_ICONS,
   TERMINAL_COLOR_VALUES,
-  resolveColorHex
+  TREE_RULE_INTENSITIES,
+  resolveColorHex,
+  treeRuleMultiplier
 } from './session-types'
 
 /** THE visibility predicate — single source of truth for workspace scoping.
@@ -76,9 +80,14 @@ interface SessionState {
   sidebarWidth: number
   theme: Theme
   appIcon: AppIcon
+  /** How heavily every tree draws the hairlines between its rows. */
+  treeRuleIntensity: TreeRuleIntensity
   /** Run new sessions inside persistent tmux sessions. On by default; falls
    *  back to a plain shell automatically when tmux isn't installed. */
   tmuxMode: boolean
+  /** The message trail: the floating box over a tab's terminal that shows
+   *  where the conversation is. One switch for every tab. */
+  messageTrailEnabled: boolean
   searchQuery: string
   claudeMode: boolean
   antigravityMode: boolean
@@ -221,7 +230,9 @@ interface SessionState {
   setSidebarWidth: (width: number) => void
   setTheme: (theme: Theme) => void
   setAppIcon: (icon: AppIcon) => void
+  setTreeRuleIntensity: (intensity: TreeRuleIntensity) => void
   setTmuxMode: (enabled: boolean) => void
+  setMessageTrailEnabled: (enabled: boolean) => void
   updateSessionAlive: (id: string, alive: boolean) => void
   setSessionActivity: (id: string, status: ActivityStatus) => void
   setAgentState: (id: string, state: import('./session-types').AgentRunState) => void
@@ -483,7 +494,10 @@ export const useSessionStore = create<SessionState>((set) => ({
   sidebarWidth: 260,
   theme: (localStorage.getItem('clave-theme') as Theme) || 'light',
   appIcon: (localStorage.getItem('clave-app-icon') as AppIcon) || 'dark',
+  treeRuleIntensity:
+    (localStorage.getItem('clave-tree-rule-intensity') as TreeRuleIntensity) || 'normal',
   tmuxMode: localStorage.getItem('clave-tmux-mode') !== 'false',
+  messageTrailEnabled: localStorage.getItem('clave-message-trail') !== 'false',
   searchQuery: '',
   claudeMode: true,
   antigravityMode: false,
@@ -1124,6 +1138,11 @@ export const useSessionStore = create<SessionState>((set) => ({
     set({ theme })
   },
 
+  setTreeRuleIntensity: (treeRuleIntensity) => {
+    localStorage.setItem('clave-tree-rule-intensity', treeRuleIntensity)
+    set({ treeRuleIntensity })
+  },
+
   setAppIcon: (appIcon) => {
     localStorage.setItem('clave-app-icon', appIcon)
     set({ appIcon })
@@ -1135,6 +1154,11 @@ export const useSessionStore = create<SessionState>((set) => ({
     set({ tmuxMode })
     // Persist to the main process too: pty:spawn reads this as the default.
     window.electronAPI?.preferencesSet('tmuxMode', tmuxMode)
+  },
+
+  setMessageTrailEnabled: (messageTrailEnabled) => {
+    localStorage.setItem('clave-message-trail', String(messageTrailEnabled))
+    set({ messageTrailEnabled })
   },
 
   updateSessionAlive: (id, alive) =>

@@ -1,10 +1,35 @@
-import { useCallback, useMemo } from 'react'
+import { Fragment, useCallback, useMemo } from 'react'
 import { FileIcon } from '../files/file-icons'
 import { ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
 import { statusLetter, statusColor, splitPath } from './git-status-utils'
 import { buildGitTree, compactTree, flattenGitTree } from '../../lib/git-file-tree'
 import type { GitFileStatus } from '../../../../preload/index.d'
 import type { FlatGitTreeNode } from '../../lib/git-file-tree'
+
+/**
+ * The hairline between two rows of a repo's contents — the changed files, in
+ * either the tree or the flat list. Same sentence as the two trees above it
+ * (the git panel's repo tree and the Files tab): a rule above every row but the
+ * first of its section, drawn at that row's own indentation.
+ *
+ * The three trees each keep a wrapper of their own because each carries a
+ * different marker attribute for its own E2E spec and a different gutter; the
+ * LINE is one thing, `.tree-rule` in main.css, which is what the Appearance
+ * setting scales.
+ *
+ * `leftPx` is the row's padding, and the rule adds the 2px these rows carry as
+ * a left border for their selected and active-diff states — a rule that ignored
+ * it would sit a hair left of every name it separates.
+ */
+function GitTreeRule({ depth, leftPx }: { depth: number; leftPx: number }): React.JSX.Element {
+  return (
+    <div
+      className="tree-rule"
+      data-git-file-rule={depth}
+      style={{ marginLeft: leftPx + 2, marginRight: 12 }}
+    />
+  )
+}
 
 export function FileRow({
   file,
@@ -20,7 +45,8 @@ export function FileRow({
   selectedPaths,
   indentPx,
   readOnly,
-  overlap
+  overlap,
+  rule
 }: {
   file: GitFileStatus
   cwd: string
@@ -39,6 +65,8 @@ export function FileRow({
   readOnly?: boolean
   /** The file also has local changes — the conflict heads-up before a pull. */
   overlap?: boolean
+  /** Close the block above this one with a rule at this row's own indentation. */
+  rule?: boolean
 }) {
   const { name, dir } = splitPath(file.path)
   const isStaged = file.staged
@@ -80,57 +108,60 @@ export function FileRow({
   )
 
   return (
-    <div
-      data-git-row="file"
-      className={`flex items-center gap-1.5 pr-3 h-[var(--panel-row-h)] text-xs transition-colors cursor-pointer group ${
-        disabled ? 'opacity-50 pointer-events-none' : isActiveDiff ? 'bg-accent/15 border-l-2 border-l-accent' : isSelected ? 'bg-surface-200 border-l-2 border-l-transparent' : 'hover:bg-surface-100 border-l-2 border-l-transparent'
-      }`}
-      style={{ paddingLeft: indentPx ?? 12 }}
-      onClick={handleClick}
-      onContextMenu={handleContextMenu}
-      draggable
-      onDragStart={handleDragStart}
-    >
-      <span className={`font-mono w-3 flex-shrink-0 ${statusColor(file.status)}`}>
-        {statusLetter(file.status)}
-      </span>
-      <span className="text-text-primary truncate hover:underline">
-        {name}
-      </span>
-      {dir && <span className="text-text-tertiary truncate text-[10px]">{dir}</span>}
-      {overlap && (
-        <span
-          className="text-orange-400 text-[10px] flex-shrink-0"
-          title="You also changed this file locally"
-        >
-          {'\u26a0'}
+    <>
+      {rule && <GitTreeRule depth={0} leftPx={indentPx ?? 12} />}
+      <div
+        data-git-row="file"
+        className={`flex items-center gap-1.5 pr-3 h-[var(--panel-row-h)] text-xs transition-colors cursor-pointer group ${
+          disabled ? 'opacity-50 pointer-events-none' : isActiveDiff ? 'bg-accent/15 border-l-2 border-l-accent' : isSelected ? 'bg-surface-200 border-l-2 border-l-transparent' : 'hover:bg-surface-100 border-l-2 border-l-transparent'
+        }`}
+        style={{ paddingLeft: indentPx ?? 12 }}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        draggable
+        onDragStart={handleDragStart}
+      >
+        <span className={`font-mono w-3 flex-shrink-0 ${statusColor(file.status)}`}>
+          {statusLetter(file.status)}
         </span>
-      )}
-      {!readOnly && (
-        <div className="ml-auto flex-shrink-0 flex items-center gap-0.5">
-          <button
-            className="btn-icon btn-icon-xs opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDiscard?.()
-            }}
-            title="Discard changes"
+        <span className="text-text-primary truncate hover:underline">
+          {name}
+        </span>
+        {dir && <span className="text-text-tertiary truncate text-[10px]">{dir}</span>}
+        {overlap && (
+          <span
+            className="text-orange-400 text-[10px] flex-shrink-0"
+            title="You also changed this file locally"
           >
-            <ArrowUturnLeftIcon className="w-3 h-3" />
-          </button>
-          <button
-            className="btn-icon btn-icon-xs opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation()
-              onStageToggle?.()
-            }}
-            title={isStaged ? 'Unstage' : 'Stage'}
-          >
-            {isStaged ? '\u2212' : '+'}
-          </button>
-        </div>
-      )}
-    </div>
+            {'\u26a0'}
+          </span>
+        )}
+        {!readOnly && (
+          <div className="ml-auto flex-shrink-0 flex items-center gap-0.5">
+            <button
+              className="btn-icon btn-icon-xs opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDiscard?.()
+              }}
+              title="Discard changes"
+            >
+              <ArrowUturnLeftIcon className="w-3 h-3" />
+            </button>
+            <button
+              className="btn-icon btn-icon-xs opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation()
+                onStageToggle?.()
+              }}
+              title={isStaged ? 'Unstage' : 'Stage'}
+            >
+              {isStaged ? '\u2212' : '+'}
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -364,39 +395,45 @@ export function GitTreeSection({
     return flattenGitTree(tree, expandedPaths)
   }, [files, expandedPaths])
 
+  // A rule above every row but the first — the section header above the first
+  // row is the boundary there, and a line under a header it already sits tight
+  // against reads as a second border rather than as the tree's ruling.
+  const ruleLeftPx = (depth: number): number => baseIndentPx + 8 + depth * 8
+
   return (
     <>
-      {flatNodes.map((node) =>
-        node.type === 'directory' ? (
-          <GitTreeDirRow
-            key={`d-${node.path}`}
-            node={node}
-            cwd={cwd}
-            isSelected={selectedPaths.has(node.path)}
-            onToggle={onToggleExpanded}
-            onSelect={onSelect}
-            baseIndentPx={baseIndentPx}
-          />
-        ) : (
-          <GitTreeFileRow
-            key={`f-${node.path}`}
-            node={node}
-            cwd={cwd}
-            isSelected={selectedPaths.has(node.file?.path ?? node.path)}
-            isActiveDiff={activeDiffFile === (node.file?.path ?? node.path)}
-            onClickName={(clickY) => node.file && onClickFile(node.file, clickY)}
-            onSelect={onSelect}
-            onStageToggle={() => node.file && onStageToggle(node.file)}
-            onDiscard={() => node.file && onDiscard(node.file)}
-            onContextMenu={onContextMenu}
-            disabled={disabled}
-            selectedPaths={selectedPaths}
-            baseIndentPx={baseIndentPx}
-            readOnly={readOnly}
-            overlap={overlapPaths?.has(node.file?.path ?? node.path)}
-          />
-        )
-      )}
+      {flatNodes.map((node, index) => (
+        <Fragment key={`${node.type}-${node.path}`}>
+          {index > 0 && <GitTreeRule depth={node.depth} leftPx={ruleLeftPx(node.depth)} />}
+          {node.type === 'directory' ? (
+            <GitTreeDirRow
+              node={node}
+              cwd={cwd}
+              isSelected={selectedPaths.has(node.path)}
+              onToggle={onToggleExpanded}
+              onSelect={onSelect}
+              baseIndentPx={baseIndentPx}
+            />
+          ) : (
+            <GitTreeFileRow
+              node={node}
+              cwd={cwd}
+              isSelected={selectedPaths.has(node.file?.path ?? node.path)}
+              isActiveDiff={activeDiffFile === (node.file?.path ?? node.path)}
+              onClickName={(clickY) => node.file && onClickFile(node.file, clickY)}
+              onSelect={onSelect}
+              onStageToggle={() => node.file && onStageToggle(node.file)}
+              onDiscard={() => node.file && onDiscard(node.file)}
+              onContextMenu={onContextMenu}
+              disabled={disabled}
+              selectedPaths={selectedPaths}
+              baseIndentPx={baseIndentPx}
+              readOnly={readOnly}
+              overlap={overlapPaths?.has(node.file?.path ?? node.path)}
+            />
+          )}
+        </Fragment>
+      ))}
     </>
   )
 }
