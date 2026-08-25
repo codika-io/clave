@@ -1244,7 +1244,10 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding-right: 4px;
+  /* 2px more than the icon button's own padding, on the leading edge only:
+     the count reads as part of the button rather than pinned to its border.
+     Air, not a box — see .group-terminals-count. */
+  padding-left: 4px;
   transition: color 150ms, background-color 150ms;
 }
 .group-terminals-btn[data-running='true'] {
@@ -1258,12 +1261,14 @@ body,
 .group-scope .group-terminals-btn--focused {
   background-color: color-mix(in srgb, currentColor 22%, transparent);
 }
+/* No min-width and no padding of its own: the count leads the icon now, and a
+   box wide enough for two digits left a single one sitting a visible gap off
+   the button's edge. It takes the width of what it says; a second digit widens
+   the button rather than filling in dead space. */
 .group-terminals-count {
   font-size: 10px;
   font-weight: var(--font-weight-medium);
   line-height: 1;
-  min-width: 0.75rem;
-  text-align: left;
 }
 /* Running/stopped dot at the end of a terminal row in the panel: a filled dot
    in the terminal's colour when running (set inline), a hollow ring otherwise. */
