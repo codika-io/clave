@@ -28,7 +28,9 @@ export interface ConversationTurn {
   replyHead: string | null
 }
 
-const USER_TEXT_MAX = 1000
+// Big enough that the trail's full-message view shows a real prompt whole;
+// the cap only guards against a pathological megabyte paste.
+const USER_TEXT_MAX = 4000
 const REPLY_HEAD_MAX = 300
 const MAX_CACHED_FILES = 64
 

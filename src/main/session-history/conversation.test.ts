@@ -75,10 +75,10 @@ describe('parseConversation', () => {
   it('caps runaway texts and skips unparseable lines', () => {
     const turns = parseConversation([
       'not json at all',
-      user('x'.repeat(5000)),
-      assistant('y'.repeat(5000))
+      user('x'.repeat(9000)),
+      assistant('y'.repeat(9000))
     ])
-    expect(turns[0].userText.length).toBe(1000)
+    expect(turns[0].userText.length).toBe(4000)
     expect(turns[0].replyHead!.length).toBe(300)
   })
 })

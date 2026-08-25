@@ -4,7 +4,8 @@ import {
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
   ChevronDownIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
 import { messageNeedle, scrollXtermToText } from '../../lib/terminal-scroll'
@@ -38,11 +39,14 @@ function relativeTime(iso: string): string {
 
 export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement | null {
   const enabled = useSessionStore((s) => s.messageTrailEnabled)
+  const setMessageTrailEnabled = useSessionStore((s) => s.setMessageTrailEnabled)
   const session = useSessionStore((s) => s.sessions.find((x) => x.id === sessionId))
   const isSelected = useSessionStore((s) => s.selectedSessionIds.includes(sessionId))
   const [turns, setTurns] = useState<ConversationTurn[]>([])
   const [cursor, setCursor] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
+  /** The full-message view: the current message unclamped, scrolling inside. */
+  const [msgExpanded, setMsgExpanded] = useState(false)
   const [miss, setMiss] = useState(false)
   /** Which way the last navigation went, for the slide direction. */
   const [dir, setDir] = useState(1)
@@ -58,6 +62,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
     setConvKey(claudeSessionId)
     setCursor(null)
     setExpanded(false)
+    setMsgExpanded(false)
     setTurns([])
   }
 
@@ -130,7 +135,11 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
   const windowTurns = turns.slice(start, start + WINDOW)
 
   return (
-    <div className="message-trail" onMouseDown={(e) => e.stopPropagation()}>
+    <div
+      className="message-trail"
+      data-view={expanded ? 'list' : msgExpanded ? 'full' : 'line'}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <motion.div
         layout
         initial={false}
@@ -138,25 +147,25 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
         className={`menu-surface message-trail-surface ${miss ? 'message-trail--miss' : ''}`}
       >
         {!expanded ? (
-          <div className="flex items-center gap-0.5 pl-1 pr-1.5 py-1">
-            <div className="flex flex-col -space-y-0.5">
+          <div className={`flex ${msgExpanded ? 'items-start' : 'items-center'} gap-0.5 px-1 py-1`}>
+            <div className="flex items-center flex-shrink-0">
               <button
-                className="btn-icon btn-icon-xs"
+                className="btn-icon"
                 onClick={() => goTo(eff - 1)}
                 disabled={eff <= 0}
                 aria-label="Previous message"
                 title="Previous message"
               >
-                <ChevronUpIcon className="w-3 h-3" />
+                <ChevronUpIcon className="w-4 h-4" />
               </button>
               <button
-                className="btn-icon btn-icon-xs"
+                className="btn-icon"
                 onClick={() => goTo(eff + 1)}
                 disabled={eff >= last}
                 aria-label="Next message"
                 title="Next message"
               >
-                <ChevronDownIcon className="w-3 h-3" />
+                <ChevronDownIcon className="w-4 h-4" />
               </button>
             </div>
             <div className="relative flex-1 min-w-0 overflow-hidden">
@@ -177,39 +186,79 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                   onClick={() => void jump(eff)}
                   title="Scroll to this message"
                 >
-                  <div className="message-trail-text">{turns[eff].userText}</div>
+                  <div
+                    className={
+                      msgExpanded
+                        ? 'message-trail-text message-trail-text--full'
+                        : 'message-trail-text'
+                    }
+                  >
+                    {turns[eff].userText}
+                  </div>
                   {turns[eff].replyHead && (
                     <div className="message-trail-reply">{turns[eff].replyHead}</div>
                   )}
                 </motion.button>
               </AnimatePresence>
             </div>
-            <span className="message-trail-count">
-              {eff + 1}/{turns.length}
-            </span>
-            <button
-              className="btn-icon btn-icon-xs"
-              onClick={() => setExpanded(true)}
-              aria-label="Expand messages"
-              title="Show surrounding messages"
-            >
-              <ArrowsPointingOutIcon className="w-3 h-3" />
-            </button>
-          </div>
-        ) : (
-          <div className="py-1">
-            <div className="flex items-center justify-between pl-2.5 pr-1.5 pb-0.5">
+            <div className="flex items-center flex-shrink-0">
               <span className="message-trail-count">
                 {eff + 1}/{turns.length}
               </span>
               <button
-                className="btn-icon btn-icon-xs"
-                onClick={() => setExpanded(false)}
-                aria-label="Collapse messages"
-                title="Collapse"
+                className="btn-icon"
+                onClick={() => setMsgExpanded(!msgExpanded)}
+                aria-label={msgExpanded ? 'Collapse message' : 'Show full message'}
+                title={msgExpanded ? 'Collapse message' : 'Show the full message'}
               >
-                <ArrowsPointingInIcon className="w-3 h-3" />
+                {msgExpanded ? (
+                  <ChevronUpIcon className="w-4 h-4" />
+                ) : (
+                  <ChevronDownIcon className="w-4 h-4" />
+                )}
               </button>
+              <button
+                className="btn-icon"
+                onClick={() => setExpanded(true)}
+                aria-label="Expand messages"
+                title="Show surrounding messages"
+              >
+                <ArrowsPointingOutIcon className="w-4 h-4" />
+              </button>
+              <button
+                className="btn-icon"
+                onClick={() => setMessageTrailEnabled(false)}
+                aria-label="Hide message trail"
+                title="Hide message trail"
+              >
+                <XMarkIcon className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-1">
+            <div className="flex items-center justify-between pl-2 pr-1 pb-0.5">
+              <span className="message-trail-count">
+                {eff + 1}/{turns.length}
+              </span>
+              <div className="flex items-center">
+                <button
+                  className="btn-icon"
+                  onClick={() => setExpanded(false)}
+                  aria-label="Collapse messages"
+                  title="Collapse"
+                >
+                  <ArrowsPointingInIcon className="w-4 h-4" />
+                </button>
+                <button
+                  className="btn-icon"
+                  onClick={() => setMessageTrailEnabled(false)}
+                  aria-label="Hide message trail"
+                  title="Hide message trail"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div className="px-1">
               {windowTurns.map((turn, w) => {

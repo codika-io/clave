@@ -188,11 +188,33 @@ export async function run(t) {
       { atBottom, scrolled }
     )
 
-    // --- The header toggle hides the trail everywhere, and it sticks ---
-    await win.click('[title="Hide message trail"]')
+    // --- The full-message view: the right chevron unclamps the prompt ---
+    await win.click('.message-trail [aria-label="Show full message"]')
+    await win.waitForTimeout(250)
+    const fullView = await win.evaluate(() => {
+      const el = document.querySelector('.message-trail-text')
+      return {
+        view: document.querySelector('.message-trail')?.getAttribute('data-view'),
+        whiteSpace: el ? getComputedStyle(el).whiteSpace : null,
+        capped: el ? getComputedStyle(el).maxHeight !== 'none' : null
+      }
+    })
+    t.equal('the chevron opens the full-message view', fullView.view, 'full')
+    t.equal('the text unclamps to wrap', fullView.whiteSpace, 'pre-wrap')
+    t.check('with a height cap for a scrollbar', fullView.capped === true, fullView)
+    await win.click('.message-trail [aria-label="Collapse message"]')
+    await win.waitForTimeout(250)
+    t.equal(
+      'and closes back to one line',
+      await win.evaluate(() => document.querySelector('.message-trail')?.getAttribute('data-view')),
+      'line'
+    )
+
+    // --- The box's X hides the trail everywhere; the header brings it back ---
+    await win.click('.message-trail [aria-label="Hide message trail"]')
     await win.waitForTimeout(200)
     t.check(
-      'the toggle removes the trail',
+      "the box's close button removes the trail",
       await win.evaluate(() => !document.querySelector('.message-trail'))
     )
     t.equal(
@@ -204,7 +226,7 @@ export async function run(t) {
     await until(async () =>
       (await win.evaluate(() => !!document.querySelector('.message-trail'))) ? true : null
     )
-    t.check('toggling back brings it back', true)
+    t.check('the header toggle brings it back', true)
   } finally {
     await app.close()
     killLeakedE2eTmux()
