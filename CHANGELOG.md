@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.74.0] — 2026-08-25
+
 ### Changed
 - **The side panel's chrome sits where each control belongs** — the top bar carried the tabs *and* the folder picker, collapse-all and a help button; it now carries the tabs and nothing else, in a box the width of the two of them, centred. Everything about *where the panel is pointed* moved one row down and joined the path, which is a box of its own now rather than a bare line of text: the folder picker opens it, the path names it and drops its parents, the back arrow and the way home flank it, and collapse-all closes what it opened. The help button is gone from the panel's corner altogether — ⌘? still opens the help panel.
 - **Both trees in the side panel are ruled the same way, all the way down** — the Files tab draws the same hairline between rows that the Git tab's repo tree does, at the depth of the row below it, so the two tabs read as one panel with two views. Every row but the first takes one, a folder and the first thing inside it included: that pairing used to be exempt on the theory that a line there cuts a folder off from its own contents, and in the panel it read as the one place the ruling gave out.
