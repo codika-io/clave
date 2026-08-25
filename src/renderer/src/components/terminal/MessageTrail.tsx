@@ -147,9 +147,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
         className={`menu-surface message-trail-surface ${miss ? 'message-trail--miss' : ''}`}
       >
         {!expanded ? (
-          <div
-            className={`flex ${msgExpanded ? 'items-start' : 'items-center'} gap-0.5 px-0.5 py-0.5`}
-          >
+          <div className="flex items-start gap-0.5 px-0.5 py-0.5">
             <div className="flex flex-col flex-shrink-0">
               <button
                 className="panel-icon-btn"
@@ -171,6 +169,21 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
               </button>
             </div>
             <div className="relative flex-1 min-w-0 overflow-hidden">
+              {/* The full-message toggle: a small chevron floating over the
+                  text, revealed by hovering the box (always shown while the
+                  full view is open, so it can be closed). */}
+              <button
+                className="message-trail-peek"
+                onClick={() => setMsgExpanded(!msgExpanded)}
+                aria-label={msgExpanded ? 'Collapse message' : 'Show full message'}
+                title={msgExpanded ? 'Collapse message' : 'Show the full message'}
+              >
+                {msgExpanded ? (
+                  <ChevronUpIcon className="w-3 h-3" />
+                ) : (
+                  <ChevronDownIcon className="w-3 h-3" />
+                )}
+              </button>
               <AnimatePresence mode="popLayout" initial={false} custom={dir}>
                 <motion.button
                   key={`${claudeSessionId}:${eff}`}
@@ -207,18 +220,6 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
               <span className="message-trail-count">
                 {eff + 1}/{turns.length}
               </span>
-              <button
-                className="panel-icon-btn"
-                onClick={() => setMsgExpanded(!msgExpanded)}
-                aria-label={msgExpanded ? 'Collapse message' : 'Show full message'}
-                title={msgExpanded ? 'Collapse message' : 'Show the full message'}
-              >
-                {msgExpanded ? (
-                  <ChevronUpIcon className="w-4 h-4" />
-                ) : (
-                  <ChevronDownIcon className="w-4 h-4" />
-                )}
-              </button>
               <button
                 className="panel-icon-btn"
                 onClick={() => setExpanded(true)}

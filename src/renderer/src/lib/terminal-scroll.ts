@@ -1,3 +1,4 @@
+import type { Terminal } from '@xterm/xterm'
 import { getRegisteredTerminal } from './terminal-registry'
 
 /**
@@ -65,6 +66,25 @@ export function scrollXtermToText(sessionId: string, needle: string, fromBottom:
   if (matches.length === 0) return false
   const k = Math.max(1, Math.min(matches.length, Math.floor(fromBottom)))
   const row = matches[matches.length - k]
-  term.scrollToLine(Math.max(0, row - 1))
+  animateScrollToLine(term, Math.max(0, row - 1))
   return true
+}
+
+/** Ease the viewport to the line instead of jumping: the reader keeps their
+ *  bearings when the jump is thousands of rows. Duration scales gently with
+ *  distance, capped — a long hop should feel long, not take long. A user
+ *  scroll mid-flight is simply overridden for these few frames. */
+function animateScrollToLine(term: Terminal, targetLine: number): void {
+  const start = term.buffer.active.viewportY
+  const delta = targetLine - start
+  if (delta === 0) return
+  const duration = Math.min(400, 150 + Math.abs(delta) * 0.2)
+  const t0 = performance.now()
+  const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3)
+  const step = (now: number): void => {
+    const p = Math.min(1, (now - t0) / duration)
+    term.scrollToLine(Math.round(start + delta * easeOutCubic(p)))
+    if (p < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
 }

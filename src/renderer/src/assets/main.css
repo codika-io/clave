@@ -1829,15 +1829,50 @@ body,
   55% { transform: translateX(4px); }
   80% { transform: translateX(-2px); }
 }
-/* The one-message face (collapsed): the whole line is the scroll-to button. */
+/* The one-message face (collapsed): the whole line is the scroll-to button.
+   Min-height and centering keep a single-line message level with the 28px
+   controls beside it, while a two-line or unclamped one grows from the top. */
 .message-trail-line {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   width: 100%;
   min-width: 0;
+  min-height: var(--control-h-md);
   padding: 0.125rem 0.5rem;
   border-radius: var(--radius-lg);
   text-align: left;
   cursor: pointer;
+}
+/* The full-message toggle: a small chevron floating over the text's top
+   right, revealed by hovering the box; pinned visible while the full view is
+   open so it can be closed. Top-RIGHT, not center: the message line is one
+   click target and a centered overlay would sit exactly on it. */
+.message-trail-peek {
+  position: absolute;
+  top: 1px;
+  right: 0.25rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-control);
+  color: var(--text-tertiary);
+  background-color: color-mix(in srgb, var(--surface-0) 90%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms, color 150ms, background-color 150ms;
+}
+.message-trail:hover .message-trail-peek,
+.message-trail[data-view='full'] .message-trail-peek {
+  opacity: 1;
+  pointer-events: auto;
+}
+.message-trail-peek:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-100);
 }
 .message-trail-line:hover {
   background-color: var(--surface-100);
