@@ -374,7 +374,7 @@ export async function run(t) {
       url !== null && /(^|\.)antasphere\.com$/.test(url.hostname),
       opened
     )
-    t.equal('named as coming from the app', url?.searchParams.get('utm_source'), 'clave')
+    t.equal('named as coming from the app', url?.searchParams.get('utm_source'), 'clave-app')
 
     // ── and no font file came with it ──
     // The failure this catches: someone reintroducing a Sentient @font-face to
