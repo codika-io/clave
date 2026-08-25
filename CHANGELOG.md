@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.76.0] — 2026-08-25
+
 ### Added
 - **History: a group's past sessions, back with one click** (PRDCT-1738) — right-click a group → **History** (or ⌘⇧H for everything) and see every Claude conversation that lived in it, open or long closed: Claude Code's own title for the session, the last thing you said in it and when, the group it sat in, sorted by that last message. Click a row and the conversation comes back as a tab in the group, its whole context restored (`claude --resume`); ⌥-click skips permissions; a live one is simply focused. The link between a closed tab and its group is something Clave never kept before — the record went with the tab — so the app now writes its own small ledger the moment a session is placed or moved, whatever moved it (a drag, ⌘G, an agent), and the three days before the ledger existed are read back from the exchange capture. A group relaunched from its pin keeps its history: groups match by name as well as by id. A transcript Claude Code has cleaned up (30 days by default) stays listed, greyed, with nothing to resume. The field filters instantly on titles, last messages, folders and group names; switch its scope to **Human**, **Agent** or **Tools** and it searches *inside* the transcripts of the rows on screen — what you typed, what the agent answered, or the tools it called — streamed, cancellable, with the matching excerpt under each row.
 
