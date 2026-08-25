@@ -50,31 +50,46 @@ export function locateTranscript(
   projectsRoot: string,
   cwd: string,
   claudeSessionId: string,
-  projectDirs?: readonly string[]
+  index?: TranscriptIndex
 ): string | null {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(claudeSessionId)) return null
   const direct = transcriptPath(projectsRoot, cwd, claudeSessionId)
   if (fs.existsSync(direct)) return direct
-  // The fallback scan lists the root once per LIST, not once per miss: a
-  // caller with many entries passes the listing in.
-  const dirs = projectDirs ?? listProjectDirs(projectsRoot)
-  for (const name of dirs) {
-    const candidate = path.join(projectsRoot, name, `${claudeSessionId}.jsonl`)
-    if (fs.existsSync(candidate)) return candidate
+  // The fallback is a lookup in an index built ONCE per list (O(files)),
+  // never a probe per project dir per miss: the missing share only grows as
+  // Claude Code cleans transcripts up while the ledger never forgets one.
+  const idx = index ?? indexTranscripts(projectsRoot)
+  for (const [dir, stems] of idx) {
+    if (stems.has(claudeSessionId)) return path.join(projectsRoot, dir, `${claudeSessionId}.jsonl`)
   }
   return null
 }
 
-/** The project directories under a transcripts root; empty when unreadable. */
-export function listProjectDirs(projectsRoot: string): string[] {
+/** Project dir name → the transcript stems it holds. */
+export type TranscriptIndex = Map<string, Set<string>>
+
+/** One listing per project dir under the root; empty when unreadable. */
+export function indexTranscripts(projectsRoot: string): TranscriptIndex {
+  const index: TranscriptIndex = new Map()
+  let dirs: fs.Dirent[]
   try {
-    return fs
-      .readdirSync(projectsRoot, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name)
+    dirs = fs.readdirSync(projectsRoot, { withFileTypes: true })
   } catch {
-    return []
+    return index
   }
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue
+    try {
+      const stems = fs
+        .readdirSync(path.join(projectsRoot, d.name))
+        .filter((f) => f.endsWith('.jsonl'))
+        .map((f) => f.slice(0, -'.jsonl'.length))
+      index.set(d.name, new Set(stems))
+    } catch {
+      // An unreadable project dir holds nothing we can resume.
+    }
+  }
+  return index
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

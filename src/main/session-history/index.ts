@@ -146,5 +146,3 @@ export function foldHistory(rows: LedgerRow[]): HistoryEntry[] {
   }
   return [...byId.values()]
 }
-
-export { entryInGroup } from '../../shared/history-group-match'

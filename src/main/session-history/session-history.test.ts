@@ -12,8 +12,10 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SessionLedger, normalizeLedgerRow, type LedgerRow } from './ledger'
-import { captureEventsToRows, entryInGroup, foldHistory } from './index'
+import { captureEventsToRows, foldHistory } from './index'
+import { entryInGroup } from '../../shared/history-group-match'
 import {
+  indexTranscripts,
   locateTranscript,
   peekTranscript,
   PeekCache,
@@ -311,17 +313,24 @@ describe('transcript peek', () => {
     mkdirSync(join(tmp, 'secrets'), { recursive: true })
     writeFileSync(join(tmp, 'secrets', 'private.jsonl'), '')
     expect(locateTranscript(root, '/tmp/proj', '../../secrets/private')).toBeNull()
-    expect(locateTranscript(root, '/tmp/proj', '../../secrets/private', ['-tmp-proj'])).toBeNull()
+    expect(
+      locateTranscript(root, '/tmp/proj', '../../secrets/private', indexTranscripts(root))
+    ).toBeNull()
   })
 
-  it('a pre-listed set of project dirs is what the fallback scans', () => {
+  it('the fallback is an index built once: a stem found under another project dir, nothing probed', () => {
     const root = join(tmp, 'projects')
     mkdirSync(join(root, '-elsewhere'), { recursive: true })
     writeFileSync(join(root, '-elsewhere', 'cc-2.jsonl'), '')
-    expect(locateTranscript(root, '/tmp/proj', 'cc-2', [])).toBeNull()
-    expect(locateTranscript(root, '/tmp/proj', 'cc-2', ['-elsewhere'])).toBe(
+    writeFileSync(join(root, 'not-a-dir.txt'), '')
+    const index = indexTranscripts(root)
+    expect([...index.keys()]).toEqual(['-elsewhere'])
+    expect(index.get('-elsewhere')).toEqual(new Set(['cc-2']))
+    expect(locateTranscript(root, '/tmp/proj', 'cc-2', new Map())).toBeNull()
+    expect(locateTranscript(root, '/tmp/proj', 'cc-2', index)).toBe(
       join(root, '-elsewhere', 'cc-2.jsonl')
     )
+    expect(indexTranscripts(join(tmp, 'nope')).size).toBe(0)
   })
 
   it('PeekCache reads a file once while unchanged, again when it moved, never caches a missing one', () => {

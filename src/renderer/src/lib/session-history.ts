@@ -91,6 +91,12 @@ export async function resumeHistoryEntry(
       },
       target
     )
+    // Select through the store's own path too: it clears an active group or
+    // session VIEW (a project's board covering the pane), which the one-step
+    // add deliberately does not touch — without this the conversation is
+    // spawned, placed and selected under the board, and the click looks
+    // like nothing happened.
+    useSessionStore.getState().selectSession(info.id, false)
     return info.id
   } catch (err) {
     console.error('Failed to resume session from history:', err)

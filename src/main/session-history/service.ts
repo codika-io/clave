@@ -5,7 +5,7 @@ import { CaptureStore } from '../exchange-capture/store'
 import { SessionLedger, normalizeLedgerRow } from './ledger'
 import { captureEventsToRows, foldHistory, type HistoryEntry } from './index'
 import {
-  listProjectDirs,
+  indexTranscripts,
   locateTranscript,
   PeekCache,
   type TranscriptPeek
@@ -28,7 +28,7 @@ import { searchTranscripts, type SearchHit, type SearchScope } from './search'
  * names another directory — the E2E harness's way of seeding transcripts
  * without touching the real store. Peeks are cached per (path, size, mtime)
  * (`PeekCache`: a stat per file, a read only when it moved), and the root's
- * project directories are listed once per list rather than once per miss.
+ * transcripts are indexed once per list rather than probed once per miss.
  */
 
 export interface HistoryListEntry extends HistoryEntry {
@@ -80,13 +80,13 @@ export function listHistory(): { entries: HistoryListEntry[]; skippedLines: numb
   const { rows, skippedLines } = getLedger().readAll()
   const seed = captureEventsToRows(getCapture().readAll().events as never[])
   const root = transcriptsRoot()
-  const projectDirs = listProjectDirs(root)
+  const index = indexTranscripts(root)
   const entries = foldHistory([...seed, ...rows])
     // Nothing to resume without a Claude transcript: `claude agents` tabs
     // and the other CLIs never make a row.
     .filter((e) => e.mode === 'claude')
     .map((e): HistoryListEntry => {
-      const file = locateTranscript(root, e.cwd, e.claudeSessionId, projectDirs)
+      const file = locateTranscript(root, e.cwd, e.claudeSessionId, index)
       pathById.set(e.claudeSessionId, file)
       const transcript = peekCache.get(file)
       return {

@@ -198,7 +198,11 @@ export async function run(t) {
       BrowserWindow.getAllWindows()[0].webContents.send(`session:clear-detected:${id}`, stem)
     }, { id: tabId, stem: 'bad/../stem' })
     await win.waitForTimeout(400)
-    t.check('an invalid stem never reaches the store', !readLedger().some((r) => r.sessionId === tabId && r.claudeSessionId === 'bad/../stem'))
+    // Not merely "the bad string is absent": the ledger normalizer scrubs
+    // any out-of-alphabet id to null on the way in, so the observable is the
+    // tab KEEPING its previous id — a scrubbed row would say null.
+    const lastRow = readLedger().filter((r) => r.sessionId === tabId).pop()
+    t.equal('an invalid stem never reaches the store: the tab keeps its id', lastRow?.claudeSessionId, 'rotated-0002')
 
     // --- Right-click the group → History, preselected ---
     await win.click(`[data-sidebar-item-id="${liveGroupId}"] > button`, { button: 'right' })
@@ -283,6 +287,20 @@ export async function run(t) {
     r = await searched('tools', 'passkey-guard')
     t.equal('Tools scope finds it', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-1']))
 
+    // A superseded search is cancelled: the dialog sends history:search-cancel
+    // with its per-window request id the moment the query changes.
+    await app.evaluate(({ ipcMain }) => {
+      globalThis.__e2eCancels = []
+      ipcMain.on('history:search-cancel', (_e, id) => globalThis.__e2eCancels.push(id))
+    })
+    await win.fill('[data-history-filter]', 'passkey')
+    await win.waitForTimeout(400)
+    await win.fill('[data-history-filter]', 'passkey-gu')
+    await win.waitForTimeout(600)
+    const cancels = await app.evaluate(() => globalThis.__e2eCancels ?? [])
+    t.check('changing the query cancels the superseded search', cancels.length >= 1, cancels)
+    t.check('with a per-window request id', cancels.every((id) => /^history-[a-z0-9]+-\d+$/.test(id)), cancels)
+
     // Bounded to the rows in scope: a word only in Beta's transcript is not
     // found while the Alpha chip is selected, and only Alpha's two
     // transcripts were read (the gone one has none).
@@ -307,6 +325,22 @@ export async function run(t) {
     const zetaTab = await callMcp(app, 'openSession', { groupId: zeta.groupId, mode: 'terminal', cwd: ROOT, name: 'zeta shell' })
     await callMcp(app, 'focus', { sessionId: zetaTab.sessionId })
     await win.waitForTimeout(400)
+    // And the target group's web view is on screen (every project group
+    // here carries a board): the resume must reveal the terminal, not spawn
+    // and place the conversation under the board.
+    writeFileSync(path.join(ROOT, 'board.html'), '<!doctype html><title>board</title><p>board</p>')
+    await callMcp(app, 'setGroupView', { groupId: liveGroupId, url: path.join(ROOT, 'board.html') })
+    await win.keyboard.press('Escape')
+    await win.waitForTimeout(300)
+    await win.click(`[data-sidebar-item-id="${liveGroupId}"] > button`, { button: 'right' })
+    await win.waitForTimeout(350)
+    await win.locator('.menu-surface .menu-item', { hasText: 'Show web view' }).click()
+    await win.waitForTimeout(500)
+    t.check("the group's web view covers the pane", await win.evaluate(() => !!document.querySelector('iframe, webview')))
+    await win.click(`[data-sidebar-item-id="${liveGroupId}"] > button`, { button: 'right' })
+    await win.waitForTimeout(350)
+    await win.locator('.menu-surface .menu-item', { hasText: 'History' }).click()
+    await win.waitForSelector('[data-history-row="cc-alpha-2"]', { timeout: 5000 })
     const readSpawns = await spyPtySpawn(app)
     await win.click('[data-history-row="cc-alpha-2"]')
     await win.waitForTimeout(800)
@@ -316,6 +350,7 @@ export async function run(t) {
     t.check('as a Claude session, without skipping permissions', spawns[0]?.claudeMode === true && spawns[0]?.dangerousMode === false, spawns[0])
     t.equal("in the conversation's own cwd", spawns[0]?.cwd, ROOT)
     t.check('the dialog closed on the click', await win.evaluate(() => !document.querySelector('[data-history-dialog]')))
+    t.check('and the resume revealed the terminal: the web view no longer covers the pane', await win.evaluate(() => !document.querySelector('iframe, webview')))
     const placed = await until(async () => {
       const list = await callMcp(app, 'list', {})
       const s = list.sessions.find((x) => x.groupId === liveGroupId && x.name === 'Export button')
