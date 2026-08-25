@@ -12,7 +12,7 @@ import { useHistoryStore } from '../../store/history-store'
 import { useSessionStore, inActiveWorkspace } from '../../store/session-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
 import { resumeHistoryEntry } from '../../lib/session-history'
-import { visibleInWorkspace } from '../../lib/session-history-diff'
+import { dotStateOf, visibleInWorkspace } from '../../lib/session-history-diff'
 import { cn, shortenPath } from '../../lib/utils'
 import { ContextMenu } from '../ui/ContextMenu'
 import { entryInGroup } from '../../../../shared/history-group-match'
@@ -193,15 +193,31 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   )
   const selectedGroup = groupId ? (chipGroups.find((g) => g.id === groupId) ?? null) : null
 
-  /** Live conversation → its run state, the sidebar's own words. */
+  /** Live conversation → its run state, the sidebar's own words. Memoised on
+   *  a STABLE signature, not on the sessions array: that array gets a fresh
+   *  identity on every store update (activity, output, renames), and hanging
+   *  the map — and therefore the search scope — off it cancelled and
+   *  restarted a running transcript search on churn this very dialog renders. */
+  const liveSignature = useMemo(
+    () =>
+      sessions
+        .filter((s) => s.alive && s.claudeSessionId)
+        .map((s) => `${s.claudeSessionId}:${s.agentState ?? 'idle'}`)
+        .sort()
+        .join('|'),
+    [sessions]
+  )
   const liveStates = useMemo(
     () =>
-      new Map(
-        sessions
-          .filter((s) => s.alive && s.claudeSessionId)
-          .map((s) => [s.claudeSessionId as string, s.agentState ?? 'idle'])
+      new Map<string, string>(
+        liveSignature === ''
+          ? []
+          : liveSignature.split('|').map((pair) => {
+              const at = pair.lastIndexOf(':')
+              return [pair.slice(0, at), pair.slice(at + 1)] as const
+            })
       ),
-    [sessions]
+    [liveSignature]
   )
 
   // The rows in SCOPE: workspace and group, before any text. This is what a
@@ -302,9 +318,9 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
 
   const resume = useCallback(
     (entry: HistoryListEntry, dangerousMode: boolean) => {
-      // Nothing to resume (transcript gone, tab not open): the dialog stays,
-      // the row's own title says why.
-      if (!liveStates.has(entry.claudeSessionId) && !entry.transcript.exists) return
+      // Nothing to resume (transcript gone or folder unknown, tab not
+      // open): the dialog stays, the row's own title says why.
+      if (!liveStates.has(entry.claudeSessionId) && (!entry.transcript.exists || !entry.cwd)) return
       closeHistory()
       void resumeHistoryEntry(entry, { groupId: selectedGroup?.id ?? null, dangerousMode })
     },
@@ -469,17 +485,12 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
           ) : (
             rows.map((e) => {
               const live = liveStates.has(e.claudeSessionId)
-              const run = live ? liveStates.get(e.claudeSessionId) : undefined
-              const dotState = !live
-                ? 'closed'
-                : run === 'working'
-                  ? 'working'
-                  : run === 'blocked'
-                    ? 'blocked'
-                    : 'open'
+              const dotState = dotStateOf(live, liveStates.get(e.claudeSessionId))
               const missing = !e.transcript.exists
               const prompt = excerpt(e.transcript.lastPrompt)
-              const gname = latestGroupName(e)
+              const gname =
+                latestGroupName(e) ??
+                (e.source === 'transcript' && e.cwd ? (e.cwd.split('/').pop() ?? null) : null)
               const rowHits = searching ? (hits.get(e.claudeSessionId) ?? []) : []
               return (
                 <button

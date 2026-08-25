@@ -158,6 +158,36 @@ export async function run(t) {
       { type: 'last-prompt', lastPrompt: 'Foreign workspace' }
     ])
   )
+  // A transcript with NO cwd anywhere: scoped by its store dir name, never
+  // resumable. One in our dir (listed, inert) and one in the foreign dir
+  // (never listed here).
+  writeFileSync(
+    path.join(pdir, 'cc-nocwd.jsonl'),
+    transcript([
+      { type: 'mode', mode: 'default' },
+      { type: 'ai-title', aiTitle: 'Folder unknown' },
+      { type: 'last-prompt', lastPrompt: 'no cwd anywhere' }
+    ])
+  )
+  writeFileSync(
+    path.join(foreignDir, 'cc-nocwd-foreign.jsonl'),
+    transcript([
+      { type: 'mode', mode: 'default' },
+      { type: 'ai-title', aiTitle: 'Foreign folder unknown' },
+      { type: 'last-prompt', lastPrompt: 'foreign no cwd' }
+    ])
+  )
+  // The same stem under TWO project dirs (a resume-from-a-subdir stub): one
+  // conversation, one row, the larger transcript wins.
+  writeFileSync(path.join(foreignDir, 'cc-dup.jsonl'), transcript([{ type: 'mode', mode: 'default' }]))
+  writeFileSync(
+    path.join(pdir, 'cc-dup.jsonl'),
+    transcript([
+      { type: 'user', timestamp: '2026-08-23T07:00:00.000Z', cwd: ROOT, message: { content: 'The duplicated conversation' } },
+      { type: 'ai-title', aiTitle: 'Duplicated stem' },
+      { type: 'last-prompt', lastPrompt: 'The duplicated conversation, big copy' }
+    ])
+  )
   writeFileSync(
     path.join(pdir, 'cc-beta-1.jsonl'),
     transcript([
@@ -434,6 +464,9 @@ export async function run(t) {
     const allIds = await rowIds()
     t.check('Everything lists the conversation Clave never ran', allIds.includes('cc-outside'))
     t.check('but not one whose own cwd is another root', !allIds.includes('cc-foreign'), allIds)
+    t.check('a cwd-less transcript is scoped by its store dir: ours listed, the foreign one not', allIds.includes('cc-nocwd') && !allIds.includes('cc-nocwd-foreign'), allIds)
+    t.equal('one stem under two dirs is ONE row', allIds.filter((id) => id === 'cc-dup').length, 1)
+    t.equal('and the larger transcript is the one shown', await win.evaluate(() => document.querySelector('[data-history-row="cc-dup"] .history-row-title')?.textContent), 'Duplicated stem')
     t.equal('titled by its own ai-title', await win.evaluate(() => document.querySelector('[data-history-row="cc-outside"] .history-row-title')?.textContent), 'Outside conversation')
     t.check('every closed row wears the hollow dot', await win.evaluate(() => [...document.querySelectorAll('[data-history-row]:not([data-live])')].every((el) => el.getAttribute('data-state') === 'closed')))
 
@@ -445,6 +478,28 @@ export async function run(t) {
     t.check('and the closed store-only conversation is gone', !openRows.some((r) => r.id === 'cc-outside'))
     await win.click('[data-history-open]')
     await win.waitForTimeout(200)
+
+    // --- Search reaches inside store-only transcripts too ---
+    await win.click('[data-history-scope="human"]')
+    await win.fill('[data-history-filter]', 'plain terminal')
+    r = await searched('human', 'plain terminal')
+    t.check('the transcript search finds a word inside a store-only conversation', (r?.rows ?? []).includes('cc-outside'), r?.rows)
+    // A store update while the query is unchanged must not cancel the search.
+    const cancelsBefore = (await app.evaluate(() => globalThis.__e2eCancels?.length ?? 0))
+    await callMcp(app, 'rename', { target: 'session', id: tabId, name: 'renamed mid-search' })
+    await callMcp(app, 'rename', { target: 'session', id: tabId, name: 'renamed again' })
+    await win.waitForTimeout(700)
+    const cancelsAfter = (await app.evaluate(() => globalThis.__e2eCancels?.length ?? 0))
+    t.equal('an unrelated session-store update never cancels or restarts the search', cancelsAfter, cancelsBefore)
+    await win.click('[data-history-scope="titles"]')
+    await win.fill('[data-history-filter]', '')
+
+    // --- A cwd-less row has nothing to resume ---
+    const inertBefore = (await readSpawns()).length
+    await win.click('[data-history-row="cc-nocwd"]')
+    await win.waitForTimeout(400)
+    t.equal('clicking a cwd-less row spawns nothing', (await readSpawns()).length, inertBefore)
+    t.check('and leaves the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
 
     // --- A store-only conversation resumes like any other ---
     const spawnsBefore = (await readSpawns()).length

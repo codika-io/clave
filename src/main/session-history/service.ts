@@ -35,6 +35,9 @@ export interface HistoryListEntry extends HistoryEntry {
   /** Where the entry comes from: the ledger (a conversation Clave ran), or
    *  a transcript the store holds that Clave never saw ("Everything"). */
   source: 'ledger' | 'transcript'
+  /** The store dir a synthesized entry was found under — the workspace
+   *  fallback when its transcript carries no cwd at all. */
+  projectDir?: string
   transcript: TranscriptPeek
   /** The row's title: Claude Code's own title when the tail carries one, else
    *  the tab's name as the ledger last saw it. */
@@ -106,14 +109,28 @@ export function listHistory(options?: { all?: boolean }): {
     })
   if (options?.all) {
     const known = new Set(entries.map((e) => e.claudeSessionId))
+    // One stem can live under TWO project dirs (`claude --resume` run from a
+    // subdirectory writes a stub beside the real transcript): same
+    // conversation, one row — the larger file wins, and it is also the one
+    // the search reads.
+    const synthAt = new Map<string, number>()
     for (const { dir, stem } of unknownStems(index, known)) {
       const file = path.join(root, dir, `${stem}.jsonl`)
       const transcript = peekCache.get(file)
       if (!transcript.exists) continue
+      const existingAt = synthAt.get(stem)
+      if (existingAt !== undefined) {
+        if (entries[existingAt].transcript.sizeBytes >= transcript.sizeBytes) continue
+        entries.splice(existingAt, 1)
+        synthAt.delete(stem)
+        for (const [k, v] of synthAt) if (v > existingAt) synthAt.set(k, v - 1)
+      }
       pathById.set(stem, file)
       const firstSeenAt = transcript.firstAt ?? transcript.modifiedAt ?? ''
       const lastHumanAt = transcript.lastHumanAt ?? transcript.modifiedAt ?? firstSeenAt
+      synthAt.set(stem, entries.length)
       entries.push({
+        projectDir: dir,
         claudeSessionId: stem,
         sessionId: '',
         name: '',

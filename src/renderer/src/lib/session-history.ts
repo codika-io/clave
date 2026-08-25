@@ -59,6 +59,9 @@ export async function resumeHistoryEntry(
     return live.id
   }
   if (!entry.transcript.exists) return null
+  // A transcript that names no working directory anywhere cannot be resumed:
+  // `claude --resume` only finds a conversation from its own project dir.
+  if (!entry.cwd) return null
   const workspaceId = entry.workspaceId ?? getActiveWorkspaceId() ?? undefined
   try {
     const info = await window.electronAPI.spawnSession(entry.cwd, {

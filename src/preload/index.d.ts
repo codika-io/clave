@@ -45,6 +45,7 @@ export interface HistorySearchHit {
 
 export interface HistoryListEntry {
   source: 'ledger' | 'transcript'
+  projectDir?: string
   claudeSessionId: string
   sessionId: string
   name: string

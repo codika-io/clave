@@ -43,7 +43,8 @@ export interface TranscriptPeek {
 
 const TAIL_FIRST = 64 * 1024
 const TAIL_SECOND = 1024 * 1024
-const HEAD_BYTES = 16 * 1024
+const HEAD_FIRST = 64 * 1024
+const HEAD_SECOND = 1024 * 1024
 
 /** The transcript's expected location under a projects root. Same encoding
  *  the export handlers and the capture use (`transcriptProjectDirName`). */
@@ -279,7 +280,15 @@ export function peekTranscript(filePath: string | null): TranscriptPeek {
   }
   let head: HeadScan = { cwd: null, firstAt: null }
   try {
-    head = scanHead(readHead(filePath, HEAD_BYTES))
+    head = scanHead(readHead(filePath, HEAD_FIRST))
+    // A transcript can open with dozens of KB of cwd-less records (mode,
+    // permission-mode, injected context); on the real store 7% carried no
+    // cwd in the first 16 KB and a handful none in the first 64 KB. One
+    // wider read recovers all but the files that truly carry none.
+    if (head.cwd === null && tail.size > HEAD_FIRST) {
+      const wider = scanHead(readHead(filePath, HEAD_SECOND))
+      head = { cwd: wider.cwd, firstAt: head.firstAt ?? wider.firstAt }
+    }
   } catch {
     // The tail answered; the head is best-effort.
   }

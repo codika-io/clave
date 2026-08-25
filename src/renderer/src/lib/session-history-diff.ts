@@ -131,12 +131,40 @@ export function resumeTargetGroup(
  *  the store is lossy, the transcript's records are not. With no workspace
  *  (or no root known), everything shows. */
 export function visibleInWorkspace(
-  entry: { workspaceId: string | null; cwd: string },
+  entry: { workspaceId: string | null; cwd: string; projectDir?: string },
   activeWorkspaceId: string | null,
   activeRoot: string | null
 ): boolean {
   if (!activeWorkspaceId) return true
   if (entry.workspaceId) return entry.workspaceId === activeWorkspaceId
-  if (!activeRoot || !entry.cwd) return true
-  return entry.cwd === activeRoot || entry.cwd.startsWith(activeRoot + '/')
+  if (!activeRoot) return true
+  if (entry.cwd) return entry.cwd === activeRoot || entry.cwd.startsWith(activeRoot + '/')
+  // No cwd anywhere in the transcript: fall back to the store's project dir
+  // name — a lossy encoding, perfectly adequate for a prefix test, and the
+  // difference between "shown in its workspace" and "leaks into every one".
+  if (entry.projectDir) {
+    const enc = encodeProjectDir(activeRoot)
+    return entry.projectDir === enc || entry.projectDir.startsWith(enc + '-')
+  }
+  return true
+}
+
+/** The store's dir-name encoding of a cwd (`/` and `.` become `-`). Kept in
+ *  step with the main process's `transcriptProjectDirName`. */
+export function encodeProjectDir(cwd: string): string {
+  return cwd.replace(/[/.]/g, '-')
+}
+
+/** The row dot's word, the sidebar's own mapping: a closed conversation is a
+ *  hollow ring; a live tab is blue while its agent works, amber while it
+ *  waits on the human, green otherwise (idle and done both read as an open
+ *  tab at rest — History's axis is open/closed, not seen/unseen). */
+export function dotStateOf(
+  live: boolean,
+  run: string | undefined
+): 'closed' | 'working' | 'blocked' | 'open' {
+  if (!live) return 'closed'
+  if (run === 'working') return 'working'
+  if (run === 'blocked') return 'blocked'
+  return 'open'
 }

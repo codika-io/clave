@@ -310,6 +310,39 @@ describe('transcript peek', () => {
     expect(peek.lastHumanAt).toBe('2026-08-25T08:00:00.000Z')
   })
 
+  it('the FIRST cwd and the FIRST timestamp win, even when the break never fires', () => {
+    // Two cwd-only records (no timestamp): the early break cannot end the
+    // scan, only the first-wins guards keep /a.
+    const cwdOnly = [
+      JSON.stringify({ type: 'x', cwd: '/a' }),
+      JSON.stringify({ type: 'x', cwd: '/b' })
+    ].join('\n')
+    expect(scanHead(cwdOnly)).toEqual({ cwd: '/a', firstAt: null })
+    const tsOnly = [
+      JSON.stringify({ type: 'x', timestamp: 't1' }),
+      JSON.stringify({ type: 'x', timestamp: 't2' })
+    ].join('\n')
+    expect(scanHead(tsOnly)).toEqual({ cwd: null, firstAt: 't1' })
+  })
+
+  it('a cwd past the first 64 KB is found by the wider second head read', () => {
+    const file = join(tmp, 'latecwd.jsonl')
+    const filler = JSON.stringify({ type: 'mode', mode: 'default' })
+    const lines: string[] = []
+    for (let i = 0; i < 3000; i++) lines.push(filler) // ~90 KB of cwd-less records
+    lines.push(
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-08-25T06:00:00.000Z',
+        cwd: '/tmp/late-root',
+        message: { content: 'hi' }
+      })
+    )
+    lines.push(TAIL)
+    writeFileSync(file, lines.join('\n') + '\n')
+    expect(peekTranscript(file).cwd).toBe('/tmp/late-root')
+  })
+
   it("scanHead reads the conversation's own cwd and start, first record wins", () => {
     const head = [
       JSON.stringify({ type: 'ai-title', aiTitle: 'no cwd here' }),
