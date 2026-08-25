@@ -11,6 +11,7 @@ import {
 import type { SessionGroup, SettingsSection } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
+import { useFullScreen } from '../../hooks/use-fullscreen'
 import { launchSession } from '../../lib/launch-session'
 import { loadLaunchPrefs, type AgentSetup } from '../../store/launch-prefs'
 import { TerminalGrid } from './TerminalGrid'
@@ -40,7 +41,9 @@ import {
 import { promptRestore } from '../../store/restore-prompt-store'
 import { RestorePromptDialog } from '../ui/RestorePromptDialog'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
-import { adoptRecord, adoptRehomed } from '../../lib/adopt-record'
+import { adoptRecord, adoptRehomed, adoptHiddenRecord } from '../../lib/adopt-record'
+import { planBootAdoption, survivingIds } from '../../lib/boot-adoption'
+import { parkToolbarSurvivor } from '../../lib/toolbar-terminal-registry'
 import { initSecretStore } from '../../store/secret-store'
 import { initCopyOfferStore } from '../../store/copy-offer-store'
 import { ToolbarSecretPopover } from './ToolbarSecretPopover'
@@ -74,6 +77,8 @@ const LAUNCH_SHORTCUTS: Record<string, AgentSetup | null> = {
 
 export function AppShell() {
   const sidebarOpen = useSessionStore((s) => s.sidebarOpen)
+  // No traffic lights in fullscreen, so no clearance to hold for them.
+  const fullScreen = useFullScreen()
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const toggleSidebar = useSessionStore((s) => s.toggleSidebar)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
@@ -167,36 +172,67 @@ export function AppShell() {
         // (hidden where not the shown one, so cross-workspace messaging and
         // clave_list never regress); dead records are offered once, all
         // together, as they always were.
+        //
+        // Not every record is a TAB, though — a group's quick-launch
+        // terminal, a session view's server and a toolbar button's dev
+        // server all leave one behind. planBootAdoption sorts them by what
+        // the record says the session IS, so the hidden halves come back
+        // where they belong instead of as rows beside the groups.
         const survivors = (await window.electronAPI?.listSessionRecords?.()) ?? []
-        const liveOnes = survivors.filter((s) => s.live)
-        const deadOnes = survivors.filter((s) => !s.live)
+        const plan = planBootAdoption(survivors)
 
         const adoptedIds: string[] = []
-        for (const s of liveOnes) {
+        for (const s of plan.liveTabs) {
           const id = await adoptRecord(s, activeWorkspaceId)
           if (id) adoptedIds.push(id)
         }
-        if (deadOnes.length > 0) {
-          if (await promptRestore(deadOnes)) {
-            for (const s of deadOnes) {
+        if (plan.deadTabs.length > 0) {
+          if (await promptRestore(plan.deadTabs)) {
+            for (const s of plan.deadTabs) {
               const id = await adoptRecord(s, activeWorkspaceId)
               if (id) adoptedIds.push(id)
             }
           } else {
-            for (const s of deadOnes) {
+            for (const s of plan.deadTabs) {
               void window.electronAPI?.discardSessionRecord?.(s.tmuxName ?? s.id)
             }
           }
         }
+        // A dead hidden half has nothing worth restoring: relaunching it
+        // gives a bare shell in the same cwd, not the dev server that died,
+        // and its owner's start action is the way back. Drop the record so
+        // it can never surface as a tab.
+        for (const s of plan.discard) {
+          void window.electronAPI?.discardSessionRecord?.(s.tmuxName ?? s.id)
+        }
+        // Toolbar terminals are not sidebar citizens at all: park each live
+        // one for its button, which reattaches when next opened instead of
+        // starting a second server on the same port.
+        for (const s of plan.toolbar) {
+          if (s.link?.kind === 'toolbar') parkToolbarSurvivor(s.link.key, s)
+        }
 
         // Rebuild the layout around what survives: a group is kept if a
-        // member was adopted. Every workspace's groups live in this one file,
-        // so every key is merged (null = the unscoped ones).
+        // member — or a running quick-launch terminal — came back. The
+        // hidden halves count as surviving here even though they are adopted
+        // just below: leaving them out is what detached a group terminal
+        // from its row and then pruned the group for looking empty. Every
+        // workspace's groups live in this one file, so every key is merged
+        // (null = the unscoped ones).
         const keys: (string | null)[] = [
           null,
           ...useWorkspaceStore.getState().workspaces.map((w) => w.id)
         ]
-        useSessionStore.getState().mergeLayoutForKeys(keys, persisted, adoptedIds)
+        useSessionStore
+          .getState()
+          .mergeLayoutForKeys(keys, persisted, survivingIds(plan, adoptedIds))
+
+        // Owners are in place now (groups from the merge, owning tabs from
+        // the adoption above), so the hidden halves can hang themselves back
+        // off them.
+        for (const s of plan.hidden) {
+          await adoptHiddenRecord(s, activeWorkspaceId)
+        }
       } catch (err) {
         console.error('Failed to restore sessions/groups on launch:', err)
       } finally {
@@ -600,6 +636,9 @@ export function AppShell() {
             animate={{ width: sidebarWidth, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={skipTransition.current ? { duration: 0 } : sidebarTransition}
+            // Named so a popover anchored inside the sidebar can measure the
+            // edge it has to clear (the group terminals panel).
+            data-sidebar-shell
             className="flex-shrink-0 overflow-hidden relative z-10"
           >
             {/* Settings mode swaps in its own navigation sidebar */}
@@ -640,9 +679,15 @@ export function AppShell() {
             launcher panel's top edge, is measured off this bar. */}
         <div className="floating-card flex-shrink-0 !bg-surface-0/70">
           <div
+            data-toolbar-row
             className={cn(
               'h-[var(--toolbar-row-h)] flex items-center justify-between px-0.5 flex-shrink-0',
-              !sidebarOpen && 'pl-[4.75rem]'
+              // With the sidebar closed the toolbar is what runs under the
+              // traffic lights, so it holds their width open. In fullscreen
+              // there are none, and that padding is a hole with the sidebar
+              // button parked to the right of it — so it goes, and the button
+              // sits where every other toolbar control does.
+              !sidebarOpen && !fullScreen && 'pl-[4.75rem]'
             )}
             style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
           >

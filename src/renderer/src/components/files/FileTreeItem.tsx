@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { FileIcon } from './file-icons'
-import { TREE_INDENT_PX, TREE_ROW_PAD_PX, TREE_CHEVRON_PX } from './tree-metrics'
+import { TREE_INDENT_PX, TREE_ROW_PAD_PX } from './tree-metrics'
 import type { FlatTreeNode } from '../../hooks/use-file-tree'
 
 const DOUBLE_CLICK_MS = 300
@@ -81,7 +81,7 @@ export function FileTreeItem({
       data-tree-depth={node.depth}
       data-tree-name={node.name}
       data-tree-expanded={node.type === 'directory' ? String(!!node.expanded) : undefined}
-      className={`relative flex items-center gap-1.5 h-[var(--panel-row-h)] pr-3 cursor-pointer select-none transition-colors text-sm ${
+      className={`flex items-center gap-1.5 h-[var(--panel-row-h)] pr-3 cursor-pointer select-none transition-colors text-sm ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
       } ${node.ignored ? 'opacity-40' : ''}`}
       style={{ paddingLeft: `${TREE_ROW_PAD_PX + node.depth * TREE_INDENT_PX}px` }}
@@ -91,16 +91,6 @@ export function FileTreeItem({
       draggable
       onDragStart={handleDragStart}
     >
-      {/* Tree indent guides — one per level, down the middle of that level's
-          chevron column. */}
-      {Array.from({ length: node.depth }, (_, i) => (
-        <span
-          key={i}
-          className="tree-guide"
-          style={{ left: `${TREE_ROW_PAD_PX + i * TREE_INDENT_PX + TREE_CHEVRON_PX / 2}px` }}
-        />
-      ))}
-
       {/* Chevron for directories — a bare glyph on the row's gap, the way the
           git tree's rows carry theirs. A file holds the same column open with
           a spacer so the names line up. */}

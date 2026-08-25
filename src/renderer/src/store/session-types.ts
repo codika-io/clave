@@ -221,6 +221,12 @@ export interface SessionGroup {
    *  on a live group. Null/absent = the `+` launches with no prompt, exactly
    *  like the sidebar's own agent button. */
   prompt?: string | null
+  /** The `+` starts its session at the WORKSPACE ROOT instead of the group's
+   *  `cwd`. Stamped from the `.clave` entry session that gave this group its
+   *  brief (`rootSession: true`) — the `+` reproduces that session, so a tab
+   *  opened an hour later lands where the group's own tabs did. `cwd` still
+   *  names the project dir the prompt's @-tokens resolve against. */
+  rootSession?: boolean
   color?: GroupTerminalColor | null
   /** Attached web view — persists with the group (serialized whole). */
   view?: GroupViewConfig | null

@@ -288,6 +288,19 @@ function baseTmuxName(cwd: string, modeTag: string): string {
 // session is gone, and reap any stray `clave-*` session that has no sidecar —
 // so nothing can pile up invisibly.
 
+/** Who owns a session that is not a tab of its own (SessionRecord.link).
+ *  The boot restore reads it to bring the session back as that half instead
+ *  of as a top-level tab — see `lib/boot-adoption.ts` in the renderer, which
+ *  owns the rules. */
+export type SessionLink =
+  /** A group's quick-launch terminal (the icons on a group row). */
+  | { kind: 'group-terminal'; groupId: string; terminalId: string }
+  /** The hidden process serving a single session's attached web view. */
+  | { kind: 'session-view'; ownerId: string }
+  /** A toolbar button's persistent terminal — never a sidebar row at all;
+   *  `key` is the `${pinId}:${terminalIndex}` of the toolbar registry. */
+  | { kind: 'toolbar'; key: string }
+
 /** What the renderer needs to recreate + reattach a surviving session's tab.
  *
  *  Historically this metadata only existed for tmux-backed sessions (the
@@ -344,6 +357,19 @@ export interface SessionRecord {
    *  action respawns the command. Mirrors displayName: renderer state dies
    *  with the window, the record is what survives. */
   view?: { url: string; title?: string; command?: string; cwd?: string }
+  /** What this session IS — absent means an ordinary tab, which is every
+   *  session the user opened and every record written before this field
+   *  existed. A session spawned as the hidden half of something else (a
+   *  group's quick-launch terminal, a session view's serving process, a
+   *  toolbar server button) carries the identity of that owner here.
+   *
+   *  Without it the record is indistinguishable from a tab's, and the next
+   *  launch brings a dev server back as a mystery tab in the sidebar while
+   *  its owner shows "not running" and starts a duplicate. The renderer's
+   *  own links do not close that gap: the toolbar's is in-memory, the
+   *  session view's is deliberately not persisted, and the group's lives in
+   *  the sidebar layout, which drops it with the group. */
+  link?: SessionLink
   /** Populated only on the listAdoptableSessions() path (not persisted in
    *  the record). True when the backing tmux session is still running (app
    *  quit/reopen, no reboot) → reattach to the live process. False when the
@@ -508,6 +534,35 @@ export interface PtySpawnOptions {
   /** The persisted key of the window asking (stamped by pty-handlers from the
    *  sender; adoption and re-homing re-stamp through the same path). */
   windowKey?: string
+  /** What this session is the hidden half of, when it is one — persisted on
+   *  the record so the next launch can put it back there. Omitted = a tab.
+   *  Carried forward across adoption like the display name. */
+  link?: SessionLink
+}
+
+/** Validate a link crossing the IPC boundary. It is only ever compared to
+ *  renderer ids and echoed back, but it lands in a JSON file we re-read at
+ *  boot, so the shape is pinned here rather than trusted. Unknown kinds and
+ *  over-long ids are dropped, never coerced. */
+function sanitizeSessionLink(link: unknown): SessionLink | undefined {
+  if (!link || typeof link !== 'object') return undefined
+  const l = link as Record<string, unknown>
+  const str = (v: unknown): string | null =>
+    typeof v === 'string' && v.length > 0 && v.length <= 200 ? v : null
+  if (l.kind === 'group-terminal') {
+    const groupId = str(l.groupId)
+    const terminalId = str(l.terminalId)
+    return groupId && terminalId ? { kind: 'group-terminal', groupId, terminalId } : undefined
+  }
+  if (l.kind === 'session-view') {
+    const ownerId = str(l.ownerId)
+    return ownerId ? { kind: 'session-view', ownerId } : undefined
+  }
+  if (l.kind === 'toolbar') {
+    const key = str(l.key)
+    return key ? { kind: 'toolbar', key } : undefined
+  }
+  return undefined
 }
 
 interface PendingSpawn {
@@ -695,7 +750,12 @@ class PtyManager {
       workspaceId: previous?.workspaceId ?? options?.workspaceId,
       // The asking window is the home from now on — an adoption or a move
       // re-stamps; only a windowless spawn keeps what the record had.
-      windowKey: options?.windowKey ?? previous?.windowKey
+      windowKey: options?.windowKey ?? previous?.windowKey,
+      // What the session is the hidden half of. The caller wins (a re-spawn
+      // may hang the same terminal off a different group), else what the
+      // record already said, so an adoption never erases the ownership that
+      // keeps the session out of the sidebar.
+      link: sanitizeSessionLink(options?.link) ?? previous?.link
     }
     let recordKey: string | null = null
 

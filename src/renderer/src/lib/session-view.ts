@@ -33,7 +33,10 @@ export async function ensureSessionViewServer(ownerId: string): Promise<void> {
     initialCommand: view.command,
     autoExecute: true,
     // The serving session lives in its owner's workspace, not the active one.
-    workspaceId: owner.workspaceId ?? undefined
+    workspaceId: owner.workspaceId ?? undefined,
+    // `serverSessionId` is renderer-only by design; the record's link is what
+    // survives the quit, and without it this process came back as a tab.
+    link: { kind: 'session-view', ownerId }
   })
   // The PTY only actually spawns when something calls start() with a size —
   // normally the terminal pane on first measure. This session is never
@@ -68,6 +71,8 @@ export async function ensureSessionViewServer(ownerId: string): Promise<void> {
     ]
   }))
   // Relink through the store action so the view object updates in place. The
-  // record write repeats (serverSessionId is never persisted), which is fine.
+  // record write repeats (serverSessionId is never persisted on the OWNER's
+  // record — the serving session's own record carries the link instead, which
+  // is what brings it back attached rather than as a tab).
   useSessionStore.getState().setSessionView(ownerId, { ...view, serverSessionId: info.id })
 }

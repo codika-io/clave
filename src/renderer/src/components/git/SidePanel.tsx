@@ -252,9 +252,16 @@ export function SidePanel() {
       {/* Header — the panel's chrome, and the window's drag region; every
           interactive child opts out. No rule under it: the bars ARE the chrome,
           exactly as the sidebar's launcher and switcher panels are, and a line
-          under them only says again what the panel edge already said. */}
+          under them only says again what the panel edge already said.
+
+          The gap between the two rows is the content column's gap-2, not the
+          sidebar's 4px between launcher and switcher: the tab bar sits level
+          with the toolbar, so the box under it is this edge's launcher and has
+          to land on the terminal card's top edge (--content-top-offset), the
+          way the sidebar's launcher does across the other divide. At 4px it
+          started four pixels above the card and read as misaligned. */}
       <div
-        className="flex flex-col gap-1 px-2 pt-2 pb-1 flex-shrink-0"
+        className="flex flex-col gap-2 px-2 pt-2 pb-1 flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         {/* Row 1 — which tab, and nothing else. The controls that used to sit
@@ -413,7 +420,7 @@ export function SidePanel() {
             {pathMenuOpen && parentPaths.length > 0 && (
               <div
                 ref={pathMenuRef}
-                className="fixed z-50 min-w-[180px] max-w-[320px] max-h-[60vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
+                className="menu-surface menu-pop-mount fixed z-50 min-w-[180px] max-w-[320px] p-1"
                 style={{
                   top: (pathButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
                   right:
@@ -421,6 +428,9 @@ export function SidePanel() {
                     (pathButtonRef.current?.getBoundingClientRect().right ?? 0)
                 }}
               >
+                {/* The scroll lives one level in: the surface clips its own
+                    corners, so it cannot also be the thing that scrolls. */}
+                <div className="max-h-[60vh] overflow-y-auto">
                 {parentPaths.map((item) => (
                   <button
                     key={item.path}
@@ -428,9 +438,8 @@ export function SidePanel() {
                       setCustomCwd(item.path)
                       setPathMenuOpen(false)
                     }}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium hover:bg-surface-200 transition-colors ${
-                      item.path === cwd ? 'text-accent' : 'text-text-primary'
-                    }`}
+                    className="menu-item"
+                    data-selected={item.path === cwd}
                   >
                     <svg
                       width="12"
@@ -449,6 +458,7 @@ export function SidePanel() {
                     <span className="truncate">{item.name}</span>
                   </button>
                 ))}
+                </div>
               </div>
             )}
           </div>

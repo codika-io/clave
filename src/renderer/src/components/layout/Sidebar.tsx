@@ -7,6 +7,8 @@ import {
   inActiveWorkspace,
   type GroupTerminalColor
 } from '../../store/session-store'
+import { resolveGroupLaunchCwd } from '../../store/group-defaults'
+import { groupHasContent } from '../../lib/sidebar-layout-partition'
 import { useWorkspaceStore, getWorkspaceById } from '../../store/workspace-store'
 import ColorPicker from '../ui/ColorPicker'
 import { SessionItem } from '../session/SessionItem'
@@ -31,8 +33,9 @@ import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGrou
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
 import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
+import { useFullScreen } from '../../hooks/use-fullscreen'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
-import { Wordmark } from './Wordmark'
+import { Wordmark, WordmarkBy } from './Wordmark'
 import { ScrollArea } from '../ui/scroll-area'
 import {
   PencilSquareIcon,
@@ -138,6 +141,8 @@ function useOverflows(ref: React.RefObject<HTMLDivElement | null>): boolean {
 }
 
 export function Sidebar() {
+  // No traffic lights in fullscreen, so the wordmark's clearance for them goes.
+  const fullScreen = useFullScreen()
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   // When there's an active selection, unselected tabs/groups fade so the
@@ -590,7 +595,10 @@ export function Sidebar() {
           if (item.type === 'fileTab') return true
           if (item.type === 'group') {
             const group = groups.find((g) => g.id === item.groupId)
-            if (!group || group.sessionIds.length === 0) return false
+            // A running quick-launch terminal keeps a group on screen even
+            // with no tabs left in it: its icon is the only handle on that
+            // process (PRDCT-1756).
+            if (!group || !groupHasContent(group)) return false
             // Hide groups toggled off via pinned buttons
             if (hiddenGroupIds.has(item.groupId)) return false
             if (!inActiveWorkspace(group, activeWorkspaceId)) return false
@@ -660,16 +668,22 @@ export function Sidebar() {
   )
 
   /** The group's own `+`: launch a session INTO this group, with the workspace's
-   *  remembered agent setup and the GROUP's default prompt. The group's cwd wins
-   *  over the workspace root — a group is about one place — and the prompt's
-   *  @-tokens resolve against the workspace root, exactly as a pinned group's
-   *  session prompts do. */
+   *  remembered agent setup, the GROUP's default prompt, and the directory the
+   *  group's declared sessions open in — its cwd, because a group is about one
+   *  place, unless the `.clave` anchored those sessions at the workspace root
+   *  (`rootSession`), in which case the `+` lands there too. Either way the
+   *  prompt's @-tokens resolve against the workspace root and the group's cwd,
+   *  exactly as a pinned group's session prompts do. */
   const handleGroupNewSession = useCallback(async (groupId: string) => {
     const group = useSessionStore.getState().groups.find((g) => g.id === groupId)
     if (!group) return
     const workspaceId = useWorkspaceStore.getState().activeWorkspaceId
     const root = getWorkspaceById(workspaceId)?.rootDir ?? null
-    const cwd = group.cwd ? ({ kind: 'path', path: group.cwd } as const) : ({ kind: 'workspace-root' } as const)
+    // Where the `+` lands: the group's own directory, unless the `.clave` it was
+    // stamped from anchors its sessions at the workspace root. `group.cwd` stays
+    // the project dir the prompt's @-tokens resolve against either way.
+    // resolveGroupLaunchCwd owns the rule, pins included.
+    const cwd = resolveGroupLaunchCwd(group, usePinnedStore.getState().pinnedGroups)
     await launchSession({
       setup: getLastAgentSetup(workspaceId),
       cwd,
@@ -717,7 +731,10 @@ export function Sidebar() {
           initialCommand: command || undefined,
           autoExecute: command ? commandMode === 'auto' : false,
           // Group terminals live in their group's workspace, not the active one.
-          workspaceId: group.workspaceId ?? undefined
+          workspaceId: group.workspaceId ?? undefined,
+          // Owner on the record: what brings it back inside the group next
+          // launch instead of as a mystery tab beside it.
+          link: { kind: 'group-terminal', groupId, terminalId }
         })
         const newSession = {
           id: sessionInfo.id,
@@ -1368,22 +1385,32 @@ export function Sidebar() {
           so their centre line is y=24 and the mark starts at 84px — 16px of
           clearance past the last button. The bottom padding is what puts the
           mark ON that centre line rather than in the middle of the spacer.
+
+          In FULLSCREEN there are no traffic lights, so that 84px is clearance
+          for nothing and the mark reads as pushed into the middle of the strip.
+          It takes the position the first traffic light would have had instead —
+          16px, the same x the buttons are placed at — which is the window's own
+          gutter and enough air that the mark is not sitting on the edge.
+
           This is the one strip of window chrome that is nobody else's, and the
           only place carrying the Antasphere mark. `pointer-events: none`
           keeps the whole strip draggable — the mark is a mark, not a target. */}
       <div
-        className="flex-shrink-0 flex items-center"
+        className="wordmark-strip flex-shrink-0 flex items-center"
+        data-wordmark-strip
+        data-fullscreen={fullScreen ? 'true' : 'false'}
         style={
           {
             height: 'var(--content-top-offset)',
-            paddingLeft: '84px',
+            paddingLeft: fullScreen ? '16px' : '84px',
             paddingBottom: '2px',
             WebkitAppRegion: 'drag'
           } as React.CSSProperties
         }
       >
-        <span style={{ pointerEvents: 'none' }}>
+        <span className="wordmark-lockup" style={{ pointerEvents: 'none' }}>
           <Wordmark />
+          <WordmarkBy />
         </span>
       </div>
 
@@ -1581,7 +1608,7 @@ export function Sidebar() {
                         )
                       } else {
                         const group = groups.find((g) => g.id === item.groupId)
-                        if (!group || group.sessionIds.length === 0) return null
+                        if (!group || !groupHasContent(group)) return null
                         const allGroupSelected =
                           group.sessionIds.length > 0 &&
                           group.sessionIds.every((id) => selectedSessionIds.includes(id))

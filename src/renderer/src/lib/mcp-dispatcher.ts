@@ -509,7 +509,9 @@ async function handleAddGroupTerminal(payload: {
     initialCommand: payload.command || undefined,
     autoExecute: !!payload.command && commandMode === 'auto',
     // Group terminals live in their group's workspace, not the active one.
-    workspaceId: group.workspaceId ?? undefined
+    workspaceId: group.workspaceId ?? undefined,
+    // Owner on the record: what brings it back inside the group next launch.
+    link: { kind: 'group-terminal', groupId: group.id, terminalId }
   })
   // PTYs spawn lazily on the first sized start() — normally the visible pane's
   // measure. A terminal spawned into a hidden workspace (or behind an active
@@ -674,7 +676,10 @@ async function handleSetSessionView(payload: {
       claudeMode: false,
       initialCommand: payload.command,
       autoExecute: true,
-      workspaceId: session.workspaceId ?? undefined
+      workspaceId: session.workspaceId ?? undefined,
+      // Owner on the record: what brings it back as this view's server rather
+      // than as a tab of its own next launch.
+      link: { kind: 'session-view', ownerId: id }
     })
     // Hidden pane, zero size: kick the PTY or the command never runs.
     window.electronAPI.startSession(info.id, 120, 30)

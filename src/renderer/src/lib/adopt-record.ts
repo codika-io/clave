@@ -1,5 +1,6 @@
 import type { SessionRecord } from '../../../preload/index.d'
 import { useSessionStore } from '../store/session-store'
+import type { Session, SessionViewConfig } from '../store/session-types'
 
 /**
  * Bring one persisted session record back as a live tab in THIS window's
@@ -24,6 +25,21 @@ export async function adoptRecord(
   activeWorkspaceId: string | null,
   options: { focus?: boolean } = {}
 ): Promise<string | null> {
+  const spawned = await spawnFromRecord(s, activeWorkspaceId)
+  if (!spawned) return null
+  useSessionStore.getState().adoptSessionInPlace(spawned.session, { focus: options.focus === true })
+  return spawned.session.id
+}
+
+/**
+ * Reattach a record's process and build the Session object for it, without
+ * touching the store. The half every adoption shares: `adoptRecord` places it
+ * as a tab, `adoptHiddenRecord` hangs it back off its owner.
+ */
+async function spawnFromRecord(
+  s: SessionRecord,
+  activeWorkspaceId: string | null
+): Promise<{ session: Session } | null> {
   try {
     const workspaceId = s.workspaceId ?? activeWorkspaceId ?? undefined
     const info = await window.electronAPI.spawnSession(s.cwd, {
@@ -53,10 +69,12 @@ export async function adoptRecord(
       configDir: s.configDir,
       claudeProfileId: s.claudeProfileId,
       claudeProfileLabel: s.claudeProfileLabel,
-      workspaceId
+      workspaceId,
+      // Carry the ownership forward: an adoption rewrites the record, and a
+      // hidden half that came back unstamped would be a tab at the NEXT boot.
+      link: s.link
     })
-    useSessionStore.getState().adoptSessionInPlace(
-      {
+    const session: Session = {
       id: info.id,
       cwd: info.cwd,
       folderName: info.folderName,
@@ -76,16 +94,76 @@ export async function adoptRecord(
       claudeProfileLabel: s.claudeProfileLabel,
       claudeConfigDir: s.configDir,
       sessionType: 'local',
-        workspaceId,
-        view: s.view ? { ...s.view } : undefined
-      },
-      { focus: options.focus === true }
-    )
-    return info.id
+      workspaceId,
+      view: s.view ? { ...s.view } : undefined,
+      // The defaults normalizeSession would fill in anyway, spelled out so
+      // this is a whole Session both adoption paths can hand around.
+      detectedUrl: null,
+      serverStatus: null,
+      serverCommand: null,
+      hasUnseenActivity: false,
+      planFilePath: null
+    }
+    return { session }
   } catch (err) {
     console.error('Failed to adopt session record:', s.tmuxName ?? s.id, err)
     return null
   }
+}
+
+/**
+ * Bring back a session that is the HIDDEN HALF of something else — a group's
+ * quick-launch terminal, a session view's serving process (PRDCT-1756). It
+ * joins the store without ever entering the top-level order, and is linked
+ * straight back to its owner from the record's own `link`, which is the only
+ * copy of that relationship that survives a quit.
+ *
+ * The owner can legitimately be gone (the group was deleted, the owning tab
+ * did not come back). Then the session becomes an ordinary tab: it is a
+ * process the user started and can still see and stop, and killing it here
+ * to keep the sidebar tidy would take a running dev server with it.
+ *
+ * Returns the adopted session id, or null on failure.
+ */
+export async function adoptHiddenRecord(
+  s: SessionRecord,
+  activeWorkspaceId: string | null
+): Promise<string | null> {
+  const link = s.link
+  if (!link || link.kind === 'toolbar') return null
+  const state = useSessionStore.getState()
+  // The owner has to be there BEFORE the process is reattached: a spawn is
+  // slow, and a group deleted meanwhile would leave us linking into nothing.
+  const ownerView: SessionViewConfig | null =
+    link.kind === 'session-view'
+      ? (state.sessions.find((o) => o.id === link.ownerId)?.view ?? null)
+      : null
+  const hasOwner =
+    link.kind === 'group-terminal'
+      ? state.groups.some(
+          (g) => g.id === link.groupId && g.terminals.some((t) => t.id === link.terminalId)
+        )
+      : ownerView !== null
+
+  const spawned = await spawnFromRecord(s, activeWorkspaceId)
+  if (!spawned) return null
+  const store = useSessionStore.getState()
+  if (!hasOwner) {
+    // No home for it any more — surface it rather than hide a live process.
+    store.adoptSessionInPlace(spawned.session)
+    return spawned.session.id
+  }
+
+  store.addHiddenSession(spawned.session)
+  // Hidden panes are never measured, so the pty would sit unspawned and the
+  // tmux client would never reattach: kick it exactly as the spawn paths do.
+  window.electronAPI.startSession(spawned.session.id, 120, 30)
+  if (link.kind === 'group-terminal') {
+    store.setGroupTerminalSessionId(link.groupId, link.terminalId, spawned.session.id)
+  } else if (ownerView) {
+    store.setSessionView(link.ownerId, { ...ownerView, serverSessionId: spawned.session.id })
+  }
+  return spawned.session.id
 }
 
 /**

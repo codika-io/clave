@@ -106,6 +106,12 @@ interface SessionState {
    *  selected group, never at the top level when a group (or a terminal, or
    *  a view) already holds it, no selection or focus change. */
   adoptSessionInPlace: (session: Session, options?: { focus?: boolean }) => void
+  /** Add a session that is the HIDDEN HALF of something else — a group's
+   *  quick-launch terminal, a session view's serving process. Never enters
+   *  the top-level order and never takes focus; the caller links it to its
+   *  owner in the same breath. The spawn paths inline this; the boot restore
+   *  needs it as an action (see lib/adopt-record.ts). */
+  addHiddenSession: (session: Session) => void
   removeSession: (id: string) => void
   /** Remove a tab because its session RE-HOMED to another window — drop it
    *  from this store WITHOUT killing the pty (it is alive, just moved). */
@@ -561,6 +567,13 @@ export const useSessionStore = create<SessionState>((set) => ({
         ...focusPatch
       }
     }),
+
+  addHiddenSession: (session) =>
+    set((state) =>
+      state.sessions.some((s) => s.id === session.id)
+        ? state
+        : { sessions: [...state.sessions, normalizeSession(session)] }
+    ),
 
   resetSessions: async () => {
     const { sessions, groups } = useSessionStore.getState()

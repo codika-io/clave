@@ -418,7 +418,7 @@ export function GitJourneyPanel() {
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 8 }}
         transition={{ duration: 0.15, ease: [0.2, 0, 0, 1] }}
-        className="fixed z-50 bg-surface-50 border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col"
+        className="menu-surface menu-surface--sheet fixed z-50 flex flex-col"
         style={{
           right: rightOffset,
           top: '4%',

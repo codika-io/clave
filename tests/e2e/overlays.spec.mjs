@@ -45,6 +45,22 @@ export async function run(t) {
     t.equal('rows are rounded menu-items, not full-bleed strips', pop?.itemRadius, '6px')
     t.check('both workspaces and both actions are rows', (pop?.items ?? 0) >= 4, pop?.items)
 
+    // The popover's ground is the panels' own: the token the toolbar, the
+    // terminal cards and the sidebar's boxes are painted with, resolved through
+    // a probe so the check holds in every theme. A surface one shade off — the
+    // old --surface-100, which is the rows' hover fill — goes red here.
+    const ground = await win.evaluate(() => {
+      const probe = document.createElement('div')
+      probe.style.backgroundColor = 'var(--surface-0)'
+      document.body.appendChild(probe)
+      const bg = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      const el = document.querySelector('.menu-surface')
+      return el ? { ground: bg, surface: getComputedStyle(el).backgroundColor } : null
+    })
+    t.check('the surface resolved to a painted colour', !!ground && ground.ground !== 'rgba(0, 0, 0, 0)', ground)
+    t.equal("the surface is painted with the panels' ground (--surface-0)", ground?.surface, ground?.ground)
+
     await win.keyboard.press('Escape')
     await win.waitForTimeout(500)
     t.check(
@@ -105,14 +121,24 @@ export async function run(t) {
       const bd = document.querySelector('.group-picker-backdrop')
       const panel = document.querySelector('.group-picker-panel')
       if (!bd || !panel) return null
+      const probe = document.createElement('div')
+      probe.style.backgroundColor = 'var(--surface-0)'
+      document.body.appendChild(probe)
+      const ground = getComputedStyle(probe).backgroundColor
+      probe.remove()
       return {
         bdAnim: getComputedStyle(bd).animationName,
-        panelAnim: getComputedStyle(panel).animationName
+        panelAnim: getComputedStyle(panel).animationName,
+        radius: getComputedStyle(panel).borderRadius,
+        bg: getComputedStyle(panel).backgroundColor,
+        ground
       }
     })
     t.check('the group picker opens', !!gp)
     t.equal('its backdrop fades in on the shared keyframe', gp?.bdAnim, 'scrim-in')
     t.equal('its panel enters via surface-in', gp?.panelAnim, 'surface-in')
+    t.equal('its panel carries the panel radius, like every other surface', gp?.radius, '10px')
+    t.equal("its panel is painted with the panels' ground", gp?.bg, gp?.ground)
     await win.keyboard.press('Escape')
     await win.waitForTimeout(200)
 

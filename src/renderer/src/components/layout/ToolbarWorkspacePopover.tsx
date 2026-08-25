@@ -11,7 +11,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover'
 import { useWorkspaceStore } from '../../store/workspace-store'
 import { useSessionStore } from '../../store/session-store'
 import { setActiveWorkspace, addWorkspace } from '../../lib/workspace-actions'
-import { shortenPath, cn } from '../../lib/utils'
+import { shortenPath } from '../../lib/utils'
 
 /** A folder picked for registration that holds several `.clave` profiles — one
  *  has to be chosen before the workspace exists. */
@@ -171,7 +171,8 @@ export function ToolbarWorkspacePopover(): React.JSX.Element {
                   return (
                     <button
                       key={ws.id}
-                      className={cn('menu-item group', isActive && 'bg-surface-200')}
+                      className="menu-item group"
+                      data-selected={isActive}
                       onClick={() => {
                         if (!isActive) void setActiveWorkspace(ws.id)
                         handleOpenChange(false)
@@ -257,7 +258,8 @@ function ProfilePicker({
         {pending.candidates.map((c) => (
           <button
             key={c.path}
-            className={cn('menu-item', c.path === pending.selected && 'bg-surface-200')}
+            className="menu-item"
+            data-selected={c.path === pending.selected}
             onClick={() => onSelect(c.path)}
           >
             <span className="flex-1 min-w-0 truncate">{c.name}</span>

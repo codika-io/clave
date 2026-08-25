@@ -17,9 +17,11 @@ import { useInlineEdit } from '../../hooks/use-inline-edit'
 
 /** Hover-to-open timing for the terminals panel: a short wait so a cursor
  *  passing over the icon does not pop it, and a longer grace on leave so the
- *  hand can travel from the icon into the panel across the 6px gap. */
+ *  hand can travel from the icon into the panel across the gap. */
 const PANEL_OPEN_DELAY = 140
 const PANEL_CLOSE_DELAY = 240
+/** Air between the sidebar's edge and the panel. */
+const PANEL_GAP = 6
 
 interface SessionGroupItemProps {
   group: SessionGroup
@@ -103,6 +105,26 @@ function SessionGroupItemImpl({
   // both directions so a quick leave-and-return never flickers it.
   const [panelOpen, setPanelOpen] = useState(false)
   const panelTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The panel is anchored to the terminals button but placed against the
+  // GROUP: out past the sidebar's right edge, and level with the top of the
+  // group's own row. The button is neither — it sits a row's padding in from
+  // the edge and is centred in a row taller than itself — so both offsets are
+  // measured from the elements around it each time the panel opens (the
+  // sidebar resizes, and the row moves as the list scrolls).
+  const anchorRef = useRef<HTMLSpanElement>(null)
+  const [panelOffset, setPanelOffset] = useState({ side: PANEL_GAP, align: 0 })
+  const measurePanelOffset = useCallback(() => {
+    const btn = anchorRef.current
+    const shell = btn?.closest('[data-sidebar-shell]')
+    const row = btn?.closest('[data-sidebar-item-type="group"]')
+    if (!btn || !shell || !row) return
+    const b = btn.getBoundingClientRect()
+    setPanelOffset({
+      side: Math.max(PANEL_GAP, shell.getBoundingClientRect().right - b.right + PANEL_GAP),
+      // Negative: the row starts above the button centred inside it.
+      align: row.getBoundingClientRect().top - b.top
+    })
+  }, [])
   const clearPanelTimer = useCallback(() => {
     if (panelTimer.current) {
       clearTimeout(panelTimer.current)
@@ -112,8 +134,11 @@ function SessionGroupItemImpl({
   const scheduleOpen = useCallback(() => {
     if (dragActive) return
     clearPanelTimer()
-    panelTimer.current = setTimeout(() => setPanelOpen(true), PANEL_OPEN_DELAY)
-  }, [dragActive, clearPanelTimer])
+    panelTimer.current = setTimeout(() => {
+      measurePanelOffset()
+      setPanelOpen(true)
+    }, PANEL_OPEN_DELAY)
+  }, [dragActive, clearPanelTimer, measurePanelOffset])
   const scheduleClose = useCallback(() => {
     clearPanelTimer()
     panelTimer.current = setTimeout(() => setPanelOpen(false), PANEL_CLOSE_DELAY)
@@ -195,15 +220,32 @@ function SessionGroupItemImpl({
           </span>
         )}
 
-        {/* Two controls, always the same two, whatever the terminal count:
-            the terminals button (icon + count, lit while one runs, the panel
-            on hover) and the `+` for a new session. The row used to lay every
-            terminal's icon out here and ran off the sidebar past a handful
-            (PRDCT-1670). */}
+        {/* Two controls, always the same two, whatever the terminal count: the
+            `+` for a new session, then the terminals button (count + icon, lit
+            while one runs, the panel on hover). The `+` leads because it is the
+            one you reach for without reading — the terminals button is the one
+            you read first, so it sits at the edge where the count lands next to
+            the icon it counts. The row used to lay every terminal's icon out
+            here and ran off the sidebar past a handful (PRDCT-1670). */}
         <div className={cn('flex items-center gap-0.5 flex-shrink-0', editing && 'invisible')}>
+          <span
+            role="button"
+            tabIndex={-1}
+            aria-label={`New session in ${group.name}`}
+            className="btn-icon btn-icon-xs group-new-session"
+            title={newSessionTitle}
+            onClick={(e) => {
+              e.stopPropagation()
+              onNewSession()
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <PlusIcon className="w-4 h-4" />
+          </span>
           <Popover open={panelShown} onOpenChange={setPanelOpen}>
             <PopoverAnchor asChild>
               <span
+                ref={anchorRef}
                 role="button"
                 tabIndex={-1}
                 aria-label={`Terminals of ${group.name}`}
@@ -226,20 +268,29 @@ function SessionGroupItemImpl({
                 onClick={(e) => {
                   e.stopPropagation()
                   clearPanelTimer()
+                  measurePanelOffset()
                   setPanelOpen((v) => !v)
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
               >
-                <CommandLineIcon className="w-4 h-4" />
                 {terminals.length > 0 && (
                   <span className="group-terminals-count tabular-nums">{terminals.length}</span>
                 )}
+                <CommandLineIcon className="w-4 h-4" />
               </span>
             </PopoverAnchor>
+            {/* To the RIGHT of the sidebar and level with the group's row, not
+                down into the list: the panel lists a dozen terminals with
+                their commands and folders, which is wider than the sidebar and
+                taller than the rows below it — opened downwards it covered the
+                very groups you were choosing between. Near the bottom of the
+                window it still slides up to stay on screen; that is the one
+                case where its top is not the group's top. */}
             <PopoverContent
-              side="bottom"
-              align="end"
-              sideOffset={4}
+              side="right"
+              align="start"
+              sideOffset={panelOffset.side}
+              alignOffset={panelOffset.align}
               className="p-0"
               onOpenAutoFocus={(e) => e.preventDefault()}
               onCloseAutoFocus={(e) => e.preventDefault()}
@@ -267,20 +318,6 @@ function SessionGroupItemImpl({
               />
             </PopoverContent>
           </Popover>
-          <span
-            role="button"
-            tabIndex={-1}
-            aria-label={`New session in ${group.name}`}
-            className="btn-icon btn-icon-xs group-new-session"
-            title={newSessionTitle}
-            onClick={(e) => {
-              e.stopPropagation()
-              onNewSession()
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <PlusIcon className="w-4 h-4" />
-          </span>
         </div>
       </button>
     </div>

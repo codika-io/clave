@@ -5,7 +5,8 @@ import { useToolbarTerminal, type ToolbarTerminalStatus } from '../../hooks/use-
 import { useServerButton, type ServerButtonApi } from '../../hooks/use-server-button'
 import {
   adoptPersistentToolbarSession,
-  getPersistentToolbarSession
+  getPersistentToolbarSession,
+  takeToolbarSurvivor
 } from '../../lib/toolbar-terminal-registry'
 import { cn, safePort } from '../../lib/utils'
 
@@ -87,11 +88,26 @@ export function ToolbarTerminalPopover({
     let spawnedId: string | null = null
     let exitCleanup: (() => void) | null = null
 
+    // A survivor of the last run reattaches instead of spawning a second
+    // server on the same port (PRDCT-1756): the boot restore parks its record
+    // here rather than adopting it as a sidebar tab. Reattaching keeps the id,
+    // so the record stays one record.
+    const survivor = takeToolbarSurvivor(registryKey)
     window.electronAPI
-      .spawnSession(cwd, {
+      .spawnSession(survivor?.cwd ?? cwd, {
         claudeMode: false,
-        initialCommand: command || undefined,
-        autoExecute: true
+        // Reattaching runs nothing: the command is already running in there.
+        initialCommand: survivor ? undefined : command || undefined,
+        autoExecute: !survivor,
+        ...(survivor
+          ? {
+              tmuxMode: true,
+              adoptTmuxName: survivor.tmuxName,
+              adoptSessionId: survivor.id,
+              workspaceId: survivor.workspaceId
+            }
+          : {}),
+        link: { kind: 'toolbar', key: registryKey }
       })
       .then((info) => {
         if (cancelled) {

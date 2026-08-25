@@ -176,6 +176,13 @@ export interface SessionInfo {
   claudeSessionId: string | null
 }
 
+/** Who owns a session that is not a tab of its own — mirrors SessionLink in
+ *  the main process. Absent on a record = an ordinary tab. */
+export type SessionLink =
+  | { kind: 'group-terminal'; groupId: string; terminalId: string }
+  | { kind: 'session-view'; ownerId: string }
+  | { kind: 'toolbar'; key: string }
+
 export interface SessionRecord {
   /** Backing tmux session when there is one; absent = plain record (relaunch-only). */
   tmuxName?: string
@@ -205,6 +212,10 @@ export interface SessionRecord {
   /** Attached web view behind the row's dashboard icon; restored at adoption.
    *  The serving session id never persists — the start action respawns it. */
   view?: { url: string; title?: string; command?: string; cwd?: string }
+  /** What this session is the hidden half of (a group terminal, a session
+   *  view's server, a toolbar button). Absent = a tab. The boot restore puts
+   *  a linked session back where it belongs instead of in the sidebar. */
+  link?: SessionLink
   /** True → reattach to a still-running tmux session. False → the tmux server
    *  died (reboot) but the sidecar survived; re-spawn fresh (Claude resumes). */
   live?: boolean
@@ -351,6 +362,9 @@ export interface ElectronAPI {
       claudeProfileId?: string
       claudeProfileLabel?: string
       workspaceId?: string
+      /** Spawning the hidden half of something else — persisted on the record
+       *  so the next launch restores it as that half, not as a tab. */
+      link?: SessionLink
     }
   ) => Promise<SessionInfo>
   writeSession: (id: string, data: string) => void
@@ -504,6 +518,8 @@ export interface ElectronAPI {
   ) => () => void
   windowIdentity: () => Promise<WindowIdentity | null>
   onWindowIdentityChanged: (callback: (identity: WindowIdentity) => void) => () => void
+  windowIsFullScreen: () => Promise<boolean>
+  onWindowFullScreenChanged: (callback: (fullScreen: boolean) => void) => () => void
   windowSetWorkspace: (workspaceId: string | null) => Promise<SetWorkspaceResult>
   windowList: () => Promise<WindowIdentity[]>
   windowOpen: (workspaceId?: string) => Promise<{ windowId: number }>

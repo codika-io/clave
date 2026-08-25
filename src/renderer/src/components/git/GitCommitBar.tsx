@@ -61,7 +61,11 @@ export function PullButton({
         </IconButton>
       </div>
       {menuOpen && (
-        <div className="absolute bottom-full right-0 mb-1 bg-surface-200 border border-border-subtle rounded shadow-lg py-0.5 z-50 min-w-[140px]">
+        <div
+          className="menu-surface menu-pop-mount absolute bottom-full right-0 mb-1 z-50 min-w-[160px] p-1"
+          // Opens upward from the bar, so it grows from its bottom edge.
+          style={{ transformOrigin: '100% 100%' }}
+        >
           {([
             ['auto', 'Pull'],
             ['merge', 'Pull (Merge)'],
@@ -70,7 +74,7 @@ export function PullButton({
           ] as [PullStrategy, string][]).map(([strategy, label]) => (
             <button
               key={strategy}
-              className="w-full text-left text-xs px-3 py-1.5 text-text-secondary hover:bg-surface-100 hover:text-text-primary transition-colors"
+              className="menu-item menu-item--muted"
               onClick={() => handlePull(strategy)}
             >
               {label}

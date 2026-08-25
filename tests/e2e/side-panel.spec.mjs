@@ -23,8 +23,8 @@
  *    first children included.
  * 5. The two trees' horizontal geometry. The file tree used to run on an 8px
  *    gutter against the git tree's 12px, so beside it the same names read as a
- *    denser, smaller list. One gutter, one indent, and guides down the middle
- *    of the chevron column in both.
+ *    denser, smaller list. One gutter and one indent in both — and no vertical
+ *    indent guides in either, in the markup or in the palette.
  *
  * The fixture is a folder that is NOT itself a repo holding repos at several
  * depths, some directly, some under plain folders. That mixture is the case the
@@ -186,6 +186,17 @@ export async function run(t) {
     await win.waitForTimeout(2000)
     await win.click('button[title^="File tree"]')
     await win.waitForTimeout(1200)
+
+    // The path bar lands on the terminal card's top edge, as the sidebar's
+    // launcher does across the other divide: the tab bar sits level with the
+    // toolbar, and the box under it starts where the content does.
+    const align = await win.evaluate(() => {
+      const bar = document.querySelector('[data-panel-bar="path"]')?.getBoundingClientRect()
+      const cards = [...document.querySelectorAll('.floating-card')].map((c) => c.getBoundingClientRect())
+      const main = cards.sort((a, b) => b.height - a.height)[0]
+      return bar && main ? { bar: bar.top, card: main.top } : null
+    })
+    t.check("the path bar sits on the content card's top edge", !!align && Math.abs(align.bar - align.card) < 1, align)
 
     // ── The tab bar carries the tabs, and nothing else ────────────────────
     const bar = await win.evaluate(() => {
@@ -404,34 +415,29 @@ export async function run(t) {
       return out
     })
 
-    // A guide runs down the MIDDLE of its level's chevron column — the claim
-    // that breaks the moment the gutter is named in two files and one of them
-    // moves. Measured against the real chevron of a real row at that level, not
-    // against the arithmetic that placed it.
-    const guideOnColumn = await win.evaluate(() => {
+    // The file tree draws NO vertical indent guides. It used to carry one
+    // hairline per level down every row; they were removed outright, so the
+    // claim is an absence — measured on a tree that is actually nested, or the
+    // check passes over a flat list that never had a guide to draw.
+    const guides = await win.evaluate(() => {
       const rows = [...document.querySelectorAll('[data-tree-item]')]
-      const at = (d) => rows.find((r) => Number(r.getAttribute('data-tree-depth')) === d)
-      const parent = at(0)
-      const child = at(1)
-      if (!parent || !child) return null
-      const chevron = parent.querySelector('svg')
-      const guide = child.querySelector('.tree-guide')
-      if (!chevron || !guide) return null
-      const c = chevron.getBoundingClientRect()
-      const g = guide.getBoundingClientRect()
       return {
-        chevronCentre: Math.round(c.left + c.width / 2),
-        guideCentre: Math.round(g.left + g.width / 2),
-        guidesOnChild: child.querySelectorAll('.tree-guide').length
+        deepestDepth: rows.reduce(
+          (m, r) => Math.max(m, Number(r.getAttribute('data-tree-depth'))),
+          0
+        ),
+        guides: document.querySelectorAll('.tree-guide').length,
+        // Anything absolutely positioned inside a row would be a guide under
+        // another name — the row itself no longer establishes a containing
+        // block for one.
+        absolutesInRows: rows.filter((r) =>
+          [...r.children].some((c) => getComputedStyle(c).position === 'absolute')
+        ).length
       }
     })
-    t.check('a level-1 row draws one guide', guideOnColumn?.guidesOnChild === 1, guideOnColumn)
-    t.check(
-      'and it runs down the middle of its parent’s chevron column',
-      guideOnColumn !== null &&
-        Math.abs(guideOnColumn.guideCentre - guideOnColumn.chevronCentre) <= 1,
-      guideOnColumn
-    )
+    t.check('the tree under test is nested', guides.deepestDepth >= 1, guides)
+    t.equal('the file tree draws no indent guides', guides.guides, 0)
+    t.equal('and no row carries an absolutely positioned line', guides.absolutesInRows, 0)
     // Drawn on the block's own indentation, not full-bleed across the tree.
     const ruleInsets = await win.evaluate(() =>
       [...document.querySelectorAll('[data-file-tree-rule]')].map((el) => ({
@@ -449,65 +455,35 @@ export async function run(t) {
       [...byDepth.entries()]
     )
 
-    // ── The indent guides are the faintest line in the panel ──────────────
-    // They used to be drawn on --border, the structural weight, once per level
-    // on every row — which turns a tree into a table of gridlines. Asserted as a
-    // relation, not a number: whatever the palette is retuned to, a guide must
-    // stay lighter than the hairline between blocks, which is itself lighter
-    // than a structural border.
-    //
-    // Swept over ALL THREE themes, because each declares its own value and the
-    // app boots in one of them: checking only the active theme let a guide
-    // raised back to the border weight in the other two pass untouched.
-    const guideSweep = await win.evaluate(() => {
+    // ── The guide token is gone from every theme ─────────────────────────
+    // "Removed" has to mean removed, not hidden: a --tree-guide-color left
+    // standing in one theme is a guide one class away from coming back. Swept
+    // over ALL THREE themes because each declares its own palette block.
+    const tokenSweep = await win.evaluate(() => {
       const root = document.documentElement
       const was = root.getAttribute('data-theme')
-      const alpha = (c) => {
-        const m = c.match(/rgba?\(([^)]+)\)/)
-        if (!m) return null
-        const parts = m[1].split(',').map((v) => parseFloat(v))
-        return parts.length > 3 ? parts[3] : 1
-      }
       const probe = document.createElement('span')
       probe.style.position = 'fixed'
       document.body.appendChild(probe)
-      const resolve = (expr) => {
-        probe.style.backgroundColor = ''
-        probe.style.backgroundColor = expr
-        return alpha(getComputedStyle(probe).backgroundColor)
-      }
-      const out = { count: document.querySelectorAll('.tree-guide').length, themes: {} }
+      const out = {}
       for (const theme of ['dark', 'light', 'coffee']) {
         if (theme === 'dark') root.removeAttribute('data-theme')
         else root.setAttribute('data-theme', theme)
-        const el = document.querySelector('.tree-guide')
-        out.themes[theme] = {
-          guide: el ? alpha(getComputedStyle(el).backgroundColor) : null,
-          rule: resolve('var(--rule-color)'),
-          border: resolve('var(--border-color)')
-        }
+        probe.style.backgroundColor = ''
+        probe.style.backgroundColor = 'var(--tree-guide-color)'
+        // An undefined custom property makes the declaration invalid at
+        // computed-value time, so background-color falls back to transparent.
+        out[theme] = getComputedStyle(probe).backgroundColor
       }
       if (was === null) root.removeAttribute('data-theme')
       else root.setAttribute('data-theme', was)
       probe.remove()
       return out
     })
-    t.check('an opened folder draws indent guides', guideSweep.count > 0, guideSweep)
-    const themed = Object.entries(guideSweep.themes)
     t.check(
-      'every theme declares a guide weight',
-      themed.length === 3 && themed.every(([, v]) => typeof v.guide === 'number'),
-      guideSweep.themes
-    )
-    t.check(
-      'in every theme a guide is fainter than the hairline between blocks',
-      themed.every(([, v]) => v.guide < v.rule),
-      guideSweep.themes
-    )
-    t.check(
-      'and in every theme far fainter than a structural border',
-      themed.every(([, v]) => v.guide < v.border / 2),
-      guideSweep.themes
+      'no theme still declares a tree-guide colour',
+      Object.values(tokenSweep).every((c) => c === 'rgba(0, 0, 0, 0)'),
+      tokenSweep
     )
 
     await win.click('[data-panel-bar="path"] [aria-label="Collapse all"]')
