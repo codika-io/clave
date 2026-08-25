@@ -150,7 +150,7 @@ const electronAPI = {
   // Session history (PRDCT-1738): the ledger row is fire-and-forget like the
   // capture above; the list is the dialog's one read.
   historyStamp: (row: unknown) => ipcRenderer.send('history:stamp', row),
-  historyList: () => ipcRenderer.invoke('history:list'),
+  historyList: (options?: { all?: boolean }) => ipcRenderer.invoke('history:list', options),
   historySearch: (request: {
     requestId: string
     query: string

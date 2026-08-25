@@ -11,7 +11,9 @@ export function registerHistoryHandlers(): void {
   ipcMain.on('history:stamp', (_event, row: unknown) => {
     stampHistory(row)
   })
-  ipcMain.handle('history:list', () => listHistory())
+  ipcMain.handle('history:list', (_event, options?: { all?: unknown }) =>
+    listHistory({ all: options?.all === true })
+  )
   ipcMain.handle('history:search', (event, request: unknown) =>
     searchHistory(request, (progress) => {
       if (!event.sender.isDestroyed()) event.sender.send('history:search-hits', progress)

@@ -137,6 +137,27 @@ export async function run(t) {
       { type: 'last-prompt', lastPrompt: 'Now wire the CSV download' }
     ])
   )
+  // A conversation Clave never ran (no ledger row), in this workspace's
+  // root — the Everything toggle's material — and one in a FOREIGN root,
+  // which the workspace scoping must keep out even under Everything.
+  writeFileSync(
+    path.join(pdir, 'cc-outside.jsonl'),
+    transcript([
+      { type: 'user', timestamp: '2026-08-24T08:00:00.000Z', cwd: ROOT, message: { content: 'Ran from a plain terminal' } },
+      { type: 'ai-title', aiTitle: 'Outside conversation' },
+      { type: 'last-prompt', lastPrompt: 'Ran from a plain terminal' }
+    ])
+  )
+  const foreignDir = path.join(TRANSCRIPTS, projectDir('/tmp/clave-e2e-foreign-root'))
+  mkdirSync(foreignDir, { recursive: true })
+  writeFileSync(
+    path.join(foreignDir, 'cc-foreign.jsonl'),
+    transcript([
+      { type: 'user', timestamp: '2026-08-24T08:00:00.000Z', cwd: '/tmp/clave-e2e-foreign-root', message: { content: 'Foreign workspace' } },
+      { type: 'ai-title', aiTitle: 'Foreign conversation' },
+      { type: 'last-prompt', lastPrompt: 'Foreign workspace' }
+    ])
+  )
   writeFileSync(
     path.join(pdir, 'cc-beta-1.jsonl'),
     transcript([
@@ -402,6 +423,36 @@ export async function run(t) {
       })
       t.check('its ledger rows name that group only', !!rows && rows.every((r) => r.groupId === liveGroupId), rows?.map((r) => r.groupName))
     }
+
+    // --- Everything: the whole store, scoped by each conversation's own cwd ---
+    await win.keyboard.press('Meta+Shift+H')
+    await win.waitForSelector('[data-history-row]', { timeout: 5000 })
+    const rowIds = () => win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')))
+    t.check('by default the store-only conversation is not listed', !(await rowIds()).includes('cc-outside'))
+    await win.click('[data-history-all]')
+    await win.waitForSelector('[data-history-row="cc-outside"]', { timeout: 10000 })
+    const allIds = await rowIds()
+    t.check('Everything lists the conversation Clave never ran', allIds.includes('cc-outside'))
+    t.check('but not one whose own cwd is another root', !allIds.includes('cc-foreign'), allIds)
+    t.equal('titled by its own ai-title', await win.evaluate(() => document.querySelector('[data-history-row="cc-outside"] .history-row-title')?.textContent), 'Outside conversation')
+    t.check('every closed row wears the hollow dot', await win.evaluate(() => [...document.querySelectorAll('[data-history-row]:not([data-live])')].every((el) => el.getAttribute('data-state') === 'closed')))
+
+    // --- Open: only conversations open as a tab right now ---
+    await win.click('[data-history-open]')
+    await win.waitForTimeout(300)
+    const openRows = await win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => ({ id: el.getAttribute('data-history-row'), live: el.hasAttribute('data-live') })))
+    t.check('the Open filter keeps only live rows', openRows.every((r) => r.live), openRows)
+    t.check('and the closed store-only conversation is gone', !openRows.some((r) => r.id === 'cc-outside'))
+    await win.click('[data-history-open]')
+    await win.waitForTimeout(200)
+
+    // --- A store-only conversation resumes like any other ---
+    const spawnsBefore = (await readSpawns()).length
+    await win.click('[data-history-row="cc-outside"]')
+    await win.waitForTimeout(800)
+    const outsideSpawn = (await readSpawns())[spawnsBefore]
+    t.equal('clicking it resumes the outside conversation', outsideSpawn?.resumeSessionId, 'cc-outside')
+    t.equal("in the conversation's own folder", outsideSpawn?.cwd, ROOT)
 
     await win.keyboard.press('Meta+Shift+H')
     await win.waitForSelector('[data-history-dialog]', { timeout: 5000 })

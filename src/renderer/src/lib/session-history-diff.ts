@@ -124,3 +124,19 @@ export function resumeTargetGroup(
   }
   return null
 }
+
+/** Is a history entry visible in the shown workspace? A stamped entry by its
+ *  workspace id; an unstamped one (the capture seed, an "Everything"
+ *  transcript) by its OWN cwd against the workspace root — the dir name in
+ *  the store is lossy, the transcript's records are not. With no workspace
+ *  (or no root known), everything shows. */
+export function visibleInWorkspace(
+  entry: { workspaceId: string | null; cwd: string },
+  activeWorkspaceId: string | null,
+  activeRoot: string | null
+): boolean {
+  if (!activeWorkspaceId) return true
+  if (entry.workspaceId) return entry.workspaceId === activeWorkspaceId
+  if (!activeRoot || !entry.cwd) return true
+  return entry.cwd === activeRoot || entry.cwd.startsWith(activeRoot + '/')
+}

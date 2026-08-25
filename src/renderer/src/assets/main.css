@@ -1636,6 +1636,29 @@ body,
   justify-content: space-between;
   gap: 0.5rem;
 }
+/* The row's state dot, the sidebar's own words: blue pulsing while the
+   agent works, amber while it waits on the human, green for an open idle
+   tab, a hollow grey ring for a closed conversation. */
+.history-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+}
+.history-dot[data-state='closed'] {
+  border: 1px solid var(--text-tertiary);
+  opacity: 0.7;
+}
+.history-dot[data-state='open'] {
+  background-color: var(--color-status-ready);
+}
+.history-dot[data-state='working'] {
+  background-color: var(--color-status-working);
+  animation: pulse-dot 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.history-dot[data-state='blocked'] {
+  background-color: var(--color-status-waiting);
+}
+
 /* A search hit under its row: the excerpt around the match, in the tone of
    the prompt line, indented the same. */
 .history-hit {

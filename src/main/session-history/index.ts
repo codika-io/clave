@@ -146,3 +146,20 @@ export function foldHistory(rows: LedgerRow[]): HistoryEntry[] {
   }
   return [...byId.values()]
 }
+
+/** The transcripts the ledger does not know: every stem in the store's index
+ *  that no folded entry claims — the "Everything" toggle's material. The `-`
+ *  project dir is Claude Code's own one-shot helpers, never a conversation. */
+export function unknownStems(
+  index: ReadonlyMap<string, ReadonlySet<string>>,
+  known: ReadonlySet<string>
+): { dir: string; stem: string }[] {
+  const out: { dir: string; stem: string }[] = []
+  for (const [dir, stems] of index) {
+    if (dir === '-') continue
+    for (const stem of stems) {
+      if (!known.has(stem)) out.push({ dir, stem })
+    }
+  }
+  return out
+}

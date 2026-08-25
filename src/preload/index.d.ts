@@ -44,6 +44,7 @@ export interface HistorySearchHit {
 }
 
 export interface HistoryListEntry {
+  source: 'ledger' | 'transcript'
   claudeSessionId: string
   sessionId: string
   name: string
@@ -58,6 +59,8 @@ export interface HistoryListEntry {
   transcript: {
     exists: boolean
     path: string
+    cwd: string | null
+    firstAt: string | null
     title: string | null
     lastPrompt: string | null
     lastHumanAt: string | null
@@ -484,7 +487,9 @@ export interface ElectronAPI {
   /** Session history (PRDCT-1738). A ledger row per placement change,
    *  fire-and-forget; the folded list for the dialog. */
   historyStamp: (row: HistoryLedgerRow) => void
-  historyList: () => Promise<{ entries: HistoryListEntry[]; skippedLines: number }>
+  historyList: (options?: {
+    all?: boolean
+  }) => Promise<{ entries: HistoryListEntry[]; skippedLines: number }>
   /** A scoped substring search through the named sessions' transcripts;
    *  hits stream through `onHistorySearchHits`, the promise carries the end. */
   historySearch: (request: {

@@ -12,13 +12,14 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SessionLedger, normalizeLedgerRow, type LedgerRow } from './ledger'
-import { captureEventsToRows, foldHistory } from './index'
+import { captureEventsToRows, foldHistory, unknownStems } from './index'
 import { entryInGroup } from '../../shared/history-group-match'
 import {
   indexTranscripts,
   locateTranscript,
   peekTranscript,
   PeekCache,
+  scanHead,
   scanTail,
   transcriptPath
 } from './transcript-peek'
@@ -237,6 +238,21 @@ const TAIL = [
   'this line is not json'
 ].join('\n')
 
+describe('unknownStems', () => {
+  it("lists what the ledger does not know, skipping Claude Code's own helper dir", () => {
+    const index = new Map([
+      ['-proj-a', new Set(['cc-1', 'cc-2'])],
+      ['-', new Set(['helper-1'])],
+      ['-proj-b', new Set(['cc-3'])]
+    ])
+    expect(unknownStems(index, new Set(['cc-1']))).toEqual([
+      { dir: '-proj-a', stem: 'cc-2' },
+      { dir: '-proj-b', stem: 'cc-3' }
+    ])
+    expect(unknownStems(index, new Set(['cc-1', 'cc-2', 'cc-3']))).toEqual([])
+  })
+})
+
 describe('transcript peek', () => {
   it('scanTail reads the title, the last prompt and the last HUMAN timestamp', () => {
     const scan = scanTail(TAIL)
@@ -292,6 +308,51 @@ describe('transcript peek', () => {
     const peek = peekTranscript(file)
     expect(peek.title).toBe('head title')
     expect(peek.lastHumanAt).toBe('2026-08-25T08:00:00.000Z')
+  })
+
+  it("scanHead reads the conversation's own cwd and start, first record wins", () => {
+    const head = [
+      JSON.stringify({ type: 'ai-title', aiTitle: 'no cwd here' }),
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-08-25T08:00:00.000Z',
+        cwd: '/tmp/real-root',
+        message: { content: 'hi' }
+      }),
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-08-25T09:00:00.000Z',
+        cwd: '/tmp/other',
+        message: { content: 'later' }
+      }),
+      'not json'
+    ].join('\n')
+    expect(scanHead(head)).toEqual({ cwd: '/tmp/real-root', firstAt: '2026-08-25T08:00:00.000Z' })
+    expect(scanHead(JSON.stringify({ cwd: 'relative-not-absolute' }))).toEqual({
+      cwd: null,
+      firstAt: null
+    })
+    expect(scanHead('')).toEqual({ cwd: null, firstAt: null })
+  })
+
+  it('peekTranscript carries the head fields alongside the tail ones', () => {
+    const file = join(tmp, 'head.jsonl')
+    writeFileSync(
+      file,
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-08-25T07:00:00.000Z',
+        cwd: '/tmp/proj',
+        message: { content: 'the ask' }
+      }) +
+        '\n' +
+        TAIL +
+        '\n'
+    )
+    const peek = peekTranscript(file)
+    expect(peek.cwd).toBe('/tmp/proj')
+    expect(peek.firstAt).toBe('2026-08-25T07:00:00.000Z')
+    expect(peek.title).toBe('Login bug fix')
   })
 
   it('a missing transcript is exists:false, never a throw', () => {

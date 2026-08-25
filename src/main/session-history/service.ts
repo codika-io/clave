@@ -3,7 +3,7 @@ import { homedir } from 'os'
 import { app } from 'electron'
 import { CaptureStore } from '../exchange-capture/store'
 import { SessionLedger, normalizeLedgerRow } from './ledger'
-import { captureEventsToRows, foldHistory, type HistoryEntry } from './index'
+import { captureEventsToRows, foldHistory, unknownStems, type HistoryEntry } from './index'
 import {
   indexTranscripts,
   locateTranscript,
@@ -32,6 +32,9 @@ import { searchTranscripts, type SearchHit, type SearchScope } from './search'
  */
 
 export interface HistoryListEntry extends HistoryEntry {
+  /** Where the entry comes from: the ledger (a conversation Clave ran), or
+   *  a transcript the store holds that Clave never saw ("Everything"). */
+  source: 'ledger' | 'transcript'
   transcript: TranscriptPeek
   /** The row's title: Claude Code's own title when the tail carries one, else
    *  the tab's name as the ledger last saw it. */
@@ -76,7 +79,10 @@ export function stampHistory(input: unknown): void {
   }
 }
 
-export function listHistory(): { entries: HistoryListEntry[]; skippedLines: number } {
+export function listHistory(options?: { all?: boolean }): {
+  entries: HistoryListEntry[]
+  skippedLines: number
+} {
   const { rows, skippedLines } = getLedger().readAll()
   const seed = captureEventsToRows(getCapture().readAll().events as never[])
   const root = transcriptsRoot()
@@ -91,12 +97,41 @@ export function listHistory(): { entries: HistoryListEntry[]; skippedLines: numb
       const transcript = peekCache.get(file)
       return {
         ...e,
+        source: 'ledger' as const,
         transcript,
         title: transcript.title ?? e.name,
         lastHumanAt:
           transcript.lastHumanAt ?? e.lastSeenAt ?? transcript.modifiedAt ?? e.firstSeenAt
       }
     })
+  if (options?.all) {
+    const known = new Set(entries.map((e) => e.claudeSessionId))
+    for (const { dir, stem } of unknownStems(index, known)) {
+      const file = path.join(root, dir, `${stem}.jsonl`)
+      const transcript = peekCache.get(file)
+      if (!transcript.exists) continue
+      pathById.set(stem, file)
+      const firstSeenAt = transcript.firstAt ?? transcript.modifiedAt ?? ''
+      const lastHumanAt = transcript.lastHumanAt ?? transcript.modifiedAt ?? firstSeenAt
+      entries.push({
+        claudeSessionId: stem,
+        sessionId: '',
+        name: '',
+        cwd: transcript.cwd ?? '',
+        mode: 'claude',
+        model: null,
+        workspaceId: null,
+        groups: [],
+        firstSeenAt,
+        lastSeenAt: lastHumanAt,
+        closedAt: null,
+        source: 'transcript',
+        transcript,
+        title: transcript.title ?? `Conversation ${stem.slice(0, 8)}`,
+        lastHumanAt
+      })
+    }
+  }
   return { entries, skippedLines }
 }
 

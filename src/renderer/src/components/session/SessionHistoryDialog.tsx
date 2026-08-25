@@ -12,6 +12,7 @@ import { useHistoryStore } from '../../store/history-store'
 import { useSessionStore, inActiveWorkspace } from '../../store/session-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
 import { resumeHistoryEntry } from '../../lib/session-history'
+import { visibleInWorkspace } from '../../lib/session-history-diff'
 import { cn, shortenPath } from '../../lib/utils'
 import { ContextMenu } from '../ui/ContextMenu'
 import { entryInGroup } from '../../../../shared/history-group-match'
@@ -119,12 +120,18 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   const groups = useSessionStore((s) => s.groups)
   const sessions = useSessionStore((s) => s.sessions)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeRoot = workspaces.find((w) => w.id === activeWorkspaceId)?.rootDir ?? null
 
   const [entries, setEntries] = useState<HistoryListEntry[] | null>(null)
   const [groupId, setGroupId] = useState<string | null>(presetGroupId)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortKey>('last')
   const [scope, setScope] = useState<Scope>('titles')
+  /** Everything: the whole transcript store, not only what the ledger knows. */
+  const [all, setAll] = useState(false)
+  /** Open tabs only. */
+  const [openOnly, setOpenOnly] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; entry: HistoryListEntry } | null>(null)
 
   // The transcript search: hits per session for the CURRENT request only,
@@ -138,11 +145,12 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   >({ status: 'idle' })
   const requestRef = useRef<string | null>(null)
 
-  // One read per open: the ledger and the transcripts moved since last time.
+  // One read per open (and per Everything toggle): the ledger and the
+  // transcripts moved since last time.
   useEffect(() => {
     let cancelled = false
     window.electronAPI
-      .historyList()
+      .historyList(all ? { all: true } : undefined)
       .then((r) => {
         if (!cancelled) setEntries(r.entries)
       })
@@ -153,7 +161,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [all])
 
   // Escape closes the row's context menu when one is open (Radix dismisses
   // it on the same key), and only otherwise the dialog.
@@ -185,9 +193,14 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   )
   const selectedGroup = groupId ? (chipGroups.find((g) => g.id === groupId) ?? null) : null
 
-  const liveIds = useMemo(
+  /** Live conversation → its run state, the sidebar's own words. */
+  const liveStates = useMemo(
     () =>
-      new Set(sessions.filter((s) => s.alive && s.claudeSessionId).map((s) => s.claudeSessionId)),
+      new Map(
+        sessions
+          .filter((s) => s.alive && s.claudeSessionId)
+          .map((s) => [s.claudeSessionId as string, s.agentState ?? 'idle'])
+      ),
     [sessions]
   )
 
@@ -196,12 +209,14 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   const inScope = useMemo(() => {
     if (!entries) return []
     return entries.filter((e) => {
-      // The seed knows no workspace (null): shown everywhere.
-      if (e.workspaceId && activeWorkspaceId && e.workspaceId !== activeWorkspaceId) return false
+      // A stamped entry by its workspace; an unstamped one (the seed, an
+      // Everything transcript) by its own cwd against the workspace root.
+      if (!visibleInWorkspace(e, activeWorkspaceId, activeRoot)) return false
       if (selectedGroup && !entryInGroup(e.groups, selectedGroup)) return false
+      if (openOnly && !liveStates.has(e.claudeSessionId)) return false
       return true
     })
-  }, [entries, selectedGroup, activeWorkspaceId])
+  }, [entries, selectedGroup, activeWorkspaceId, activeRoot, openOnly, liveStates])
 
   const trimmed = query.trim()
   const searching = scope !== 'titles' && trimmed.length >= SEARCH_MIN_CHARS
@@ -289,11 +304,11 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     (entry: HistoryListEntry, dangerousMode: boolean) => {
       // Nothing to resume (transcript gone, tab not open): the dialog stays,
       // the row's own title says why.
-      if (!liveIds.has(entry.claudeSessionId) && !entry.transcript.exists) return
+      if (!liveStates.has(entry.claudeSessionId) && !entry.transcript.exists) return
       closeHistory()
       void resumeHistoryEntry(entry, { groupId: selectedGroup?.id ?? null, dangerousMode })
     },
-    [closeHistory, selectedGroup, liveIds]
+    [closeHistory, selectedGroup, liveStates]
   )
 
   const latestGroupName = (e: HistoryListEntry): string | null =>
@@ -377,6 +392,31 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                 </button>
               ))}
             </div>
+            <div className="history-chips history-chips--sort" aria-label="Which conversations">
+              <button
+                type="button"
+                className="group-switcher-chip"
+                data-history-all
+                data-selected={all ? 'true' : undefined}
+                title="Every Claude Code conversation on this Mac, Clave or not — scoped to this workspace by each conversation's own folder"
+                onClick={() => {
+                  setAll((v) => !v)
+                  setEntries(null)
+                }}
+              >
+                Everything
+              </button>
+              <button
+                type="button"
+                className="group-switcher-chip"
+                data-history-open
+                data-selected={openOnly ? 'true' : undefined}
+                title="Only conversations open as a tab right now"
+                onClick={() => setOpenOnly((v) => !v)}
+              >
+                Open
+              </button>
+            </div>
           </div>
           <div className="history-controls-row">
             <div className="history-chips" role="radiogroup" aria-label="Search in">
@@ -428,7 +468,15 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
             </p>
           ) : (
             rows.map((e) => {
-              const live = liveIds.has(e.claudeSessionId)
+              const live = liveStates.has(e.claudeSessionId)
+              const run = live ? liveStates.get(e.claudeSessionId) : undefined
+              const dotState = !live
+                ? 'closed'
+                : run === 'working'
+                  ? 'working'
+                  : run === 'blocked'
+                    ? 'blocked'
+                    : 'open'
               const missing = !e.transcript.exists
               const prompt = excerpt(e.transcript.lastPrompt)
               const gname = latestGroupName(e)
@@ -440,6 +488,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                   className="history-row"
                   data-history-row={e.claudeSessionId}
                   data-live={live ? 'true' : undefined}
+                  data-state={dotState}
                   data-missing={missing ? 'true' : undefined}
                   data-hits={searching ? rowHits.length : undefined}
                   onClick={(ev) => resume(e, ev.altKey)}
@@ -457,10 +506,9 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <span
-                      className="terminal-row-dot flex-shrink-0"
-                      data-running={live ? 'true' : undefined}
-                      style={live ? { backgroundColor: 'var(--color-accent)' } : undefined}
-                      aria-label={live ? 'open' : 'closed'}
+                      className="history-dot flex-shrink-0"
+                      data-state={dotState}
+                      aria-label={dotState}
                     />
                     <span className="history-row-title truncate">{e.title}</span>
                     {gname && <span className="history-row-group truncate">{gname}</span>}
@@ -512,7 +560,8 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
             {
               label: 'Resume',
               icon: <PlayIcon className="w-3.5 h-3.5" />,
-              disabled: !menu.entry.transcript.exists && !liveIds.has(menu.entry.claudeSessionId),
+              disabled:
+                !menu.entry.transcript.exists && !liveStates.has(menu.entry.claudeSessionId),
               onClick: () => resume(menu.entry, false)
             },
             {

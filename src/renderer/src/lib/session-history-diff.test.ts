@@ -12,6 +12,7 @@ import {
   SessionHistoryDiff,
   resumeTargetGroup,
   tabSessions,
+  visibleInWorkspace,
   type LayoutState
 } from './session-history-diff'
 import type { Session, SessionGroup } from '../store/session-types'
@@ -219,5 +220,27 @@ describe('resumeTargetGroup', () => {
   it('else the top level — never the ambient selection', () => {
     expect(resumeTargetGroup([{ id: 'g-old', name: 'Gamma' }], null, shown)).toBeNull()
     expect(resumeTargetGroup([], null, shown)).toBeNull()
+  })
+})
+
+describe('visibleInWorkspace', () => {
+  it('a stamped entry goes by its workspace id', () => {
+    expect(visibleInWorkspace({ workspaceId: 'ws-1', cwd: '/x' }, 'ws-1', '/root')).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: 'ws-2', cwd: '/root/x' }, 'ws-1', '/root')).toBe(false)
+  })
+  it('an unstamped one goes by its own cwd against the root', () => {
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/root/proj' }, 'ws-1', '/root')).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/root' }, 'ws-1', '/root')).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/rootling/proj' }, 'ws-1', '/root')).toBe(
+      false
+    )
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/elsewhere' }, 'ws-1', '/root')).toBe(
+      false
+    )
+  })
+  it('no workspace, or no root known: everything shows', () => {
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/anything' }, null, null)).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '' }, 'ws-1', '/root')).toBe(true)
+    expect(visibleInWorkspace({ workspaceId: null, cwd: '/elsewhere' }, 'ws-1', null)).toBe(true)
   })
 })
