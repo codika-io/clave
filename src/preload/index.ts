@@ -35,6 +35,10 @@ const electronAPI = {
       claudeProfileId?: string
       claudeProfileLabel?: string
       workspaceId?: string
+      link?:
+        | { kind: 'group-terminal'; groupId: string; terminalId: string }
+        | { kind: 'session-view'; ownerId: string }
+        | { kind: 'toolbar'; key: string }
     }
   ) => ipcRenderer.invoke('pty:spawn', cwd, options),
 

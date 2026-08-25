@@ -1,0 +1,80 @@
+import { describe, it, expect } from 'vitest'
+import { planBootAdoption, survivingIds, type BootRecordLike } from './boot-adoption'
+
+const tab = (id: string, live = true): BootRecordLike => ({ id, live })
+const term = (id: string, live = true, groupId = 'g1', terminalId = 't1'): BootRecordLike => ({
+  id,
+  live,
+  link: { kind: 'group-terminal', groupId, terminalId }
+})
+const server = (id: string, live = true, ownerId = 'owner'): BootRecordLike => ({
+  id,
+  live,
+  link: { kind: 'session-view', ownerId }
+})
+const toolbar = (id: string, live = true, key = 'pin:0'): BootRecordLike => ({
+  id,
+  live,
+  link: { kind: 'toolbar', key }
+})
+
+describe('planBootAdoption — a record only becomes a tab when it IS one', () => {
+  it('an unlinked record is a tab, live or dead (every legacy record)', () => {
+    const plan = planBootAdoption([tab('a'), tab('b', false)])
+    expect(plan.liveTabs.map((r) => r.id)).toEqual(['a'])
+    expect(plan.deadTabs.map((r) => r.id)).toEqual(['b'])
+    expect(plan.hidden).toEqual([])
+    expect(plan.toolbar).toEqual([])
+    expect(plan.discard).toEqual([])
+  })
+
+  it('a live group terminal and a live view server are hidden halves, never tabs', () => {
+    const plan = planBootAdoption([term('t'), server('s')])
+    expect(plan.hidden.map((r) => r.id)).toEqual(['t', 's'])
+    expect(plan.liveTabs).toEqual([])
+    expect(plan.deadTabs).toEqual([])
+  })
+
+  it('a live toolbar terminal goes to the toolbar, not the sidebar', () => {
+    const plan = planBootAdoption([toolbar('tb')])
+    expect(plan.toolbar.map((r) => r.id)).toEqual(['tb'])
+    expect(plan.liveTabs).toEqual([])
+    expect(plan.hidden).toEqual([])
+  })
+
+  it('a DEAD hidden half is discarded — never offered by the restore prompt', () => {
+    const plan = planBootAdoption([term('t', false), server('s', false), toolbar('tb', false)])
+    expect(plan.discard.map((r) => r.id)).toEqual(['t', 's', 'tb'])
+    expect(plan.deadTabs).toEqual([])
+    expect(plan.hidden).toEqual([])
+    expect(plan.toolbar).toEqual([])
+  })
+
+  it('sorts a real mixed launch', () => {
+    const plan = planBootAdoption([
+      tab('agent'),
+      term('devserver'),
+      tab('crashed', false),
+      toolbar('docs'),
+      server('board'),
+      term('old-dev', false)
+    ])
+    expect(plan.liveTabs.map((r) => r.id)).toEqual(['agent'])
+    expect(plan.deadTabs.map((r) => r.id)).toEqual(['crashed'])
+    expect(plan.hidden.map((r) => r.id)).toEqual(['devserver', 'board'])
+    expect(plan.toolbar.map((r) => r.id)).toEqual(['docs'])
+    expect(plan.discard.map((r) => r.id)).toEqual(['old-dev'])
+  })
+})
+
+describe('survivingIds — what the layout merge must treat as alive', () => {
+  it('counts the hidden halves even though they are adopted after the merge', () => {
+    const plan = planBootAdoption([tab('agent'), term('devserver'), toolbar('docs')])
+    expect(survivingIds(plan, ['agent'])).toEqual(['agent', 'devserver'])
+  })
+
+  it('leaves out what will not come back (dead halves, toolbar terminals)', () => {
+    const plan = planBootAdoption([term('gone', false), toolbar('docs')])
+    expect(survivingIds(plan, [])).toEqual([])
+  })
+})

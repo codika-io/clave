@@ -38,7 +38,11 @@ export async function ensureGroupTerminalRunning(
     claudeMode: false,
     initialCommand: terminal.command || undefined,
     autoExecute: !!terminal.command && terminal.commandMode === 'auto',
-    workspaceId: group.workspaceId ?? undefined
+    workspaceId: group.workspaceId ?? undefined,
+    // Stamp the owner on the record: the sidebar layout's own link is dropped
+    // with the group, and a session that comes back unlinked comes back as a
+    // tab beside the group instead of inside it.
+    link: { kind: 'group-terminal', groupId: group.id, terminalId }
   })
   // The PTY only actually spawns when something calls start() with a size —
   // normally the terminal pane on first measure. This session stays unselected

@@ -7,6 +7,7 @@ import {
   inActiveWorkspace,
   type GroupTerminalColor
 } from '../../store/session-store'
+import { groupHasContent } from '../../lib/sidebar-layout-partition'
 import { useWorkspaceStore, getWorkspaceById } from '../../store/workspace-store'
 import ColorPicker from '../ui/ColorPicker'
 import { SessionItem } from '../session/SessionItem'
@@ -590,7 +591,10 @@ export function Sidebar() {
           if (item.type === 'fileTab') return true
           if (item.type === 'group') {
             const group = groups.find((g) => g.id === item.groupId)
-            if (!group || group.sessionIds.length === 0) return false
+            // A running quick-launch terminal keeps a group on screen even
+            // with no tabs left in it: its icon is the only handle on that
+            // process (PRDCT-1756).
+            if (!group || !groupHasContent(group)) return false
             // Hide groups toggled off via pinned buttons
             if (hiddenGroupIds.has(item.groupId)) return false
             if (!inActiveWorkspace(group, activeWorkspaceId)) return false
@@ -717,7 +721,10 @@ export function Sidebar() {
           initialCommand: command || undefined,
           autoExecute: command ? commandMode === 'auto' : false,
           // Group terminals live in their group's workspace, not the active one.
-          workspaceId: group.workspaceId ?? undefined
+          workspaceId: group.workspaceId ?? undefined,
+          // Owner on the record: what brings it back inside the group next
+          // launch instead of as a mystery tab beside it.
+          link: { kind: 'group-terminal', groupId, terminalId }
         })
         const newSession = {
           id: sessionInfo.id,
@@ -1581,7 +1588,7 @@ export function Sidebar() {
                         )
                       } else {
                         const group = groups.find((g) => g.id === item.groupId)
-                        if (!group || group.sessionIds.length === 0) return null
+                        if (!group || !groupHasContent(group)) return null
                         const allGroupSelected =
                           group.sessionIds.length > 0 &&
                           group.sessionIds.every((id) => selectedSessionIds.includes(id))

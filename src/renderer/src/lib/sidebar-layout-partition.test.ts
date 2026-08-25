@@ -3,6 +3,7 @@ import {
   mergeLayoutForKeys,
   absorbLayout,
   placeAdopted,
+  groupHasContent,
   type LayoutGroupLike,
   type LayoutSessionLike
 } from './sidebar-layout-partition'
@@ -68,6 +69,41 @@ describe('mergeLayoutForKeys', () => {
     expect(out.groups.map((x) => x.id)).toEqual(['live'])
     expect(out.groups[0].terminals).toEqual([{ sessionId: null }])
     expect(out.displayOrder).toEqual(['live'])
+  })
+
+  // ── PRDCT-1756: the group-drop that orphaned a running dev server. A group
+  //    whose members did not come back was pruned outright, which un-nested
+  //    its quick-launch terminal and dropped it at the top level as a tab
+  //    nobody recognised. A live terminal now keeps its group. ──
+  it('keeps a group whose only survivor is a RUNNING quick-launch terminal', () => {
+    const out = mergeLayoutForKeys(
+      { groups: [], displayOrder: [], sessions: [s('devserver', B)] },
+      [B],
+      {
+        groups: [g('gB', ['agent-gone'], B, [{ sessionId: 'devserver' }])],
+        displayOrder: ['gB']
+      },
+      ['devserver']
+    )
+    expect(out.groups.map((x) => x.id)).toEqual(['gB'])
+    expect(out.groups[0].sessionIds).toEqual([])
+    expect(out.groups[0].terminals).toEqual([{ sessionId: 'devserver' }])
+    // and the terminal's session is NOT a top-level row
+    expect(out.displayOrder).toEqual(['gB'])
+  })
+
+  it('still drops a group with no members and no running terminal', () => {
+    const out = mergeLayoutForKeys(
+      { groups: [], displayOrder: [], sessions: [] },
+      [B],
+      {
+        groups: [g('gB', ['agent-gone'], B, [{ sessionId: 'term-gone' }])],
+        displayOrder: ['gB']
+      },
+      []
+    )
+    expect(out.groups).toEqual([])
+    expect(out.displayOrder).toEqual([])
   })
 
   it('never surfaces a nested session at the top level, appends missed standalone sessions', () => {
@@ -212,5 +248,21 @@ describe('placeAdopted — an adopted tab never lands twice, never in a foreign 
 
   it('is idempotent for a tab already at the top level', () => {
     expect(placeAdopted(state, 's-free')).toEqual(['g1', 's-free'])
+  })
+})
+
+
+describe('groupHasContent — what the sidebar draws', () => {
+  it('a group with tabs shows', () => {
+    expect(groupHasContent({ sessionIds: ['a'], terminals: [] })).toBe(true)
+  })
+  it('a group with only a RUNNING terminal shows — its icon is the way back', () => {
+    expect(groupHasContent({ sessionIds: [], terminals: [{ sessionId: 'srv' }] })).toBe(true)
+  })
+  it('a group with only idle terminal configs stays hidden', () => {
+    expect(groupHasContent({ sessionIds: [], terminals: [{ sessionId: null }] })).toBe(false)
+  })
+  it('an empty group stays hidden', () => {
+    expect(groupHasContent({ sessionIds: [], terminals: [] })).toBe(false)
   })
 })
