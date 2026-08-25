@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.75.0] — 2026-08-25
+
 ### Changed
 - **The group header reads `+` then the terminals** — the two controls swapped places and the count moved in front of the icon it counts, so the row ends on `+ 3 ⌨` instead of `⌨ 3 +`. The terminals panel opens to the **right** of the sidebar now rather than downwards into it: it lists each terminal's command and folder, which is wider than the sidebar and taller than the rows under it, so opening downwards covered the very groups you were choosing between. It opens level with the group's own row and clears the sidebar's edge whatever width you have dragged it to, both measured each time it opens; near the bottom of the window it still slides up to stay on screen. The count also lost the two-digit-wide box it was laid into — a single digit floated a visible gap in from the button's edge while a two-digit one filled it — and keeps 4px of deliberate air instead.
 - **Every popover is one of the sidebar's boxes, lifted off the page** — the workspace switcher, the agent menu, every context menu, the file preview and the diff and journey sheets, the file palette, the commit bar's pull menu and the side panel's folder menu all sat on a surface one shade off the boxes they open from (the hover colour of their own rows, in fact), and a few of them still wore corners, borders and shadows of their own. They now share one surface — the toolbar's ground, the boxes' radius, one shadow for menus and a heavier one for the document-sized sheets — and the current row inside (the active workspace, the folder you are in) takes the sidebar's selected fill.
