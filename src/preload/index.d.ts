@@ -34,6 +34,15 @@ export interface HistoryLedgerRow {
   groupName: string | null
 }
 
+export type HistorySearchScope = 'human' | 'agent' | 'tools'
+
+export interface HistorySearchHit {
+  claudeSessionId: string
+  ts: string | null
+  scope: HistorySearchScope
+  excerpt: string
+}
+
 export interface HistoryListEntry {
   claudeSessionId: string
   sessionId: string
@@ -476,6 +485,18 @@ export interface ElectronAPI {
    *  fire-and-forget; the folded list for the dialog. */
   historyStamp: (row: HistoryLedgerRow) => void
   historyList: () => Promise<{ entries: HistoryListEntry[]; skippedLines: number }>
+  /** A scoped substring search through the named sessions' transcripts;
+   *  hits stream through `onHistorySearchHits`, the promise carries the end. */
+  historySearch: (request: {
+    requestId: string
+    query: string
+    scope: HistorySearchScope
+    claudeSessionIds: string[]
+  }) => Promise<{ requestId: string; filesSearched: number; truncated: boolean }>
+  historySearchCancel: (requestId: string) => void
+  onHistorySearchHits: (
+    callback: (progress: { requestId: string; hits: HistorySearchHit[] }) => void
+  ) => () => void
   /** A `/clear` rotated the tab's transcript: the record follows the new id
    *  so a restart resumes the conversation the user is actually in. */
   setSessionClaudeSessionId: (id: string, claudeSessionId: string) => Promise<void>

@@ -112,6 +112,7 @@ export async function run(t) {
     transcript([
       { type: 'user', timestamp: '2026-08-21T10:00:00.000Z', message: { content: 'Fix the login bug' } },
       { type: 'ai-title', aiTitle: 'Login bug fix' },
+      { type: 'assistant', timestamp: '2026-08-21T10:04:00.000Z', message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/src/auth/passkey-guard.ts' } }] } },
       { type: 'user', timestamp: '2026-08-21T10:05:00.000Z', toolUseResult: true, message: { content: [{ type: 'tool_result', content: 'ok' }] } },
       { type: 'last-prompt', lastPrompt: 'Fix the login bug' }
     ])
@@ -122,6 +123,7 @@ export async function run(t) {
       { type: 'user', timestamp: '2026-08-22T10:00:00.000Z', message: { content: 'Add the export button' } },
       { type: 'ai-title', aiTitle: 'Export button' },
       { type: 'user', timestamp: '2026-08-23T09:00:00.000Z', message: { content: [{ type: 'text', text: 'Now wire the CSV download' }] } },
+      { type: 'assistant', timestamp: '2026-08-23T09:01:00.000Z', message: { content: [{ type: 'thinking', thinking: 'papaparse would do' }, { type: 'text', text: 'Wired the download through papaparse.' }] } },
       { type: 'last-prompt', lastPrompt: 'Now wire the CSV download' }
     ])
   )
@@ -203,6 +205,53 @@ export async function run(t) {
     await win.fill('[data-history-filter]', 'csv')
     const filtered = await win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')))
     t.equal('the filter matches the last prompt', JSON.stringify(filtered), JSON.stringify(['cc-alpha-2']))
+    await win.fill('[data-history-filter]', '')
+
+    // --- The transcript search: each scope reads only its own kind of text ---
+    const rowsAndHits = () =>
+      win.evaluate(() => ({
+        rows: [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')),
+        hits: [...document.querySelectorAll('[data-history-hit]')].map((el) => el.textContent),
+        footer: document.querySelector('[data-history-footer]')?.textContent ?? ''
+      }))
+    // Wait for THIS search: the debounce has to fire and the footer must
+    // settle on a hit count, or the empty state must name this scope and
+    // query — the previous search's message would otherwise be read as an
+    // answer.
+    const searched = async (scope, q) => {
+      await win.waitForTimeout(400)
+      return until(async () => {
+        const r = await rowsAndHits()
+        if (/Searching/.test(r.footer)) return null
+        const listText = await win.evaluate(() => document.querySelector('[data-history-list]')?.textContent ?? '')
+        if (/\d+ hits? in/.test(r.footer) && r.rows.length > 0) return r
+        if (listText.includes(`Nothing in the ${scope} messages matches "${q}"`)) return r
+        return null
+      })
+    }
+    await win.click('[data-history-scope="human"]')
+    await win.fill('[data-history-filter]', 'csv')
+    let r = await searched('human', 'csv')
+    t.equal('Human scope: the query is found in what the human typed', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-2']))
+    t.check('the row shows the matching excerpt', (r?.hits ?? []).some((h) => h?.includes('CSV download')), r?.hits)
+    t.check('the footer counts the hits', /1 hit in 1 of \d+ transcripts?/.test(r?.footer ?? ''), r?.footer)
+
+    await win.fill('[data-history-filter]', 'papaparse')
+    r = await searched('human', 'papaparse')
+    t.equal('a word only the agent said is not a Human hit', JSON.stringify(r?.rows), JSON.stringify([]))
+    await win.click('[data-history-scope="agent"]')
+    r = await searched('agent', 'papaparse')
+    t.equal('Agent scope finds it (in the answer, never the thinking)', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-2']))
+    t.check('with the excerpt marked', (r?.hits ?? []).some((h) => h?.includes('papaparse')), r?.hits)
+
+    await win.fill('[data-history-filter]', 'passkey-guard')
+    r = await searched('agent', 'passkey-guard')
+    t.equal('a path only in a tool input is not an Agent hit', JSON.stringify(r?.rows), JSON.stringify([]))
+    await win.click('[data-history-scope="tools"]')
+    r = await searched('tools', 'passkey-guard')
+    t.equal('Tools scope finds it', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-1']))
+
+    await win.click('[data-history-scope="titles"]')
     await win.fill('[data-history-filter]', '')
     await win.click('[data-history-chip="all"]')
     const all = await win.evaluate(() => [...document.querySelectorAll('[data-history-row]')].map((el) => el.getAttribute('data-history-row')))

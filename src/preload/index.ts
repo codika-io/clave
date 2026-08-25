@@ -151,6 +151,15 @@ const electronAPI = {
   // capture above; the list is the dialog's one read.
   historyStamp: (row: unknown) => ipcRenderer.send('history:stamp', row),
   historyList: () => ipcRenderer.invoke('history:list'),
+  historySearch: (request: {
+    requestId: string
+    query: string
+    scope: string
+    claudeSessionIds: string[]
+  }) => ipcRenderer.invoke('history:search', request),
+  historySearchCancel: (requestId: string) => ipcRenderer.send('history:search-cancel', requestId),
+  onHistorySearchHits: (callback: (progress: { requestId: string; hits: unknown[] }) => void) =>
+    createIpcListener<[{ requestId: string; hits: unknown[] }]>('history:search-hits', callback),
   setSessionClaudeSessionId: (id: string, claudeSessionId: string) =>
     ipcRenderer.invoke('session:set-claude-session-id', id, claudeSessionId),
 

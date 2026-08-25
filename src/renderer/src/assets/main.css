@@ -1463,10 +1463,28 @@ body,
 }
 .history-controls {
   display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem 0.375rem;
+}
+.history-controls-row {
+  display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem 0.375rem;
+}
+/* A search hit under its row: the excerpt around the match, in the tone of
+   the prompt line, indented the same. */
+.history-hit {
+  display: block;
+  padding-left: 0.875rem;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.history-hit mark {
+  color: var(--text-primary);
+  background-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  border-radius: 2px;
 }
 .history-chips {
   display: flex;

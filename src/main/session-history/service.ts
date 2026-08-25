@@ -5,6 +5,7 @@ import { CaptureStore } from '../exchange-capture/store'
 import { SessionLedger, normalizeLedgerRow } from './ledger'
 import { captureEventsToRows, foldHistory, type HistoryEntry } from './index'
 import { locateTranscript, peekTranscript, type TranscriptPeek } from './transcript-peek'
+import { searchTranscripts, type SearchHit, type SearchScope } from './search'
 
 /**
  * Session-history service: the main-process owner of the ledger and the one
@@ -40,6 +41,9 @@ const peekCache = new Map<
   string,
   { size: number; modifiedAt: string | null; peek: TranscriptPeek }
 >()
+/** Transcript path per session as of the last list — what a search reads. */
+const pathById = new Map<string, string | null>()
+const searches = new Map<string, AbortController>()
 
 function getLedger(): SessionLedger {
   if (!ledger) ledger = new SessionLedger(path.join(app.getPath('userData'), 'session-history'))
@@ -89,7 +93,9 @@ export function listHistory(): { entries: HistoryListEntry[]; skippedLines: numb
     // and the other CLIs never make a row.
     .filter((e) => e.mode === 'claude')
     .map((e): HistoryListEntry => {
-      const transcript = cachedPeek(locateTranscript(root, e.cwd, e.claudeSessionId))
+      const file = locateTranscript(root, e.cwd, e.claudeSessionId)
+      pathById.set(e.claudeSessionId, file)
+      const transcript = cachedPeek(file)
       return {
         ...e,
         transcript,
@@ -99,4 +105,69 @@ export function listHistory(): { entries: HistoryListEntry[]; skippedLines: numb
       }
     })
   return { entries, skippedLines }
+}
+
+export interface SearchRequest {
+  requestId: string
+  query: string
+  scope: SearchScope
+  /** The sessions in the dialog's current scope; unknown ids and sessions
+   *  whose transcript is gone are skipped. */
+  claudeSessionIds: string[]
+}
+
+export interface SearchProgress {
+  requestId: string
+  hits: SearchHit[]
+}
+
+export interface SearchDone {
+  requestId: string
+  filesSearched: number
+  truncated: boolean
+}
+
+const SCOPES: ReadonlySet<string> = new Set<SearchScope>(['human', 'agent', 'tools'])
+
+/** Run one scoped search over the named sessions' transcripts, streaming
+ *  hits through `onHits`. A second request with the same id cancels the
+ *  first. Resolves when the search ends, cancelled or not. */
+export async function searchHistory(
+  input: unknown,
+  onHits: (progress: SearchProgress) => void
+): Promise<SearchDone> {
+  const r = input as Partial<SearchRequest> | null
+  const requestId = typeof r?.requestId === 'string' ? r.requestId : ''
+  const query = typeof r?.query === 'string' ? r.query : ''
+  const scope = typeof r?.scope === 'string' && SCOPES.has(r.scope) ? r.scope : null
+  const ids = Array.isArray(r?.claudeSessionIds)
+    ? r.claudeSessionIds.filter((id): id is string => typeof id === 'string')
+    : []
+  if (!requestId || !scope) return { requestId, filesSearched: 0, truncated: false }
+  cancelSearch(requestId)
+  const ac = new AbortController()
+  searches.set(requestId, ac)
+  try {
+    const files = ids
+      .map((id) => ({ claudeSessionId: id, path: pathById.get(id) ?? null }))
+      .filter((f): f is { claudeSessionId: string; path: string } => f.path !== null)
+    const result = await searchTranscripts(files, {
+      query,
+      scope,
+      signal: ac.signal,
+      onHits: (hits) => {
+        if (!ac.signal.aborted) onHits({ requestId, hits })
+      }
+    })
+    return { requestId, filesSearched: result.filesSearched, truncated: result.truncated }
+  } finally {
+    if (searches.get(requestId) === ac) searches.delete(requestId)
+  }
+}
+
+export function cancelSearch(requestId: string): void {
+  const running = searches.get(requestId)
+  if (!running) return
+  running.abort()
+  searches.delete(requestId)
 }
