@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.77.0] — 2026-08-25
+
 ### Added
 - **Charcoal — a fourth theme, and a softer dark** — the default dark is off-black, which reads as a hole cut out of the screen. Charcoal is the same architecture painted on warm charcoal instead: one hue held at low chroma through the whole ramp so the greys are ash rather than slate, bigger steps between the surfaces because a lifted ground stops letting a 1px border do the separating, and nothing in it pure black — the modal scrim, the overlay shadows, the terminal's own ANSI black and the hairline under a selected row included. It brings its own terminal palette and source-code highlighting rather than borrowing the light theme's. Pick it in Settings → Appearance; nothing changes for anyone who does not.
 
