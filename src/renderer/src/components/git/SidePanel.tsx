@@ -413,7 +413,7 @@ export function SidePanel() {
             {pathMenuOpen && parentPaths.length > 0 && (
               <div
                 ref={pathMenuRef}
-                className="fixed z-50 min-w-[180px] max-w-[320px] max-h-[60vh] overflow-y-auto py-1 bg-surface-100 border border-border rounded-lg shadow-xl"
+                className="menu-surface menu-pop-mount fixed z-50 min-w-[180px] max-w-[320px] p-1"
                 style={{
                   top: (pathButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
                   right:
@@ -421,6 +421,9 @@ export function SidePanel() {
                     (pathButtonRef.current?.getBoundingClientRect().right ?? 0)
                 }}
               >
+                {/* The scroll lives one level in: the surface clips its own
+                    corners, so it cannot also be the thing that scrolls. */}
+                <div className="max-h-[60vh] overflow-y-auto">
                 {parentPaths.map((item) => (
                   <button
                     key={item.path}
@@ -428,9 +431,8 @@ export function SidePanel() {
                       setCustomCwd(item.path)
                       setPathMenuOpen(false)
                     }}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium hover:bg-surface-200 transition-colors ${
-                      item.path === cwd ? 'text-accent' : 'text-text-primary'
-                    }`}
+                    className="menu-item"
+                    data-selected={item.path === cwd}
                   >
                     <svg
                       width="12"
@@ -449,6 +451,7 @@ export function SidePanel() {
                     <span className="truncate">{item.name}</span>
                   </button>
                 ))}
+                </div>
               </div>
             )}
           </div>

@@ -187,7 +187,7 @@ export function FilePalette() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 bg-black/40 z-50"
+            className="modal-scrim z-50"
             onClick={close}
           />
           {/* Modal */}
@@ -199,7 +199,7 @@ export function FilePalette() {
             className="fixed z-50 left-1/2 -translate-x-1/2 w-[560px]"
             style={{ top: '20%' }}
           >
-            <div className="bg-surface-100 rounded-xl border border-border shadow-2xl overflow-hidden">
+            <div className="menu-surface menu-surface--sheet">
               {/* Search input */}
               <div className="px-4 py-3 border-b border-border-subtle">
                 <input

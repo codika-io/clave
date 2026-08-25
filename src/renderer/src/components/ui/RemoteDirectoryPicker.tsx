@@ -199,7 +199,7 @@ export function RemoteDirectoryPicker({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="modal-scrim scrim-mount z-50 flex items-center justify-center"
       onClick={onCancel}
     >
       <div
@@ -207,7 +207,7 @@ export function RemoteDirectoryPicker({
         tabIndex={-1}
         onKeyDown={handleCardKeyDown}
         onClick={(e) => e.stopPropagation()}
-        className="w-[520px] max-h-[560px] flex flex-col bg-surface-0 border border-border-subtle rounded-xl shadow-2xl overflow-hidden outline-none"
+        className="modal-card menu-pop-mount w-[520px] max-h-[560px] flex flex-col outline-none"
       >
         {/* Header */}
         <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border-subtle">

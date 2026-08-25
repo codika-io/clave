@@ -103,7 +103,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
-    className={cn('menu-item data-[state=open]:bg-surface-200', className)}
+    className={cn('menu-item', className)}
     {...props}
   />
 ))

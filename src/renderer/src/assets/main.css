@@ -48,7 +48,7 @@
   /* shadcn semantic aliases */
   --color-background: var(--surface-0);
   --color-foreground: var(--text-primary);
-  --color-popover: var(--surface-100);
+  --color-popover: var(--surface-0);
   --color-popover-foreground: var(--text-primary);
   --color-muted: var(--surface-200);
   --color-muted-foreground: var(--text-secondary);
@@ -176,8 +176,8 @@
      levels (menus/popovers, modals). Overlays float above the flat panels, so
      they are the one place a shadow is depth rather than chrome. */
   --scrim-color: rgb(0 0 0 / 0.4);
-  --overlay-shadow: 0 8px 24px rgb(0 0 0 / 0.32), 0 2px 8px rgb(0 0 0 / 0.24);
-  --overlay-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.28);
+  --overlay-shadow: 0 6px 16px rgb(0 0 0 / 0.24), 0 1px 4px rgb(0 0 0 / 0.16);
+  --overlay-shadow-lg: 0 12px 28px rgb(0 0 0 / 0.3), 0 3px 8px rgb(0 0 0 / 0.2);
   --danger-toggle-bg: rgba(255, 255, 255, 0.08);
   --danger-toggle-active: rgba(229, 64, 64, 0.18);
   --danger-toggle-glow: rgba(229, 64, 64, 0.25);
@@ -226,8 +226,8 @@
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.22);
   --scrim-color: rgb(27 27 24 / 0.25);
-  --overlay-shadow: 0 8px 24px rgb(0 0 0 / 0.1), 0 2px 8px rgb(0 0 0 / 0.06);
-  --overlay-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.16), 0 4px 12px rgb(0 0 0 / 0.08);
+  --overlay-shadow: 0 6px 16px rgb(0 0 0 / 0.07), 0 1px 4px rgb(0 0 0 / 0.04);
+  --overlay-shadow-lg: 0 12px 28px rgb(0 0 0 / 0.11), 0 3px 8px rgb(0 0 0 / 0.05);
   --danger-toggle-bg: rgba(0, 0, 0, 0.05);
   --danger-toggle-active: rgba(220, 53, 69, 0.14);
   --danger-toggle-glow: rgba(220, 53, 69, 0.17);
@@ -282,8 +282,8 @@
   --scrollbar-thumb: rgba(120, 100, 80, 0.18);
   --scrollbar-thumb-hover: rgba(120, 100, 80, 0.3);
   --scrim-color: rgb(43 34 24 / 0.25);
-  --overlay-shadow: 0 8px 24px rgb(60 45 30 / 0.12), 0 2px 8px rgb(60 45 30 / 0.07);
-  --overlay-shadow-lg: 0 16px 40px rgb(60 45 30 / 0.18), 0 4px 12px rgb(60 45 30 / 0.09);
+  --overlay-shadow: 0 6px 16px rgb(60 45 30 / 0.08), 0 1px 4px rgb(60 45 30 / 0.05);
+  --overlay-shadow-lg: 0 12px 28px rgb(60 45 30 / 0.12), 0 3px 8px rgb(60 45 30 / 0.06);
   --danger-toggle-bg: rgba(120, 100, 80, 0.08);
   --danger-toggle-active: rgba(220, 53, 69, 0.15);
   --danger-toggle-glow: rgba(220, 53, 69, 0.18);
@@ -461,17 +461,6 @@ body,
   color: var(--text-primary);
   background-color: var(--surface-200);
   box-shadow: 0 0 0.5px rgba(0,0,0,0.12);
-}
-
-/* Use on elevated surfaces (popovers/menus that sit on --surface-100). Shifts
-   the hover/selected fills one shade up so they stay visible against the
-   elevated background, keeping the same +1/+2 contrast steps the sidebar has
-   against --surface-50. Placed after the base rules to win on equal specificity. */
-.sidebar-item--elevated:hover {
-  background-color: var(--surface-200);
-}
-.sidebar-item--elevated[data-selected="true"] {
-  background-color: var(--surface-300);
 }
 
 /* Leading icon on sidebar tabs (session/file/group). Sizes both the wrapper
@@ -1318,9 +1307,9 @@ body,
   width: 100%;
   max-width: 62rem;
   max-height: 100%;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
-  background-color: var(--surface-50);
+  background-color: var(--surface-0);
   box-shadow: var(--overlay-shadow-lg);
   overflow: hidden;
   animation: surface-in 160ms var(--ease-out-expo);
@@ -1357,10 +1346,16 @@ body,
 /* ── Overlays: menus, popovers, modals ──
    One language for every surface that floats above the panels, cut from the
    same cloth as the launcher/toolbar panels: --radius-xl corners, a 1px
-   --color-border, and — because these float rather than sit in the layout —
-   an --overlay-shadow. Rows inside are inset and rounded like .sidebar-item,
-   never full-bleed: the surface holds the rows, the rows do not become the
-   surface.
+   --color-border, the panels' own --surface-0 ground, and — because these
+   float rather than sit in the layout — an --overlay-shadow. Rows inside are
+   inset and rounded like .sidebar-item, never full-bleed: the surface holds
+   the rows, the rows do not become the surface.
+
+   The ground is the same token the toolbar, the terminal cards and the
+   sidebar's boxes are painted with, so a popover reads as one of those boxes
+   lifted off the page rather than as a different material. It used to sit on
+   --surface-100, which is the hover fill of the rows inside it: a whole menu
+   the colour of a hovered row, and a shade off every box it opened from.
 
    Motion: enter/exit run off Radix's data-state with the app's own curve.
    These replaced tailwindcss-animate classes (animate-in/fade-in-0/…) that
@@ -1401,11 +1396,18 @@ body,
 .menu-surface {
   border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
-  background-color: var(--surface-100);
+  background-color: var(--surface-0);
   box-shadow: var(--overlay-shadow);
   overflow: hidden;
   /* Grow from the trigger's edge: Radix's popper publishes the origin. */
   transform-origin: var(--radix-popper-transform-origin, 50% 0%);
+}
+/* The sheet tier: the file preview, the diff and journey panels, the file
+   palette — surfaces the size of a document that float over the terminals
+   without a scrim. Same material, the modal's heavier shadow: at that size the
+   menu shadow reads as a card lying on the page rather than held above it. */
+.menu-surface--sheet {
+  box-shadow: var(--overlay-shadow-lg);
 }
 .menu-pop[data-state='open'] {
   animation: overlay-in 140ms var(--ease-out-expo);
@@ -1445,6 +1447,13 @@ body,
 }
 .menu-item:hover,
 .menu-item[data-highlighted] {
+  background-color: var(--surface-100);
+}
+/* The current row — the active workspace, the folder you are in, a submenu
+   held open — takes the sidebar's selected fill, one step past hover. Same
+   two steps as .sidebar-item, on the same ground. */
+.menu-item[data-selected="true"],
+.menu-item[data-state="open"] {
   background-color: var(--surface-200);
 }
 .menu-item[data-disabled],
