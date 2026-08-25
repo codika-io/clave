@@ -1894,20 +1894,27 @@ body,
 .message-trail-row[data-selected='true'] {
   background-color: var(--surface-200);
 }
+/* The message reads at panel-row size and gets TWO lines before it clips —
+   the box exists to answer "what was I saying", and one truncated line often
+   did not. */
 .message-trail-text {
-  font-size: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 13px;
+  line-height: 1.35;
   font-weight: var(--font-weight-medium);
   color: var(--text-primary);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* The full-message view: the chevron on the right unclamps the current
-   message so a big prompt can be read in place — capped, scrolling inside. */
-.message-trail-text--full {
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: break-word;
-  text-overflow: clip;
+}
+/* The full-message view: the hover chevron unclamps the current message so a
+   big prompt can be read in place — capped, scrolling inside. */
+.message-trail-text--full {
+  display: block;
+  -webkit-line-clamp: unset;
+  white-space: pre-wrap;
   max-height: min(40vh, 320px);
   overflow-y: auto;
 }

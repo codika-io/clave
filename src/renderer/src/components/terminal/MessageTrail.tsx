@@ -147,7 +147,9 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
         className={`menu-surface message-trail-surface ${miss ? 'message-trail--miss' : ''}`}
       >
         {!expanded ? (
-          <div className="flex items-start gap-0.5 px-0.5 py-0.5">
+          // Everything centers on the box's axis — the text, the pager, the
+          // counter — except the two action buttons, which hold the top.
+          <div className="flex items-center gap-0.5 px-0.5 py-0.5">
             <div className="flex flex-col flex-shrink-0">
               <button
                 className="panel-icon-btn"
@@ -168,7 +170,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                 <ChevronDownIcon className="w-4 h-4" />
               </button>
             </div>
-            <div className="relative flex-1 min-w-0 overflow-hidden">
+            <div className="relative flex-1 min-w-0 overflow-hidden mr-1.5">
               {/* The full-message toggle: a small chevron floating over the
                   text, revealed by hovering the box (always shown while the
                   full view is open, so it can be closed). */}
@@ -216,10 +218,10 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                 </motion.button>
               </AnimatePresence>
             </div>
-            <div className="flex items-center flex-shrink-0">
-              <span className="message-trail-count">
-                {eff + 1}/{turns.length}
-              </span>
+            <span className="message-trail-count flex-shrink-0">
+              {eff + 1}/{turns.length}
+            </span>
+            <div className="flex items-center flex-shrink-0 self-start">
               <button
                 className="panel-icon-btn"
                 onClick={() => setExpanded(true)}
