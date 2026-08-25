@@ -23,6 +23,13 @@ import { getXtermTheme } from './terminal-theme'
 
 const CSS = readFileSync(fileURLToPath(new URL('../assets/main.css', import.meta.url)), 'utf-8')
 
+/** Tokens that are deliberately CROSS-theme: user-setting knobs written as an
+ *  inline style on the root element (which beats every stylesheet block), so
+ *  the themes never own them and re-declaring them per theme would be copies
+ *  of a constant. `--rule-intensity` is Appearance → Tree separators
+ *  (AppShell sets it via `style.setProperty`). */
+const CROSS_THEME_KNOBS = new Set(['--rule-intensity'])
+
 /** The selector each theme's palette block is written under. Dark is the app's
  *  default and lives on bare `:root`; the others are attribute-scoped. */
 function selectorFor(theme: Theme): string {
@@ -86,7 +93,7 @@ describe('theme palettes', () => {
     const missing = [...root.entries()]
       .filter(([, v]) => refsOf(v).length === 0)
       .map(([t]) => t)
-      .filter((t) => !declared.has(t))
+      .filter((t) => !declared.has(t) && !CROSS_THEME_KNOBS.has(t))
     expect(missing).toEqual([])
   })
 
@@ -99,7 +106,7 @@ describe('theme palettes', () => {
     const root = tokensOf(':root')
     const dangling = [...root.values()]
       .flatMap(refsOf)
-      .filter((ref) => root.has(ref) && !declared.has(ref))
+      .filter((ref) => root.has(ref) && !declared.has(ref) && !CROSS_THEME_KNOBS.has(ref))
     expect([...new Set(dangling)]).toEqual([])
   })
 
