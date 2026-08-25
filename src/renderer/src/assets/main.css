@@ -1930,7 +1930,7 @@ body,
 .message-trail-count {
   flex-shrink: 0;
   padding-inline: 0.375rem;
-  font-size: 20px;
+  font-size: 14px;
   line-height: 1;
   font-weight: var(--font-weight-medium);
   font-variant-numeric: tabular-nums;

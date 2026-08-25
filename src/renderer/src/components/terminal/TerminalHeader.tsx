@@ -59,7 +59,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps): ReactElement
 
   return (
     <>
-      <div className="flex items-center justify-between pl-3 pr-1 py-0.5 bg-surface-0 border-b border-border-subtle flex-shrink-0">
+      <div className="flex items-center justify-between pl-3 pr-0.5 py-0.5 bg-surface-0 border-b border-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span
             className={cn(
