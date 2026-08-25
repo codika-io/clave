@@ -82,7 +82,12 @@ export function WhatsNewBanner(): ReactNode {
                 <XMarkIcon className="w-3 h-3" />
               </button>
             </div>
-            <p className="text-[11px] text-text-secondary mt-0.5 leading-relaxed">
+            {/* A release note is a changelog, not a line: the entries run to
+                several paragraphs, and unbounded they pushed the session list
+                and the foot panel off the bottom of the sidebar. Capped and
+                scrolled, so a long note reads inside the card instead of
+                growing it. */}
+            <p className="text-[11px] text-text-secondary mt-0.5 leading-relaxed max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line">
               {entry.title}. {entry.description}
             </p>
             <button

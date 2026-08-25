@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { type Highlighter } from 'shiki'
 import { useSessionStore } from '../store/session-store'
+import { isDarkTheme } from '../store/session-types'
 
 let highlighterPromise: Promise<Highlighter> | null = null
 
@@ -74,7 +75,7 @@ export function useSyntaxHighlight(content: string | null, filename: string) {
         const loadedLangs = highlighter.getLoadedLanguages()
 
         const actualLang = loadedLangs.includes(lang) ? lang : 'text'
-        const shikiTheme = theme === 'dark' ? 'github-dark' : 'github-light'
+        const shikiTheme = isDarkTheme(theme) ? 'github-dark' : 'github-light'
 
         const result = highlighter.codeToHtml(content, {
           lang: actualLang,

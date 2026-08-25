@@ -1411,7 +1411,11 @@ export function Sidebar() {
           {
             height: 'var(--content-top-offset)',
             paddingLeft: fullScreen ? '16px' : '84px',
-            paddingBottom: '2px',
+            // Optical, not geometric. Centred in the strip the lockup read high:
+            // the two words share one frame with descender room at the bottom
+            // that "Clave" never uses, so its mass sits above the box's middle.
+            // The pad is the correction — it buys back roughly that descender.
+            paddingTop: '5px',
             WebkitAppRegion: 'drag'
           } as React.CSSProperties
         }

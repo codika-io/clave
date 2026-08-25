@@ -170,6 +170,11 @@
   --sidebar-item-text: rgba(255, 255, 255, 0.78);
   /* Resting color for sidebar tab icons — more opaque than --text-tertiary */
   --sidebar-icon-color: rgba(255, 255, 255, 0.6);
+  /* The 0.5px ring under a selected row or group card. A token because it was
+     literal rgba(0,0,0,0.12) in the rules, which no theme could reach — on the
+     off-black themes a black hairline is invisible, and on a lifted ground it
+     is a black outline drawn around the one row you are looking at. */
+  --selected-ring: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
   /* The ONE modal scrim (dialogs, the group picker) and the two overlay shadow
@@ -217,12 +222,16 @@
   --surface-400: #c9c8c5;
   --border-color: rgba(0, 0, 0, 0.1);
   --border-subtle-color: rgba(0, 0, 0, 0.05);
-  --rule-color: rgba(0, 0, 0, 0.035);
+  /* Lighter than the dark theme's equivalent alpha on purpose: black on a warm
+     off-white reads harder than white on off-black, so the same number is a
+     darker line here. Kept a shade under what the eye would call a border. */
+  --rule-color: rgba(0, 0, 0, 0.022);
   --text-primary: #1b1b18;
   --text-secondary: #6c6c65;
   --text-tertiary: #9b9b94;
   --sidebar-item-text: #45453f;
   --sidebar-icon-color: #6c6c65;
+  --selected-ring: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.22);
   --scrim-color: rgb(27 27 24 / 0.25);
@@ -279,6 +288,7 @@
   --text-tertiary: #9b9590;
   --sidebar-item-text: #4d4840;
   --sidebar-icon-color: #756e66;
+  --selected-ring: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb: rgba(120, 100, 80, 0.18);
   --scrollbar-thumb-hover: rgba(120, 100, 80, 0.3);
   --scrim-color: rgb(43 34 24 / 0.25);
@@ -317,6 +327,103 @@
   --cm-tag: #3a6b35;
   --cm-operator: #756e66;
   --cm-punctuation: #756e66;
+}
+
+/* Charcoal theme — the soft dark. The default dark theme is off-black, which
+   reads as a hole cut in the screen; this is the same architecture painted on
+   warm charcoal instead, with nothing on it pure black and nothing pure white.
+
+   Three things carry it, and none of them is a brightness change:
+
+   1. A warm hue held at low chroma through the WHOLE ramp — every surface,
+      every ink, every hairline is oklch hue 68 at chroma ~0.010, so the greys
+      are ash and not slate. A ramp that warms only its darkest rungs goes
+      muddy at the top; holding one hue is what makes it read as a material.
+   2. Bigger steps between the rungs than dark uses. On off-black a 1px border
+      does the separating and the fills barely need to differ; lift the ground
+      and that border stops carrying it, so tone has to. Selected-against-chrome
+      is 1.43:1 here where dark gets away with 1.18:1 — which is the point of
+      the skin, not a side effect: soft ground, firm structure.
+   3. Nothing in it may be black. Not the ramp, and not the four places a theme
+      normally leaves on the default: the modal scrim, the two overlay shadows,
+      the terminal's own ANSI black, and the hairline ring under a selected row
+      — that last one was literal rgba(0,0,0,0.12) in a rule no theme could
+      reach, which is invisible on off-black and an outline here.
+
+   The layer order is the app's, unchanged: --surface-0 is the card (terminal,
+   toolbar, the panels inside the sidebar) and sits a step BELOW --surface-50,
+   the chrome that the window ground and the sidebar share. Cards are wells
+   here exactly as they are in dark. */
+[data-theme="charcoal"] {
+  --surface-0: #2b2722;
+  --surface-50: #34302c;
+  --surface-100: #3e3a35;
+  --surface-200: #4c4743;
+  --surface-300: #5a5651;
+  --surface-400: #6a6560;
+  /* Warm white rather than #fff: a neutral hairline over a warm ground reads
+     blue, and at these alphas that tint is the whole difference between ash
+     and slate. The same alphas dark uses, which is not the same line: a white
+     hairline loses relative contrast as the fill under it rises, so holding
+     the number is what keeps the border where dark has it. */
+  --border-color: rgba(255, 243, 232, 0.1);
+  --border-subtle-color: rgba(255, 243, 232, 0.058);
+  --rule-color: rgba(255, 243, 232, 0.045);
+  /* Ink as explicit warm greys, not white-at-alpha. Over a warm ground white
+     alpha composites toward neutral as it gets more opaque, so the body text —
+     the most opaque ink there is — would be the one thing in the theme that
+     went cold. */
+  --text-primary: #efece9;
+  --text-secondary: #a39f9b;
+  --text-tertiary: #84807b;
+  --sidebar-item-text: #c7c3c0;
+  --sidebar-icon-color: #9f9a96;
+  --selected-ring: rgba(255, 243, 232, 0.07);
+  --scrollbar-thumb: rgba(255, 243, 232, 0.14);
+  --scrollbar-thumb-hover: rgba(255, 243, 232, 0.26);
+  --scrim-color: rgb(24 18 13 / 0.46);
+  /* A shade heavier than dark's. A shadow is the difference between the
+     overlay and what is under it, and what is under it here is 12 points
+     lighter — the same shadow would simply be less shadow. */
+  --overlay-shadow: 0 6px 16px rgb(9 6 4 / 0.34), 0 1px 4px rgb(9 6 4 / 0.22);
+  --overlay-shadow-lg: 0 12px 28px rgb(9 6 4 / 0.42), 0 3px 8px rgb(9 6 4 / 0.3);
+  --danger-toggle-bg: rgba(255, 243, 232, 0.07);
+  --danger-toggle-active: rgba(229, 64, 64, 0.2);
+  --danger-toggle-glow: rgba(229, 64, 64, 0.26);
+  --danger-toggle-icon: #e54040;
+  --claude-toggle-bg: rgba(255, 243, 232, 0.07);
+  --claude-toggle-active: rgba(217, 119, 87, 0.2);
+  --claude-toggle-glow: rgba(217, 119, 87, 0.26);
+  --heatmap-0: #3a3631;
+  --heatmap-1: rgba(94, 106, 210, 0.3);
+  --heatmap-2: rgba(94, 106, 210, 0.5);
+  --heatmap-3: rgba(94, 106, 210, 0.7);
+  --heatmap-4: rgba(94, 106, 210, 0.95);
+  /* Lifted off dark's 0.25 backgrounds: those were solved against off-black and
+     land almost on this theme's own surface, so the chip would lose its edge. */
+  --color-wellbeing-gentle: oklch(0.78 0.14 85);
+  --color-wellbeing-gentle-bg: oklch(0.36 0.035 85);
+  --color-wellbeing-gentle-border: oklch(0.5 0.06 85);
+  --color-wellbeing-strong: oklch(0.73 0.15 50);
+  --color-wellbeing-strong-bg: oklch(0.36 0.035 50);
+  --color-wellbeing-strong-border: oklch(0.5 0.07 50);
+  /* CodeMirror syntax tokens — dark's github-dark family, desaturated a notch
+     for the lifted ground and with the two greys (comment, punctuation) taken
+     off their cool #8b949e onto the theme's own warm axis. */
+  --cm-selection: rgba(94, 106, 210, 0.32);
+  --cm-active-line: rgba(255, 243, 232, 0.052);
+  --cm-keyword: #ff8b7e;
+  --cm-comment: #8a8279;
+  --cm-string: #a8d4f5;
+  --cm-number: #8fc6ff;
+  --cm-constant: #8fc6ff;
+  --cm-function: #d8b0ff;
+  --cm-variable: #efece9;
+  --cm-type: #f0a86a;
+  --cm-property: #8fc6ff;
+  --cm-tag: #8ce89a;
+  --cm-operator: #8a8279;
+  --cm-punctuation: #8a8279;
 }
 
 @keyframes pulse-dot {
@@ -460,7 +567,7 @@ body,
 .sidebar-item[data-selected="true"] {
   color: var(--text-primary);
   background-color: var(--surface-200);
-  box-shadow: 0 0 0.5px rgba(0,0,0,0.12);
+  box-shadow: 0 0 0.5px var(--selected-ring);
 }
 
 /* Leading icon on sidebar tabs (session/file/group). Sizes both the wrapper
@@ -851,8 +958,10 @@ body,
    so the query answers the one question worth asking — is there room left for
    the second word. */
 .wordmark-strip {
-  /* Clave's INK height — what has to land on the traffic lights' centre line.
-     Declared HERE, on the strip, rather than on .wordmark: the gap between the
+  /* Clave's INK height. Where it lands is the strip's business (Sidebar.tsx
+     pads the lockup down off the geometric middle, which reads high once the
+     shared frame's descender room is counted); this is only how tall the mark
+     is. Declared HERE, on the strip, rather than on .wordmark: the gap between the
      two words is derived from it too, and a custom property set on the SVGs
      themselves is invisible to the flex container holding them apart. */
   --wordmark-h: 14px;
@@ -1208,7 +1317,7 @@ body,
 .group-scope[data-selected="true"] {
   background-color: var(--group-bg-selected, color-mix(in srgb, var(--surface-200) 60%, transparent));
   border-color: var(--group-border-selected, var(--color-border));
-  box-shadow: 0 0 0.5px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0.5px var(--selected-ring);
 }
 /* Selected AND hovered still moves — a card that stops responding once selected
    reads as disabled. */

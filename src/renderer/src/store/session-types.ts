@@ -1,4 +1,32 @@
-export type Theme = 'dark' | 'light' | 'coffee'
+/**
+ * Every skin the app ships, as a runtime list — the union is derived from it
+ * rather than written beside it. A theme is four things that live in four files
+ * (this list, a `[data-theme]` block in main.css, an xterm palette, a swatch in
+ * the Appearance pane) and none of them fails loudly when it lags: a missing CSS
+ * block inherits the dark theme's palette and simply looks wrong. Deriving the
+ * union means the palette table's `Record<Theme, ...>` is a type error the
+ * moment a name is added here, and `theme-palettes.test.ts` walks this list to
+ * hold the other two honest.
+ */
+export const THEMES = ['dark', 'charcoal', 'light', 'coffee'] as const
+
+export type Theme = (typeof THEMES)[number]
+
+/**
+ * The themes that paint on a dark ground. The one place that answers it.
+ *
+ * Every `theme === 'dark'` in the app was really a light/dark test written when
+ * `dark` was the only dark theme, and each one FAILED SILENTLY the moment a
+ * second one existed: charcoal would have been handed github-light source
+ * highlighting and the light xterm palette, on a charcoal surface, with nothing
+ * throwing. A theme is dark if it is in here, and adding the next one is one
+ * edit rather than a hunt.
+ */
+export const DARK_THEMES = ['dark', 'charcoal'] as const satisfies readonly Theme[]
+
+export function isDarkTheme(theme: Theme): boolean {
+  return (DARK_THEMES as readonly string[]).includes(theme)
+}
 
 export type AppIcon = 'dark' | 'light' | 'claude'
 

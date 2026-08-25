@@ -30,6 +30,11 @@ const themes: { id: Theme; label: string; colors: { bg: string; surface: string;
     colors: { bg: '#0a0a0a', surface: '#1a1a1a', text: 'rgba(255,255,255,0.9)', border: 'rgba(255,255,255,0.1)' }
   },
   {
+    id: 'charcoal',
+    label: 'Charcoal',
+    colors: { bg: '#34302c', surface: '#4c4743', text: '#efece9', border: 'rgba(255,243,232,0.1)' }
+  },
+  {
     id: 'light',
     label: 'Light',
     colors: { bg: '#f9f9f9', surface: '#e6e6e6', text: 'rgba(0,0,0,0.85)', border: 'rgba(0,0,0,0.12)' }
