@@ -80,7 +80,7 @@ export function Wordmark(): React.ReactElement {
  */
 
 /** The house, with the app named as the source. */
-export const ANTASPHERE_URL = 'https://antasphere.com/?utm_source=clave-app'
+export const ANTASPHERE_URL = 'https://antasphere.com/?utm_source=clave'
 
 export function WordmarkBy(): React.ReactElement {
   return (

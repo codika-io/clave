@@ -47,6 +47,16 @@ function tokensOf(selector: string): Map<string, string> {
   return out
 }
 
+/** The tokens a value reads through `var()`. A property whose value is BUILT
+ *  from other tokens — `color-mix(… var(--sidebar-icon-color) …)` — is a
+ *  different animal from one holding a literal: substitution happens where it
+ *  is used, against whatever the winning theme set those inputs to, so a theme
+ *  that does not redeclare it still gets its own colour out of it. Declaring it
+ *  per theme would be four copies of one expression, free to drift. */
+function refsOf(value: string): string[] {
+  return [...value.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((m) => m[1])
+}
+
 /** Relative luminance, the WCAG definition — the objective half of "is this a
  *  dark theme", so the answer is measured off the paint instead of asserted. */
 function luminance(hex: string): number {
@@ -68,9 +78,29 @@ describe('theme palettes', () => {
     // Whatever a theme leaves out, it silently inherits from the dark block —
     // which is a plausible-looking value on another dark skin and a hole in the
     // paint on a light one. Either way nothing reports it.
+    // Derived tokens are exempt, and only they: they cannot go stale, because
+    // they are re-resolved per theme from inputs the theme DOES declare — which
+    // the test below is what guarantees.
     const declared = tokensOf(selectorFor(theme))
-    const missing = [...tokensOf(':root').keys()].filter((t) => !declared.has(t))
+    const root = tokensOf(':root')
+    const missing = [...root.entries()]
+      .filter(([, v]) => refsOf(v).length === 0)
+      .map(([t]) => t)
+      .filter((t) => !declared.has(t))
     expect(missing).toEqual([])
+  })
+
+  it.each([...THEMES])('%s declares the inputs every derived token reads', (theme) => {
+    // The exemption above is only sound while a derived token's inputs are
+    // themselves per-theme. Let one of those inputs go missing and the derived
+    // value inherits dark's through the back door — the same hole in the paint,
+    // one level down, and nothing else would report it.
+    const declared = tokensOf(selectorFor(theme))
+    const root = tokensOf(':root')
+    const dangling = [...root.values()]
+      .flatMap(refsOf)
+      .filter((ref) => root.has(ref) && !declared.has(ref))
+    expect([...new Set(dangling)]).toEqual([])
   })
 
   it.each([...THEMES])('%s paints its terminal on its own card surface', (theme) => {
