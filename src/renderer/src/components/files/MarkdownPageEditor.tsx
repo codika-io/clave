@@ -78,6 +78,8 @@ interface MarkdownPageEditorProps {
   content: string
   onChange: (value: string) => void
   onSave: () => void
+  /** Put the caret in the document at mount — a file with nothing in it. */
+  autoFocus?: boolean
 }
 
 /**
@@ -91,7 +93,8 @@ interface MarkdownPageEditorProps {
 export function MarkdownPageEditor({
   content,
   onChange,
-  onSave
+  onSave,
+  autoFocus
 }: MarkdownPageEditorProps): React.JSX.Element {
   // Frozen at mount: the editor owns the buffer from here on.
   const [initial] = useState(() => splitFrontmatter(content))
@@ -126,6 +129,51 @@ export function MarkdownPageEditor({
     return () => window.removeEventListener('keydown', handler, true)
   }, [onSave])
 
+  /** Focus the document and drop the caret at the end of it. */
+  const placeCaret = useCallback((el: HTMLElement): void => {
+    el.focus()
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    range.collapse(false)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+  }, [])
+
+  /** The page fills its pane and a click anywhere on it lands in the text: a
+   *  short document is mostly margin, and a margin that swallows clicks reads
+   *  as a document that cannot be edited. Clicks on the text itself pass
+   *  through untouched — this only catches the empty page around it. */
+  const focusDocumentEnd = useCallback(
+    (e: React.MouseEvent): void => {
+      const el = rootRef.current?.querySelector<HTMLElement>('.markdown-page-content')
+      if (!el || el.contains(e.target as Node)) return
+      e.preventDefault()
+      placeCaret(el)
+    },
+    [placeCaret]
+  )
+
+  // An empty document opens with the caret in it. MDXEditor takes an autoFocus
+  // prop and it does nothing here — the value is published into the realm and
+  // nothing in the runtime reads it back — so the caret is placed by hand, on
+  // the frame the editable appears (Lexical mounts it after this effect runs).
+  useEffect(() => {
+    if (!autoFocus) return
+    let frames = 0
+    let raf = 0
+    const place = (): void => {
+      const el = rootRef.current?.querySelector<HTMLElement>('.markdown-page-content')
+      if (el) {
+        placeCaret(el)
+        return
+      }
+      if (frames++ < 30) raf = requestAnimationFrame(place)
+    }
+    place()
+    return () => cancelAnimationFrame(raf)
+  }, [autoFocus, placeCaret])
+
   if (parseError) {
     return (
       <div>
@@ -139,7 +187,11 @@ export function MarkdownPageEditor({
   }
 
   return (
-    <div ref={rootRef} className="markdown-page-editor mx-auto w-full max-w-[44rem] px-10 py-12">
+    <div
+      ref={rootRef}
+      onMouseDown={focusDocumentEnd}
+      className="markdown-page-editor mx-auto w-full max-w-[44rem] min-h-full px-10 py-12"
+    >
       {initial.title && (
         <h1 className="text-[1.9rem] leading-tight tracking-tight font-semibold text-text-primary mb-4">
           {initial.title}

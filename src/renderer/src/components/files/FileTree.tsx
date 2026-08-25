@@ -257,12 +257,20 @@ export function FileTree({ cwd, onNavigateToFolder }: {
       setInlineCreate(null)
       // Refresh the parent directory in the tree
       await refreshDir(parentPath)
-      // If a file was created, open it in edit-mode preview
+      // A new file opens BIG, as a tab, and not in the side sheet: a document
+      // you just named is a document you are about to write, and the 560px
+      // preview column gave a brand-new empty file a 28px editable strip you
+      // had to find and click before a single keystroke landed anywhere.
       if (type === 'file') {
-        setPreviewFile(relativePath, 'tree', cwd)
+        const filename = relativePath.split('/').pop() ?? relativePath
+        addFileTab({
+          id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          filePath: `${cwd}/${relativePath}`,
+          name: filename
+        })
       }
     },
-    [cwd, inlineCreate, refreshDir, setPreviewFile]
+    [cwd, inlineCreate, refreshDir, addFileTab]
   )
 
   const handleContextMenu = useCallback(
