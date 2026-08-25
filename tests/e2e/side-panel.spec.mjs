@@ -187,6 +187,17 @@ export async function run(t) {
     await win.click('button[title^="File tree"]')
     await win.waitForTimeout(1200)
 
+    // The path bar lands on the terminal card's top edge, as the sidebar's
+    // launcher does across the other divide: the tab bar sits level with the
+    // toolbar, and the box under it starts where the content does.
+    const align = await win.evaluate(() => {
+      const bar = document.querySelector('[data-panel-bar="path"]')?.getBoundingClientRect()
+      const cards = [...document.querySelectorAll('.floating-card')].map((c) => c.getBoundingClientRect())
+      const main = cards.sort((a, b) => b.height - a.height)[0]
+      return bar && main ? { bar: bar.top, card: main.top } : null
+    })
+    t.check("the path bar sits on the content card's top edge", !!align && Math.abs(align.bar - align.card) < 1, align)
+
     // ── The tab bar carries the tabs, and nothing else ────────────────────
     const bar = await win.evaluate(() => {
       const el = document.querySelector('[data-panel-bar="tabs"]')

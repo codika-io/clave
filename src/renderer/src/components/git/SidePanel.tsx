@@ -252,9 +252,16 @@ export function SidePanel() {
       {/* Header — the panel's chrome, and the window's drag region; every
           interactive child opts out. No rule under it: the bars ARE the chrome,
           exactly as the sidebar's launcher and switcher panels are, and a line
-          under them only says again what the panel edge already said. */}
+          under them only says again what the panel edge already said.
+
+          The gap between the two rows is the content column's gap-2, not the
+          sidebar's 4px between launcher and switcher: the tab bar sits level
+          with the toolbar, so the box under it is this edge's launcher and has
+          to land on the terminal card's top edge (--content-top-offset), the
+          way the sidebar's launcher does across the other divide. At 4px it
+          started four pixels above the card and read as misaligned. */}
       <div
-        className="flex flex-col gap-1 px-2 pt-2 pb-1 flex-shrink-0"
+        className="flex flex-col gap-2 px-2 pt-2 pb-1 flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         {/* Row 1 — which tab, and nothing else. The controls that used to sit

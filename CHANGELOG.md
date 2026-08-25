@@ -15,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 - **Every popover is one of the sidebar's boxes, lifted off the page** — the workspace switcher, the agent menu, every context menu, the file preview and the diff and journey sheets, the file palette, the commit bar's pull menu and the side panel's folder menu all sat on a surface one shade off the boxes they open from (the hover colour of their own rows, in fact), and a few of them still wore corners, borders and shadows of their own. They now share one surface — the toolbar's ground, the boxes' radius, one shadow for menus and a heavier one for the document-sized sheets — and the current row inside (the active workspace, the folder you are in) takes the sidebar's selected fill.
 
 ### Fixed
+- **The side panel's path box lines up with the content** — the tab bar sits level with the toolbar, and the box under it started four pixels above the terminal card's top edge, one gap short of where the sidebar's launcher lands across the other divide. It now starts on the card's edge.
 - **The sidebar's list ends on a seam at both ends** — the seam under the group switcher told you the cards scroll *behind* the chrome above them; at the bottom the list simply ran out into the foot panel. It now closes on the same hairline with the same 4px, mirrored — the line first, then the air — and only while the list actually overflows, since with nothing scrolling under the foot there is no edge for a seam to be.
 
 ## [1.73.0] — 2026-08-24
