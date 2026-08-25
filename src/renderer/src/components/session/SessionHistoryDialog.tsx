@@ -572,13 +572,14 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
               label: 'Resume',
               icon: <PlayIcon className="w-3.5 h-3.5" />,
               disabled:
-                !menu.entry.transcript.exists && !liveStates.has(menu.entry.claudeSessionId),
+                (!menu.entry.transcript.exists || !menu.entry.cwd) &&
+                !liveStates.has(menu.entry.claudeSessionId),
               onClick: () => resume(menu.entry, false)
             },
             {
               label: 'Resume (skip permissions)',
               icon: <ShieldExclamationIcon className="w-3.5 h-3.5" />,
-              disabled: !menu.entry.transcript.exists,
+              disabled: !menu.entry.transcript.exists || !menu.entry.cwd,
               onClick: () => resume(menu.entry, true)
             },
             {

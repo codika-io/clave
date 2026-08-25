@@ -465,7 +465,10 @@ export async function run(t) {
     t.check('Everything lists the conversation Clave never ran', allIds.includes('cc-outside'))
     t.check('but not one whose own cwd is another root', !allIds.includes('cc-foreign'), allIds)
     t.check('a cwd-less transcript is scoped by its store dir: ours listed, the foreign one not', allIds.includes('cc-nocwd') && !allIds.includes('cc-nocwd-foreign'), allIds)
-    t.equal('one stem under two dirs is ONE row', allIds.filter((id) => id === 'cc-dup').length, 1)
+    const dupEntries = await win.evaluate(() =>
+      window.electronAPI.historyList({ all: true }).then((r) => r.entries.filter((e) => e.claudeSessionId === 'cc-dup').length)
+    )
+    t.equal('one stem under two dirs is ONE entry from the service (not a React key collapse)', dupEntries, 1)
     t.equal('and the larger transcript is the one shown', await win.evaluate(() => document.querySelector('[data-history-row="cc-dup"] .history-row-title')?.textContent), 'Duplicated stem')
     t.equal('titled by its own ai-title', await win.evaluate(() => document.querySelector('[data-history-row="cc-outside"] .history-row-title')?.textContent), 'Outside conversation')
     t.check('every closed row wears the hollow dot', await win.evaluate(() => [...document.querySelectorAll('[data-history-row]:not([data-live])')].every((el) => el.getAttribute('data-state') === 'closed')))
@@ -500,6 +503,14 @@ export async function run(t) {
     await win.waitForTimeout(400)
     t.equal('clicking a cwd-less row spawns nothing', (await readSpawns()).length, inertBefore)
     t.check('and leaves the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
+    await win.click('[data-history-row="cc-nocwd"]', { button: 'right' })
+    await win.waitForTimeout(350)
+    const menuState = await win.evaluate(() =>
+      [...document.querySelectorAll('.menu-surface .menu-item')].map((el) => [el.textContent?.trim(), el.getAttribute('data-disabled') !== null || el.getAttribute('aria-disabled') === 'true'])
+    )
+    t.check('its menu disables both Resume entries', menuState.filter(([l]) => l?.startsWith('Resume')).every(([, d]) => d), menuState)
+    await win.keyboard.press('Escape')
+    await win.waitForTimeout(300)
 
     // --- A store-only conversation resumes like any other ---
     const spawnsBefore = (await readSpawns()).length

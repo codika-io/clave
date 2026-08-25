@@ -238,6 +238,17 @@ const TAIL = [
   'this line is not json'
 ].join('\n')
 
+describe('the dir encoding', () => {
+  it("the shared copy and the contract's pinned copy agree", async () => {
+    const { encodeProjectDir } = await import('../../shared/project-dir')
+    const { transcriptProjectDirName } =
+      await import('../exchange-capture/contract/workstream-events')
+    for (const cwd of ['/tmp/proj', '/a/b.c/d-e', '/Users/x/.antasphere/labs']) {
+      expect(encodeProjectDir(cwd)).toBe(transcriptProjectDirName(cwd))
+    }
+  })
+})
+
 describe('unknownStems', () => {
   it("lists what the ledger does not know, skipping Claude Code's own helper dir", () => {
     const index = new Map([

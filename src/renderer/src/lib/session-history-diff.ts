@@ -2,6 +2,7 @@ import type { Session, SessionGroup } from '../store/session-types'
 import { sessionMode, groupOfSession } from './exchange-capture'
 import type { HistoryLedgerRow } from '../../../preload/index.d'
 import { entryInGroup, type GroupRef } from '../../../shared/history-group-match'
+import { encodeProjectDir } from '../../../shared/project-dir'
 
 /**
  * The session ledger's diff (PRDCT-1738), store-free so the unit tests pin it.
@@ -149,11 +150,7 @@ export function visibleInWorkspace(
   return true
 }
 
-/** The store's dir-name encoding of a cwd (`/` and `.` become `-`). Kept in
- *  step with the main process's `transcriptProjectDirName`. */
-export function encodeProjectDir(cwd: string): string {
-  return cwd.replace(/[/.]/g, '-')
-}
+export { encodeProjectDir } from '../../../shared/project-dir'
 
 /** The row dot's word, the sidebar's own mapping: a closed conversation is a
  *  hollow ring; a live tab is blue while its agent works, amber while it
