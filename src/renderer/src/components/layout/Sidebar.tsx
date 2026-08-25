@@ -32,8 +32,9 @@ import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGrou
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
 import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
+import { useFullScreen } from '../../hooks/use-fullscreen'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
-import { Wordmark } from './Wordmark'
+import { Wordmark, WordmarkBy } from './Wordmark'
 import { ScrollArea } from '../ui/scroll-area'
 import {
   PencilSquareIcon,
@@ -139,6 +140,8 @@ function useOverflows(ref: React.RefObject<HTMLDivElement | null>): boolean {
 }
 
 export function Sidebar() {
+  // No traffic lights in fullscreen, so the wordmark's clearance for them goes.
+  const fullScreen = useFullScreen()
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   // When there's an active selection, unselected tabs/groups fade so the
@@ -1375,22 +1378,32 @@ export function Sidebar() {
           so their centre line is y=24 and the mark starts at 84px — 16px of
           clearance past the last button. The bottom padding is what puts the
           mark ON that centre line rather than in the middle of the spacer.
+
+          In FULLSCREEN there are no traffic lights, so that 84px is clearance
+          for nothing and the mark reads as pushed into the middle of the strip.
+          It takes the position the first traffic light would have had instead —
+          16px, the same x the buttons are placed at — which is the window's own
+          gutter and enough air that the mark is not sitting on the edge.
+
           This is the one strip of window chrome that is nobody else's, and the
           only place carrying the Antasphere mark. `pointer-events: none`
           keeps the whole strip draggable — the mark is a mark, not a target. */}
       <div
-        className="flex-shrink-0 flex items-center"
+        className="wordmark-strip flex-shrink-0 flex items-center"
+        data-wordmark-strip
+        data-fullscreen={fullScreen ? 'true' : 'false'}
         style={
           {
             height: 'var(--content-top-offset)',
-            paddingLeft: '84px',
+            paddingLeft: fullScreen ? '16px' : '84px',
             paddingBottom: '2px',
             WebkitAppRegion: 'drag'
           } as React.CSSProperties
         }
       >
-        <span style={{ pointerEvents: 'none' }}>
+        <span className="wordmark-lockup" style={{ pointerEvents: 'none' }}>
           <Wordmark />
+          <WordmarkBy />
         </span>
       </div>
 

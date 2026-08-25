@@ -518,6 +518,8 @@ export interface ElectronAPI {
   ) => () => void
   windowIdentity: () => Promise<WindowIdentity | null>
   onWindowIdentityChanged: (callback: (identity: WindowIdentity) => void) => () => void
+  windowIsFullScreen: () => Promise<boolean>
+  onWindowFullScreenChanged: (callback: (fullScreen: boolean) => void) => () => void
   windowSetWorkspace: (workspaceId: string | null) => Promise<SetWorkspaceResult>
   windowList: () => Promise<WindowIdentity[]>
   windowOpen: (workspaceId?: string) => Promise<{ windowId: number }>

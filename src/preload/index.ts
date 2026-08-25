@@ -311,6 +311,11 @@ const electronAPI = {
   // stamps against it). Any window may show any workspace.
   windowSetWorkspace: (workspaceId: string | null) =>
     ipcRenderer.invoke('window:set-workspace', workspaceId),
+  // Whether THIS window is fullscreen — macOS hides the traffic lights there,
+  // so the chrome that keeps clear of them closes the gap.
+  windowIsFullScreen: () => ipcRenderer.invoke('window:is-fullscreen'),
+  onWindowFullScreenChanged: (callback: (fullScreen: boolean) => void) =>
+    createIpcListener<[boolean]>('window:fullscreen-changed', callback),
   // Every open window, for the "move to window" pickers.
   windowList: () => ipcRenderer.invoke('window:list'),
   // A new window — the app once more — on a workspace (default: this one's).

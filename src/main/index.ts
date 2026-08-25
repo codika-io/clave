@@ -180,6 +180,15 @@ function createWindow(entry: PersistedWindow): BrowserWindow {
 
   attachMissionControlWindow(win)
 
+  // The traffic lights are gone in fullscreen and the chrome keeping clear of
+  // them should close the gap. Sent to this window only — fullscreen is a
+  // window's state, not the app's.
+  const sendFullScreen = (value: boolean) => (): void => {
+    if (!win.isDestroyed()) win.webContents.send('window:fullscreen-changed', value)
+  }
+  win.on('enter-full-screen', sendFullScreen(true))
+  win.on('leave-full-screen', sendFullScreen(false))
+
   const windowId = win.id
   win.on('closed', () => onWindowClosed(windowId, entry.key))
 

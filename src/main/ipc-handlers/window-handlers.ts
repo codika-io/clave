@@ -112,6 +112,14 @@ export function registerWindowHandlers(deps: WindowHandlerDeps): void {
     return win ? identityFor(win.id) : null
   })
 
+  // macOS hides the traffic lights in fullscreen, so the chrome that was
+  // keeping clear of them has to know. Per window, never broadcast: two
+  // windows are rarely in the same state.
+  ipcMain.handle('window:is-fullscreen', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return win ? win.isFullScreen() : false
+  })
+
   ipcMain.handle('window:list', () =>
     windowRegistry
       .listWindows()
