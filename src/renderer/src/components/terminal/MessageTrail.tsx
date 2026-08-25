@@ -243,7 +243,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
         ) : (
           <div className="py-0.5">
             <div className="flex items-center justify-between pl-2 pr-0.5 pb-0.5">
-              <span className="message-trail-count">
+              <span className="message-trail-count message-trail-count--compact">
                 {eff + 1}/{turns.length}
               </span>
               <div className="flex items-center">

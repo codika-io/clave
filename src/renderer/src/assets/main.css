@@ -1925,13 +1925,21 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The position counter reads at a glance — sized to the two-line message
+   block beside it, quiet in color so the size doesn't shout. */
 .message-trail-count {
   flex-shrink: 0;
   padding-inline: 0.375rem;
-  font-size: 11px;
+  font-size: 20px;
+  line-height: 1;
   font-weight: var(--font-weight-medium);
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
+}
+/* The list view keeps the small label size — there the counter is a header
+   caption, not the box's focal state. */
+.message-trail-count--compact {
+  font-size: 11px;
 }
 .message-trail-time {
   flex-shrink: 0;
