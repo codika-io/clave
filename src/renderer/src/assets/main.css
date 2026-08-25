@@ -1844,13 +1844,13 @@ body,
   text-align: left;
   cursor: pointer;
 }
-/* The full-message toggle: a small chevron floating over the text's top
-   right, revealed by hovering the box; pinned visible while the full view is
-   open so it can be closed. Top-RIGHT, not center: the message line is one
-   click target and a centered overlay would sit exactly on it. */
+/* The panel toggle: a small chevron floating over the title's right end,
+   revealed by hovering the box. Off-center on purpose: the message line is
+   one click target and a centered overlay would sit exactly on it. */
 .message-trail-peek {
   position: absolute;
-  top: 1px;
+  top: 50%;
+  translate: 0 -50%;
   right: 0.25rem;
   z-index: 1;
   display: inline-flex;
@@ -1865,8 +1865,7 @@ body,
   pointer-events: none;
   transition: opacity 120ms, color 150ms, background-color 150ms;
 }
-.message-trail:hover .message-trail-peek,
-.message-trail[data-view='full'] .message-trail-peek {
+.message-trail:hover .message-trail-peek {
   opacity: 1;
   pointer-events: auto;
 }
@@ -1894,27 +1893,24 @@ body,
 .message-trail-row[data-selected='true'] {
   background-color: var(--surface-200);
 }
-/* The message reads at panel-row size and gets TWO lines before it clips —
-   the box exists to answer "what was I saying", and one truncated line often
-   did not. */
+/* The collapsed face is a TITLE: one line, panel-row size, ellipsis. The
+   whole message is read in the expanded panel, where the current turn
+   unclamps (--full below). */
 .message-trail-text {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   font-size: 13px;
   line-height: 1.35;
   font-weight: var(--font-weight-medium);
   color: var(--text-primary);
   overflow: hidden;
-  white-space: normal;
-  overflow-wrap: break-word;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-/* The full-message view: the hover chevron unclamps the current message so a
-   big prompt can be read in place — capped, scrolling inside. */
+/* The current turn in the expanded panel: unclamped so a big prompt reads
+   whole — capped, scrolling inside. */
 .message-trail-text--full {
-  display: block;
-  -webkit-line-clamp: unset;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  text-overflow: clip;
   max-height: min(40vh, 320px);
   overflow-y: auto;
 }
