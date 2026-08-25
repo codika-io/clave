@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  ArrowsPointingInIcon,
-  ArrowsPointingOutIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  XMarkIcon
-} from '@heroicons/react/24/outline'
+import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
 import { messageNeedle, scrollXtermToText } from '../../lib/terminal-scroll'
 import type { ConversationTurn } from '../../../../preload/index.d'
@@ -39,14 +33,11 @@ function relativeTime(iso: string): string {
 
 export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement | null {
   const enabled = useSessionStore((s) => s.messageTrailEnabled)
-  const setMessageTrailEnabled = useSessionStore((s) => s.setMessageTrailEnabled)
   const session = useSessionStore((s) => s.sessions.find((x) => x.id === sessionId))
   const isSelected = useSessionStore((s) => s.selectedSessionIds.includes(sessionId))
   const [turns, setTurns] = useState<ConversationTurn[]>([])
   const [cursor, setCursor] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
-  /** The full-message view: the current message unclamped, scrolling inside. */
-  const [msgExpanded, setMsgExpanded] = useState(false)
   const [miss, setMiss] = useState(false)
   /** Which way the last navigation went, for the slide direction. */
   const [dir, setDir] = useState(1)
@@ -62,7 +53,6 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
     setConvKey(claudeSessionId)
     setCursor(null)
     setExpanded(false)
-    setMsgExpanded(false)
     setTurns([])
   }
 
@@ -137,7 +127,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
   return (
     <div
       className="message-trail"
-      data-view={expanded ? 'list' : msgExpanded ? 'full' : 'line'}
+      data-view={expanded ? 'list' : 'line'}
       onMouseDown={(e) => e.stopPropagation()}
     >
       <motion.div
@@ -147,7 +137,9 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
         className={`menu-surface message-trail-surface ${miss ? 'message-trail--miss' : ''}`}
       >
         {!expanded ? (
-          <div className="flex items-start gap-0.5 px-0.5 py-0.5">
+          // Everything centers on the box's axis — the text, the pager, the
+          // counter — except the two action buttons, which hold the top.
+          <div className="flex items-center gap-0.5 px-0.5 py-0.5">
             <div className="flex flex-col flex-shrink-0">
               <button
                 className="panel-icon-btn"
@@ -168,21 +160,17 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                 <ChevronDownIcon className="w-4 h-4" />
               </button>
             </div>
-            <div className="relative flex-1 min-w-0 overflow-hidden">
-              {/* The full-message toggle: a small chevron floating over the
-                  text, revealed by hovering the box (always shown while the
-                  full view is open, so it can be closed). */}
+            <div className="relative flex-1 min-w-0 overflow-hidden mr-1.5">
+              {/* The panel toggle: a small chevron floating over the title,
+                  revealed by hovering the box. It opens the surrounding-turns
+                  panel, where the current message also reads unclamped. */}
               <button
                 className="message-trail-peek"
-                onClick={() => setMsgExpanded(!msgExpanded)}
-                aria-label={msgExpanded ? 'Collapse message' : 'Show full message'}
-                title={msgExpanded ? 'Collapse message' : 'Show the full message'}
+                onClick={() => setExpanded(true)}
+                aria-label="Expand messages"
+                title="Show the conversation"
               >
-                {msgExpanded ? (
-                  <ChevronUpIcon className="w-3 h-3" />
-                ) : (
-                  <ChevronDownIcon className="w-3 h-3" />
-                )}
+                <ChevronDownIcon className="w-3 h-3" />
               </button>
               <AnimatePresence mode="popLayout" initial={false} custom={dir}>
                 <motion.button
@@ -201,67 +189,31 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                   onClick={() => void jump(eff)}
                   title="Scroll to this message"
                 >
-                  <div
-                    className={
-                      msgExpanded
-                        ? 'message-trail-text message-trail-text--full'
-                        : 'message-trail-text'
-                    }
-                  >
-                    {turns[eff].userText}
-                  </div>
+                  <div className="message-trail-text">{turns[eff].userText}</div>
                   {turns[eff].replyHead && (
                     <div className="message-trail-reply">{turns[eff].replyHead}</div>
                   )}
                 </motion.button>
               </AnimatePresence>
             </div>
-            <div className="flex items-center flex-shrink-0">
-              <span className="message-trail-count">
-                {eff + 1}/{turns.length}
-              </span>
-              <button
-                className="panel-icon-btn"
-                onClick={() => setExpanded(true)}
-                aria-label="Expand messages"
-                title="Show surrounding messages"
-              >
-                <ArrowsPointingOutIcon className="w-4 h-4" />
-              </button>
-              <button
-                className="panel-icon-btn"
-                onClick={() => setMessageTrailEnabled(false)}
-                aria-label="Hide message trail"
-                title="Hide message trail"
-              >
-                <XMarkIcon className="w-4 h-4" />
-              </button>
-            </div>
+            <span className="message-trail-count flex-shrink-0">
+              {eff + 1}/{turns.length}
+            </span>
           </div>
         ) : (
           <div className="py-0.5">
             <div className="flex items-center justify-between pl-2 pr-0.5 pb-0.5">
-              <span className="message-trail-count">
+              <span className="message-trail-count message-trail-count--compact">
                 {eff + 1}/{turns.length}
               </span>
-              <div className="flex items-center">
-                <button
-                  className="panel-icon-btn"
-                  onClick={() => setExpanded(false)}
-                  aria-label="Collapse messages"
-                  title="Collapse"
-                >
-                  <ArrowsPointingInIcon className="w-4 h-4" />
-                </button>
-                <button
-                  className="panel-icon-btn"
-                  onClick={() => setMessageTrailEnabled(false)}
-                  aria-label="Hide message trail"
-                  title="Hide message trail"
-                >
-                  <XMarkIcon className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                className="panel-icon-btn"
+                onClick={() => setExpanded(false)}
+                aria-label="Collapse messages"
+                title="Collapse"
+              >
+                <ChevronUpIcon className="w-4 h-4" />
+              </button>
             </div>
             <div className="px-1">
               {windowTurns.map((turn, w) => {
@@ -278,7 +230,18 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                     title="Scroll to this message"
                   >
                     <div className="flex items-baseline gap-2 min-w-0">
-                      <div className="message-trail-text flex-1">{turn.userText}</div>
+                      {/* The current turn reads WHOLE in the panel (capped,
+                          scrolling inside) — this is where a big prompt is
+                          read since the collapsed face keeps to one line. */}
+                      <div
+                        className={
+                          i === eff
+                            ? 'message-trail-text message-trail-text--full flex-1'
+                            : 'message-trail-text flex-1'
+                        }
+                      >
+                        {turn.userText}
+                      </div>
                       {turn.ts && (
                         <span className="message-trail-time">{relativeTime(turn.ts)}</span>
                       )}

@@ -120,7 +120,8 @@ export async function run(t) {
       )
     )
 
-    // --- Expand: the surrounding window, current row marked ---
+    // --- Expand via the hover chevron: the surrounding window, current row marked ---
+    await win.hover('.message-trail-line')
     await win.click('.message-trail [aria-label="Expand messages"]')
     await win.waitForTimeout(300)
     const rows = await win.evaluate(() =>
@@ -142,6 +143,17 @@ export async function run(t) {
       ),
       'Now wire the CSV download'
     )
+    // The selected row is where a big prompt reads whole: unclamped, capped.
+    const fullRow = await win.evaluate(() => {
+      const el = document.querySelector(
+        '.message-trail-row[data-selected="true"] .message-trail-text'
+      )
+      return el
+        ? { whiteSpace: getComputedStyle(el).whiteSpace, capped: getComputedStyle(el).maxHeight !== 'none' }
+        : null
+    })
+    t.equal('the selected row unclamps to wrap', fullRow?.whiteSpace, 'pre-wrap')
+    t.check('with a height cap for a scrollbar', fullRow?.capped === true, fullRow)
     await win.click('.message-trail [aria-label="Collapse messages"]')
     await win.waitForTimeout(300)
 
@@ -188,33 +200,11 @@ export async function run(t) {
       { atBottom, scrolled }
     )
 
-    // --- The full-message view: the right chevron unclamps the prompt ---
-    await win.click('.message-trail [aria-label="Show full message"]')
-    await win.waitForTimeout(250)
-    const fullView = await win.evaluate(() => {
-      const el = document.querySelector('.message-trail-text')
-      return {
-        view: document.querySelector('.message-trail')?.getAttribute('data-view'),
-        whiteSpace: el ? getComputedStyle(el).whiteSpace : null,
-        capped: el ? getComputedStyle(el).maxHeight !== 'none' : null
-      }
-    })
-    t.equal('the chevron opens the full-message view', fullView.view, 'full')
-    t.equal('the text unclamps to wrap', fullView.whiteSpace, 'pre-wrap')
-    t.check('with a height cap for a scrollbar', fullView.capped === true, fullView)
-    await win.click('.message-trail [aria-label="Collapse message"]')
-    await win.waitForTimeout(250)
-    t.equal(
-      'and closes back to one line',
-      await win.evaluate(() => document.querySelector('.message-trail')?.getAttribute('data-view')),
-      'line'
-    )
-
-    // --- The box's X hides the trail everywhere; the header brings it back ---
-    await win.click('.message-trail [aria-label="Hide message trail"]')
+    // --- The header toggle is the one hide; it persists and comes back ---
+    await win.click('[title="Hide message trail"]')
     await win.waitForTimeout(200)
     t.check(
-      "the box's close button removes the trail",
+      'the header toggle removes the trail',
       await win.evaluate(() => !document.querySelector('.message-trail'))
     )
     t.equal(
@@ -226,7 +216,7 @@ export async function run(t) {
     await until(async () =>
       (await win.evaluate(() => !!document.querySelector('.message-trail'))) ? true : null
     )
-    t.check('the header toggle brings it back', true)
+    t.check('toggling back brings it back', true)
   } finally {
     await app.close()
     killLeakedE2eTmux()
