@@ -88,19 +88,10 @@ function RemoteFileTreeRow({
   return (
     <button
       onClick={() => onClick(node)}
-      className="relative w-full flex items-center h-7 px-2 cursor-pointer select-none transition-colors text-sm text-left hover:bg-surface-100"
+      className="w-full flex items-center h-7 px-2 cursor-pointer select-none transition-colors text-sm text-left hover:bg-surface-100"
       style={{ paddingLeft: `${8 + node.depth * 8}px` }}
       title={node.name}
     >
-      {/* Tree indent guides */}
-      {Array.from({ length: node.depth }, (_, i) => (
-        <span
-          key={i}
-          className="tree-guide"
-          style={{ left: `${8 + i * 8 + 6}px` }}
-        />
-      ))}
-
       {/* Chevron for directories */}
       {node.type === 'directory' ? (
         <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-[color:var(--sidebar-icon-color)]">
