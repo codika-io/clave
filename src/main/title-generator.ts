@@ -108,9 +108,14 @@ export function scheduleTitleGeneration(
         // Start watching the new JSONL for title generation
         watchJsonl(sessionId, entry)
 
-        // Notify renderer to reset the session name
+        // The new file's stem IS the rotated Claude session id: hand it to
+        // the renderer with the reset, so the tab follows its conversation
+        // (before this the tab kept the pre-/clear id, and a Resume or a
+        // restart reopened the conversation the user had just cleared).
+        const stem = filename.slice(0, -'.jsonl'.length)
+        entry.claudeSessionId = stem
         if (entry.win && !entry.win.isDestroyed()) {
-          entry.win.webContents.send(`session:clear-detected:${sessionId}`)
+          entry.win.webContents.send(`session:clear-detected:${sessionId}`, stem)
         }
       }, 500)
     })

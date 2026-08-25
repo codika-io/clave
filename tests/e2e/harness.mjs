@@ -51,11 +51,14 @@ export function seedTrustedRoots(dir, roots) {
  *  focus from whoever is working while it goes. Its cost is that OS focus is
  *  gone — `BrowserWindow.getFocusedWindow()` can be null and `win.isFocused()`
  *  false all run — so assert Clave-internal focus, never the window manager's. */
-export async function launchApp(dir, { settleMs = 4000 } = {}) {
+export async function launchApp(dir, { settleMs = 4000, env = {} } = {}) {
   const app = await electron.launch({
     executablePath: ELECTRON_BIN,
     args: ['.', `--user-data-dir=${dir}`, '--test-no-activate'],
-    cwd: REPO
+    cwd: REPO,
+    // Extra environment for the main process (e.g. CLAVE_TRANSCRIPTS_ROOT, so
+    // a spec seeds transcripts without touching the real ~/.claude/projects).
+    env: { ...process.env, ...env }
   })
   const win = await app.firstWindow()
   await win.waitForLoadState('domcontentloaded')
@@ -295,7 +298,11 @@ export async function spyPtySpawn(app) {
         claudeMode: options?.claudeMode ?? false,
         claudeAgentsMode: options?.claudeAgentsMode ?? false,
         codexMode: options?.codexMode ?? false,
-        antigravityMode: options?.antigravityMode ?? false
+        antigravityMode: options?.antigravityMode ?? false,
+        // A resume from the history dialog: the conversation id, verbatim.
+        resumeSessionId: options?.resumeSessionId ?? null,
+        dangerousMode: options?.dangerousMode ?? false,
+        workspaceId: options?.workspaceId ?? null
       })
       return original(event, cwd, options)
     })

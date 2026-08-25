@@ -32,6 +32,7 @@ import { useAgentStore } from '../../store/agent-store'
 import { usePinnedStore, substituteTokens, pinGroupFromCurrent, removePinnedGroupWithCleanup, resyncPinnedGroup, findPinnedByGroupId, isPinnedOutOfSync, getHiddenGroupIds, revealGroup, spawnTemplate, exportClaveFile, getExportFileName } from '../../store/pinned-store'
 import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
+import { useHistoryStore } from '../../store/history-store'
 import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
 import { useFullScreen } from '../../hooks/use-fullscreen'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
@@ -43,6 +44,7 @@ import {
   Squares2X2Icon,
   FolderMinusIcon,
   CommandLineIcon,
+  ClockIcon,
   XMarkIcon,
   DocumentDuplicateIcon,
   BookmarkIcon,
@@ -1179,6 +1181,12 @@ export function Sidebar() {
             label: 'Add terminal',
             icon: <CommandLineIcon className="w-3.5 h-3.5" />,
             onClick: () => setTerminalDialogState({ groupId, terminalId: null })
+          },
+          {
+            label: 'History',
+            icon: <ClockIcon className="w-3.5 h-3.5" />,
+            shortcut: '\u2318\u21e7H',
+            onClick: () => useHistoryStore.getState().openHistory(groupId)
           },
           group?.view
             ? {

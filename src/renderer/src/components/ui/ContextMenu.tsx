@@ -16,13 +16,15 @@ interface ContextMenuProps {
   y: number
   onClose: () => void
   header?: React.ReactNode
+  /** Extra classes on the surface — a dialog above the default z-50 passes its own. */
+  className?: string
 }
 
 // Estimated menu footprint, used to decide which side of the cursor to open on.
 const ESTIMATED_MENU_WIDTH = 220
 const ESTIMATED_MENU_HEIGHT = 280
 
-export function ContextMenu({ items, x, y, onClose, header }: ContextMenuProps) {
+export function ContextMenu({ items, x, y, onClose, header, className }: ContextMenuProps) {
   // Open leftward / upward when the cursor is too close to the viewport edge,
   // so the menu is never cropped off-screen.
   const align = x > window.innerWidth - ESTIMATED_MENU_WIDTH ? 'end' : 'start'
@@ -52,7 +54,7 @@ export function ContextMenu({ items, x, y, onClose, header }: ContextMenuProps) 
           alignOffset={0}
           avoidCollisions
           collisionPadding={8}
-          className="menu-surface menu-pop z-50 min-w-[180px] p-1"
+          className={cn('menu-surface menu-pop z-50 min-w-[180px] p-1', className)}
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
           {header && (

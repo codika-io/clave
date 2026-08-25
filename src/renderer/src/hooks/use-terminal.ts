@@ -153,8 +153,14 @@ export function useTerminal(sessionId: string) {
     })
 
     // Listen for /clear command — reset session name to folder name
-    const cleanupClearDetected = window.electronAPI.onClearDetected(sessionId, () => {
+    const cleanupClearDetected = window.electronAPI.onClearDetected(sessionId, (newClaudeSessionId) => {
       resetSessionName(sessionId)
+      // The tab follows its rotated transcript: store (Resume, the history
+      // ledger's diff) and record (a restart's re-adoption) alike.
+      if (newClaudeSessionId) {
+        useSessionStore.getState().setClaudeSessionId(sessionId, newClaudeSessionId)
+        void window.electronAPI.setSessionClaudeSessionId?.(sessionId, newClaudeSessionId)
+      }
     })
 
     // Deterministic Claude run state from CC lifecycle hooks (working/blocked/done).

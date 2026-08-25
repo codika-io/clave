@@ -1453,6 +1453,83 @@ body,
   border-color: var(--color-accent);
 }
 
+/* ── Session history ── */
+
+/* The history dialog rides the picker's surface, narrower and fixed in
+   height: a list you scan top to bottom, not a grid you sweep. */
+.group-picker-panel--history {
+  max-width: 46rem;
+  height: min(44rem, 100%);
+}
+.history-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0.375rem;
+}
+.history-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.history-chips--sort {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+/* One conversation: title line (dot, title, group, time), then what the
+   human last said. Inset and rounded like a menu row, never full-bleed. */
+.history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-lg);
+  text-align: left;
+  transition: background-color 150ms;
+}
+.history-row:hover,
+.history-row:focus-visible {
+  background-color: var(--surface-100);
+  outline: none;
+}
+.history-row[data-missing='true'] {
+  opacity: 0.5;
+}
+.history-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+.history-row-group {
+  flex: 0 1 auto;
+  max-width: 10rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-md);
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--text-tertiary);
+  background-color: var(--surface-200);
+}
+.history-row-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.history-row-prompt {
+  padding-left: 0.875rem; /* under the title, past the dot */
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.history-row-prompt--none {
+  color: var(--text-tertiary);
+}
+
 /* ── Overlays: menus, popovers, modals ──
    One language for every surface that floats above the panels, cut from the
    same cloth as the launcher/toolbar panels: --radius-xl corners, a 1px
