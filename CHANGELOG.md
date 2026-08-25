@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Fixed
+- **A folder closes the way it opens, and an ignored file is never painted twice** — closing still snapped: the rows vanished between two frames and the list below jumped up into the gap. They now shrink out of it over 140ms, the mirror of the opening, and the folder's chevron turns at once rather than waiting for them. Collapse-all stays instant — a whole tree playing out at once is a flicker, not a movement. The other half is the ink: a file outside git's account of the folder is drawn at 40%, but the status was filled in by a second pass *after* the rows had been handed to React, so every one of them arrived black and went grey a moment later. It is resolved with the listing now and the row is painted once — and never asked for at all inside an already-ignored directory, where the parent's answer is the children's. The entry animation was making it worse on its own account: a CSS animation outranks a normal declaration while it runs, so fading to a literal `opacity: 1` held a greyed row at full strength for the whole 160ms. Both animations end on the row's own value.
+
 ### Added
 - **Charcoal — a fourth theme, and a softer dark** — the default dark is off-black, which reads as a hole cut out of the screen. Charcoal is the same architecture painted on warm charcoal instead: one hue held at low chroma through the whole ramp so the greys are ash rather than slate, bigger steps between the surfaces because a lifted ground stops letting a 1px border do the separating, and nothing in it pure black — the modal scrim, the overlay shadows, the terminal's own ANSI black and the hairline under a selected row included. It brings its own terminal palette and source-code highlighting rather than borrowing the light theme's. Pick it in Settings → Appearance; nothing changes for anyone who does not.
 

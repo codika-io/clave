@@ -162,11 +162,12 @@ function InlineCreateInput({
  * full-bleed line cuts across the indentation and costs the reader the sense of
  * the tree.
  */
-function TreeRule({ depth }: { depth: number }): React.JSX.Element {
+function TreeRule({ depth, leaving }: { depth: number; leaving?: boolean }): React.JSX.Element {
   return (
     <div
       className="tree-rule"
       data-file-tree-rule={depth}
+      data-leaving={leaving ? 'true' : undefined}
       style={{ marginLeft: TREE_ROW_PAD_PX + depth * TREE_INDENT_PX, marginRight: 12 }}
     />
   )
@@ -407,7 +408,9 @@ export function FileTree({ cwd, onNavigateToFolder }: {
       // and the next), which showed as ruling that gives out halfway down.
       // The first row closes nothing, so it takes none.
       if (i > 0) {
-        elements.push(<TreeRule key={`rule:${node.path}`} depth={node.depth} />)
+        elements.push(
+          <TreeRule key={`rule:${node.path}`} depth={node.depth} leaving={node.leaving} />
+        )
       }
       elements.push(
         <FileTreeItem

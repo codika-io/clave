@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
 import {
-  flattenTree,
   findNode,
   updateNodeChildren,
   toggleNodeExpanded,
@@ -16,6 +15,8 @@ export interface TreeNode extends BaseTreeNode {
 
 export interface FlatTreeNode extends TreeNode {
   depth: number
+  /** On screen only to finish its exit animation — see flattenForDisplay. */
+  leaving?: boolean
 }
 
 /** Mark nodes whose paths appear in the ignored set */
@@ -27,6 +28,72 @@ function applyIgnored(nodes: TreeNode[], ignoredSet: Set<string>): TreeNode[] {
     }
     return { ...node, ignored }
   })
+}
+
+/** How long a closing folder's rows take to leave. MUST match the duration of
+ *  `tree-row-out` in main.css — the rows animate there, the subtree is dropped
+ *  here, and if this fires first the animation is cut off mid-way. */
+const TREE_COLLAPSE_MS = 140
+
+/** Which of these paths git ignores. */
+async function resolveIgnored(rootCwd: string, nodes: TreeNode[]): Promise<Set<string>> {
+  const paths = nodes.map((n) => n.path)
+  if (paths.length === 0) return new Set()
+  const ignored = await window.electronAPI?.gitCheckIgnored(rootCwd, paths)
+  return new Set(ignored ?? [])
+}
+
+/**
+ * Decide a fresh listing's ignored flags BEFORE it is handed to React.
+ *
+ * These used to be filled in afterwards, by a second pass that re-rendered the
+ * rows once git answered — so every row arrived at full strength and then went
+ * grey a moment later. On a folder of build output that is the whole listing
+ * flashing black. The status is part of what a row IS, not an embellishment on
+ * it, so it is resolved with the listing and the row is painted once.
+ *
+ * The parent's flag short-circuits it: git does not descend into an ignored
+ * directory, so everything inside one is ignored too. That saves the round trip
+ * exactly where the listing is longest — an ignored output or cache directory
+ * used to ask git about every path inside it to be told what its parent already
+ * knew. (The very worst offenders never arrive here at all: node_modules, .git
+ * and friends are dropped from every listing by IGNORED_DIRECTORIES in main.)
+ */
+async function withIgnored(
+  rootCwd: string,
+  children: TreeNode[],
+  parentIgnored: boolean
+): Promise<TreeNode[]> {
+  if (parentIgnored) return children.map((c) => ({ ...c, ignored: true }))
+  const set = await resolveIgnored(rootCwd, children)
+  if (set.size === 0) return children.map((c) => ({ ...c, ignored: false }))
+  return children.map((c) => ({ ...c, ignored: set.has(c.path) }))
+}
+
+/**
+ * Flatten for display, keeping a CLOSING folder's rows on screen.
+ *
+ * A folder's `expanded` goes false the moment you click it — the chevron has to
+ * turn, and the state has to be true — but its rows are still animating out, so
+ * the subtree is drawn for as long as the path sits in `collapsing`, and every
+ * row under it is marked `leaving` so it can play the exit. `leaving` inherits:
+ * an expanded folder inside a closing one is going away too.
+ */
+function flattenForDisplay(
+  nodes: TreeNode[],
+  collapsing: Set<string>,
+  depth = 0,
+  leaving = false
+): FlatTreeNode[] {
+  const out: FlatTreeNode[] = []
+  for (const node of nodes) {
+    out.push({ ...node, depth, leaving })
+    const closing = node.type === 'directory' && collapsing.has(node.path)
+    if (node.type === 'directory' && node.children && (node.expanded || closing)) {
+      out.push(...flattenForDisplay(node.children, collapsing, depth + 1, leaving || closing))
+    }
+  }
+  return out
 }
 
 /** Batch-check which paths are gitignored, then mark them in the tree */
@@ -137,6 +204,42 @@ export function useFileTree(cwd: string | null) {
   const [filter, setFilter] = useState('')
   const [allFiles, setAllFiles] = useState<string[] | null>(null)
   const expansionCache = useRef(new Map<string, Set<string>>())
+  /** Folders whose rows are still animating out. See flattenForDisplay. */
+  const [collapsing, setCollapsing] = useState<ReadonlySet<string>>(() => new Set())
+  const collapseTimers = useRef(new Map<string, number>())
+  /** The current tree, readable from callbacks that must not depend on it —
+   *  loadChildren is memoised on [] so it can recurse without re-creating. */
+  const nodesRef = useRef<TreeNode[]>([])
+  nodesRef.current = rootNodes
+
+  /** Stop drawing a closing folder's subtree, now. */
+  const endCollapse = useCallback((dirPath: string) => {
+    const t = collapseTimers.current.get(dirPath)
+    if (t !== undefined) {
+      window.clearTimeout(t)
+      collapseTimers.current.delete(dirPath)
+    }
+    setCollapsing((prev) => {
+      if (!prev.has(dirPath)) return prev
+      const next = new Set(prev)
+      next.delete(dirPath)
+      return next
+    })
+  }, [])
+
+  // A folder left mid-animation when the panel is pointed somewhere else would
+  // hold a subtree of a tree that no longer exists.
+  useEffect(() => {
+    return () => {
+      for (const t of collapseTimers.current.values()) window.clearTimeout(t)
+      collapseTimers.current.clear()
+    }
+  }, [])
+  useEffect(() => {
+    for (const t of collapseTimers.current.values()) window.clearTimeout(t)
+    collapseTimers.current.clear()
+    setCollapsing(new Set())
+  }, [cwd])
 
   // Load root directory when cwd changes
   useEffect(() => {
@@ -167,10 +270,11 @@ export function useFileTree(cwd: string | null) {
           children: e.type === 'directory' ? undefined : undefined
         }))
 
-        setRootNodes(nodes)
-
-        // Check gitignore status (async, non-blocking)
-        enrichWithIgnored(cwd, nodes, setRootNodes)
+        // Same rule at the root: decided before it is drawn. The root itself is
+        // the folder you opened, so nothing above it can be ignored.
+        const marked = await withIgnored(cwd, nodes, false)
+        if (cancelled) return
+        setRootNodes(marked)
 
         // Auto-expand previously expanded dirs
         for (const node of nodes) {
@@ -303,13 +407,20 @@ export function useFileTree(cwd: string | null) {
           depth: 0
         }))
 
+        // Resolved BEFORE the rows are handed over, so a row is painted once
+        // rather than at full strength and then grey. Costs one git call that
+        // used to happen a beat later anyway — and none at all inside an
+        // already-ignored directory.
+        const marked = await withIgnored(
+          rootCwd,
+          children,
+          !!findNode(nodesRef.current, dirPath)?.ignored
+        )
+
         setRootNodes((prev) => {
           const nodes = currentNodes ?? prev
-          return updateNodeChildren(nodes, dirPath, children)
+          return updateNodeChildren(nodes, dirPath, marked)
         })
-
-        // Check gitignore status for children (async, non-blocking)
-        enrichWithIgnored(rootCwd, children, setRootNodes, dirPath)
 
         // Recursively load children for subdirectories that were previously expanded
         for (const child of children) {
@@ -358,6 +469,18 @@ export function useFileTree(cwd: string | null) {
       // unwatched) can have gone stale on disk. Cached children paint instantly;
       // loadChildren re-reads and recursively reconciles the expanded subtree.
       const node = findNode(rootNodes, dirPath)
+      // Closing: the folder is collapsed in the state immediately, so the
+      // chevron turns at once, but its rows keep being drawn until the exit
+      // animation has run. Re-opening inside that window cancels it.
+      if (node?.expanded) {
+        setCollapsing((prev) => new Set(prev).add(dirPath))
+        collapseTimers.current.set(
+          dirPath,
+          window.setTimeout(() => endCollapse(dirPath), TREE_COLLAPSE_MS)
+        )
+      } else {
+        endCollapse(dirPath)
+      }
       if (node && !node.expanded) {
         await loadChildren(cwd, dirPath)
         if (!node.children) {
@@ -365,7 +488,7 @@ export function useFileTree(cwd: string | null) {
         }
       }
     },
-    [cwd, rootNodes, loadChildren]
+    [cwd, rootNodes, loadChildren, endCollapse]
   )
 
   const refreshDir = useCallback(
@@ -385,8 +508,7 @@ export function useFileTree(cwd: string | null) {
           loading: false,
           depth: 0
         }))
-        setRootNodes(nodes)
-        enrichWithIgnored(cwd, nodes, setRootNodes)
+        setRootNodes(await withIgnored(cwd, nodes, false))
         for (const node of nodes) {
           if (node.type === 'directory' && expanded.has(node.path)) {
             loadChildren(cwd, node.path, nodes)
@@ -402,11 +524,16 @@ export function useFileTree(cwd: string | null) {
   const collapseAll = useCallback(() => {
     if (!cwd) return
     expansionCache.current.delete(cwd)
+    // No exit animation here on purpose: this closes every folder at once, and
+    // a whole tree playing out at once is a flicker, not a movement.
+    for (const t of collapseTimers.current.values()) window.clearTimeout(t)
+    collapseTimers.current.clear()
+    setCollapsing(new Set())
     setRootNodes((prev) => collapseAllNodes(prev))
   }, [cwd])
 
   const flatList = useMemo(() => {
-    if (!filter) return flattenTree(rootNodes)
+    if (!filter) return flattenForDisplay(rootNodes, collapsing as Set<string>)
 
     const lowerFilter = filter.toLowerCase()
 
@@ -440,7 +567,7 @@ export function useFileTree(cwd: string | null) {
     }
     collectMatches(rootNodes)
     return matches
-  }, [rootNodes, filter, allFiles])
+  }, [rootNodes, filter, allFiles, collapsing])
 
   return { rootNodes, flatList, loading, filter, setFilter, toggleDir, refreshDir, collapseAll }
 }

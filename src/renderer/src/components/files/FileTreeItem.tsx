@@ -81,9 +81,11 @@ export function FileTreeItem({
       data-tree-depth={node.depth}
       data-tree-name={node.name}
       data-tree-expanded={node.type === 'directory' ? String(!!node.expanded) : undefined}
+      data-leaving={node.leaving ? 'true' : undefined}
+      data-ignored={node.ignored ? 'true' : undefined}
       className={`flex items-center gap-1.5 h-[var(--panel-row-h)] pr-3 cursor-pointer select-none transition-colors text-sm ${
         isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
-      } ${node.ignored ? 'opacity-40' : ''}`}
+      }`}
       style={{ paddingLeft: `${TREE_ROW_PAD_PX + node.depth * TREE_INDENT_PX}px` }}
       title={node.name}
       onClick={handleClick}

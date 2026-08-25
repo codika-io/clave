@@ -2289,7 +2289,7 @@ body,
   }
   to {
     height: var(--panel-row-h);
-    opacity: 1;
+    opacity: var(--row-opacity);
   }
 }
 @keyframes tree-rule-in {
@@ -2302,9 +2302,56 @@ body,
     opacity: 1;
   }
 }
+/* A row's resting strength, as a variable the animations can END on.
+   It has to be a variable: a CSS animation outranks a normal declaration for as
+   long as it runs, so an entry that faded to a literal `opacity: 1` painted a
+   gitignored row at FULL strength for its whole 160ms and dropped it to 40% on
+   the last frame — the animation itself producing the flash it was there to
+   avoid. Ending on var(--row-opacity) lands each row on its own value. */
 [data-tree-item] {
+  --row-opacity: 1;
   overflow: hidden;
+  opacity: var(--row-opacity);
   animation: tree-row-in 160ms var(--ease-out-expo);
+}
+/* Outside git's account of the folder — present, and not part of the work. */
+[data-tree-item][data-ignored="true"] {
+  --row-opacity: 0.4;
+}
+/* And out. A closing folder's rows keep their place in the list until they have
+   shrunk out of it, so the rows below rise into the gap instead of snapping up
+   into it — the same movement as opening, run backwards and a shade quicker,
+   because a thing leaving does not need as long to be understood as a thing
+   arriving. `forwards` holds them at nothing for the frames between the end of
+   the animation and the state dropping them; the duration is paired with
+   TREE_COLLAPSE_MS in use-file-tree.ts, which is what does the dropping.
+   Unclickable on the way out: a row you can no longer see is not a target. */
+@keyframes tree-row-out {
+  from {
+    height: var(--panel-row-h);
+    opacity: var(--row-opacity);
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+@keyframes tree-rule-out {
+  from {
+    height: 1px;
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+[data-tree-item][data-leaving="true"] {
+  animation: tree-row-out 140ms var(--ease-out-expo) forwards;
+  pointer-events: none;
+}
+.tree-rule[data-file-tree-rule][data-leaving="true"] {
+  animation: tree-rule-out 140ms var(--ease-out-expo) forwards;
 }
 .tree-rule[data-file-tree-rule] {
   animation: tree-rule-in 160ms var(--ease-out-expo);
@@ -2316,6 +2363,10 @@ body,
   [data-tree-item],
   .tree-rule[data-file-tree-rule] {
     animation: none;
+  }
+  [data-tree-item][data-leaving="true"],
+  .tree-rule[data-file-tree-rule][data-leaving="true"] {
+    display: none;
   }
 }
 
