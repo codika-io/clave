@@ -375,12 +375,15 @@ export async function run(t) {
     t.check('and leaves the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
 
     // --- Escape with a row's menu open dismisses the menu, not the dialog ---
+    // `.menu-item` narrows to an actual MENU: the message trail floats a
+    // `.menu-surface` over a live tab's terminal at all times, so the bare
+    // class no longer means "a menu is open".
     await win.click('[data-history-row="cc-alpha-1"]', { button: 'right' })
     await win.waitForTimeout(350)
-    t.check('the row menu opened above the dialog', await win.evaluate(() => !!document.querySelector('.menu-surface')))
+    t.check('the row menu opened above the dialog', await win.evaluate(() => !!document.querySelector('.menu-surface .menu-item')))
     await win.keyboard.press('Escape')
     await win.waitForTimeout(400)
-    t.check('Escape closed the menu', await win.evaluate(() => !document.querySelector('.menu-surface')))
+    t.check('Escape closed the menu', await win.evaluate(() => !document.querySelector('.menu-surface .menu-item')))
     t.check('and left the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
 
     // --- From All, a resume lands in the group the conversation last lived in ---

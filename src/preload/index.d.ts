@@ -68,6 +68,14 @@ export interface HistoryListEntry {
   lastHumanAt: string
 }
 
+/** One turn of a live tab's conversation, as the message trail shows it:
+ *  the human message and the first line of the agent's final answer. */
+export interface ConversationTurn {
+  ts: string | null
+  userText: string
+  replyHead: string | null
+}
+
 /** What a window is told to take in: session ids to adopt (their records
  *  carry the rest) and, on a window close or a group move, groups. */
 export interface RehomePayload {
@@ -485,6 +493,18 @@ export interface ElectronAPI {
    *  fire-and-forget; the folded list for the dialog. */
   historyStamp: (row: HistoryLedgerRow) => void
   historyList: () => Promise<{ entries: HistoryListEntry[]; skippedLines: number }>
+  /** The message trail's read: a live tab's conversation as turns. */
+  historyConversation: (
+    cwd: string,
+    claudeSessionId: string
+  ) => Promise<{ exists: boolean; turns: ConversationTurn[] }>
+  /** Click-to-scroll: tmux-backed tabs are driven in main (`tmux: true`);
+   *  plain ones answer `tmux: false` and the caller scans xterm's buffer. */
+  scrollSessionToText: (
+    id: string,
+    needle: string,
+    fromBottom: number
+  ) => Promise<{ tmux: boolean }>
   /** A scoped substring search through the named sessions' transcripts;
    *  hits stream through `onHistorySearchHits`, the promise carries the end. */
   historySearch: (request: {

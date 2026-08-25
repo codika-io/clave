@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { useTerminal } from '../../hooks/use-terminal'
 import { useSessionStore } from '../../store/session-store'
 import { TerminalHeader } from './TerminalHeader'
+import { MessageTrail } from './MessageTrail'
 import { cn } from '../../lib/utils'
 
 interface TerminalPanelProps {
@@ -51,7 +52,10 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
       onMouseDown={handleClick}
     >
       <TerminalHeader sessionId={sessionId} />
-      <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden" />
+      <div className="flex-1 min-h-0 relative">
+        <div ref={containerRef} className="absolute inset-0 overflow-hidden" />
+        <MessageTrail sessionId={sessionId} />
+      </div>
     </div>
   )
 }

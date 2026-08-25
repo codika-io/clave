@@ -11,6 +11,7 @@ import {
   type TranscriptPeek
 } from './transcript-peek'
 import { searchTranscripts, type SearchHit, type SearchScope } from './search'
+import { ConversationCache, type ConversationTurn } from './conversation'
 
 /**
  * Session-history service: the main-process owner of the ledger and the one
@@ -44,6 +45,7 @@ export interface HistoryListEntry extends HistoryEntry {
 let ledger: SessionLedger | null = null
 let capture: CaptureStore | null = null
 const peekCache = new PeekCache()
+const conversations = new ConversationCache()
 /** Transcript path per session as of the last list — what a search reads. */
 const pathById = new Map<string, string | null>()
 const searches = new Map<string, AbortController>()
@@ -98,6 +100,18 @@ export function listHistory(): { entries: HistoryListEntry[]; skippedLines: numb
       }
     })
   return { entries, skippedLines }
+}
+
+/** The message trail's read (one live tab's conversation): locate the
+ *  transcript, fold what was appended since the last call. `locateTranscript`
+ *  validates the id alphabet, so a traversal string resolves to nothing. */
+export function getConversation(input: unknown): { exists: boolean; turns: ConversationTurn[] } {
+  const r = input as { cwd?: unknown; claudeSessionId?: unknown } | null
+  const cwd = typeof r?.cwd === 'string' ? r.cwd : null
+  const claudeSessionId = typeof r?.claudeSessionId === 'string' ? r.claudeSessionId : null
+  if (!cwd || !claudeSessionId) return { exists: false, turns: [] }
+  const file = locateTranscript(transcriptsRoot(), cwd, claudeSessionId)
+  return conversations.read(file)
 }
 
 export interface SearchRequest {

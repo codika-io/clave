@@ -1,6 +1,6 @@
 import { emitTabClosed } from '../../lib/exchange-capture'
 import { useCallback, useState } from 'react'
-import { ArrowTopRightOnSquareIcon, PlayIcon, ArrowDownTrayIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
+import { ArrowTopRightOnSquareIcon, PlayIcon, ArrowDownTrayIcon, DocumentTextIcon, ChatBubbleBottomCenterTextIcon } from '@heroicons/react/24/outline'
 import { useSessionStore } from '../../store/session-store'
 import { useClaudeProfileStore } from '../../store/claude-profile-store'
 import { cn, safePort } from '../../lib/utils'
@@ -16,6 +16,8 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
   const multiProfile = useClaudeProfileStore((s) => s.profiles.length > 1)
   const removeSession = useSessionStore((s) => s.removeSession)
   const setSessionServerStatus = useSessionStore((s) => s.setSessionServerStatus)
+  const messageTrailEnabled = useSessionStore((s) => s.messageTrailEnabled)
+  const setMessageTrailEnabled = useSessionStore((s) => s.setMessageTrailEnabled)
   const [showConfirm, setShowConfirm] = useState(false)
 
   const handleKill = useCallback(async () => {
@@ -132,6 +134,18 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps) {
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <SessionCopyOffers sessionId={sessionId} />
+          {session.claudeSessionId && (
+            <button
+              onClick={() => setMessageTrailEnabled(!messageTrailEnabled)}
+              className={cn(
+                'btn-icon btn-icon-sm hover:bg-surface-300',
+                messageTrailEnabled && 'text-accent'
+              )}
+              title={messageTrailEnabled ? 'Hide message trail' : 'Show message trail'}
+            >
+              <ChatBubbleBottomCenterTextIcon className="w-3.5 h-3.5" />
+            </button>
+          )}
           {session.claudeMode && session.claudeSessionId && (
             <>
               <button
