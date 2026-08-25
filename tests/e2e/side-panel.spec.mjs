@@ -14,10 +14,11 @@
  *    its own folder picker; those are shared now, and each tab's own controls
  *    sit in a bar of the same material. That bar must not wrap at the panel's
  *    default width — the whole point of the cluster.
- * 3. Where the shared controls live. The folder picker and collapse-all are on
- *    the PATH bar, beside the path they act on, not out on the tab bar; the tab
- *    bar carries the tabs and nothing else, centred; and the help button that
- *    used to sit in the panel's corner is gone (⌘? still opens the panel).
+ * 3. Where the shared controls live. The root chip (whose menu holds the folder
+ *    picker) and collapse-all are on the PATH bar, beside the path they act on,
+ *    not out on the tab bar; the tab bar carries the tabs and nothing else,
+ *    centred; and the help button that used to sit in the panel's corner is
+ *    gone (⌘? still opens the panel).
  * 4. The rules in the FILE tab's tree, drawn by the same sentence as the git
  *    tab's: above every row but the first, at that row's own depth, files and
  *    first children included.
@@ -249,14 +250,15 @@ export async function run(t) {
     t.check('the help button is gone from the tab bar', bar?.help === false)
 
     // ── The path bar is where you are, as one control ─────────────────────
-    // The folder picker opens the folder, the path names it, collapse-all
-    // closes what it opened: all three act on the same subject, so they are one
-    // bar. They used to be split across two rows, the path a bare line of text.
+    // The root chip picks the folder, the path names it, collapse-all closes
+    // what it opened: all three act on the same subject, so they are one bar.
+    // They used to be split across two rows, the path a bare line of text.
     const pathBar = await win.evaluate(() => {
       const el = document.querySelector('[data-panel-bar="path"]')
       if (!el) return null
       return {
         boxed: getComputedStyle(el).borderTopWidth !== '0px',
+        chip: !!el.querySelector('[data-panel-scope]'),
         folder: !!el.querySelector('[aria-label="Open another folder"]'),
         collapse: !!el.querySelector('[aria-label="Collapse all"]'),
         text: el.textContent.trim()
@@ -264,7 +266,8 @@ export async function run(t) {
     })
     t.check('the path sits in a bar of its own', pathBar !== null, pathBar)
     t.check('drawn as a box like the panel’s other bars', pathBar?.boxed === true, pathBar)
-    t.check('the folder picker is on it', pathBar?.folder === true, pathBar)
+    t.check('the root chip is on it', pathBar?.chip === true, pathBar)
+    t.check('and the folder picker is in its menu, not loose on the bar', pathBar?.folder === false, pathBar)
     t.check('collapse-all is on it', pathBar?.collapse === true, pathBar)
     t.check('and it names the folder the panel is pointed at', pathBar?.text.length > 0, pathBar)
 
@@ -458,7 +461,7 @@ export async function run(t) {
     // ── The guide token is gone from every theme ─────────────────────────
     // "Removed" has to mean removed, not hidden: a --tree-guide-color left
     // standing in one theme is a guide one class away from coming back. Swept
-    // over ALL THREE themes because each declares its own palette block.
+    // over ALL FOUR themes because each declares its own palette block.
     const tokenSweep = await win.evaluate(() => {
       const root = document.documentElement
       const was = root.getAttribute('data-theme')
@@ -466,7 +469,7 @@ export async function run(t) {
       probe.style.position = 'fixed'
       document.body.appendChild(probe)
       const out = {}
-      for (const theme of ['dark', 'light', 'coffee']) {
+      for (const theme of ['dark', 'charcoal', 'light', 'coffee']) {
         if (theme === 'dark') root.removeAttribute('data-theme')
         else root.setAttribute('data-theme', theme)
         probe.style.backgroundColor = ''
@@ -771,12 +774,15 @@ export async function run(t) {
     }
     t.equal('folded, every rule still sits above a row of its own depth', foldedProblems, 0)
     // ── The paused-updates footnote ───────────────────────────────────────
-    // Reached the way a user reaches it: the tab bar's folder picker, pointed
-    // at a folder with more repos than the DEFAULT limit. (Setting the limit by
-    // hand needs a reload, and a reloaded window has no focused session, so the
-    // panel has no folder to be paused about.)
+    // Reached the way a user reaches it: the folder picker in the root chip's
+    // menu, pointed at a folder with more repos than the DEFAULT limit.
+    // (Setting the limit by hand needs a reload, and a reloaded window has no
+    // focused session, so the panel would be paused about the workspace root
+    // rather than the big folder.)
     await stubFolderDialog(app, { returns: BIG_ROOT })
-    await win.click('[data-panel-bar="path"] [aria-label="Open another folder"]')
+    await win.click('[data-panel-bar="path"] [data-panel-scope]')
+    await win.waitForTimeout(300)
+    await win.click('[data-scope-option="folder"]')
     await win.waitForTimeout(9000)
 
     const note = await win.evaluate(() => {
@@ -798,7 +804,7 @@ export async function run(t) {
       () => document.querySelector('[data-panel-bar="tabs"]')?.parentElement?.textContent ?? ''
     )
     t.check(
-      'the folder picker in the path bar navigates the panel',
+      'the folder picker in the root menu navigates the panel',
       landedOn.includes('side-panel-big'),
       landedOn.slice(0, 80)
     )

@@ -1118,6 +1118,42 @@ body,
   opacity: 0.4;
 }
 
+/* The root chip at the head of the path bar: one letter for which root the
+   panel hangs from — W, G, S — and a chevron for "this opens". It is a
+   panel-icon-btn that grew a second glyph, so it keeps the button's height,
+   radius and states and only loses the fixed width. */
+.panel-scope-btn {
+  width: auto;
+  padding: 0 3px 0 5px;
+  gap: 1px;
+  color: var(--text-secondary);
+}
+.panel-scope-glyph {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+/* A fixed-width leading cell in a menu row, so a letter and an icon line the
+   labels beside them up the same way. */
+.menu-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+/* The trailing note on a menu row — the folder a root resolves to, or why the
+   row is greyed. */
+.menu-hint {
+  max-width: 45%;
+  font-size: 11px;
+  font-weight: var(--font-weight-normal, 400);
+  color: var(--text-tertiary);
+}
+
 /* The tab bar holds one control and nothing else — Files | Git — so the BAR
    hugs it and centres itself, rather than running the panel's full width with
    its contents floated into the middle. A full-width box around two buttons
