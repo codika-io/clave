@@ -147,10 +147,12 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
         className={`menu-surface message-trail-surface ${miss ? 'message-trail--miss' : ''}`}
       >
         {!expanded ? (
-          <div className={`flex ${msgExpanded ? 'items-start' : 'items-center'} gap-0.5 px-1 py-1`}>
-            <div className="flex items-center flex-shrink-0">
+          <div
+            className={`flex ${msgExpanded ? 'items-start' : 'items-center'} gap-0.5 px-0.5 py-0.5`}
+          >
+            <div className="flex flex-col flex-shrink-0">
               <button
-                className="btn-icon"
+                className="panel-icon-btn"
                 onClick={() => goTo(eff - 1)}
                 disabled={eff <= 0}
                 aria-label="Previous message"
@@ -159,7 +161,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                 <ChevronUpIcon className="w-4 h-4" />
               </button>
               <button
-                className="btn-icon"
+                className="panel-icon-btn"
                 onClick={() => goTo(eff + 1)}
                 disabled={eff >= last}
                 aria-label="Next message"
@@ -206,7 +208,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                 {eff + 1}/{turns.length}
               </span>
               <button
-                className="btn-icon"
+                className="panel-icon-btn"
                 onClick={() => setMsgExpanded(!msgExpanded)}
                 aria-label={msgExpanded ? 'Collapse message' : 'Show full message'}
                 title={msgExpanded ? 'Collapse message' : 'Show the full message'}
@@ -218,7 +220,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                 )}
               </button>
               <button
-                className="btn-icon"
+                className="panel-icon-btn"
                 onClick={() => setExpanded(true)}
                 aria-label="Expand messages"
                 title="Show surrounding messages"
@@ -226,7 +228,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                 <ArrowsPointingOutIcon className="w-4 h-4" />
               </button>
               <button
-                className="btn-icon"
+                className="panel-icon-btn"
                 onClick={() => setMessageTrailEnabled(false)}
                 aria-label="Hide message trail"
                 title="Hide message trail"
@@ -236,14 +238,14 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
             </div>
           </div>
         ) : (
-          <div className="py-1">
-            <div className="flex items-center justify-between pl-2 pr-1 pb-0.5">
+          <div className="py-0.5">
+            <div className="flex items-center justify-between pl-2 pr-0.5 pb-0.5">
               <span className="message-trail-count">
                 {eff + 1}/{turns.length}
               </span>
               <div className="flex items-center">
                 <button
-                  className="btn-icon"
+                  className="panel-icon-btn"
                   onClick={() => setExpanded(false)}
                   aria-label="Collapse messages"
                   title="Collapse"
@@ -251,7 +253,7 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
                   <ArrowsPointingInIcon className="w-4 h-4" />
                 </button>
                 <button
-                  className="btn-icon"
+                  className="panel-icon-btn"
                   onClick={() => setMessageTrailEnabled(false)}
                   aria-label="Hide message trail"
                   title="Hide message trail"

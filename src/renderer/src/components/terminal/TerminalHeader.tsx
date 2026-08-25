@@ -59,7 +59,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps): ReactElement
 
   return (
     <>
-      <div className="flex items-center justify-between pl-3 pr-2 py-1 bg-surface-0 border-b border-border-subtle flex-shrink-0">
+      <div className="flex items-center justify-between pl-3 pr-1 py-0.5 bg-surface-0 border-b border-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span
             className={cn(
@@ -120,7 +120,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps): ReactElement
               {serverStatus === 'running' && (
                 <button
                   onClick={handleServerStop}
-                  className="btn-icon btn-icon-sm hover:!text-red-400"
+                  className="panel-icon-btn hover:!text-red-400"
                   title="Stop server (Ctrl+C)"
                 >
                   <StopIcon className="w-3.5 h-3.5" />
@@ -135,7 +135,8 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps): ReactElement
           {session.claudeSessionId && (
             <button
               onClick={() => setMessageTrailEnabled(!messageTrailEnabled)}
-              className={cn('btn-icon btn-icon-md', messageTrailEnabled && '!text-accent')}
+              className="panel-icon-btn"
+              data-active={messageTrailEnabled ? 'true' : undefined}
               title={messageTrailEnabled ? 'Hide message trail' : 'Show message trail'}
             >
               <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
@@ -150,7 +151,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps): ReactElement
                     locationId: session.locationId ?? null
                   })
                 }
-                className="btn-icon btn-icon-md"
+                className="panel-icon-btn"
                 title="Save discussion"
               >
                 <ArrowDownTrayIcon className="w-4 h-4" />
@@ -163,7 +164,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps): ReactElement
                       locationId: session.locationId ?? null
                     })
                   }
-                  className="btn-icon btn-icon-md"
+                  className="panel-icon-btn"
                   title="Save plan"
                 >
                   <DocumentTextIcon className="w-4 h-4" />
@@ -173,7 +174,7 @@ export function TerminalHeader({ sessionId }: TerminalHeaderProps): ReactElement
           )}
           <button
             onClick={() => setShowConfirm(true)}
-            className="btn-icon btn-icon-md"
+            className="panel-icon-btn"
             title="Kill session"
           >
             <XMarkIcon className="w-4 h-4" />
