@@ -49,23 +49,32 @@ export function transcriptPath(projectsRoot: string, cwd: string, claudeSessionI
 export function locateTranscript(
   projectsRoot: string,
   cwd: string,
-  claudeSessionId: string
+  claudeSessionId: string,
+  projectDirs?: readonly string[]
 ): string | null {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(claudeSessionId)) return null
   const direct = transcriptPath(projectsRoot, cwd, claudeSessionId)
   if (fs.existsSync(direct)) return direct
-  let dirs: fs.Dirent[]
-  try {
-    dirs = fs.readdirSync(projectsRoot, { withFileTypes: true })
-  } catch {
-    return null
-  }
-  for (const d of dirs) {
-    if (!d.isDirectory()) continue
-    const candidate = path.join(projectsRoot, d.name, `${claudeSessionId}.jsonl`)
+  // The fallback scan lists the root once per LIST, not once per miss: a
+  // caller with many entries passes the listing in.
+  const dirs = projectDirs ?? listProjectDirs(projectsRoot)
+  for (const name of dirs) {
+    const candidate = path.join(projectsRoot, name, `${claudeSessionId}.jsonl`)
     if (fs.existsSync(candidate)) return candidate
   }
   return null
+}
+
+/** The project directories under a transcripts root; empty when unreadable. */
+export function listProjectDirs(projectsRoot: string): string[] {
+  try {
+    return fs
+      .readdirSync(projectsRoot, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+  } catch {
+    return []
+  }
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -202,5 +211,42 @@ export function peekTranscript(filePath: string | null): TranscriptPeek {
     lastHumanAt: scan.lastHumanAt,
     modifiedAt: new Date(tail.mtimeMs).toISOString(),
     sizeBytes: tail.size
+  }
+}
+
+/**
+ * Peeks, cached per (path, size, mtime): a `stat` decides whether the file
+ * moved since the last peek, and only then is the tail read again. Without
+ * this every list re-read every tail (measured: 170 opens and 55 MB per
+ * dialog open on a real install). The reader is injected for the tests.
+ */
+export class PeekCache {
+  private readonly entries = new Map<
+    string,
+    { size: number; mtimeMs: number; peek: TranscriptPeek }
+  >()
+
+  constructor(
+    private readonly read: (filePath: string | null) => TranscriptPeek = peekTranscript
+  ) {}
+
+  get(filePath: string | null): TranscriptPeek {
+    if (!filePath) return this.read(null)
+    let stat: fs.Stats
+    try {
+      stat = fs.statSync(filePath)
+    } catch {
+      this.entries.delete(filePath)
+      return this.read(filePath)
+    }
+    const hit = this.entries.get(filePath)
+    if (hit && hit.size === stat.size && hit.mtimeMs === stat.mtimeMs) return hit.peek
+    const peek = this.read(filePath)
+    this.entries.set(filePath, { size: stat.size, mtimeMs: stat.mtimeMs, peek })
+    return peek
+  }
+
+  size(): number {
+    return this.entries.size
   }
 }

@@ -1,6 +1,6 @@
-import { useSessionStore } from '../store/session-store'
+import { useSessionStore, inActiveWorkspace } from '../store/session-store'
 import { getActiveWorkspaceId } from '../store/workspace-store'
-import { SessionHistoryDiff } from './session-history-diff'
+import { SessionHistoryDiff, resumeTargetGroup } from './session-history-diff'
 import type { HistoryListEntry, HistoryLedgerRow } from '../../../preload/index.d'
 
 /**
@@ -42,9 +42,10 @@ export function startSessionHistoryStamping(): void {
 /**
  * Resume a history entry: focus the live tab when the conversation is still
  * open, else spawn `claude --resume <id>` in the entry's own cwd (the
- * transcript lives under that cwd's project dir) and place the tab in
- * `groupId` when that group is live. Same spawn the sidebar's own Resume
- * uses; returns the tab id, or null when nothing could be opened.
+ * transcript lives under that cwd's project dir) and place the tab in ONE
+ * step (`addSessionInGroup`) where `resumeTargetGroup` says. Same spawn the
+ * sidebar's own Resume uses; returns the tab id, or null when nothing could
+ * be opened.
  */
 export async function resumeHistoryEntry(
   entry: HistoryListEntry,
@@ -67,29 +68,29 @@ export async function resumeHistoryEntry(
       resumeSessionId: entry.claudeSessionId,
       workspaceId
     })
-    state.addSession({
-      id: info.id,
-      cwd: info.cwd,
-      folderName: info.folderName,
-      name: entry.title,
-      alive: info.alive,
-      activityStatus: 'idle',
-      promptWaiting: null,
-      claudeMode: true,
-      antigravityMode: false,
-      codexMode: false,
-      dangerousMode: options.dangerousMode,
-      model: entry.model ?? undefined,
-      workspaceId,
-      claudeSessionId: info.claudeSessionId,
-      sessionType: 'local'
-    })
     const after = useSessionStore.getState()
-    if (options.groupId && after.groups.some((g) => g.id === options.groupId)) {
-      after.moveItems([info.id], options.groupId, 'inside')
-    }
-    after.selectSession(info.id, false)
-    after.setFocusedSession(info.id)
+    const shown = after.groups.filter((g) => inActiveWorkspace(g, getActiveWorkspaceId()))
+    const target = resumeTargetGroup(entry.groups, options.groupId, shown)
+    after.addSessionInGroup(
+      {
+        id: info.id,
+        cwd: info.cwd,
+        folderName: info.folderName,
+        name: entry.title,
+        alive: info.alive,
+        activityStatus: 'idle',
+        promptWaiting: null,
+        claudeMode: true,
+        antigravityMode: false,
+        codexMode: false,
+        dangerousMode: options.dangerousMode,
+        model: entry.model ?? undefined,
+        workspaceId,
+        claudeSessionId: info.claudeSessionId,
+        sessionType: 'local'
+      },
+      target
+    )
     return info.id
   } catch (err) {
     console.error('Failed to resume session from history:', err)

@@ -4,7 +4,12 @@ import { app } from 'electron'
 import { CaptureStore } from '../exchange-capture/store'
 import { SessionLedger, normalizeLedgerRow } from './ledger'
 import { captureEventsToRows, foldHistory, type HistoryEntry } from './index'
-import { locateTranscript, peekTranscript, type TranscriptPeek } from './transcript-peek'
+import {
+  listProjectDirs,
+  locateTranscript,
+  PeekCache,
+  type TranscriptPeek
+} from './transcript-peek'
 import { searchTranscripts, type SearchHit, type SearchScope } from './search'
 
 /**
@@ -22,7 +27,8 @@ import { searchTranscripts, type SearchHit, type SearchScope } from './search'
  * The transcripts root is `~/.claude/projects` unless `CLAVE_TRANSCRIPTS_ROOT`
  * names another directory — the E2E harness's way of seeding transcripts
  * without touching the real store. Peeks are cached per (path, size, mtime)
- * so reopening the dialog re-reads only what changed.
+ * (`PeekCache`: a stat per file, a read only when it moved), and the root's
+ * project directories are listed once per list rather than once per miss.
  */
 
 export interface HistoryListEntry extends HistoryEntry {
@@ -37,10 +43,7 @@ export interface HistoryListEntry extends HistoryEntry {
 
 let ledger: SessionLedger | null = null
 let capture: CaptureStore | null = null
-const peekCache = new Map<
-  string,
-  { size: number; modifiedAt: string | null; peek: TranscriptPeek }
->()
+const peekCache = new PeekCache()
 /** Transcript path per session as of the last list — what a search reads. */
 const pathById = new Map<string, string | null>()
 const searches = new Map<string, AbortController>()
@@ -73,29 +76,19 @@ export function stampHistory(input: unknown): void {
   }
 }
 
-function cachedPeek(filePath: string | null): TranscriptPeek {
-  if (!filePath) return peekTranscript(null)
-  const fresh = peekTranscript(filePath)
-  const hit = peekCache.get(filePath)
-  // The first peek already read the tail; the cache only spares the wider
-  // second read on an unchanged file, and keeps a stable object for React.
-  if (hit && hit.size === fresh.sizeBytes && hit.modifiedAt === fresh.modifiedAt) return hit.peek
-  peekCache.set(filePath, { size: fresh.sizeBytes, modifiedAt: fresh.modifiedAt, peek: fresh })
-  return fresh
-}
-
 export function listHistory(): { entries: HistoryListEntry[]; skippedLines: number } {
   const { rows, skippedLines } = getLedger().readAll()
   const seed = captureEventsToRows(getCapture().readAll().events as never[])
   const root = transcriptsRoot()
+  const projectDirs = listProjectDirs(root)
   const entries = foldHistory([...seed, ...rows])
     // Nothing to resume without a Claude transcript: `claude agents` tabs
     // and the other CLIs never make a row.
     .filter((e) => e.mode === 'claude')
     .map((e): HistoryListEntry => {
-      const file = locateTranscript(root, e.cwd, e.claudeSessionId)
+      const file = locateTranscript(root, e.cwd, e.claudeSessionId, projectDirs)
       pathById.set(e.claudeSessionId, file)
-      const transcript = cachedPeek(file)
+      const transcript = peekCache.get(file)
       return {
         ...e,
         transcript,

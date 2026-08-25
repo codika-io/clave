@@ -157,7 +157,9 @@ export function useTerminal(sessionId: string) {
       resetSessionName(sessionId)
       // The tab follows its rotated transcript: store (Resume, the history
       // ledger's diff) and record (a restart's re-adoption) alike.
-      if (newClaudeSessionId) {
+      // Same alphabet main enforces before touching the record: the store
+      // and the record must never disagree on which conversation this is.
+      if (newClaudeSessionId && /^[A-Za-z0-9_-]{1,128}$/.test(newClaudeSessionId)) {
         useSessionStore.getState().setClaudeSessionId(sessionId, newClaudeSessionId)
         void window.electronAPI.setSessionClaudeSessionId?.(sessionId, newClaudeSessionId)
       }

@@ -113,7 +113,6 @@ export function scheduleTitleGeneration(
         // (before this the tab kept the pre-/clear id, and a Resume or a
         // restart reopened the conversation the user had just cleared).
         const stem = filename.slice(0, -'.jsonl'.length)
-        entry.claudeSessionId = stem
         if (entry.win && !entry.win.isDestroyed()) {
           entry.win.webContents.send(`session:clear-detected:${sessionId}`, stem)
         }

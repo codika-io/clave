@@ -147,9 +147,4 @@ export function foldHistory(rows: LedgerRow[]): HistoryEntry[] {
   return [...byId.values()]
 }
 
-/** Does an entry belong to a group's history? By id OR by name: group ids are
- *  minted at every launch (a pinned group relaunched tomorrow has a new one),
- *  and the name is how the user thinks of the group. */
-export function entryInGroup(entry: HistoryEntry, group: { id: string; name: string }): boolean {
-  return entry.groups.some((g) => g.id === group.id || (g.name !== '' && g.name === group.name))
-}
+export { entryInGroup } from '../../shared/history-group-match'

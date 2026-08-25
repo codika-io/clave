@@ -14,6 +14,7 @@ import { useWorkspaceStore } from '../../store/workspace-store'
 import { resumeHistoryEntry } from '../../lib/session-history'
 import { cn, shortenPath } from '../../lib/utils'
 import { ContextMenu } from '../ui/ContextMenu'
+import { entryInGroup } from '../../../../shared/history-group-match'
 import type {
   HistoryListEntry,
   HistorySearchHit,
@@ -87,10 +88,6 @@ function excerpt(text: string | null, max = 160): string | null {
   return one.length > max ? `${one.slice(0, max - 1)}…` : one
 }
 
-function entryMatchesGroup(entry: HistoryListEntry, group: { id: string; name: string }): boolean {
-  return entry.groups.some((g) => g.id === group.id || (g.name !== '' && g.name === group.name))
-}
-
 /** The excerpt with the query marked, case-insensitively. */
 function Highlight({ text, query }: { text: string; query: string }): React.JSX.Element {
   const at = text.toLowerCase().indexOf(query.toLowerCase())
@@ -104,6 +101,9 @@ function Highlight({ text, query }: { text: string; query: string }): React.JSX.
   )
 }
 
+/** Request ids are matched in ONE main-process map across every window, so
+ *  a per-window token keeps two windows' searches from cancelling each other. */
+const WINDOW_TOKEN = Math.random().toString(36).slice(2, 10)
 let searchSeq = 0
 
 export function SessionHistoryDialog(): React.JSX.Element | null {
@@ -155,12 +155,24 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     }
   }, [])
 
+  // Escape closes the row's context menu when one is open (Radix dismisses
+  // it on the same key), and only otherwise the dialog.
+  const menuRef = useRef(menu)
+  useEffect(() => {
+    menuRef.current = menu
+  }, [menu])
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') closeHistory()
+      if (e.key !== 'Escape') return
+      if (menuRef.current) setMenu(null)
+      else closeHistory()
     }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    // Capture phase, registered at mount: Radix dismisses its menu from a
+    // capture listener too, and React flushes that discrete update before
+    // a bubble listener would run — which then saw no menu and closed the
+    // dialog. Registered first, this one decides first.
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
   }, [closeHistory])
 
   const chipGroups = useMemo(
@@ -186,7 +198,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     return entries.filter((e) => {
       // The seed knows no workspace (null): shown everywhere.
       if (e.workspaceId && activeWorkspaceId && e.workspaceId !== activeWorkspaceId) return false
-      if (selectedGroup && !entryMatchesGroup(e, selectedGroup)) return false
+      if (selectedGroup && !entryInGroup(e.groups, selectedGroup)) return false
       return true
     })
   }, [entries, selectedGroup, activeWorkspaceId])
@@ -226,7 +238,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     }
     const timer = setTimeout(() => {
       cancelRunning()
-      const requestId = `history-${++searchSeq}`
+      const requestId = `history-${WINDOW_TOKEN}-${++searchSeq}`
       requestRef.current = requestId
       setHits(new Map())
       setSearchState({ status: 'searching' })
@@ -275,10 +287,13 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
 
   const resume = useCallback(
     (entry: HistoryListEntry, dangerousMode: boolean) => {
+      // Nothing to resume (transcript gone, tab not open): the dialog stays,
+      // the row's own title says why.
+      if (!liveIds.has(entry.claudeSessionId) && !entry.transcript.exists) return
       closeHistory()
       void resumeHistoryEntry(entry, { groupId: selectedGroup?.id ?? null, dangerousMode })
     },
-    [closeHistory, selectedGroup]
+    [closeHistory, selectedGroup, liveIds]
   )
 
   const latestGroupName = (e: HistoryListEntry): string | null =>

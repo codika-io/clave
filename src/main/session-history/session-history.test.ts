@@ -13,7 +13,13 @@ import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SessionLedger, normalizeLedgerRow, type LedgerRow } from './ledger'
 import { captureEventsToRows, entryInGroup, foldHistory } from './index'
-import { locateTranscript, peekTranscript, scanTail, transcriptPath } from './transcript-peek'
+import {
+  locateTranscript,
+  peekTranscript,
+  PeekCache,
+  scanTail,
+  transcriptPath
+} from './transcript-peek'
 
 let tmp: string
 beforeEach(() => {
@@ -64,6 +70,22 @@ describe('SessionLedger', () => {
     expect(normalizeLedgerRow({ ...row({}), ts: 'yesterday' })).toBeNull()
     expect(normalizeLedgerRow({ ...row({}), sessionId: undefined })).toBeNull()
     expect(normalizeLedgerRow(null)).toBeNull()
+  })
+
+  it('a transcript id outside the id alphabet is dropped to null, never stored', () => {
+    expect(normalizeLedgerRow({ ...row({}), claudeSessionId: 42 })?.claudeSessionId).toBeNull()
+    expect(
+      normalizeLedgerRow({ ...row({}), claudeSessionId: '../../etc/passwd' })?.claudeSessionId
+    ).toBeNull()
+    expect(normalizeLedgerRow({ ...row({}), claudeSessionId: 'cc-1' })?.claudeSessionId).toBe(
+      'cc-1'
+    )
+  })
+
+  it('an empty name is a valid row (the tab may not be titled yet); a huge name is cut, a huge cwd refused', () => {
+    expect(normalizeLedgerRow({ ...row({}), name: '' })?.name).toBe('')
+    expect(normalizeLedgerRow({ ...row({}), name: 'x'.repeat(5000) })?.name).toHaveLength(512)
+    expect(normalizeLedgerRow({ ...row({}), cwd: '/' + 'y'.repeat(5000) })).toBeNull()
   })
 })
 
@@ -148,11 +170,19 @@ describe('foldHistory', () => {
 
   it('entryInGroup matches by id or by name — a relaunched pin keeps its history', () => {
     const [entry] = foldHistory([row({})])
-    expect(entryInGroup(entry, { id: 'g-1', name: 'whatever' })).toBe(true)
-    expect(entryInGroup(entry, { id: 'g-9', name: 'Alpha' })).toBe(true)
-    expect(entryInGroup(entry, { id: 'g-9', name: 'Beta' })).toBe(false)
+    expect(entryInGroup(entry.groups, { id: 'g-1', name: 'whatever' })).toBe(true)
+    expect(entryInGroup(entry.groups, { id: 'g-9', name: 'Alpha' })).toBe(true)
+    expect(entryInGroup(entry.groups, { id: 'g-9', name: 'Beta' })).toBe(false)
     const [nameless] = foldHistory([row({ groupName: null })])
-    expect(entryInGroup(nameless, { id: 'g-9', name: '' })).toBe(false)
+    expect(entryInGroup(nameless.groups, { id: 'g-9', name: '' })).toBe(false)
+  })
+
+  it('the model sticks: a later row without one keeps the model the session was opened on', () => {
+    const [entry] = foldHistory([
+      row({ model: 'claude-opus-5' }),
+      row({ ts: '2026-08-25T11:00:00.000Z', model: null })
+    ])
+    expect(entry.model).toBe('claude-opus-5')
   })
 })
 
@@ -191,6 +221,17 @@ const TAIL = [
     message: { content: '<system-reminder>injected</system-reminder>' }
   }),
   JSON.stringify({ type: 'last-prompt', lastPrompt: 'Please fix the login bug' }),
+  JSON.stringify({
+    type: 'user',
+    timestamp: '2026-08-25T09:06:00.000Z',
+    isMeta: true,
+    message: { content: [{ type: 'text', text: 'Base directory for this skill: /x\n\n# /lane' }] }
+  }),
+  JSON.stringify({
+    type: 'user',
+    timestamp: '2026-08-25T09:07:00.000Z',
+    message: { content: [{ type: 'text', text: '<task-notification>done</task-notification>' }] }
+  }),
   'this line is not json'
 ].join('\n')
 
@@ -199,7 +240,8 @@ describe('transcript peek', () => {
     const scan = scanTail(TAIL)
     expect(scan.title).toBe('Login bug fix')
     expect(scan.lastPrompt).toBe('Please fix the login bug')
-    // Not 09:03 (a tool result), not 09:04 (a subagent), not 09:05 (injected).
+    // Not 09:03 (a tool result), not 09:04 (a subagent), not 09:05 (injected),
+    // not 09:06 (an isMeta skill body), not 09:07 (a `<`-prefixed notification).
     expect(scan.lastHumanAt).toBe('2026-08-25T09:01:00.000Z')
   })
 
@@ -229,7 +271,7 @@ describe('transcript peek', () => {
     expect(peek.sizeBytes).toBeGreaterThan(64 * 1024)
   })
 
-  it('a title only in the head is found by the wider second read', () => {
+  it('a title outside the first 64 KB is found by the wider second read (the last 1 MB)', () => {
     const file = join(tmp, 'headtitle.jsonl')
     const filler = JSON.stringify({
       type: 'assistant',
@@ -265,6 +307,40 @@ describe('transcript peek', () => {
     writeFileSync(join(root, '-elsewhere', 'cc-2.jsonl'), '')
     expect(locateTranscript(root, '/tmp/proj', 'cc-2')).toBe(join(root, '-elsewhere', 'cc-2.jsonl'))
     expect(locateTranscript(root, '/tmp/proj', 'cc-3')).toBeNull()
-    expect(locateTranscript(root, '/tmp/proj', '../../etc/passwd')).toBeNull()
+    // The traversal target EXISTS: only the id alphabet guard keeps it out.
+    mkdirSync(join(tmp, 'secrets'), { recursive: true })
+    writeFileSync(join(tmp, 'secrets', 'private.jsonl'), '')
+    expect(locateTranscript(root, '/tmp/proj', '../../secrets/private')).toBeNull()
+    expect(locateTranscript(root, '/tmp/proj', '../../secrets/private', ['-tmp-proj'])).toBeNull()
+  })
+
+  it('a pre-listed set of project dirs is what the fallback scans', () => {
+    const root = join(tmp, 'projects')
+    mkdirSync(join(root, '-elsewhere'), { recursive: true })
+    writeFileSync(join(root, '-elsewhere', 'cc-2.jsonl'), '')
+    expect(locateTranscript(root, '/tmp/proj', 'cc-2', [])).toBeNull()
+    expect(locateTranscript(root, '/tmp/proj', 'cc-2', ['-elsewhere'])).toBe(
+      join(root, '-elsewhere', 'cc-2.jsonl')
+    )
+  })
+
+  it('PeekCache reads a file once while unchanged, again when it moved, never caches a missing one', () => {
+    const file = join(tmp, 'c.jsonl')
+    writeFileSync(file, TAIL + '\n')
+    let reads = 0
+    const cache = new PeekCache((p) => {
+      reads++
+      return peekTranscript(p)
+    })
+    const first = cache.get(file)
+    const second = cache.get(file)
+    expect(reads).toBe(1)
+    expect(second).toBe(first)
+    writeFileSync(file, TAIL + '\n' + JSON.stringify({ type: 'ai-title', aiTitle: 'moved' }) + '\n')
+    expect(cache.get(file).title).toBe('moved')
+    expect(reads).toBe(2)
+    expect(cache.get(join(tmp, 'gone.jsonl')).exists).toBe(false)
+    expect(cache.get(null).exists).toBe(false)
+    expect(cache.size()).toBe(1)
   })
 })

@@ -24,7 +24,7 @@ import {
   until,
   killLeakedE2eTmux
 } from './harness.mjs'
-import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 
 const DIR = userDataDir('session-history')
@@ -62,6 +62,16 @@ function ledgerRow(over) {
 
 function transcript(lines) {
   return lines.map((l) => JSON.stringify(l)).join('\n') + '\n'
+}
+
+/** Every session record on disk (the tmux sidecars), so a spec can read a
+ *  record's transcript id. */
+function sessionRecords() {
+  const dir = path.join(DIR, 'session-records')
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.json'))
+    .map((f) => JSON.parse(readFileSync(path.join(dir, f), 'utf-8')))
 }
 
 function readLedger() {
@@ -168,6 +178,28 @@ export async function run(t) {
     })
     t.check('moving it back in is another row — the drag-later case is recorded', !!movedBack)
 
+    // --- A /clear rotates the transcript id: record and store both follow ---
+    await win.evaluate((id) => window.electronAPI.setSessionClaudeSessionId(id, 'rotated-0001'), tabId)
+    const rec1 = await until(() => sessionRecords().find((r) => r.id === tabId && r.claudeSessionId === 'rotated-0001') ?? null)
+    t.check('the session record on disk carries the rotated transcript id', !!rec1, sessionRecords().find((r) => r.id === tabId))
+    await win.evaluate((id) => window.electronAPI.setSessionClaudeSessionId(id, '../evil'), tabId)
+    await win.waitForTimeout(300)
+    t.equal('an id outside the alphabet is refused by the record', sessionRecords().find((r) => r.id === tabId)?.claudeSessionId, 'rotated-0001')
+    // The renderer half: the clear-detected event, sent the way main sends
+    // it, lands the new id in the store — visible as a ledger row.
+    await callMcp(app, 'focus', { sessionId: tabId })
+    await win.waitForTimeout(400)
+    await app.evaluate(({ BrowserWindow }, { id, stem }) => {
+      BrowserWindow.getAllWindows()[0].webContents.send(`session:clear-detected:${id}`, stem)
+    }, { id: tabId, stem: 'rotated-0002' })
+    const rotatedRow = await until(() => readLedger().find((r) => r.sessionId === tabId && r.claudeSessionId === 'rotated-0002') ?? null)
+    t.check('the store follows the rotation: a ledger row carries the new id', !!rotatedRow)
+    await app.evaluate(({ BrowserWindow }, { id, stem }) => {
+      BrowserWindow.getAllWindows()[0].webContents.send(`session:clear-detected:${id}`, stem)
+    }, { id: tabId, stem: 'bad/../stem' })
+    await win.waitForTimeout(400)
+    t.check('an invalid stem never reaches the store', !readLedger().some((r) => r.sessionId === tabId && r.claudeSessionId === 'bad/../stem'))
+
     // --- Right-click the group → History, preselected ---
     await win.click(`[data-sidebar-item-id="${liveGroupId}"] > button`, { button: 'right' })
     await win.waitForTimeout(350)
@@ -251,6 +283,15 @@ export async function run(t) {
     r = await searched('tools', 'passkey-guard')
     t.equal('Tools scope finds it', JSON.stringify(r?.rows), JSON.stringify(['cc-alpha-1']))
 
+    // Bounded to the rows in scope: a word only in Beta's transcript is not
+    // found while the Alpha chip is selected, and only Alpha's two
+    // transcripts were read (the gone one has none).
+    await win.click('[data-history-scope="human"]')
+    await win.fill('[data-history-filter]', 'Beta things')
+    r = await searched('human', 'Beta things')
+    t.equal('a group search never reads outside the group', JSON.stringify(r?.rows), JSON.stringify([]))
+    t.equal('and it read exactly the group\'s transcripts', r?.footer, '0 hits in 0 of 2 transcripts')
+
     await win.click('[data-history-scope="titles"]')
     await win.fill('[data-history-filter]', '')
     await win.click('[data-history-chip="all"]')
@@ -259,6 +300,13 @@ export async function run(t) {
     await win.click(`[data-history-chip="${liveGroupId}"]`)
 
     // --- Resume: the spawn carries --resume <id>, and the tab lands in the group ---
+    // Another group holds the selection: `addSession` would nest a new tab
+    // there, and the ledger would record the conversation as having lived
+    // in it. The resume must place the tab where it is told, in one step.
+    const zeta = await callMcp(app, 'createGroup', { name: 'Zeta' })
+    const zetaTab = await callMcp(app, 'openSession', { groupId: zeta.groupId, mode: 'terminal', cwd: ROOT, name: 'zeta shell' })
+    await callMcp(app, 'focus', { sessionId: zetaTab.sessionId })
+    await win.waitForTimeout(400)
     const readSpawns = await spyPtySpawn(app)
     await win.click('[data-history-row="cc-alpha-2"]')
     await win.waitForTimeout(800)
@@ -277,6 +325,8 @@ export async function run(t) {
     if (placed) {
       const stamped = await until(() => readLedger().find((r) => r.sessionId === placed.id && r.claudeSessionId === 'cc-alpha-2' && r.groupId === liveGroupId) ?? null)
       t.check('and the resume itself is a ledger row in that group', !!stamped)
+      const rows = readLedger().filter((r) => r.sessionId === placed.id)
+      t.check('and NO row ever claims it lived in the group that held the selection', !rows.some((r) => r.groupId === zeta.groupId), rows.map((r) => r.groupName))
     }
 
     // --- The gone row cannot resume ---
@@ -287,6 +337,39 @@ export async function run(t) {
     await win.click('[data-history-row="cc-alpha-gone"]')
     await win.waitForTimeout(500)
     t.equal('a row whose transcript is gone spawns nothing', (await readSpawns()).length, 1)
+    t.check('and leaves the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
+
+    // --- Escape with a row's menu open dismisses the menu, not the dialog ---
+    await win.click('[data-history-row="cc-alpha-1"]', { button: 'right' })
+    await win.waitForTimeout(350)
+    t.check('the row menu opened above the dialog', await win.evaluate(() => !!document.querySelector('.menu-surface')))
+    await win.keyboard.press('Escape')
+    await win.waitForTimeout(400)
+    t.check('Escape closed the menu', await win.evaluate(() => !document.querySelector('.menu-surface')))
+    t.check('and left the dialog open', await win.evaluate(() => !!document.querySelector('[data-history-dialog]')))
+
+    // --- From All, a resume lands in the group the conversation last lived in ---
+    await callMcp(app, 'focus', { sessionId: zetaTab.sessionId })
+    await win.waitForTimeout(300)
+    await win.click('[data-history-row="cc-alpha-1"]')
+    await win.waitForTimeout(800)
+    const spawnsAll = await readSpawns()
+    t.equal('the row resumes its conversation', spawnsAll[1]?.resumeSessionId, 'cc-alpha-1')
+    const placedAll = await until(async () => {
+      const list = await callMcp(app, 'list', {})
+      return list.sessions.find((x) => x.name === 'Login bug fix') ?? null
+    })
+    t.equal('and lands in the live group named like the one it lived in, not the ambient one', placedAll?.groupId, liveGroupId)
+    if (placedAll) {
+      const rows = await until(() => {
+        const all = readLedger().filter((r) => r.sessionId === placedAll.id)
+        return all.length > 0 ? all : null
+      })
+      t.check('its ledger rows name that group only', !!rows && rows.every((r) => r.groupId === liveGroupId), rows?.map((r) => r.groupName))
+    }
+
+    await win.keyboard.press('Meta+Shift+H')
+    await win.waitForSelector('[data-history-dialog]', { timeout: 5000 })
     await win.keyboard.press('Escape')
     await win.waitForTimeout(300)
     t.check('Escape closes the dialog', await win.evaluate(() => !document.querySelector('[data-history-dialog]')))

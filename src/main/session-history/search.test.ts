@@ -51,7 +51,26 @@ const ENTRIES = [
     toolUseResult: true,
     message: { content: [{ type: 'tool_result', content: 'export function login() {}' }] }
   },
-  { type: 'assistant', timestamp: 't7', message: { content: [{ type: 'text', text: 'Done.' }] } }
+  { type: 'assistant', timestamp: 't7', message: { content: [{ type: 'text', text: 'Done.' }] } },
+  {
+    type: 'user',
+    timestamp: 't8',
+    message: {
+      content: [
+        { type: 'text', text: '<task-notification>login task finished</task-notification>' }
+      ]
+    }
+  },
+  {
+    type: 'assistant',
+    timestamp: 't9',
+    message: {
+      content: [
+        { type: 'text', text: 'First block mentions login.' },
+        { type: 'text', text: 'Second block mentions login too.' }
+      ]
+    }
+  }
 ]
 const LINES = ENTRIES.map((e) => JSON.stringify(e))
 
@@ -62,6 +81,7 @@ describe('scopedTexts', () => {
     expect(scopedTexts(ENTRIES[2], 'human')).toEqual([])
     expect(scopedTexts(ENTRIES[5], 'human')).toEqual([])
     expect(scopedTexts(ENTRIES[3], 'human')).toEqual([])
+    expect(scopedTexts(ENTRIES[7], 'human')).toEqual([])
   })
   it('agent = assistant text, never thinking', () => {
     expect(scopedTexts(ENTRIES[3], 'agent')).toEqual(['I will fix the login flow now.'])
@@ -94,7 +114,8 @@ describe('searchLines', () => {
     const human = await searchLines(LINES, 'cc', 'login', 'human', 10)
     expect(human.hits.map((h) => h.ts)).toEqual(['t1'])
     const agent = await searchLines(LINES, 'cc', 'login', 'agent', 10)
-    expect(agent.hits.map((h) => h.ts)).toEqual(['t4'])
+    // t9 has TWO matching blocks and yields ONE hit: once per entry.
+    expect(agent.hits.map((h) => h.ts)).toEqual(['t4', 't9'])
     const tools = await searchLines(LINES, 'cc', 'login', 'tools', 10)
     expect(tools.hits.map((h) => h.ts)).toEqual(['t5', 't6'])
     expect(tools.hits[0].excerpt).toContain('/src/auth/login.ts')
@@ -151,11 +172,19 @@ describe('searchTranscripts (files)', () => {
     expect(r.hits).toHaveLength(2)
     expect(r.truncated).toBe(true)
   })
-  it('an empty query searches nothing', async () => {
-    const r = await searchTranscripts([{ claudeSessionId: 'A', path: join(tmp, 'x') }], {
+  it('a blank query searches nothing, even over a file that would match anything', async () => {
+    const a = join(tmp, 'a.jsonl')
+    writeFileSync(a, LINES.join('\n') + '\n')
+    const r = await searchTranscripts([{ claudeSessionId: 'A', path: a }], {
       query: '  ',
       scope: 'human'
     })
     expect(r).toEqual({ hits: [], filesSearched: 0, truncated: false })
+    // And the query is trimmed before matching.
+    const t = await searchTranscripts([{ claudeSessionId: 'A', path: a }], {
+      query: '  login  ',
+      scope: 'human'
+    })
+    expect(t.hits).toHaveLength(1)
   })
 })

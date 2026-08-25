@@ -6,7 +6,14 @@
  * display order) are never stamped.
  */
 import { describe, expect, it } from 'vitest'
-import { SessionHistoryDiff, tabSessions, type LayoutState } from './session-history-diff'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import {
+  SessionHistoryDiff,
+  resumeTargetGroup,
+  tabSessions,
+  type LayoutState
+} from './session-history-diff'
 import type { Session, SessionGroup } from '../store/session-types'
 import type { HistoryLedgerRow } from '../../../preload/index.d'
 
@@ -155,5 +162,62 @@ describe('SessionHistoryDiff', () => {
 
   it('an empty display order is the legacy "every session is a tab"', () => {
     expect(tabSessions({ sessions: [session({})], groups: [], displayOrder: [] })).toHaveLength(1)
+  })
+})
+
+describe('the diff key', () => {
+  it('a move between workspaces is a row (the dialog filters on it)', () => {
+    const { diff, rows } = harness()
+    diff.apply({ sessions: [session({})], groups: [], displayOrder: ['s1'] })
+    diff.apply({ sessions: [session({ workspaceId: 'ws-2' })], groups: [], displayOrder: ['s1'] })
+    expect(rows.map((r) => r.workspaceId)).toEqual(['ws-1', 'ws-2'])
+  })
+
+  it('two identities that only differ across a field boundary do not collide', () => {
+    const { diff, rows } = harness()
+    diff.apply({
+      sessions: [session({ name: 'c' })],
+      groups: [group({ name: 'a b', sessionIds: ['s1'] })],
+      displayOrder: ['g1']
+    })
+    diff.apply({
+      sessions: [session({ name: 'b c' })],
+      groups: [group({ name: 'a', sessionIds: ['s1'] })],
+      displayOrder: ['g1']
+    })
+    expect(rows).toHaveLength(2)
+  })
+
+  it('the source file is text — no raw control byte, so git can diff it', () => {
+    const src = readFileSync(join(__dirname, 'session-history-diff.ts'), 'utf-8')
+    const control = [...src].some((ch) => {
+      const c = ch.charCodeAt(0)
+      return c < 9 || c === 11 || c === 12 || (c >= 14 && c < 32)
+    })
+    expect(control).toBe(false)
+  })
+})
+
+describe('resumeTargetGroup', () => {
+  const shown = [
+    { id: 'g-new-alpha', name: 'Alpha' },
+    { id: 'g-beta', name: 'Beta' }
+  ]
+  it('the requested group when it is live', () => {
+    expect(resumeTargetGroup([{ id: 'g-old', name: 'Beta' }], 'g-new-alpha', shown)).toBe(
+      'g-new-alpha'
+    )
+  })
+  it('else the LAST group the conversation lived in, matched by name across a relaunch', () => {
+    const lived = [
+      { id: 'g-old-beta', name: 'Beta' },
+      { id: 'g-old-alpha', name: 'Alpha' }
+    ]
+    expect(resumeTargetGroup(lived, null, shown)).toBe('g-new-alpha')
+    expect(resumeTargetGroup(lived, 'g-gone', shown)).toBe('g-new-alpha')
+  })
+  it('else the top level — never the ambient selection', () => {
+    expect(resumeTargetGroup([{ id: 'g-old', name: 'Gamma' }], null, shown)).toBeNull()
+    expect(resumeTargetGroup([], null, shown)).toBeNull()
   })
 })

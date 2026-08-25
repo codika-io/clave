@@ -65,6 +65,12 @@ function str(v: unknown): string | null {
   return typeof v === 'string' ? v : null
 }
 
+/** Transcript ids are the file stems `locateTranscript` resolves: only the
+ *  id alphabet is accepted, so a traversal string never enters the ledger. */
+const CLAUDE_SESSION_ID = /^[A-Za-z0-9_-]{1,128}$/
+const NAME_MAX = 512
+const CWD_MAX = 4096
+
 /** Re-pick a row field by field: it crosses the IPC boundary from the
  *  renderer and must not smuggle extra keys — or the wrong shapes — into the
  *  file. Returns null when a required field is missing or malformed. */
@@ -80,13 +86,16 @@ export function normalizeLedgerRow(input: unknown): LedgerRow | null {
   if (!kind || !KINDS.has(kind)) return null
   if (!ts || Number.isNaN(Date.parse(ts))) return null
   if (!sessionId || name === null || !cwd || !mode || !MODES.has(mode)) return null
+  if (cwd.length > CWD_MAX) return null
+  const claudeSessionId = str(r.claudeSessionId)
   return {
     v: LEDGER_VERSION,
     kind: kind as LedgerKind,
     ts,
     sessionId,
-    claudeSessionId: str(r.claudeSessionId),
-    name,
+    claudeSessionId:
+      claudeSessionId && CLAUDE_SESSION_ID.test(claudeSessionId) ? claudeSessionId : null,
+    name: name.length > NAME_MAX ? name.slice(0, NAME_MAX) : name,
     cwd,
     mode: mode as LedgerRow['mode'],
     model: str(r.model),

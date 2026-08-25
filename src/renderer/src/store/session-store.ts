@@ -23,8 +23,29 @@ import { mergeLayoutForKeys, absorbLayout, placeAdopted } from '../lib/sidebar-l
 import { moveLayoutItems } from '../lib/sidebar-layout-ops'
 
 // Re-export types and constants so existing imports continue to work
-export type { Theme, AppIcon, ActivityStatus, GroupTerminalConfig, GroupTerminalColor, GroupTerminalIcon, GroupViewConfig, SessionViewConfig, Session, SessionGroup, FileTab, ActiveView, SettingsSection, ExtensionsSection, SessionType }
-export { GROUP_TERMINAL_COLORS, GROUP_TERMINAL_ICONS, TERMINAL_COLOR_VALUES, resolveColorHex } from './session-types'
+export type {
+  Theme,
+  AppIcon,
+  ActivityStatus,
+  GroupTerminalConfig,
+  GroupTerminalColor,
+  GroupTerminalIcon,
+  GroupViewConfig,
+  SessionViewConfig,
+  Session,
+  SessionGroup,
+  FileTab,
+  ActiveView,
+  SettingsSection,
+  ExtensionsSection,
+  SessionType
+}
+export {
+  GROUP_TERMINAL_COLORS,
+  GROUP_TERMINAL_ICONS,
+  TERMINAL_COLOR_VALUES,
+  resolveColorHex
+} from './session-types'
 
 /** THE visibility predicate — single source of truth for workspace scoping.
  *  activeId null → no-workspace mode, everything visible (today's app).
@@ -72,7 +93,16 @@ interface SessionState {
   previewCwd: string | null
   previewSource: 'palette' | 'tree' | null
   previewLocationId: string | null
-  diffPreview: { file: string, cwd: string, type: 'working' | 'commit' | 'incoming' | 'outgoing', staged: boolean, fileStatus: string, hash: string | null, siblings?: Array<{ file: string; staged: boolean; fileStatus: string }>, clickY?: number } | null
+  diffPreview: {
+    file: string
+    cwd: string
+    type: 'working' | 'commit' | 'incoming' | 'outgoing'
+    staged: boolean
+    fileStatus: string
+    hash: string | null
+    siblings?: Array<{ file: string; staged: boolean; fileStatus: string }>
+    clickY?: number
+  } | null
   gitRefreshTrigger: number
   collapseAllTrigger: number
   activeView: ActiveView
@@ -96,11 +126,20 @@ interface SessionState {
   sidebarUndoStack: SidebarSnapshot[]
   /** Last selection/focus per workspace, restored when switching back so each
    *  workspace feels like the tab set you left. Session-lifetime only. */
-  workspaceSelections: Record<string, { selectedSessionIds: string[]; focusedSessionId: string | null }>
+  workspaceSelections: Record<
+    string,
+    { selectedSessionIds: string[]; focusedSessionId: string | null }
+  >
   /** Save the outgoing workspace's selection and restore (or initialize) the
    *  incoming one's. Pure view/selection change — sessions are untouched. */
   applyWorkspaceSwitch: (fromId: string | null, toId: string | null) => void
   addSession: (session: Session) => void
+  /** Add a session and place it in ONE step — inside `groupId`, or at the
+   *  top level when null — with no placement heuristic. `addSession` nests a
+   *  new tab into whatever group holds the selection; a resume from the
+   *  history dialog must land where it is told, and subscribers (the history
+   *  ledger's diff) must never see a transient placement in between. */
+  addSessionInGroup: (session: Session, groupId: string | null) => void
   /** Add an ADOPTED session — a survivor at boot, a tab handed over by
    *  another window — without any placement heuristic: never nested into the
    *  selected group, never at the top level when a group (or a terminal, or
@@ -154,7 +193,16 @@ interface SessionState {
   openSessionView: (sessionId: string) => void
   addGroupTerminal: (groupId: string, config: Omit<GroupTerminalConfig, 'sessionId'>) => void
   removeGroupTerminal: (groupId: string, terminalId: string) => void
-  updateGroupTerminal: (groupId: string, terminalId: string, updates: Partial<Pick<GroupTerminalConfig, 'command' | 'commandMode' | 'color' | 'icon' | 'serverUrl' | 'groupView'>>) => void
+  updateGroupTerminal: (
+    groupId: string,
+    terminalId: string,
+    updates: Partial<
+      Pick<
+        GroupTerminalConfig,
+        'command' | 'commandMode' | 'color' | 'icon' | 'serverUrl' | 'groupView'
+      >
+    >
+  ) => void
   setGroupTerminalSessionId: (groupId: string, terminalId: string, sessionId: string | null) => void
   setGroupCwd: (groupId: string, cwd: string) => void
   setGroupColor: (groupId: string, color: GroupTerminalColor | null) => void
@@ -215,7 +263,12 @@ interface SessionState {
   closeJourneyPanel: () => void
   setCommitMessage: (cwd: string, message: string) => void
   setGeneratingCommit: (cwd: string, generating: boolean) => void
-  setPreviewFile: (path: string | null, source?: 'palette' | 'tree', cwd?: string | null, locationId?: string | null) => void
+  setPreviewFile: (
+    path: string | null,
+    source?: 'palette' | 'tree',
+    cwd?: string | null,
+    locationId?: string | null
+  ) => void
   setDiffPreview: (preview: SessionState['diffPreview'], opts?: { fromJourney?: boolean }) => void
   triggerGitRefresh: () => void
   triggerCollapseAll: () => void
@@ -234,7 +287,8 @@ interface SessionState {
 /** The defaults every session entering the store gets; the workspace stamp
  *  falls back to this window's active workspace (mirrors pty:spawn). */
 function normalizeSession(session: Session): Session {
-  const workspaceId = session.workspaceId ?? useWorkspaceStore.getState().activeWorkspaceId ?? undefined
+  const workspaceId =
+    session.workspaceId ?? useWorkspaceStore.getState().activeWorkspaceId ?? undefined
   return {
     ...session,
     workspaceId,
@@ -301,13 +355,11 @@ function persistSessionName(
   folderName: string,
   userRenamed: boolean
 ): void {
-  window.electronAPI?.setSessionDisplayName?.(
-    id,
-    name === folderName ? null : name,
-    userRenamed
-  ).catch(() => {
-    // Non-fatal: the name still applies for this run, it just won't survive.
-  })
+  window.electronAPI
+    ?.setSessionDisplayName?.(id, name === folderName ? null : name, userRenamed)
+    .catch(() => {
+      // Non-fatal: the name still applies for this run, it just won't survive.
+    })
 }
 
 /** Turn on sidebar-layout persistence. Call once on launch after the previous
@@ -350,11 +402,11 @@ function snapshotSidebar(state: {
   }
 }
 
-function pushSidebarSnapshot(
-  stack: SidebarSnapshot[],
-  snap: SidebarSnapshot
-): SidebarSnapshot[] {
-  const next = stack.length >= MAX_SIDEBAR_UNDO ? stack.slice(stack.length - MAX_SIDEBAR_UNDO + 1) : stack.slice()
+function pushSidebarSnapshot(stack: SidebarSnapshot[], snap: SidebarSnapshot): SidebarSnapshot[] {
+  const next =
+    stack.length >= MAX_SIDEBAR_UNDO
+      ? stack.slice(stack.length - MAX_SIDEBAR_UNDO + 1)
+      : stack.slice()
   next.push(snap)
   return next
 }
@@ -453,7 +505,9 @@ export const useSessionStore = create<SessionState>((set) => ({
   settingsSection: 'general' as SettingsSection,
   extensionsSection: 'marketplaces' as ExtensionsSection,
   sidePanelTab: 'files' as const,
-  gitViewMode: (localStorage.getItem('clave-git-view-mode') === 'tree' ? 'tree' : 'list') as 'list' | 'tree',
+  gitViewMode: (localStorage.getItem('clave-git-view-mode') === 'tree' ? 'tree' : 'list') as
+    | 'list'
+    | 'tree',
   gitPanelMode: 'changes' as const,
   gitShowCommitBar: localStorage.getItem('clave-git-commit-bar') === 'show',
   gitLivePollLimit: (() => {
@@ -492,7 +546,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       const focusedSessionId =
         saved?.focusedSessionId && visibleIds.has(saved.focusedSessionId)
           ? saved.focusedSessionId
-          : selectedSessionIds[0] ?? null
+          : (selectedSessionIds[0] ?? null)
       return { workspaceSelections, selectedSessionIds, focusedSessionId }
     }),
   addSession: (session) =>
@@ -534,14 +588,42 @@ export const useSessionStore = create<SessionState>((set) => ({
           sessions: [...state.sessions, newSession],
           ...focusPatch,
           groups: state.groups.map((g) =>
-            g.id === targetGroup!.id
-              ? { ...g, sessionIds: [...g.sessionIds, session.id] }
-              : g
+            g.id === targetGroup!.id ? { ...g, sessionIds: [...g.sessionIds, session.id] } : g
           ),
           displayOrder: getDisplayOrder(state)
         }
       }
 
+      return {
+        sessions: [...state.sessions, newSession],
+        ...focusPatch,
+        displayOrder: [...getDisplayOrder(state), session.id]
+      }
+    }),
+
+  addSessionInGroup: (session, groupId) =>
+    set((state) => {
+      if (state.sessions.some((s) => s.id === session.id)) return state
+      const newSession = normalizeSession(session)
+      const visible = inActiveWorkspace(newSession, useWorkspaceStore.getState().activeWorkspaceId)
+      const focusPatch = visible
+        ? {
+            selectedSessionIds: [session.id],
+            focusedSessionId: session.id,
+            activeView: 'terminals' as const
+          }
+        : {}
+      const target = groupId ? state.groups.find((g) => g.id === groupId) : undefined
+      if (target) {
+        return {
+          sessions: [...state.sessions, newSession],
+          ...focusPatch,
+          groups: state.groups.map((g) =>
+            g.id === target.id ? { ...g, sessionIds: [...g.sessionIds, session.id] } : g
+          ),
+          displayOrder: getDisplayOrder(state)
+        }
+      }
       return {
         sessions: [...state.sessions, newSession],
         ...focusPatch,
@@ -559,7 +641,11 @@ export const useSessionStore = create<SessionState>((set) => ({
       const visible = inActiveWorkspace(newSession, useWorkspaceStore.getState().activeWorkspaceId)
       const focusPatch =
         options?.focus && visible
-          ? { selectedSessionIds: [session.id], focusedSessionId: session.id, activeView: 'terminals' as const }
+          ? {
+              selectedSessionIds: [session.id],
+              focusedSessionId: session.id,
+              activeView: 'terminals' as const
+            }
           : {}
       return {
         sessions: [...state.sessions, newSession],
@@ -665,9 +751,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       const groups = state.groups.map((g) => ({
         ...g,
         sessionIds: g.sessionIds.filter((sid) => sid !== id),
-        terminals: g.terminals.map((t) =>
-          t.sessionId === id ? { ...t, sessionId: null } : t
-        )
+        terminals: g.terminals.map((t) => (t.sessionId === id ? { ...t, sessionId: null } : t))
       }))
       const displayOrder = getDisplayOrder(state).filter((did) => did !== id)
 
@@ -681,8 +765,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         focusedSessionId =
           selectedSessionIds[0] ?? visibleSessions[visibleSessions.length - 1]?.id ?? null
       }
-      const viewPatch =
-        state.activeSessionViewId === id ? { activeSessionViewId: null } : {}
+      const viewPatch = state.activeSessionViewId === id ? { activeSessionViewId: null } : {}
       if (selectedSessionIds.length === 0 && visibleSessions.length > 0) {
         const lastId = visibleSessions[visibleSessions.length - 1].id
         return {
@@ -703,18 +786,35 @@ export const useSessionStore = create<SessionState>((set) => ({
       const session = state.sessions.find((s) => s.id === id)
       const targetView: ActiveView = session?.sessionType === 'agent' ? 'agents' : 'terminals'
       // Clear unseen activity + the cross-tab injected marker when viewed
-      const sessions = session?.hasUnseenActivity || session?.injectedFrom
-        ? state.sessions.map((s) => s.id === id ? { ...s, hasUnseenActivity: false, injectedFrom: null } : s)
-        : state.sessions
+      const sessions =
+        session?.hasUnseenActivity || session?.injectedFrom
+          ? state.sessions.map((s) =>
+              s.id === id ? { ...s, hasUnseenActivity: false, injectedFrom: null } : s
+            )
+          : state.sessions
       if (addToSelection) {
         const isSelected = state.selectedSessionIds.includes(id)
         const newSelected = isSelected
           ? state.selectedSessionIds.filter((sid) => sid !== id)
           : [...state.selectedSessionIds, id]
         const focusedSessionId = isSelected ? (newSelected[0] ?? null) : id
-        return { sessions, selectedSessionIds: newSelected, focusedSessionId, activeView: targetView, activeGroupViewId: null, activeSessionViewId: null }
+        return {
+          sessions,
+          selectedSessionIds: newSelected,
+          focusedSessionId,
+          activeView: targetView,
+          activeGroupViewId: null,
+          activeSessionViewId: null
+        }
       }
-      return { sessions, selectedSessionIds: [id], focusedSessionId: id, activeView: targetView, activeGroupViewId: null, activeSessionViewId: null }
+      return {
+        sessions,
+        selectedSessionIds: [id],
+        focusedSessionId: id,
+        activeView: targetView,
+        activeGroupViewId: null,
+        activeSessionViewId: null
+      }
     }),
 
   selectSessions: (ids) =>
@@ -850,23 +950,26 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => ({
       groups: state.groups.map((g) => (g.id === groupId ? { ...g, view } : g)),
       // Clearing a view that is currently showing drops back to the mosaic.
-      ...(view === null && state.activeGroupViewId === groupId
-        ? { activeGroupViewId: null }
-        : {})
+      ...(view === null && state.activeGroupViewId === groupId ? { activeGroupViewId: null } : {})
     })),
 
   setActiveGroupView: (groupId) =>
-    set(() => ({ activeGroupViewId: groupId, ...(groupId !== null ? { activeSessionViewId: null } : {}) })),
+    set(() => ({
+      activeGroupViewId: groupId,
+      ...(groupId !== null ? { activeSessionViewId: null } : {})
+    })),
 
   setSessionView: (sessionId, view) => {
     // The record (main process) is what survives a restart — renderer state
     // dies with the window, same rationale as persistSessionName. The serving
     // session id is deliberately not persisted: it never survives a restart,
     // and the start action respawns from `command`.
-    window.electronAPI?.setSessionViewRecord?.(
-      sessionId,
-      view ? { url: view.url, title: view.title, command: view.command, cwd: view.cwd } : null
-    ).catch(() => {})
+    window.electronAPI
+      ?.setSessionViewRecord?.(
+        sessionId,
+        view ? { url: view.url, title: view.title, command: view.command, cwd: view.cwd } : null
+      )
+      .catch(() => {})
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === sessionId ? { ...s, view } : s)),
       // Clearing the view that is currently showing drops back to the terminal.
@@ -877,7 +980,10 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 
   setActiveSessionView: (sessionId) =>
-    set(() => ({ activeSessionViewId: sessionId, ...(sessionId !== null ? { activeGroupViewId: null } : {}) })),
+    set(() => ({
+      activeSessionViewId: sessionId,
+      ...(sessionId !== null ? { activeGroupViewId: null } : {})
+    })),
 
   openSessionView: (sessionId) =>
     set((state) => {
@@ -895,18 +1001,14 @@ export const useSessionStore = create<SessionState>((set) => ({
   addGroupTerminal: (groupId, config) =>
     set((state) => ({
       groups: state.groups.map((g) =>
-        g.id === groupId
-          ? { ...g, terminals: [...g.terminals, { ...config, sessionId: null }] }
-          : g
+        g.id === groupId ? { ...g, terminals: [...g.terminals, { ...config, sessionId: null }] } : g
       )
     })),
 
   removeGroupTerminal: (groupId, terminalId) =>
     set((state) => ({
       groups: state.groups.map((g) =>
-        g.id === groupId
-          ? { ...g, terminals: g.terminals.filter((t) => t.id !== terminalId) }
-          : g
+        g.id === groupId ? { ...g, terminals: g.terminals.filter((t) => t.id !== terminalId) } : g
       )
     })),
 
@@ -916,9 +1018,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         g.id === groupId
           ? {
               ...g,
-              terminals: g.terminals.map((t) =>
-                t.id === terminalId ? { ...t, ...updates } : t
-              )
+              terminals: g.terminals.map((t) => (t.id === terminalId ? { ...t, ...updates } : t))
             }
           : g
       )
@@ -930,9 +1030,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         g.id === groupId
           ? {
               ...g,
-              terminals: g.terminals.map((t) =>
-                t.id === terminalId ? { ...t, sessionId } : t
-              )
+              terminals: g.terminals.map((t) => (t.id === terminalId ? { ...t, sessionId } : t))
             }
           : g
       )
@@ -940,9 +1038,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setGroupCwd: (groupId, cwd) =>
     set((state) => ({
-      groups: state.groups.map((g) =>
-        g.id === groupId ? { ...g, cwd } : g
-      )
+      groups: state.groups.map((g) => (g.id === groupId ? { ...g, cwd } : g))
     })),
 
   setGroupPrompt: (groupId, prompt) =>
@@ -1013,7 +1109,8 @@ export const useSessionStore = create<SessionState>((set) => ({
         groups: restoredGroups,
         displayOrder,
         focusedSessionId,
-        selectedSessionIds: selectedSessionIds.length > 0 ? selectedSessionIds : state.selectedSessionIds,
+        selectedSessionIds:
+          selectedSessionIds.length > 0 ? selectedSessionIds : state.selectedSessionIds,
         sidebarUndoStack
       }
     }),
@@ -1072,9 +1169,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       const session = state.sessions.find((s) => s.id === id)
       if (!session || session.promptWaiting === promptType) return state
       return {
-        sessions: state.sessions.map((s) =>
-          s.id === id ? { ...s, promptWaiting: promptType } : s
-        )
+        sessions: state.sessions.map((s) => (s.id === id ? { ...s, promptWaiting: promptType } : s))
       }
     }),
 
@@ -1087,9 +1182,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
       // Auto-launch localhost if the session's terminal config has the flag
       if (url && window.electronAPI?.openExternal) {
-        const group = state.groups.find((g) =>
-          g.terminals.some((t) => t.sessionId === id)
-        )
+        const group = state.groups.find((g) => g.terminals.some((t) => t.sessionId === id))
         const terminal = group?.terminals.find((t) => t.sessionId === id)
         if (terminal?.autoLaunchLocalhost) {
           window.electronAPI.openExternal(url)
@@ -1098,23 +1191,21 @@ export const useSessionStore = create<SessionState>((set) => ({
 
       return {
         sessions: state.sessions.map((s) =>
-          s.id === id ? { ...s, detectedUrl: url, serverStatus: url ? 'running' : s.serverStatus } : s
+          s.id === id
+            ? { ...s, detectedUrl: url, serverStatus: url ? 'running' : s.serverStatus }
+            : s
         )
       }
     }),
 
   setSessionServerStatus: (id, status) =>
     set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === id ? { ...s, serverStatus: status } : s
-      )
+      sessions: state.sessions.map((s) => (s.id === id ? { ...s, serverStatus: status } : s))
     })),
 
   setSessionServerCommand: (id, command) =>
     set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === id ? { ...s, serverCommand: command } : s
-      )
+      sessions: state.sessions.map((s) => (s.id === id ? { ...s, serverCommand: command } : s))
     })),
 
   setSessionUnseenActivity: (id, unseen) =>
@@ -1122,9 +1213,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       const session = state.sessions.find((s) => s.id === id)
       if (!session || session.hasUnseenActivity === unseen) return state
       return {
-        sessions: state.sessions.map((s) =>
-          s.id === id ? { ...s, hasUnseenActivity: unseen } : s
-        )
+        sessions: state.sessions.map((s) => (s.id === id ? { ...s, hasUnseenActivity: unseen } : s))
       }
     }),
 
@@ -1171,9 +1260,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setSessionPlanFile: (id, path) =>
     set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === id ? { ...s, planFilePath: path } : s
-      )
+      sessions: state.sessions.map((s) => (s.id === id ? { ...s, planFilePath: path } : s))
     })),
 
   setSearchQuery: (query) => set({ searchQuery: query }),
@@ -1242,7 +1329,14 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 
   openJourneyPanel: (cwd, repoName) =>
-    set({ journeyPanel: { cwd, repoName }, diffPreview: null, previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null }),
+    set({
+      journeyPanel: { cwd, repoName },
+      diffPreview: null,
+      previewFile: null,
+      previewCwd: null,
+      previewSource: null,
+      previewLocationId: null
+    }),
 
   closeJourneyPanel: () => set({ journeyPanel: null, diffPreview: null }),
 
@@ -1260,12 +1354,20 @@ export const useSessionStore = create<SessionState>((set) => ({
     }),
 
   setPreviewFile: (path, source, cwd, locationId) =>
-    set((state) => ({ previewFile: path, previewCwd: cwd ?? null, previewSource: source ?? null, previewLocationId: locationId ?? null, diffPreview: path ? null : state.diffPreview })),
+    set((state) => ({
+      previewFile: path,
+      previewCwd: cwd ?? null,
+      previewSource: source ?? null,
+      previewLocationId: locationId ?? null,
+      diffPreview: path ? null : state.diffPreview
+    })),
 
   setDiffPreview: (preview, opts) =>
     set({
       diffPreview: preview,
-      ...(preview ? { previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null } : {}),
+      ...(preview
+        ? { previewFile: null, previewCwd: null, previewSource: null, previewLocationId: null }
+        : {}),
       ...(preview && !opts?.fromJourney ? { journeyPanel: null } : {})
     }),
 
@@ -1317,7 +1419,8 @@ export const useSessionStore = create<SessionState>((set) => ({
 
       let focusedSessionId = state.focusedSessionId
       if (focusedSessionId === id) {
-        focusedSessionId = selectedSessionIds[0] ?? state.sessions[state.sessions.length - 1]?.id ?? null
+        focusedSessionId =
+          selectedSessionIds[0] ?? state.sessions[state.sessions.length - 1]?.id ?? null
       }
       if (selectedSessionIds.length === 0 && state.sessions.length > 0) {
         const lastId = state.sessions[state.sessions.length - 1].id
@@ -1349,9 +1452,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setClaudeSessionId: (id, claudeSessionId) =>
     set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === id ? { ...s, claudeSessionId } : s
-      )
+      sessions: state.sessions.map((s) => (s.id === id ? { ...s, claudeSessionId } : s))
     })),
 
   addAgentSession: (agent, locationId) =>
@@ -1364,7 +1465,8 @@ export const useSessionStore = create<SessionState>((set) => ({
         folderName: agent.name,
         name: agent.name,
         alive: agent.status !== 'offline',
-        activityStatus: agent.status === 'busy' ? 'active' : agent.status === 'offline' ? 'ended' : 'idle',
+        activityStatus:
+          agent.status === 'busy' ? 'active' : agent.status === 'offline' ? 'ended' : 'idle',
         promptWaiting: null,
         claudeMode: false,
         antigravityMode: false,
@@ -1391,14 +1493,18 @@ export const useSessionStore = create<SessionState>((set) => ({
   removeAgentSessions: (locationId) =>
     set((state) => {
       const agentSessionIds = new Set(
-        state.sessions.filter((s) => s.sessionType === 'agent' && s.locationId === locationId).map((s) => s.id)
+        state.sessions
+          .filter((s) => s.sessionType === 'agent' && s.locationId === locationId)
+          .map((s) => s.id)
       )
       if (agentSessionIds.size === 0) return {}
       return {
         sessions: state.sessions.filter((s) => !agentSessionIds.has(s.id)),
         displayOrder: getDisplayOrder(state).filter((id) => !agentSessionIds.has(id)),
         selectedSessionIds: state.selectedSessionIds.filter((id) => !agentSessionIds.has(id)),
-        focusedSessionId: agentSessionIds.has(state.focusedSessionId ?? '') ? null : state.focusedSessionId
+        focusedSessionId: agentSessionIds.has(state.focusedSessionId ?? '')
+          ? null
+          : state.focusedSessionId
       }
     }),
 
