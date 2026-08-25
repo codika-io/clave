@@ -19,6 +19,55 @@ export type WriteResult =
   | { ok: true }
   | { ok: false; reason: 'invalid-key' | 'no-window' }
 
+export interface HistoryLedgerRow {
+  v: 1
+  kind: 'placed' | 'closed'
+  ts: string
+  sessionId: string
+  claudeSessionId: string | null
+  name: string
+  cwd: string
+  mode: 'claude' | 'antigravity' | 'codex' | 'claude-agents' | 'terminal'
+  model: string | null
+  workspaceId: string | null
+  groupId: string | null
+  groupName: string | null
+}
+
+export type HistorySearchScope = 'human' | 'agent' | 'tools'
+
+export interface HistorySearchHit {
+  claudeSessionId: string
+  ts: string | null
+  scope: HistorySearchScope
+  excerpt: string
+}
+
+export interface HistoryListEntry {
+  claudeSessionId: string
+  sessionId: string
+  name: string
+  cwd: string
+  mode: HistoryLedgerRow['mode']
+  model: string | null
+  workspaceId: string | null
+  groups: { id: string; name: string; firstAt: string }[]
+  firstSeenAt: string
+  lastSeenAt: string
+  closedAt: string | null
+  transcript: {
+    exists: boolean
+    path: string
+    title: string | null
+    lastPrompt: string | null
+    lastHumanAt: string | null
+    modifiedAt: string | null
+    sizeBytes: number
+  }
+  title: string
+  lastHumanAt: string
+}
+
 /** What a window is told to take in: session ids to adopt (their records
  *  carry the rest) and, on a window close or a group move, groups. */
 export interface RehomePayload {
@@ -393,7 +442,7 @@ export interface ElectronAPI {
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) => () => void
-  onClearDetected: (sessionId: string, callback: () => void) => () => void
+  onClearDetected: (sessionId: string, callback: (newClaudeSessionId: string | null) => void) => () => void
   onAgentState: (sessionId: string, callback: (state: string) => void) => () => void
   onMcpCommand: (
     callback: (msg: { requestId: string; command: string; payload: unknown }) => void
@@ -432,6 +481,25 @@ export interface ElectronAPI {
     by: 'user' | 'agent' | 'app'
     closer: ExchangeEndpoint | null
   }) => void
+  /** Session history (PRDCT-1738). A ledger row per placement change,
+   *  fire-and-forget; the folded list for the dialog. */
+  historyStamp: (row: HistoryLedgerRow) => void
+  historyList: () => Promise<{ entries: HistoryListEntry[]; skippedLines: number }>
+  /** A scoped substring search through the named sessions' transcripts;
+   *  hits stream through `onHistorySearchHits`, the promise carries the end. */
+  historySearch: (request: {
+    requestId: string
+    query: string
+    scope: HistorySearchScope
+    claudeSessionIds: string[]
+  }) => Promise<{ requestId: string; filesSearched: number; truncated: boolean }>
+  historySearchCancel: (requestId: string) => void
+  onHistorySearchHits: (
+    callback: (progress: { requestId: string; hits: HistorySearchHit[] }) => void
+  ) => () => void
+  /** A `/clear` rotated the tab's transcript: the record follows the new id
+   *  so a restart resumes the conversation the user is actually in. */
+  setSessionClaudeSessionId: (id: string, claudeSessionId: string) => Promise<void>
   secretList: () => Promise<SecretRequestView[]>
   secretSubmit: (id: string, secret: string) => Promise<SecretRequestView>
   secretDismiss: (id: string) => Promise<SecretRequestView>

@@ -22,6 +22,9 @@ import { ExtensionsSidebar } from '../extensions/ExtensionsSidebar'
 import { UpdateOverlay } from '../ui/UpdateOverlay'
 import { connectUpdaterStore } from '../../store/updater-store'
 import { MissionControlOverlay } from '../ui/MissionControlOverlay'
+import { SessionHistoryDialog } from '../session/SessionHistoryDialog'
+import { useHistoryStore } from '../../store/history-store'
+import { startSessionHistoryStamping } from '../../lib/session-history'
 import { AgentChatPanel } from '../agents/AgentChatPanel'
 import { useWorkTracker } from '../../store/work-tracker-store'
 import { FilePalette } from '../files/FilePalette'
@@ -239,6 +242,9 @@ export function AppShell() {
         // Turn persistence on only now — after the saved layout was loaded
         // and groups restored — so adoption writes can't clobber the file.
         enableSidebarPersistence()
+        // And the history ledger's diff: the restored tabs are stamped where
+        // they actually sit, not mid-restore (PRDCT-1738).
+        startSessionHistoryStamping()
       }
 
       // Boot tail: land the initial selection in the active workspace, start
@@ -353,6 +359,15 @@ export function AppShell() {
           if (!state.fileTreeOpen) toggleFileTree()
           useSessionStore.getState().setSidePanelTab('git')
         }
+      }
+      // Cmd+Shift+H: the session history, on All (a group's own context menu
+      // opens it on that group).
+      if (e.metaKey && e.shiftKey && e.code === 'KeyH') {
+        e.preventDefault()
+        const history = useHistoryStore.getState()
+        if (history.open) history.closeHistory()
+        else history.openHistory(null)
+        return
       }
       // Cmd+? (Cmd+Shift+/) — open help panel
       if (e.metaKey && e.shiftKey && e.key === '/') {
@@ -801,6 +816,7 @@ export function AppShell() {
       <GitJourneyPanel />
       <UpdateOverlay />
       <MissionControlOverlay />
+      <SessionHistoryDialog />
       <RestorePromptDialog />
     </div>
   )

@@ -104,8 +104,8 @@ const electronAPI = {
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) =>
     createIpcListener<[string]>(`session:plan-detected:${sessionId}`, callback),
 
-  onClearDetected: (sessionId: string, callback: () => void) =>
-    createIpcListener<[]>(`session:clear-detected:${sessionId}`, callback),
+  onClearDetected: (sessionId: string, callback: (newClaudeSessionId: string | null) => void) =>
+    createIpcListener<[string | null]>(`session:clear-detected:${sessionId}`, callback),
 
   onAgentState: (sessionId: string, callback: (state: string) => void) =>
     createIpcListener<[string]>(`agent:state:${sessionId}`, callback),
@@ -146,6 +146,22 @@ const electronAPI = {
 
   captureTabClosed: (payload: { ts: string; session: unknown; by: string; closer: unknown }) =>
     ipcRenderer.send('exchange:capture-tab-closed', payload),
+
+  // Session history (PRDCT-1738): the ledger row is fire-and-forget like the
+  // capture above; the list is the dialog's one read.
+  historyStamp: (row: unknown) => ipcRenderer.send('history:stamp', row),
+  historyList: () => ipcRenderer.invoke('history:list'),
+  historySearch: (request: {
+    requestId: string
+    query: string
+    scope: string
+    claudeSessionIds: string[]
+  }) => ipcRenderer.invoke('history:search', request),
+  historySearchCancel: (requestId: string) => ipcRenderer.send('history:search-cancel', requestId),
+  onHistorySearchHits: (callback: (progress: { requestId: string; hits: unknown[] }) => void) =>
+    createIpcListener<[{ requestId: string; hits: unknown[] }]>('history:search-hits', callback),
+  setSessionClaudeSessionId: (id: string, claudeSessionId: string) =>
+    ipcRenderer.invoke('session:set-claude-session-id', id, claudeSessionId),
 
   secretList: () => ipcRenderer.invoke('secret:list'),
 

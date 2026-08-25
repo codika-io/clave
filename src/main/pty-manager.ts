@@ -1034,6 +1034,21 @@ class PtyManager {
     writeSessionRecord({ ...meta, workspaceId: next })
   }
 
+  /** Follow a `/clear`: Claude Code rotated to a new transcript, so the
+   *  session's id — in memory and in the record — moves with it. Mirrors
+   *  setSessionDisplayName: what is not in the record does not survive a
+   *  restart, and a stale id would resume the pre-/clear conversation. */
+  setSessionClaudeSessionId(id: string, claudeSessionId: string): void {
+    if (!isValidClaudeSessionId(claudeSessionId)) return
+    const session = this.sessions.get(id)
+    if (session) session.claudeSessionId = claudeSessionId
+    const key = this.recordKeyForSession(id)
+    if (!key) return
+    const meta = readSessionRecord(key)
+    if (!meta || meta.claudeSessionId === claudeSessionId) return
+    writeSessionRecord({ ...meta, claudeSessionId })
+  }
+
   /** Re-home a record to another window WITHOUT touching the process — used
    *  when a closing window hands a non-tmux session (whose pty dies with the
    *  window) to the primary, so the next boot offers it there. */

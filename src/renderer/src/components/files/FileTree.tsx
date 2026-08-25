@@ -501,7 +501,7 @@ export function FileTree({ cwd, onNavigateToFolder }: {
       >
         {!cwd ? (
           <div className="px-3 py-8 text-center text-xs text-text-tertiary">
-            Focus a session to browse files
+            Open a workspace or focus a session to browse files
           </div>
         ) : loading ? (
           <div className="px-3 py-8 text-center text-xs text-text-tertiary">Loading...</div>

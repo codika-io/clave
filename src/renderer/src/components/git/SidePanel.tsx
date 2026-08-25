@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
+import { useWorkspaceStore } from '../../store/workspace-store'
 import { FileTree } from '../files/FileTree'
 import { RemoteFileTree } from '../files/RemoteFileTree'
 import { GitStatusPanel, MultiRepoGitPanel } from './GitStatusPanel'
@@ -14,10 +15,65 @@ import { Tooltip, TooltipTrigger, TooltipContent, IconButton } from '../ui/toolt
 import {
   InformationCircleIcon,
   ChevronLeftIcon,
+  ChevronDownIcon,
   FolderOpenIcon,
   ArrowUturnLeftIcon,
   DocumentTextIcon
 } from '@heroicons/react/24/outline'
+
+/** Which root the panel hangs from. `session` is the focused tab's own folder,
+ *  `group` the folder its group was declared on, `workspace` the workspace
+ *  root. The panel used to know only the first, which is why it drew nothing
+ *  at all with no tab focused: it had no folder to be about. */
+export type PanelScope = 'workspace' | 'group' | 'session'
+const SCOPES: PanelScope[] = ['workspace', 'group', 'session']
+const SCOPE_GLYPH: Record<PanelScope, string> = { workspace: 'W', group: 'G', session: 'S' }
+const SCOPE_LABEL: Record<PanelScope, string> = {
+  workspace: 'Workspace',
+  group: 'Group',
+  session: 'Session'
+}
+const SCOPE_HOME: Record<PanelScope, string> = {
+  workspace: 'the workspace root',
+  group: "the group's folder",
+  session: "the session's folder"
+}
+/** The scope and navigation maps are keyed by session. With no session focused
+ *  the panel still has a root (the workspace) and can still be navigated, so
+ *  that state needs a key of its own. */
+const NO_SESSION_KEY = '__no-session__'
+
+/** Close a hand-rolled popover on a click outside it or on Escape. */
+function useDismiss(
+  open: boolean,
+  surface: React.RefObject<HTMLElement | null>,
+  trigger: React.RefObject<HTMLElement | null>,
+  close: () => void
+): void {
+  useEffect(() => {
+    if (!open) return
+    const handleClick = (e: MouseEvent): void => {
+      const t = e.target as Node
+      if (
+        surface.current &&
+        !surface.current.contains(t) &&
+        trigger.current &&
+        !trigger.current.contains(t)
+      ) {
+        close()
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') close()
+    }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, surface, trigger, close])
+}
 
 function getParentPaths(fullPath: string): { path: string; name: string }[] {
   const homedir = fullPath.match(/^\/Users\/[^/]+/)?.[0] ?? ''
@@ -63,74 +119,137 @@ export function SidePanel() {
     return useLocationStore.getState().locations.find((l) => l.id === remoteLocationId)?.name ?? null
   }, [remoteLocationId])
 
+  // ── The root: which of the three folders the panel hangs from ──────────
+  const groups = useSessionStore((s) => s.groups)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+
+  const focusedGroup = useMemo(
+    () =>
+      focusedSessionId
+        ? groups.find((g) => g.sessionIds.includes(focusedSessionId)) ?? null
+        : null,
+    [groups, focusedSessionId]
+  )
+  const workspaceRoot = useMemo(() => {
+    const id = focusedSession?.workspaceId ?? activeWorkspaceId
+    return (id ? workspaces.find((w) => w.id === id)?.rootDir : null) ?? null
+  }, [focusedSession?.workspaceId, activeWorkspaceId, workspaces])
+
+  // A remote session's folder is on another machine: the two local roots are
+  // not it, so the chip stays hidden there and the panel follows the session.
+  const scopeRoots: Record<PanelScope, string | null> = {
+    session: sessionCwd,
+    group: isRemoteSession ? null : focusedGroup?.cwd ?? null,
+    workspace: isRemoteSession ? null : workspaceRoot
+  }
+
+  // The choice is remembered per session; another session takes its own, or
+  // the default. The default is a ladder, not a fixed rung: the session's own
+  // folder when it has one, else its group's, else the workspace — which is
+  // what a panel with no session focused lands on, instead of on nothing.
+  const [scopeChoices, setScopeChoices] = useState<ReadonlyMap<string, PanelScope>>(
+    () => new Map()
+  )
+  const navKey = focusedSessionId ?? NO_SESSION_KEY
+  const defaultScope: PanelScope = scopeRoots.session
+    ? 'session'
+    : scopeRoots.group
+      ? 'group'
+      : 'workspace'
+  const chosenScope = scopeChoices.get(navKey)
+  const scope: PanelScope =
+    chosenScope && scopeRoots[chosenScope] ? chosenScope : defaultScope
+  const rootCwd = scopeRoots[scope]
+
   const [customCwd, _setCustomCwd] = useState<string | null>(null)
-  const navMapRef = useRef(new Map<string, string>())        // sessionId -> current customCwd
-  const navStackRef = useRef(new Map<string, string[]>())    // sessionId -> back stack
-  const prevSessionIdRef = useRef(focusedSessionId)
+  const navMapRef = useRef(new Map<string, string>())        // navKey -> current customCwd
+  const navStackRef = useRef(new Map<string, string[]>())    // navKey -> back stack
+  const prevNavKeyRef = useRef(navKey)
   const [canGoBack, setCanGoBack] = useState(false)
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const pathButtonRef = useRef<HTMLButtonElement>(null)
   const pathMenuRef = useRef<HTMLDivElement>(null)
+  const [scopeMenuOpen, setScopeMenuOpen] = useState(false)
+  const scopeButtonRef = useRef<HTMLButtonElement>(null)
+  const scopeMenuRef = useRef<HTMLDivElement>(null)
 
   const updateCanGoBack = useCallback(() => {
-    if (!focusedSessionId) { setCanGoBack(false); return }
-    const stack = navStackRef.current.get(focusedSessionId)
+    const stack = navStackRef.current.get(navKey)
     setCanGoBack(!!stack && stack.length > 0)
-  }, [focusedSessionId])
+  }, [navKey])
 
   // Navigate forward — pushes current cwd onto the back stack
   const setCustomCwd = useCallback(
     (path: string | null) => {
-      if (focusedSessionId) {
-        if (path) {
-          // Push current location onto the back stack before navigating
-          const currentCwd = customCwd ?? sessionCwd
-          if (currentCwd && currentCwd !== path) {
-            const stack = navStackRef.current.get(focusedSessionId) ?? []
-            stack.push(currentCwd)
-            navStackRef.current.set(focusedSessionId, stack)
-          }
-          navMapRef.current.set(focusedSessionId, path)
-        } else {
-          // Reset to root — clear everything
-          navStackRef.current.delete(focusedSessionId)
-          navMapRef.current.delete(focusedSessionId)
+      if (path) {
+        // Push current location onto the back stack before navigating
+        const currentCwd = customCwd ?? rootCwd
+        if (currentCwd && currentCwd !== path) {
+          const stack = navStackRef.current.get(navKey) ?? []
+          stack.push(currentCwd)
+          navStackRef.current.set(navKey, stack)
         }
+        navMapRef.current.set(navKey, path)
+      } else {
+        // Reset to root — clear everything
+        navStackRef.current.delete(navKey)
+        navMapRef.current.delete(navKey)
       }
       _setCustomCwd(path)
       updateCanGoBack()
     },
-    [focusedSessionId, customCwd, sessionCwd, updateCanGoBack]
+    [navKey, customCwd, rootCwd, updateCanGoBack]
   )
 
   // Navigate back — pops from the stack
   const goBack = useCallback(() => {
-    if (!focusedSessionId) return
-    const stack = navStackRef.current.get(focusedSessionId)
+    const stack = navStackRef.current.get(navKey)
     if (!stack || stack.length === 0) return
     const prev = stack.pop()!
-    if (stack.length === 0) navStackRef.current.delete(focusedSessionId)
-    const newCwd = prev === sessionCwd ? null : prev
+    if (stack.length === 0) navStackRef.current.delete(navKey)
+    const newCwd = prev === rootCwd ? null : prev
     _setCustomCwd(newCwd)
     if (newCwd) {
-      navMapRef.current.set(focusedSessionId, newCwd)
+      navMapRef.current.set(navKey, newCwd)
     } else {
-      navMapRef.current.delete(focusedSessionId)
+      navMapRef.current.delete(navKey)
     }
     updateCanGoBack()
-  }, [focusedSessionId, sessionCwd, updateCanGoBack])
+  }, [navKey, rootCwd, updateCanGoBack])
 
   // Restore from nav map when focused session changes
   useEffect(() => {
-    if (focusedSessionId !== prevSessionIdRef.current) {
-      prevSessionIdRef.current = focusedSessionId
-      const saved = focusedSessionId ? navMapRef.current.get(focusedSessionId) ?? null : null
-      _setCustomCwd(saved)
+    if (navKey !== prevNavKeyRef.current) {
+      prevNavKeyRef.current = navKey
+      _setCustomCwd(navMapRef.current.get(navKey) ?? null)
       updateCanGoBack()
     }
-  }, [focusedSessionId, updateCanGoBack])
+  }, [navKey, updateCanGoBack])
 
-  const cwd = customCwd ?? sessionCwd
+  // A new root is a new place: the navigation into the old one does not carry
+  // over, and the way back is to switch back.
+  const setScope = useCallback(
+    (next: PanelScope) => {
+      setScopeChoices((prev) => {
+        const m = new Map(prev)
+        m.set(navKey, next)
+        return m
+      })
+      navStackRef.current.delete(navKey)
+      navMapRef.current.delete(navKey)
+      _setCustomCwd(null)
+      setCanGoBack(false)
+    },
+    [navKey]
+  )
+
+  const closePathMenu = useCallback(() => setPathMenuOpen(false), [])
+  const closeScopeMenu = useCallback(() => setScopeMenuOpen(false), [])
+  useDismiss(pathMenuOpen, pathMenuRef, pathButtonRef, closePathMenu)
+  useDismiss(scopeMenuOpen, scopeMenuRef, scopeButtonRef, closeScopeMenu)
+
+  const cwd = customCwd ?? rootCwd
   const isCustom = customCwd !== null
 
   // Force files tab for remote sessions
@@ -195,57 +314,33 @@ export function SidePanel() {
     [setCustomCwd]
   )
 
-  // Are we navigated into a subfolder of the session's cwd?
+  // Are we navigated into a subfolder of the root?
   const isNavigatedSubfolder = !!(
-    cwd && sessionCwd && cwd !== sessionCwd && cwd.startsWith(sessionCwd + '/')
+    cwd && rootCwd && cwd !== rootCwd && cwd.startsWith(rootCwd + '/')
   )
 
   // Breadcrumb segments when navigated into a subfolder
   const breadcrumbSegments = useMemo(() => {
-    if (!isNavigatedSubfolder || !sessionCwd || !cwd) return []
-    const sessionFolderName = sessionCwd.split('/').pop() ?? sessionCwd
-    const relativePath = cwd.slice(sessionCwd.length + 1)
+    if (!isNavigatedSubfolder || !rootCwd || !cwd) return []
+    const rootFolderName = rootCwd.split('/').pop() ?? rootCwd
+    const relativePath = cwd.slice(rootCwd.length + 1)
     const parts = relativePath.split('/')
     const segments: { label: string; path: string }[] = [
-      { label: sessionFolderName, path: sessionCwd }
+      { label: rootFolderName, path: rootCwd }
     ]
     for (let i = 0; i < parts.length; i++) {
       segments.push({
         label: parts[i],
-        path: sessionCwd + '/' + parts.slice(0, i + 1).join('/')
+        path: rootCwd + '/' + parts.slice(0, i + 1).join('/')
       })
     }
     return segments
-  }, [isNavigatedSubfolder, sessionCwd, cwd])
+  }, [isNavigatedSubfolder, rootCwd, cwd])
 
   const parentPaths = useMemo(() => {
     if (!cwd) return []
     return getParentPaths(cwd)
   }, [cwd])
-
-  // Close path menu on outside click or Escape
-  useEffect(() => {
-    if (!pathMenuOpen) return
-    const handleClick = (e: MouseEvent) => {
-      if (
-        pathMenuRef.current &&
-        !pathMenuRef.current.contains(e.target as Node) &&
-        pathButtonRef.current &&
-        !pathButtonRef.current.contains(e.target as Node)
-      ) {
-        setPathMenuOpen(false)
-      }
-    }
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setPathMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [pathMenuOpen])
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
@@ -306,12 +401,14 @@ export function SidePanel() {
           )}
         </div>
 
-        {/* Row 2 — where you are, as one control. The folder picker opens it, the
-            path names it and drops the parents, the back arrow and the way home
-            flank it, and collapse-all closes what it opened: every one of them is
-            about the folder this panel is pointed at, so they are one bar rather
-            than a naked line of text with its own controls stranded a row above.
-            It does not wrap — a long path truncates, which is what a path is for;
+        {/* Row 2 — where you are, as one control. The root chip says which
+            folder the panel hangs from and opens the choice (workspace, group,
+            session, or any folder), the path names where you are under it and
+            drops the parents, the back arrow and the way home flank it, and
+            collapse-all closes what it opened: every one of them is about the
+            folder this panel is pointed at, so they are one bar rather than a
+            naked line of text with its own controls stranded a row above. It
+            does not wrap — a long path truncates, which is what a path is for;
             wrapping would drop collapse-all onto a second line at every width. */}
         {effectiveTab !== 'help' && (
           <div
@@ -329,14 +426,26 @@ export function SidePanel() {
                 <ChevronLeftIcon className="w-3.5 h-3.5" />
               </IconButton>
             )}
-            <IconButton
-              onClick={handleChangeFolder}
-              className="panel-icon-btn"
-              aria-label="Open another folder"
-              tooltip="Open another folder"
-            >
-              <FolderOpenIcon className="w-3.5 h-3.5" />
-            </IconButton>
+            {/* The root chip: one letter for which root, a chevron for "this
+                opens". A letter rather than an icon because no glyph reads as
+                "workspace" against "group" at 12px, and three letters do. The
+                old folder-picker icon folded into its menu, so the row lost a
+                control here rather than gaining one. */}
+            {!isRemoteSession && (
+              <IconButton
+                ref={scopeButtonRef}
+                onClick={() => setScopeMenuOpen((v) => !v)}
+                className="panel-icon-btn panel-scope-btn"
+                aria-label="Choose the panel's root"
+                aria-expanded={scopeMenuOpen}
+                data-panel-scope={scope}
+                data-active={scopeMenuOpen ? 'true' : undefined}
+                tooltip={`Rooted at ${SCOPE_HOME[scope]} — click to change`}
+              >
+                <span className="panel-scope-glyph">{SCOPE_GLYPH[scope]}</span>
+                <ChevronDownIcon className="w-2.5 h-2.5" aria-hidden="true" />
+              </IconButton>
+            )}
             {/* The slack beside a truncated path is the window's drag band —
                 it was one before the row became a box, and it is the only one
                 left at this corner of the window now that both bars opt out.
@@ -365,7 +474,7 @@ export function SidePanel() {
                   className="flex items-center gap-0.5 text-xs font-medium min-w-0 overflow-hidden"
                   style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
                   onDoubleClick={() => setCustomCwd(null)}
-                  title="Double-click to reset to session folder"
+                  title={`Double-click to go back to ${SCOPE_HOME[scope]}`}
                 >
                   {breadcrumbSegments.map((seg, i) => (
                     <span key={seg.path} className="flex items-center min-w-0">
@@ -374,7 +483,7 @@ export function SidePanel() {
                       )}
                       <button
                         onClick={() => {
-                          if (seg.path === sessionCwd) {
+                          if (seg.path === rootCwd) {
                             setCustomCwd(null)
                           } else {
                             setCustomCwd(seg.path)
@@ -408,14 +517,86 @@ export function SidePanel() {
               <IconButton
                 onClick={handleResetFolder}
                 className="panel-icon-btn"
-                aria-label="Back to the session's folder"
-                tooltip="Back to the session's folder"
+                aria-label={`Back to ${SCOPE_HOME[scope]}`}
+                tooltip={`Back to ${SCOPE_HOME[scope]}`}
               >
                 <ArrowUturnLeftIcon className="w-3.5 h-3.5" />
               </IconButton>
             )}
             <span className="panel-sep" aria-hidden="true" />
             <CollapseAllButton />
+
+            {/* The root menu. Three rungs, each greyed when there is nothing on
+                it — a tab outside any group has no group folder, an empty
+                window has no session — and the folder picker under a rule,
+                since any folder is a root too. Anchored to the chip's left edge:
+                the chip heads the bar and the panel sits at the window's right
+                edge, so a menu hung to the right would run off it. */}
+            {scopeMenuOpen && (
+              <div
+                ref={scopeMenuRef}
+                className="menu-surface menu-pop-mount fixed z-50 w-[220px] p-1"
+                data-panel-scope-menu
+                style={{
+                  top: (scopeButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                  left: Math.max(
+                    8,
+                    Math.min(
+                      scopeButtonRef.current?.getBoundingClientRect().left ?? 0,
+                      document.documentElement.clientWidth - 228
+                    )
+                  )
+                }}
+              >
+                {SCOPES.map((s) => {
+                  const root = scopeRoots[s]
+                  const hint = root
+                    ? root.split('/').pop() || root
+                    : s === 'group'
+                      ? focusedSessionId
+                        ? focusedGroup
+                          ? 'no folder'
+                          : 'not in a group'
+                        : 'no session'
+                      : s === 'session'
+                        ? 'no session'
+                        : 'no workspace'
+                  return (
+                    <button
+                      key={s}
+                      className="menu-item"
+                      data-scope-option={s}
+                      data-selected={s === scope}
+                      disabled={!root}
+                      onClick={() => {
+                        setScope(s)
+                        setScopeMenuOpen(false)
+                      }}
+                    >
+                      <span className="panel-scope-glyph menu-glyph">{SCOPE_GLYPH[s]}</span>
+                      <span className="flex-1 truncate">{SCOPE_LABEL[s]}</span>
+                      <span className="menu-hint truncate" title={root ?? undefined}>
+                        {hint}
+                      </span>
+                    </button>
+                  )
+                })}
+                <div className="menu-sep" />
+                <button
+                  className="menu-item menu-item--muted"
+                  data-scope-option="folder"
+                  onClick={() => {
+                    setScopeMenuOpen(false)
+                    void handleChangeFolder()
+                  }}
+                >
+                  <span className="menu-glyph">
+                    <FolderOpenIcon className="w-3.5 h-3.5" />
+                  </span>
+                  <span>Another folder…</span>
+                </button>
+              </div>
+            )}
 
             {pathMenuOpen && parentPaths.length > 0 && (
               <div

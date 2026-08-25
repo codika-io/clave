@@ -140,6 +140,13 @@ export function registerPtyHandlers(): void {
     }
   )
 
+  // A `/clear` rotated the transcript: the record follows the new id (see
+  // PtyManager.setSessionClaudeSessionId).
+  ipcMain.handle('session:set-claude-session-id', (_event, id: string, claudeSessionId: string) => {
+    if (typeof id !== 'string' || typeof claudeSessionId !== 'string') return
+    ptyManager.setSessionClaudeSessionId(id, claudeSessionId)
+  })
+
   // A session's attached web view, persisted like its display name. The shape
   // is re-picked field by field: the renderer object crosses the IPC boundary
   // and must not smuggle extra keys into the record file.
