@@ -380,11 +380,11 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
       }}
     >
       <div className="group-picker-panel group-picker-panel--history">
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border-subtle">
-          <ClockIcon className="w-5 h-5 flex-shrink-0 text-text-tertiary" />
-          <h2 className="text-sm font-medium text-text-primary">History</h2>
-          <div className="relative flex-1 min-w-0 ml-2">
-            <MagnifyingGlassIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle">
+          <ClockIcon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
+          <h2 className="text-[13px] font-medium text-text-primary">History</h2>
+          <div className="search-field ml-2">
+            <MagnifyingGlassIcon className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
             <input
               autoFocus
               value={query}
@@ -393,11 +393,22 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
                 if (e.key === 'Enter' && rows[0]) resume(rows[0], e.altKey)
               }}
               placeholder="Search every conversation…"
-              className="input-compact input-compact-icon-right w-full"
+              aria-label="Search every conversation"
+              spellCheck={false}
               data-history-filter
             />
+            {query && (
+              <button
+                className="search-field-clear"
+                onClick={() => setQuery('')}
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+            )}
           </div>
-          <button className="btn-icon btn-icon-sm" onClick={closeHistory} aria-label="Close">
+          <button className="panel-icon-btn" onClick={closeHistory} aria-label="Close">
             <XMarkIcon className="w-4 h-4" />
           </button>
         </div>
@@ -558,7 +569,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 px-5 py-2.5 border-t border-border-subtle text-[11px] text-text-tertiary/70">
+        <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-border-subtle text-[11px] text-text-tertiary/70">
           <span className="truncate" data-history-footer>
             {footer}
           </span>

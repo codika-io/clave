@@ -140,22 +140,31 @@ export function GroupPickerDialog({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border-subtle">
-          <Squares2X2Icon className="w-5 h-5 flex-shrink-0 text-text-tertiary" />
-          <h2 className="text-sm font-medium text-text-primary">Add a group</h2>
-          <div className="relative flex-1 min-w-0 ml-2">
-            {/* On the trailing edge: the field sits right after the dialog's
-                title, so a leading glass crowds the heading it abuts. */}
-            <MagnifyingGlassIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle">
+          <Squares2X2Icon className="w-4 h-4 flex-shrink-0 text-text-tertiary" />
+          <h2 className="text-[13px] font-medium text-text-primary">Add a group</h2>
+          <div className="search-field ml-2">
+            <MagnifyingGlassIcon className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
             <input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search groups…"
-              className="input-compact input-compact-icon-right w-full"
+              aria-label="Search groups"
+              spellCheck={false}
             />
+            {query && (
+              <button
+                className="search-field-clear"
+                onClick={() => setQuery('')}
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+            )}
           </div>
-          <button className="btn-icon btn-icon-sm" onClick={onClose} aria-label="Close">
+          <button className="panel-icon-btn" onClick={onClose} aria-label="Close">
             <XMarkIcon className="w-4 h-4" />
           </button>
         </div>
@@ -192,7 +201,7 @@ export function GroupPickerDialog({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 px-5 py-2.5 border-t border-border-subtle text-[11px] text-text-tertiary/70">
+        <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-border-subtle text-[11px] text-text-tertiary/70">
           <DocumentIcon className="w-3 h-3 flex-shrink-0" />
           <span className="truncate">
             {isFileDragOver ? 'Drop to add' : 'Drop a .clave file to add a group'}
