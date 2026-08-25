@@ -7,6 +7,7 @@ import {
   inActiveWorkspace,
   type GroupTerminalColor
 } from '../../store/session-store'
+import { resolveGroupLaunchCwd } from '../../store/group-defaults'
 import { groupHasContent } from '../../lib/sidebar-layout-partition'
 import { useWorkspaceStore, getWorkspaceById } from '../../store/workspace-store'
 import ColorPicker from '../ui/ColorPicker'
@@ -667,16 +668,22 @@ export function Sidebar() {
   )
 
   /** The group's own `+`: launch a session INTO this group, with the workspace's
-   *  remembered agent setup and the GROUP's default prompt. The group's cwd wins
-   *  over the workspace root — a group is about one place — and the prompt's
-   *  @-tokens resolve against the workspace root, exactly as a pinned group's
-   *  session prompts do. */
+   *  remembered agent setup, the GROUP's default prompt, and the directory the
+   *  group's declared sessions open in — its cwd, because a group is about one
+   *  place, unless the `.clave` anchored those sessions at the workspace root
+   *  (`rootSession`), in which case the `+` lands there too. Either way the
+   *  prompt's @-tokens resolve against the workspace root and the group's cwd,
+   *  exactly as a pinned group's session prompts do. */
   const handleGroupNewSession = useCallback(async (groupId: string) => {
     const group = useSessionStore.getState().groups.find((g) => g.id === groupId)
     if (!group) return
     const workspaceId = useWorkspaceStore.getState().activeWorkspaceId
     const root = getWorkspaceById(workspaceId)?.rootDir ?? null
-    const cwd = group.cwd ? ({ kind: 'path', path: group.cwd } as const) : ({ kind: 'workspace-root' } as const)
+    // Where the `+` lands: the group's own directory, unless the `.clave` it was
+    // stamped from anchors its sessions at the workspace root. `group.cwd` stays
+    // the project dir the prompt's @-tokens resolve against either way.
+    // resolveGroupLaunchCwd owns the rule, pins included.
+    const cwd = resolveGroupLaunchCwd(group, usePinnedStore.getState().pinnedGroups)
     await launchSession({
       setup: getLastAgentSetup(workspaceId),
       cwd,

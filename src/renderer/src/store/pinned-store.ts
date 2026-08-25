@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { substituteTokens } from './prompt-tokens'
 import type { PinnedGroup, PinnedGroupSession, PinnedGroupTerminal, GroupTerminalColor, GroupTerminalConfig } from './session-types'
+import { resolveGroupDefaults } from './group-defaults'
 import { resolveDeclaredGroupView } from '../../../shared/group-view'
 import { useSessionStore } from './session-store'
 import { getActiveWorkspaceId } from './workspace-store'
@@ -543,7 +544,12 @@ export function pinGroupFromCurrent(groupId: string): void {
       antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
       claudeAgentsMode: s.claudeAgentsMode,
-      dangerousMode: s.dangerousMode
+      dangerousMode: s.dangerousMode,
+      // A root-anchored group keeps its anchor through the pin. The session is
+      // recorded at its absolute cwd (already the root, so the respawn lands
+      // there either way); the flag is what tells the `+` of the group this pin
+      // stamps out later to land there too, instead of in the group's cwd.
+      ...(group.rootSession ? { rootSession: true } : {})
     }))
 
   const groupTerminals: PinnedGroupTerminal[] = group.terminals.map((t) => ({
@@ -615,31 +621,6 @@ export async function togglePinnedGroup(pinnedId: string): Promise<void> {
 
   // Idle → spawn fresh
   await spawnPinnedGroup(pinnedId, pg)
-}
-
-/** The default prompt a live group's `+` inherits from the pin it was stamped
- *  from — what a session opened later in that group starts on.
- *
- *  `.clave` lets a group declare `prompt` at group level, but every workspace
- *  file we actually author puts the project briefing on the group's first
- *  session instead (`sessions[0].prompt` — what the product is, which repos sit
- *  in the folder, wait for instructions). That string IS the group's brief, and
- *  a tab opened from the `+` an hour later needs it exactly as much as the one
- *  stamped at launch. Without this fallback the `+` in every real project group
- *  launched a bare agent knowing nothing about the project, while the row's
- *  tooltip stayed silent about it — the group-level `prompt` the code read is a
- *  field no workspace file in the fleet sets.
- *
- *  Precedence: a declared group-level prompt wins (it is the explicit answer);
- *  otherwise the root session's brief, then the first session that carries one.
- *  Returned RAW — the `+` substitutes the @-tokens at press time against the
- *  group's own cwd, the same way the group-level prompt has always been. */
-export function resolveGroupDefaultPrompt(
-  pg: Pick<PinnedGroup, 'prompt' | 'sessions'>
-): string | null {
-  if (pg.prompt) return pg.prompt
-  const root = pg.sessions.find((s) => s.rootSession && s.prompt)
-  return root?.prompt ?? pg.sessions.find((s) => s.prompt)?.prompt ?? null
 }
 
 async function spawnPinnedGroup(
@@ -743,6 +724,7 @@ async function spawnPinnedGroup(
   const declaredView = resolveDeclaredGroupView(liveTerminals, pg.view, pg.name)
 
   // Patch group with saved metadata
+  const defaults = resolveGroupDefaults(pg)
   useSessionStore.setState((s) => ({
     groups: s.groups.map((g) =>
       g.id === newGroup.id
@@ -750,11 +732,13 @@ async function spawnPinnedGroup(
             ...g,
             cwd: pg.cwd ?? g.cwd,
             color: pg.color,
-            // The group's default prompt travels with it: sessions launched
-            // later from the live group's `+` inherit what the .clave declared
-            // — at group level, or (what every real file does) on the group's
-            // first session. See resolveGroupDefaultPrompt.
-            prompt: resolveGroupDefaultPrompt(pg),
+            // The group's default prompt travels with it, and so does where
+            // its sessions open: sessions launched later from the live group's
+            // `+` inherit what the .clave declared — at group level, or (what
+            // every real file does) on the group's first session, root-anchored
+            // or not. See resolveGroupDefaults.
+            prompt: defaults.prompt,
+            rootSession: defaults.rootSession,
             terminals: liveTerminals,
             ...(declaredView ? { view: declaredView } : {})
           }

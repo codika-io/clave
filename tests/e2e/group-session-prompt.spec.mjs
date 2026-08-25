@@ -1,6 +1,6 @@
 /**
- * The group `+` inherits the brief from the group's FIRST SESSION when the
- * `.clave` declares no group-level `prompt`.
+ * The group `+` reproduces the group's FIRST SESSION when the `.clave` declares
+ * no group-level `prompt`: its brief, and the directory it opens in.
  *
  * group-prompt.spec.mjs covers the group-level `prompt` field, and that field
  * works. The gap this closes is that no workspace file in the fleet uses it:
@@ -9,11 +9,18 @@
  * null and launched a bare agent into a project group — the tooltip going quiet
  * being the only hint, and only if you knew to look at it.
  *
+ * The directory is the second half of the same declaration and it broke the
+ * same way. Those files carry `rootSession: true`: the group's own tab opens at
+ * the WORKSPACE ROOT with the whole tree in reach, while `cwd` stays the small
+ * project dir the @-tokens resolve against. The `+` ignored the flag and used
+ * `cwd`, so the second tab in a project group sat one directory deep from the
+ * first — same group, same button, and nothing on screen said so.
+ *
  * The shape of the file here is the real one: a single session carrying the
  * brief, `rootSession: true`, an @-token in the text. Assertions are on the
  * `pty:spawn` payload for the same reason group-prompt.spec.mjs is — a tooltip
  * promising a prompt proves the renderer holds a string, never that anything
- * was handed to the agent.
+ * was handed to the agent, and nothing in the UI shows a cwd at all.
  */
 import {
   launchApp,
@@ -132,7 +139,13 @@ export async function run(t) {
       !(sent.initialPrompt ?? '').includes('@project_path'),
       sent.initialPrompt
     )
-    t.equal('into the group’s own directory', sent.cwd, PROJECT)
+    t.equal('into the workspace root, where the group’s own tab opened', sent.cwd, ROOT)
+    t.check(
+      'and NOT the group directory the tokens resolved against',
+      sent.cwd !== PROJECT,
+      sent.cwd
+    )
+
   } finally {
     await app.close()
   }

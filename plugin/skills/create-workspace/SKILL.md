@@ -110,7 +110,7 @@ Set at most one agent mode. If `antigravityMode`, `codexMode`, or `claudeAgentsM
 
 > **Deprecated:** `geminiMode` is the retired name for `antigravityMode`. Files using it still load (it is read as an alias), but Clave writes `antigravityMode` whenever it saves the file back. Don't emit `geminiMode` in new files.
 | `prompt` | string | Optional. A one-shot message auto-submitted to the agent the moment the session launches, so it starts already primed. Agent modes only (claude / antigravity / codex) — ignored for plain terminals and `claude agents`. Free text; supports the path tokens below. |
-| `rootSession` | boolean | Optional. `true` = spawn the session at the **workspace root** (the folder whose `.clave/workspaces/` the umbrella auto-discovered), instead of at `cwd`. `cwd` still names the project dir that feeds the prompt tokens. No effect when the file is opened standalone (no umbrella root known). |
+| `rootSession` | boolean | Optional. `true` = spawn the session at the **workspace root** (the folder whose `.clave/workspaces/` the umbrella auto-discovered), instead of at `cwd`. `cwd` still names the project dir that feeds the prompt tokens. It also anchors the group's `+`: a tab opened there later starts at the root too, so every tab in the group sits where the declared one does. No effect when the file is opened standalone (no umbrella root known). |
 
 **Prompt path tokens** (substituted at launch, only useful with `rootSession: true`):
 
@@ -457,6 +457,8 @@ This is a per-project `.clave` living at `clients/acme/acme-app/.clave/workspace
 ```
 
 The prompt is a one-shot: it fires once on launch (and again when you Duplicate the tab), but a session re-adopted after quitting and reopening Clave is not re-primed — the resumed conversation already contains it.
+
+The group's `+` reproduces this session — both halves of it. It starts on the same brief (a group-level `prompt` overrides the text, never the directory), and it opens in the same directory: at the workspace root when the session declares `rootSession: true`, in the group's `cwd` otherwise. The `@`-tokens still expand against the group's `cwd`, so the second tab is briefed exactly like the first.
 
 ## File placement
 
