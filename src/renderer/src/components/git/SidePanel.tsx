@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/session-store'
+import { PANEL_ROOTS, panelRootLadder, type PanelScope } from '../../store/session-types'
 import { useAgentStore } from '../../store/agent-store'
 import { useLocationStore } from '../../store/location-store'
 import { useWorkspaceStore } from '../../store/workspace-store'
@@ -21,23 +22,18 @@ import {
   DocumentTextIcon
 } from '@heroicons/react/24/outline'
 
-/** Which root the panel hangs from. `session` is the focused tab's own folder,
- *  `group` the folder its group was declared on, `workspace` the workspace
- *  root. The panel used to know only the first, which is why it drew nothing
- *  at all with no tab focused: it had no folder to be about. */
-export type PanelScope = 'workspace' | 'group' | 'session'
-const SCOPES: PanelScope[] = ['workspace', 'group', 'session']
-const SCOPE_GLYPH: Record<PanelScope, string> = { workspace: 'W', group: 'G', session: 'S' }
-const SCOPE_LABEL: Record<PanelScope, string> = {
-  workspace: 'Workspace',
-  group: 'Group',
-  session: 'Session'
-}
-const SCOPE_HOME: Record<PanelScope, string> = {
-  workspace: 'the workspace root',
-  group: "the group's folder",
-  session: "the session's folder"
-}
+/** Which root the panel hangs from. The rungs, their glyphs and the phrase the
+ *  tooltips read all come from PANEL_ROOTS, so the panel and the Settings pane
+ *  that picks its default cannot drift apart. The panel used to know only the
+ *  focused tab's own folder, which is why it drew nothing at all with no tab
+ *  focused: it had no folder to be about. */
+export type { PanelScope }
+const SCOPES: PanelScope[] = PANEL_ROOTS.map((r) => r.id)
+const byScope = <T,>(pick: (r: (typeof PANEL_ROOTS)[number]) => T): Record<PanelScope, T> =>
+  Object.fromEntries(PANEL_ROOTS.map((r) => [r.id, pick(r)])) as Record<PanelScope, T>
+const SCOPE_GLYPH = byScope((r) => r.glyph)
+const SCOPE_LABEL = byScope((r) => r.label)
+const SCOPE_HOME = byScope((r) => r.home)
 /** The scope and navigation maps are keyed by session. With no session focused
  *  the panel still has a root (the workspace) and can still be navigated, so
  *  that state needs a key of its own. */
@@ -145,18 +141,20 @@ export function SidePanel() {
   }
 
   // The choice is remembered per session; another session takes its own, or
-  // the default. The default is a ladder, not a fixed rung: the session's own
-  // folder when it has one, else its group's, else the workspace — which is
-  // what a panel with no session focused lands on, instead of on nothing.
+  // the default. The default is a ladder, not a fixed rung: the root chosen in
+  // Settings when the focused tab has that folder, else the next rung down —
+  // which is what a panel with no session focused lands on, instead of on
+  // nothing. It ships pointed at the GROUP, so every tab in a group opens on
+  // the one folder the group is about (usually the repo the work is in) rather
+  // than on whichever subfolder each tab happens to be launched in; a tab
+  // outside any group has no group rung and falls to its own folder.
   const [scopeChoices, setScopeChoices] = useState<ReadonlyMap<string, PanelScope>>(
     () => new Map()
   )
   const navKey = focusedSessionId ?? NO_SESSION_KEY
-  const defaultScope: PanelScope = scopeRoots.session
-    ? 'session'
-    : scopeRoots.group
-      ? 'group'
-      : 'workspace'
+  const defaultPanelRoot = useSessionStore((s) => s.defaultPanelRoot)
+  const defaultScope: PanelScope =
+    panelRootLadder(defaultPanelRoot).find((s) => scopeRoots[s]) ?? 'workspace'
   const chosenScope = scopeChoices.get(navKey)
   const scope: PanelScope =
     chosenScope && scopeRoots[chosenScope] ? chosenScope : defaultScope

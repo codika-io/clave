@@ -4,6 +4,7 @@ import type {
   Theme,
   AppIcon,
   TreeRuleIntensity,
+  PanelScope,
   ActivityStatus,
   GroupTerminalConfig,
   GroupTerminalColor,
@@ -18,6 +19,7 @@ import type {
   ExtensionsSection,
   SessionType
 } from './session-types'
+import { PANEL_ROOTS } from './session-types'
 import type { Agent, AgentStatus } from '../../../shared/remote-types'
 import { useWorkspaceStore } from './workspace-store'
 import { mergeLayoutForKeys, absorbLayout, placeAdopted } from '../lib/sidebar-layout-partition'
@@ -40,15 +42,18 @@ export type {
   SettingsSection,
   ExtensionsSection,
   SessionType,
-  TreeRuleIntensity
+  TreeRuleIntensity,
+  PanelScope
 }
 export {
   GROUP_TERMINAL_COLORS,
   GROUP_TERMINAL_ICONS,
   TERMINAL_COLOR_VALUES,
   TREE_RULE_INTENSITIES,
+  PANEL_ROOTS,
   resolveColorHex,
-  treeRuleMultiplier
+  treeRuleMultiplier,
+  panelRootLadder
 } from './session-types'
 
 /** THE visibility predicate — single source of truth for workspace scoping.
@@ -128,6 +133,11 @@ interface SessionState {
   gitLivePollLimit: number
   /** When true, never pause live updates regardless of repo count. */
   gitLivePollAlways: boolean
+  /** Which folder the side panel (Files and Git) opens a tab on — see
+   *  PANEL_ROOTS. A preference for which rung to try first, not a fixed one:
+   *  a tab with no folder on the chosen rung falls to the next (see
+   *  panelRootLadder), and the panel's root chip still overrides it per tab. */
+  defaultPanelRoot: PanelScope
   journeyPanel: { cwd: string; repoName: string } | null
   commitMessages: Record<string, string>
   generatingCommitCwds: Set<string>
@@ -270,6 +280,7 @@ interface SessionState {
   setGitShowCommitBar: (show: boolean) => void
   setGitLivePollLimit: (limit: number) => void
   setGitLivePollAlways: (always: boolean) => void
+  setDefaultPanelRoot: (root: PanelScope) => void
   openJourneyPanel: (cwd: string, repoName: string) => void
   closeJourneyPanel: () => void
   setCommitMessage: (cwd: string, message: string) => void
@@ -529,6 +540,10 @@ export const useSessionStore = create<SessionState>((set) => ({
     return Number.isFinite(raw) && raw > 0 ? raw : 50
   })(),
   gitLivePollAlways: localStorage.getItem('clave-git-live-poll-always') === 'true',
+  defaultPanelRoot: (() => {
+    const raw = localStorage.getItem('clave-panel-root-default')
+    return PANEL_ROOTS.some((r) => r.id === raw) ? (raw as PanelScope) : 'group'
+  })(),
   journeyPanel: null,
   commitMessages: {} as Record<string, string>,
   generatingCommitCwds: new Set<string>(),
@@ -1350,6 +1365,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   setGitLivePollAlways: (always) => {
     localStorage.setItem('clave-git-live-poll-always', String(always))
     set({ gitLivePollAlways: always })
+  },
+
+  setDefaultPanelRoot: (root) => {
+    localStorage.setItem('clave-panel-root-default', root)
+    set({ defaultPanelRoot: root })
   },
 
   openJourneyPanel: (cwd, repoName) =>
