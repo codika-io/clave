@@ -1453,15 +1453,29 @@ body,
    terminal's (set inline) and the count beside it is how many are attached;
    with nothing running it sits in the group's muted tone. The panel it opens
    on hover lists them (GroupTerminalsPanel). */
-.group-terminals-btn {
+/* Compound selector on purpose: .btn-icon-xs sits further down this file and
+   would otherwise win the fixed square back. This is the one icon button whose
+   content is not a lone glyph, so the size class gives it a HEIGHT and a floor
+   on the width, and the count is allowed to widen it. A fixed 20px box put the
+   count and a 16px glyph in room for one of them and the glyph was the one that
+   shrank. */
+.group-terminals-btn.btn-icon-xs {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  /* 2px more than the icon button's own padding, on the leading edge only:
-     the count reads as part of the button rather than pinned to its border.
-     Air, not a box — see .group-terminals-count. */
-  padding-left: 4px;
+  width: auto;
+  min-width: var(--control-h-xs);
   transition: color 150ms, background-color 150ms;
+}
+/* Air on both edges, and only once there IS a count: the count reads as part of
+   the button rather than pinned to its border, while a group with no terminals
+   keeps the plain square that centres its glyph. */
+.group-terminals-btn.btn-icon-xs:has(.group-terminals-count) {
+  padding-inline: 4px;
+}
+.group-terminals-btn > svg {
+  flex-shrink: 0;
 }
 .group-terminals-btn[data-running='true'] {
   /* Colour comes inline from the running terminal; keep it on hover too. */

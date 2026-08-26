@@ -269,7 +269,10 @@ function SessionGroupItemImpl({
                   e.stopPropagation()
                   clearPanelTimer()
                   measurePanelOffset()
-                  setPanelOpen((v) => !v)
+                  // Opens, never toggles: hover has usually opened it already by
+                  // the time the click lands, and a click that closed what you
+                  // were reaching for read as the panel refusing to open.
+                  setPanelOpen(true)
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
               >
