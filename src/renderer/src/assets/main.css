@@ -697,15 +697,16 @@ body,
 .launcher-split .launcher-btn {
   flex: 1 1 auto;
 }
+/* Square on the row's height, like the folder picker it shares the row with: a
+   caret sized by its padding came out 20×28 and read as a narrow sliver of
+   hover fill between two proper buttons. */
 .launcher-caret {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  width: var(--control-h-md);
   height: var(--control-h-md);
-  padding: 0 0.25rem;      /* px-1 — the panel's own hairlines already frame the
-                              segment, so the caret needs less air than it did
-                              when it carried a divider of its own */
   border-radius: var(--radius-control);
   color: var(--text-tertiary);
   transition: color 150ms, background-color 150ms, scale 120ms var(--ease-out-expo);
