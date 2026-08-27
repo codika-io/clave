@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Added
+- **Keymaps are editable, live, and can form commands** — Settings → Keymaps lists every Clave-owned shortcut, records up to two bindings per action, supports raw JSON plus import/export, and applies a valid draft to every open window only when Save is pressed. Existing shortcuts remain the defaults. `Ctrl+B` is the default command-mode master key: press it and then `C` within 300ms to start a Claude session; unmatched keys are consumed and leave command mode. Bindings can be removed or reset individually, the master key can be disabled, and invalid or conflicting configuration never replaces the last valid keymap. Menu accelerators and in-app shortcut labels follow the active configuration.
+
 ## [1.79.0] — 2026-08-28
 
 ### Added
@@ -18,7 +21,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ### Fixed
 - **The copy button on an open file copies the file** — opening a document and pressing copy put its *path* on the clipboard, on all three file surfaces: the preview sheet, the file tab, and the diff tab. That is the one thing the tree's right-click menu already offers twice, as a relative path and an absolute one, so the one gesture with an obvious meaning on an open document was spending itself on the only thing already covered. Copy now hands over what you are looking at — the file's text in the sheet and the tab, unsaved edits included, since it copies the live buffer rather than the disk, and the patch as git printed it in a diff — and flashes a check to say it happened, because a clipboard write is otherwise invisible. It is off, and says so, for what has no text to give: binaries, images, a file that failed to load.
-
 
 ## [1.78.0] — 2026-08-25
 

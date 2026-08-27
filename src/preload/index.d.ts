@@ -751,6 +751,11 @@ export interface ElectronAPI {
   readImageAsDataUrl: (absolutePath: string) => Promise<string | null>
   preferencesGet: (key: string) => Promise<unknown>
   preferencesSet: (key: string, value: unknown) => Promise<void>
+  keymapsLoad: () => Promise<unknown>
+  keymapsSave: (value: unknown) => Promise<unknown>
+  keymapsImport: () => Promise<string | null>
+  keymapsExport: (json: string) => Promise<boolean>
+  onKeymapsChanged: (callback: (value: unknown) => void) => () => void
   trustWorkspaceRoot: (root: string) => Promise<void>
   untrustWorkspaceRoot: (root: string) => Promise<void>
   listTrustedRoots: () => Promise<string[]>
@@ -794,3 +799,4 @@ declare global {
     electronAPI: ElectronAPI
   }
 }
+

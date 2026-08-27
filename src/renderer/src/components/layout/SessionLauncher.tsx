@@ -31,6 +31,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent
 } from '../ui/dropdown-menu'
+import { useShortcutLabel } from '../../store/keymap-store'
 
 /** What the caret's remote entries hand back to the sidebar, which owns the
  *  remote directory picker (remote launches never touch the local cwd rules). */
@@ -116,6 +117,12 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
   const byWorkspace = useLaunchPrefsStore((s) => s.byWorkspace)
   void byWorkspace
   const setup = getLastAgentSetup(activeWorkspaceId)
+  const terminalShortcut = useShortcutLabel('newTerminal')
+  const claudeShortcut = useShortcutLabel('newClaude')
+  const dangerousShortcut = useShortcutLabel('newDangerousClaude')
+  const agentsShortcut = useShortcutLabel('newClaudeAgents')
+  const antigravityShortcut = useShortcutLabel('newAntigravity')
+  const codexShortcut = useShortcutLabel('newCodex')
 
   const connectedRemoteLocations = locations.filter(
     (l) => l.type === 'remote' && l.status === 'connected'
@@ -209,7 +216,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
           <button
             disabled={busy}
             className="launcher-btn"
-            title={'New terminal — workspace root (⌥ to choose a folder)'}
+            title={`New terminal — workspace root${terminalShortcut ? ` (${terminalShortcut})` : ''}; ⌥ to choose a folder`}
             onClick={(e) => void run({ setup: null, cwd: cwdFor(e) })}
           >
             <CommandLineIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
@@ -259,9 +266,19 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
               >
                 {hasRemoteLocations && <DropdownMenuLabel>This Mac</DropdownMenuLabel>}
 
-                {renderClaudeEntry('claude', 'Claude Code', '⌘N', false)}
-                {renderClaudeEntry('claude', 'Claude Code (skip permissions)', '⌘D', true)}
-                {renderClaudeEntry('claude-agents', 'Claude Agents', '⌘⇧A', false)}
+                {renderClaudeEntry('claude', 'Claude Code', claudeShortcut ?? undefined, false)}
+                {renderClaudeEntry(
+                  'claude',
+                  'Claude Code (skip permissions)',
+                  dangerousShortcut ?? undefined,
+                  true
+                )}
+                {renderClaudeEntry(
+                  'claude-agents',
+                  'Claude Agents',
+                  agentsShortcut ?? undefined,
+                  false
+                )}
                 <DropdownMenuItem
                   onSelect={() =>
                     launchAgent(
@@ -272,7 +289,9 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
                 >
                   <AntigravityLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
                   <span className="flex-1">Antigravity CLI</span>
-                  <DropdownMenuShortcut>{'⌘I'}</DropdownMenuShortcut>
+                  {antigravityShortcut && (
+                    <DropdownMenuShortcut>{antigravityShortcut}</DropdownMenuShortcut>
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() =>
@@ -281,7 +300,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
                 >
                   <CodexLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
                   <span className="flex-1">Codex CLI</span>
-                  <DropdownMenuShortcut>{'⌘U'}</DropdownMenuShortcut>
+                  {codexShortcut && <DropdownMenuShortcut>{codexShortcut}</DropdownMenuShortcut>}
                 </DropdownMenuItem>
 
                 {connectedRemoteLocations.map((loc) => (

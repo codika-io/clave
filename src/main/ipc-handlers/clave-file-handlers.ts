@@ -714,3 +714,10 @@ const preferencesManager = new PreferencesManager()
 export function getPreference(key: string): unknown {
   return preferencesManager.get(key)
 }
+
+
+/** Persist one app preference from a main-process feature. */
+export function setPreference(key: string, value: unknown): void {
+  preferencesManager.set(key, value)
+}
+

@@ -3,7 +3,8 @@ import {
   AdjustmentsHorizontalIcon,
   SwatchIcon,
   ArrowDownTrayIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  CommandLineIcon
 } from '@heroicons/react/24/outline'
 import { useUpdaterStore } from '../../store/updater-store'
 import { useSessionStore, type SettingsSection } from '../../store/session-store'
@@ -11,6 +12,7 @@ import { useSessionStore, type SettingsSection } from '../../store/session-store
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
   { id: 'general', label: 'General', icon: AdjustmentsHorizontalIcon },
   { id: 'appearance', label: 'Appearance', icon: SwatchIcon },
+  { id: 'keymaps', label: 'Keymaps', icon: CommandLineIcon },
   { id: 'updates', label: 'Software Update', icon: ArrowDownTrayIcon },
   { id: 'usage', label: 'Usage', icon: ChartBarIcon }
 ]
@@ -65,3 +67,4 @@ export function SettingsSidebar() {
     </div>
   )
 }
+

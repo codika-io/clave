@@ -493,6 +493,12 @@ const electronAPI = {
   preferencesGet: (key: string) => ipcRenderer.invoke('preferences:get', key),
   preferencesSet: (key: string, value: unknown) =>
     ipcRenderer.invoke('preferences:set', key, value),
+  keymapsLoad: () => ipcRenderer.invoke('keymaps:load'),
+  keymapsSave: (value: unknown) => ipcRenderer.invoke('keymaps:save', value),
+  keymapsImport: () => ipcRenderer.invoke('keymaps:import') as Promise<string | null>,
+  keymapsExport: (json: string) => ipcRenderer.invoke('keymaps:export', json) as Promise<boolean>,
+  onKeymapsChanged: (callback: (value: unknown) => void) =>
+    createIpcListener<[unknown]>('keymaps:changed', callback),
   trustWorkspaceRoot: (root: string) =>
     ipcRenderer.invoke('clave:trust-root', root) as Promise<void>,
   untrustWorkspaceRoot: (root: string) =>

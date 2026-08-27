@@ -282,7 +282,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerIpcHandlers()
+  registerIpcHandlers({ onChanged: () => buildAppMenu({ openWindow }) })
   registerWindowHandlers({ openWindow })
   registerMcpWindowOpener(openWindow)
   installPreviewProtocol()
@@ -339,3 +339,4 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+

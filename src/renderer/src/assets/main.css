@@ -2623,6 +2623,74 @@ body,
 
 /* ── Settings ── */
 
+/* Command-mode readout. It sits above every app panel but below native chrome,
+   and uses the same material as menus because it is equally transient. */
+.keymap-command-hud {
+  position: fixed;
+  z-index: 80;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.375rem 0.625rem;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.keymap-command-hud[data-state="matched"] {
+  color: var(--color-status-ready);
+}
+.keymap-command-hud[data-state="cancelled"] {
+  color: var(--text-tertiary);
+}
+
+.keymap-row {
+  min-height: var(--control-h-lg);
+}
+.keymap-bindings {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.keymap-binding {
+  min-width: 4.5rem;
+  height: var(--control-h-md);
+  padding: 0 0.5rem;
+  border: 1px solid var(--border-subtle-color);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-100);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: color 150ms, border-color 150ms, background-color 150ms;
+}
+.keymap-binding:hover,
+.keymap-binding:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--color-accent);
+  outline: none;
+}
+.keymap-json {
+  min-height: 28rem;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.keymap-message {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-subtle-color);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-100);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.keymap-message[data-tone="error"] {
+  color: var(--color-destructive);
+}
+
 /* Section label above each settings card (small, regular case) */
 .settings-section-title {
   display: block;
@@ -2891,3 +2959,4 @@ button.extension-card:hover {
   border-radius: var(--radius-lg);
   font-size: 13px;
 }
+

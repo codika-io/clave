@@ -339,7 +339,7 @@ export interface FileTab {
 
 export type ActiveView = 'terminals' | 'settings' | 'agents' | 'extensions'
 
-export type SettingsSection = 'general' | 'appearance' | 'updates' | 'usage'
+export type SettingsSection = 'general' | 'appearance' | 'keymaps' | 'updates' | 'usage'
 
 export type ExtensionsSection = 'marketplaces' | 'mcp'
 
@@ -411,3 +411,4 @@ export interface PinnedGroup {
   activeGroupId: string | null
   visible: boolean
 }
+

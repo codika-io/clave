@@ -1,5 +1,5 @@
 import { emitTabClosed } from '../../lib/exchange-capture'
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   useSessionStore,
@@ -14,7 +14,7 @@ import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
 import { useFullScreen } from '../../hooks/use-fullscreen'
 import { launchSession } from '../../lib/launch-session'
-import { loadLaunchPrefs, type AgentSetup } from '../../store/launch-prefs'
+import { loadLaunchPrefs } from '../../store/launch-prefs'
 import { TerminalGrid } from './TerminalGrid'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { SettingsSidebar } from '../settings/SettingsSidebar'
@@ -55,6 +55,10 @@ import { ToolbarWorkspacePopover } from './ToolbarWorkspacePopover'
 import { resolveColorHex } from '../../store/session-types'
 import { getTerminalIconComponent } from '../ui/GroupCommandDialog'
 import { ToolbarTerminalPopover } from './ToolbarTerminalPopover'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { useKeymapManager, type KeymapActionHandlers } from '../../hooks/use-keymap-manager'
+import { KeymapCommandHud } from '../ui/KeymapCommandHud'
+import { connectKeymapStore, useShortcutLabel } from '../../store/keymap-store'
 
 const sidebarTransition = {
   duration: 0.2,
@@ -68,16 +72,6 @@ let tmuxAdoptionStarted = false
 /** Same latch pattern for the MCP command dispatcher: exactly one subscriber
  *  per process, or concurrent tool calls would get duplicate responses. */
 let mcpDispatcherStarted = false
-
-/** ⌘-key → what it launches. `null` is a plain terminal (no agent), which is
- *  why the lookup tests `!== undefined` rather than truthiness. */
-const LAUNCH_SHORTCUTS: Record<string, AgentSetup | null> = {
-  KeyT: null,
-  KeyN: { kind: 'claude', dangerousMode: false },
-  KeyD: { kind: 'claude', dangerousMode: true },
-  KeyI: { kind: 'antigravity', dangerousMode: false },
-  KeyU: { kind: 'codex', dangerousMode: false }
-}
 
 export function AppShell() {
   const sidebarOpen = useSessionStore((s) => s.sidebarOpen)
@@ -97,10 +91,14 @@ export function AppShell() {
   const activeView = useSessionStore((s) => s.activeView)
   const previewFile = useSessionStore((s) => s.previewFile)
   const previewSource = useSessionStore((s) => s.previewSource)
+  const filePaletteShortcut = useShortcutLabel('openFilePalette')
+  const sidePanelShortcut = useShortcutLabel('toggleSidePanel')
 
   const addSession = useSessionStore((s) => s.addSession)
   const removeSession = useSessionStore((s) => s.removeSession)
   const removeFileTab = useSessionStore((s) => s.removeFileTab)
+  const resetSessions = useSessionStore((s) => s.resetSessions)
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
 
   useWorkTracker()
 
@@ -129,7 +127,9 @@ export function AppShell() {
     // groups land first so the adopted members find their group.
     window.electronAPI?.onSessionRehome?.(({ sessionIds, layout, focus }) => {
       if (layout) {
-        useSessionStore.getState().absorbLayout(layout as { groups: SessionGroup[]; displayOrder: string[] })
+        useSessionStore
+          .getState()
+          .absorbLayout(layout as { groups: SessionGroup[]; displayOrder: string[] })
       }
       void adoptRehomed(sessionIds, useWorkspaceStore.getState().activeWorkspaceId, focus === true)
     })
@@ -335,160 +335,128 @@ export function AppShell() {
     [setFileTreeWidth]
   )
 
-  // Global keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === 'p') {
-        e.preventDefault()
-        toggleFilePalette()
+  const keymapActions = useMemo<KeymapActionHandlers>(() => {
+    const launch = (
+      setup: Parameters<typeof launchSession>[0]['setup'],
+      cwd: 'workspace-root' | 'ask',
+      remember = setup !== null
+    ): void => {
+      void launchSession({ setup, cwd: { kind: cwd }, remember })
+    }
+    const selectByIndex = (index: number): void => {
+      const state = useSessionStore.getState()
+      const ids = getVisibleFlatOrder(state, useWorkspaceStore.getState().activeWorkspaceId)
+      if (index < ids.length) state.selectSession(ids[index], false)
+    }
+    const cycleSession = (direction: 1 | -1): void => {
+      const state = useSessionStore.getState()
+      const ids = getVisibleFlatOrder(state, useWorkspaceStore.getState().activeWorkspaceId)
+      if (ids.length === 0) return
+      const current = ids.indexOf(state.focusedSessionId ?? '')
+      const next =
+        current < 0
+          ? direction === 1
+            ? 0
+            : ids.length - 1
+          : (current + direction + ids.length) % ids.length
+      state.selectSession(ids[next], false)
+    }
+    const togglePanel = (tab: 'git' | 'help'): void => {
+      const state = useSessionStore.getState()
+      if (state.fileTreeOpen && state.sidePanelTab === tab) state.toggleFileTree()
+      else {
+        if (!state.fileTreeOpen) state.toggleFileTree()
+        useSessionStore.getState().setSidePanelTab(tab)
       }
-      if (e.metaKey && e.key === 'e') {
-        e.preventDefault()
-        toggleFileTree()
-      }
-      // Cmd+B: Toggle left sidebar
-      if (e.metaKey && !e.shiftKey && e.key === 'b') {
-        e.preventDefault()
-        toggleSidebar()
-      }
-      // Cmd+Shift+G: Open right sidebar with Git tab
-      if (e.metaKey && e.shiftKey && e.key === 'g') {
-        e.preventDefault()
-        const state = useSessionStore.getState()
-        if (state.fileTreeOpen && state.sidePanelTab === 'git') {
-          toggleFileTree()
-        } else {
-          if (!state.fileTreeOpen) toggleFileTree()
-          useSessionStore.getState().setSidePanelTab('git')
-        }
-      }
-      // Cmd+Shift+H: the session history, on All (a group's own context menu
-      // opens it on that group).
-      if (e.metaKey && e.shiftKey && e.code === 'KeyH') {
-        e.preventDefault()
+    }
+    const actions = {
+      newTerminal: () => launch(null, 'workspace-root', false),
+      newTerminalAtFolder: () => launch(null, 'ask', false),
+      newClaude: () => launch({ kind: 'claude', dangerousMode: false }, 'workspace-root'),
+      newClaudeAtFolder: () => launch({ kind: 'claude', dangerousMode: false }, 'ask'),
+      newDangerousClaude: () => launch({ kind: 'claude', dangerousMode: true }, 'workspace-root'),
+      newDangerousClaudeAtFolder: () => launch({ kind: 'claude', dangerousMode: true }, 'ask'),
+      newClaudeAgents: () =>
+        launch({ kind: 'claude-agents', dangerousMode: false }, 'workspace-root'),
+      newClaudeAgentsAtFolder: () => launch({ kind: 'claude-agents', dangerousMode: false }, 'ask'),
+      newAntigravity: () => launch({ kind: 'antigravity', dangerousMode: false }, 'workspace-root'),
+      newAntigravityAtFolder: () => launch({ kind: 'antigravity', dangerousMode: false }, 'ask'),
+      newCodex: () => launch({ kind: 'codex', dangerousMode: false }, 'workspace-root'),
+      newCodexAtFolder: () => launch({ kind: 'codex', dangerousMode: false }, 'ask'),
+      toggleSidebar: () => toggleSidebar(),
+      toggleSidePanel: () => toggleFileTree(),
+      openFilePalette: () => toggleFilePalette(),
+      openGitPanel: () => togglePanel('git'),
+      openHistory: () => {
         const history = useHistoryStore.getState()
         if (history.open) history.closeHistory()
         else history.openHistory(null)
-        return
-      }
-      // Cmd+? (Cmd+Shift+/) — open help panel
-      if (e.metaKey && e.shiftKey && e.key === '/') {
-        e.preventDefault()
-        const {
-          fileTreeOpen: helpFileTreeOpen,
-          toggleFileTree: helpToggleFileTree,
-          sidePanelTab,
-          setSidePanelTab
-        } = useSessionStore.getState()
-        if (helpFileTreeOpen && sidePanelTab === 'help') {
-          helpToggleFileTree()
-        } else {
-          if (!helpFileTreeOpen) helpToggleFileTree()
-          setSidePanelTab('help')
-        }
-        return
-      }
-      // New-session shortcuts. They start at the WORKSPACE ROOT — the folder
-      // dialog is no longer on the common path — and Option is the escape hatch
-      // that asks where: ⌘N launches at the root, ⌥⌘N opens the picker.
-      //
-      // Matched on e.code, not e.key: Option rewrites e.key on macOS (⌥N is a
-      // dead key producing '˜'), so an e.key match would never fire with Option
-      // held. e.code loses the implicit "Shift makes it uppercase" guard the old
-      // lowercase comparisons had, so !e.shiftKey is now explicit.
-      if (e.metaKey && !e.shiftKey && LAUNCH_SHORTCUTS[e.code] !== undefined) {
-        e.preventDefault()
-        void launchSession({
-          setup: LAUNCH_SHORTCUTS[e.code],
-          cwd: e.altKey ? { kind: 'ask' } : { kind: 'workspace-root' },
-          remember: LAUNCH_SHORTCUTS[e.code] !== null
-        })
-      }
-      // Cmd+Shift+A: New Claude Agents session (`claude agents`)
-      if (e.metaKey && e.shiftKey && e.code === 'KeyA') {
-        e.preventDefault()
-        void launchSession({
-          setup: { kind: 'claude-agents', dangerousMode: false },
-          cwd: e.altKey ? { kind: 'ask' } : { kind: 'workspace-root' },
-          remember: true
-        })
-      }
-      // Cmd+W: Close focused file tab
-      if (e.metaKey && e.key === 'w') {
-        const sid = useSessionStore.getState().focusedSessionId
-        if (sid && isFileTabId(sid)) {
-          e.preventDefault()
-          removeFileTab(sid)
-        }
-      }
-      // Cmd+Delete: Close focused session
-      if (e.metaKey && e.key === 'Backspace') {
-        e.preventDefault()
-        const sid = useSessionStore.getState().focusedSessionId
-        if (sid) {
-          if (isFileTabId(sid)) {
-            removeFileTab(sid)
-          } else {
-            const current = useSessionStore.getState()
-            const closing = current.sessions.find((s) => s.id === sid)
-            if (closing) emitTabClosed(closing, current.groups, 'user', null)
-            window.electronAPI.killSession(sid).catch(() => {})
-            removeSession(sid)
-          }
-        }
-      }
-      // Cmd+,: Open settings
-      if (e.metaKey && e.key === ',') {
-        e.preventDefault()
-        useSessionStore.getState().setActiveView('settings')
-      }
-      // Cmd+F: Focus sidebar search (open sidebar if closed)
-      if (e.metaKey && !e.shiftKey && e.key === 'f') {
-        e.preventDefault()
+      },
+      openHelp: () => togglePanel('help'),
+      openSettings: () => useSessionStore.getState().setActiveView('settings'),
+      focusSidebarSearch: () => {
         const state = useSessionStore.getState()
         if (!state.sidebarOpen) state.toggleSidebar()
-        // Small delay to let sidebar mount before focusing
-        setTimeout(() => {
-          const input = document.querySelector<HTMLInputElement>('[data-sidebar-search]')
-          input?.focus()
-        }, 50)
-      }
-      // Cmd+Ctrl+] / Cmd+Ctrl+[: cycle the active workspace
-      if (e.metaKey && e.ctrlKey && (e.key === ']' || e.key === '[')) {
-        e.preventDefault()
-        cycleWorkspace(e.key === ']' ? 1 : -1)
-        return
-      }
-      // Cmd+1-9: Switch to session by index (within the active workspace)
-      if (e.metaKey && !e.shiftKey && !e.ctrlKey && e.key >= '1' && e.key <= '9') {
-        e.preventDefault()
-        const state = useSessionStore.getState()
-        const flatIds = getVisibleFlatOrder(state, useWorkspaceStore.getState().activeWorkspaceId)
-        const idx = parseInt(e.key) - 1
-        if (idx < flatIds.length) {
-          state.selectSession(flatIds[idx], false)
+        setTimeout(
+          () => document.querySelector<HTMLInputElement>('[data-sidebar-search]')?.focus(),
+          50
+        )
+      },
+      closeFocused: () => {
+        const sid = useSessionStore.getState().focusedSessionId
+        if (sid && isFileTabId(sid)) removeFileTab(sid)
+        else window.close()
+      },
+      killFocusedSession: () => {
+        const sid = useSessionStore.getState().focusedSessionId
+        if (!sid) return
+        if (isFileTabId(sid)) removeFileTab(sid)
+        else {
+          const current = useSessionStore.getState()
+          const closing = current.sessions.find((session) => session.id === sid)
+          if (closing) emitTabClosed(closing, current.groups, 'user', null)
+          void window.electronAPI.killSession(sid).catch(() => {})
+          removeSession(sid)
         }
-      }
-      // Cmd+Shift+] / Cmd+Shift+[: Next / previous session (active workspace)
-      if (e.metaKey && e.shiftKey && (e.key === ']' || e.key === '[')) {
-        e.preventDefault()
+      },
+      previousWorkspace: () => cycleWorkspace(-1),
+      nextWorkspace: () => cycleWorkspace(1),
+      previousSession: () => cycleSession(-1),
+      nextSession: () => cycleSession(1),
+      selectSession1: () => selectByIndex(0),
+      selectSession2: () => selectByIndex(1),
+      selectSession3: () => selectByIndex(2),
+      selectSession4: () => selectByIndex(3),
+      selectSession5: () => selectByIndex(4),
+      selectSession6: () => selectByIndex(5),
+      selectSession7: () => selectByIndex(6),
+      selectSession8: () => selectByIndex(7),
+      selectSession9: () => selectByIndex(8),
+      groupSelectedSessions: () => {
         const state = useSessionStore.getState()
-        const flatIds = getVisibleFlatOrder(state, useWorkspaceStore.getState().activeWorkspaceId)
-        if (flatIds.length === 0) return
-        const currentIdx = flatIds.indexOf(state.focusedSessionId ?? '')
-        let nextIdx: number
-        if (e.key === ']') {
-          nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % flatIds.length
-        } else {
-          nextIdx =
-            currentIdx < 0 ? flatIds.length - 1 : (currentIdx - 1 + flatIds.length) % flatIds.length
-        }
-        state.selectSession(flatIds[nextIdx], false)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleFilePalette, toggleFileTree, toggleSidebar, removeSession, removeFileTab])
+        if (state.selectedSessionIds.length > 0) state.createGroup(state.selectedSessionIds)
+      },
+      ungroupSelectedSessions: () => {
+        const state = useSessionStore.getState()
+        const group = state.groups.find(
+          (candidate) =>
+            state.selectedSessionIds.length > 0 &&
+            state.selectedSessionIds.every((id) => candidate.sessionIds.includes(id))
+        )
+        if (group) state.ungroupSessions(group.id)
+      },
+      resetSessions: () => {
+        if (useSessionStore.getState().sessions.length > 0) setResetConfirmOpen(true)
+      },
+      undoSidebar: () => {
+        const state = useSessionStore.getState()
+        if (state.sidebarUndoStack.length > 0) state.undoSidebar()
+      },
+      newWindow: () => void window.electronAPI.windowOpen()
+    } satisfies KeymapActionHandlers
+    return actions
+  }, [removeFileTab, removeSession, toggleFilePalette, toggleFileTree, toggleSidebar])
+  const commandHud = useKeymapManager(keymapActions)
 
   // Sync data-theme attribute to root element
   useEffect(() => {
@@ -510,6 +478,7 @@ export function AppShell() {
   // The pull is the point — a push-only updater loses the "an update exists"
   // fact for 30 minutes if the renderer was not listening when it fired.
   useEffect(() => connectUpdaterStore(), [])
+  useEffect(() => connectKeymapStore(), [])
 
   // Open Settings → Updates when asked from the native menu.
   useEffect(() => {
@@ -747,7 +716,7 @@ export function AppShell() {
               <button
                 onClick={toggleFilePalette}
                 className="btn-icon btn-icon-md flex-shrink-0"
-                title="Search files (Cmd+P)"
+                title={`Search files${filePaletteShortcut ? ` (${filePaletteShortcut})` : ''}`}
               >
                 <MagnifyingGlassIcon className="w-4 h-4" />
               </button>
@@ -755,7 +724,7 @@ export function AppShell() {
               <button
                 onClick={toggleFileTree}
                 className={cn('btn-icon btn-icon-md flex-shrink-0', fileTreeOpen && '!text-accent')}
-                title="File tree (Cmd+E)"
+                title={`File tree${sidePanelShortcut ? ` (${sidePanelShortcut})` : ''}`}
               >
                 <Bars3BottomLeftIcon className="w-4 h-4 scale-x-[-1]" />
               </button>
@@ -831,6 +800,17 @@ export function AppShell() {
       <MissionControlOverlay />
       <SessionHistoryDialog />
       <RestorePromptDialog />
+      <KeymapCommandHud hud={commandHud} />
+      <ConfirmDialog
+        isOpen={resetConfirmOpen}
+        title="Reset sessions"
+        message="Close all sessions and start fresh?"
+        onConfirm={() => {
+          setResetConfirmOpen(false)
+          void resetSessions()
+        }}
+        onCancel={() => setResetConfirmOpen(false)}
+      />
     </div>
   )
 }
