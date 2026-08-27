@@ -5,8 +5,10 @@ import type {
 } from '../shared/extensions-types'
 import type { WindowIdentity, Workspace, WorkspaceStateFile } from '../shared/workspace-types'
 import type { DownloadProgress, UpdaterState } from '../shared/updater-types'
+import type { LaunchProfile, LaunchProfilePreferences, LauncherFamily, PiThinkingLevel } from '../shared/agent-launch'
 
 export type { DownloadProgress, UpdaterState, WindowIdentity }
+export type { LaunchProfile, LaunchProfilePreferences, LauncherFamily, PiThinkingLevel }
 
 /** Main's answer to `windowSetWorkspace`. Any window may show any workspace;
  *  only an unknown one is refused. */
@@ -27,7 +29,7 @@ export interface HistoryLedgerRow {
   claudeSessionId: string | null
   name: string
   cwd: string
-  mode: 'claude' | 'antigravity' | 'codex' | 'claude-agents' | 'terminal'
+  mode: 'claude' | 'antigravity' | 'codex' | 'pi' | 'claude-agents' | 'terminal'
   model: string | null
   workspaceId: string | null
   groupId: string | null
@@ -46,7 +48,9 @@ export interface HistorySearchHit {
 export interface HistoryListEntry {
   source: 'ledger' | 'transcript'
   /** Which CLI's conversation this is; resume exists for claude only. */
-  provider: 'claude' | 'codex' | 'antigravity'
+  provider: 'claude' | 'codex' | 'pi' | 'antigravity'
+  agentProvider?: string | null
+  thinking?: PiThinkingLevel | null
   projectDir?: string
   claudeSessionId: string
   sessionId: string
@@ -161,6 +165,7 @@ export interface ClaveFileGroupData {
     claudeMode: boolean
     antigravityMode: boolean
     codexMode: boolean
+    piMode?: boolean
     claudeAgentsMode?: boolean
     dangerousMode: boolean
     prompt?: string
@@ -193,6 +198,7 @@ export interface ClaveFileWriteData {
     claudeMode: boolean
     antigravityMode: boolean
     codexMode: boolean
+    piMode?: boolean
     claudeAgentsMode?: boolean
     dangerousMode: boolean
     prompt?: string
@@ -213,6 +219,7 @@ export interface ClaveFileWriteData {
       claudeMode: boolean
       antigravityMode: boolean
       codexMode: boolean
+      piMode?: boolean
       claudeAgentsMode?: boolean
       dangerousMode: boolean
       prompt?: string
@@ -237,6 +244,11 @@ export interface SessionInfo {
   folderName: string
   alive: boolean
   claudeSessionId: string | null
+  piSessionId: string | null
+  launchProfileId?: string
+  model?: string
+  piProvider?: string
+  piThinking?: PiThinkingLevel
 }
 
 /** Who owns a session that is not a tab of its own — mirrors SessionLink in
@@ -251,6 +263,7 @@ export interface SessionRecord {
   tmuxName?: string
   id: string
   claudeSessionId?: string
+  piSessionId?: string
   cwd: string
   folderName: string
   /** Tab label the user last saw (rename or auto-title); absent → folderName. */
@@ -260,10 +273,14 @@ export interface SessionRecord {
   claudeMode: boolean
   antigravityMode: boolean
   codexMode: boolean
+  piMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
   /** Model the session was launched on (claude/codex); re-applied on re-spawn. */
   model?: string
+  launchProfileId?: string
+  piProvider?: string
+  piThinking?: PiThinkingLevel
   configDir?: string
   claudeProfileId?: string
   claudeProfileLabel?: string
@@ -319,6 +336,17 @@ export interface UsageWindow {
 export interface UsageLimits {
   windows: UsageWindow[]
   fetchedAt: number
+}
+
+export interface PiUsageTotals {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  totalTokens: number
+  cost: number
+  sessions: number
+  range: 'today' | '7d' | '30d' | 'all'
 }
 
 export interface UsageError {
@@ -404,6 +432,18 @@ export interface MagicPullResult {
 
 
 export interface ElectronAPI {
+  launchProfilesList: () => Promise<LaunchProfilePreferences>
+  launchProfileUpsert: (profile: LaunchProfile) => Promise<LaunchProfilePreferences>
+  launchProfileDelete: (profileId: string) => Promise<LaunchProfilePreferences>
+  launchProfileSetGlobal: (
+    family: LauncherFamily,
+    profileId: string | null
+  ) => Promise<LaunchProfilePreferences>
+  launchProfileSetWorkspace: (
+    workspaceId: string,
+    family: LauncherFamily,
+    profileId: string | null
+  ) => Promise<LaunchProfilePreferences>
   spawnSession: (
     cwd: string,
     options?: {
@@ -412,9 +452,14 @@ export interface ElectronAPI {
       claudeMode?: boolean
       antigravityMode?: boolean
       codexMode?: boolean
+      piMode?: boolean
       claudeAgentsMode?: boolean
       resumeSessionId?: string
       claudeSessionId?: string
+      piSessionId?: string
+      launchProfileId?: string
+      piProvider?: string
+      piThinking?: PiThinkingLevel
       initialCommand?: string
       autoExecute?: boolean
       initialPrompt?: string
@@ -502,7 +547,8 @@ export interface ElectronAPI {
   /** The message trail's read: a live tab's conversation as turns. */
   historyConversation: (
     cwd: string,
-    claudeSessionId: string
+    claudeSessionId: string,
+    provider?: 'claude' | 'pi'
   ) => Promise<{ exists: boolean; turns: ConversationTurn[] }>
   /** Click-to-scroll: tmux-backed tabs are driven in main (`tmux: true`);
    *  plain ones answer `tmux: false` and the caller scans xterm's buffer. */
@@ -620,6 +666,7 @@ export interface ElectronAPI {
   windowMoveSessions: (sessionIds: string[], targetWindowId: number) => Promise<MoveResult>
   windowMoveGroup: (group: unknown, targetWindowId: number) => Promise<MoveResult & { ok: boolean }>
   getUsageLimits: () => Promise<UsageLimits | UsageError>
+  getPiUsage: (range: PiUsageTotals['range']) => Promise<PiUsageTotals>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>
   getGitStatusBatch: (paths: string[]) => Promise<Array<{ path: string; status: GitStatusResult }>>

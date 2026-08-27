@@ -10,6 +10,8 @@ Sessions are the core of Clave. Each session is an independent terminal running 
 | Cmd+T | Terminal | Plain shell session |
 | Cmd+D | Dangerous | Claude Code without permission prompts |
 | Cmd+I | Antigravity CLI | Antigravity CLI coding session |
+| Cmd+U | Codex CLI | Codex coding session |
+| Cmd+Shift+P | Pi | Pi coding-agent session |
 
 You can also create sessions from the **+** button in the sidebar.
 
@@ -30,6 +32,7 @@ Session icons in the sidebar reflect their type:
 - **Sparkles**: Claude Code session
 - **Fire**: Dangerous mode session
 - **Antigravity logo**: Antigravity CLI session
+- **Pi logo**: Pi session
 - **Bolt**: Agent session
 - **Globe**: Remote session
 - **Terminal**: Plain shell session

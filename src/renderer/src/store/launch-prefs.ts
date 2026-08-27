@@ -6,7 +6,7 @@ import { create } from 'zustand'
  *  four independent booleans can encode states that don't exist. The booleans
  *  stay the wire format for `spawnSession` and the Session record — this type
  *  is the launcher's own vocabulary, bridged by the helpers below. */
-export type AgentKind = 'claude' | 'claude-agents' | 'antigravity' | 'codex'
+export type AgentKind = 'claude' | 'claude-agents' | 'antigravity' | 'codex' | 'pi'
 
 /** Everything the agent button needs to relaunch what was last launched. */
 export interface AgentSetup {
@@ -15,6 +15,8 @@ export interface AgentSetup {
   /** Claude account. Applies to `claude` and `claude-agents` only — the other
    *  kinds ignore it, matching the spawn paths. */
   claudeProfileId?: string
+  /** Local binary-wrapper profile, independent from the Claude account. */
+  launchProfileId?: string
 }
 
 export const DEFAULT_AGENT_SETUP: AgentSetup = { kind: 'claude', dangerousMode: false }
@@ -29,7 +31,7 @@ const NO_WORKSPACE_KEY = '__none__'
  *  wrong agent. */
 const PREF_KEY = 'lastAgentSetupByWorkspace'
 
-const AGENT_KINDS: readonly AgentKind[] = ['claude', 'claude-agents', 'antigravity', 'codex']
+const AGENT_KINDS: readonly AgentKind[] = ['claude', 'claude-agents', 'antigravity', 'codex', 'pi']
 
 /** The four spawn booleans for a setup. Exactly one is true. */
 export function agentSetupToModes(setup: AgentSetup): {
@@ -37,12 +39,14 @@ export function agentSetupToModes(setup: AgentSetup): {
   claudeAgentsMode: boolean
   antigravityMode: boolean
   codexMode: boolean
+  piMode: boolean
 } {
   return {
     claudeMode: setup.kind === 'claude',
     claudeAgentsMode: setup.kind === 'claude-agents',
     antigravityMode: setup.kind === 'antigravity',
-    codexMode: setup.kind === 'codex'
+    codexMode: setup.kind === 'codex',
+    piMode: setup.kind === 'pi'
   }
 }
 
@@ -71,7 +75,8 @@ export function parseSetup(raw: unknown): AgentSetup | null {
     dangerousMode: value.dangerousMode === true,
     ...(typeof value.claudeProfileId === 'string' && (kind === 'claude' || kind === 'claude-agents')
       ? { claudeProfileId: value.claudeProfileId }
-      : {})
+      : {}),
+    ...(typeof value.launchProfileId === 'string' ? { launchProfileId: value.launchProfileId } : {})
   }
 }
 

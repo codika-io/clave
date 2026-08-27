@@ -213,6 +213,8 @@ export interface Session {
   claudeMode: boolean
   antigravityMode: boolean
   codexMode: boolean
+  /** Pi mode. Optional so session records written before Pi remain valid. */
+  piMode?: boolean
   /** Claude session launched via the `claude agents` subcommand. */
   claudeAgentsMode?: boolean
   dangerousMode: boolean
@@ -226,6 +228,10 @@ export interface Session {
    *  sidecar, so the link is gone after an app restart. */
   spawnedBy?: string
   claudeSessionId: string | null
+  piSessionId?: string | null
+  launchProfileId?: string
+  piProvider?: string
+  piThinking?: import('../../../shared/agent-launch').PiThinkingLevel
   /** Claude account/profile this session runs under (issue #22). Undefined =
    *  the Default profile. `claudeProfileLabel` drives the session-header badge. */
   claudeProfileId?: string
@@ -339,7 +345,7 @@ export interface FileTab {
 
 export type ActiveView = 'terminals' | 'settings' | 'agents' | 'extensions'
 
-export type SettingsSection = 'general' | 'appearance' | 'updates' | 'usage'
+export type SettingsSection = 'general' | 'agents' | 'appearance' | 'updates' | 'usage'
 
 export type ExtensionsSection = 'marketplaces' | 'mcp'
 
@@ -349,6 +355,7 @@ export interface PinnedGroupSession {
   claudeMode: boolean
   antigravityMode: boolean
   codexMode: boolean
+  piMode?: boolean
   claudeAgentsMode?: boolean
   dangerousMode: boolean
   /** One-shot initial prompt auto-submitted to the agent on launch. Agent modes

@@ -8,6 +8,8 @@
 | Cmd+T | New terminal session |
 | Cmd+D | New dangerous mode session |
 | Cmd+I | New Antigravity CLI session |
+| Cmd+U | New Codex CLI session |
+| Cmd+Shift+P | New Pi session |
 | Cmd+Backspace | Kill focused session |
 | Cmd+1-9 | Switch to session by index |
 | Cmd+Shift+] | Next session |

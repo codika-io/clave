@@ -103,13 +103,14 @@ Each session spawns a terminal process in a specific directory. A session runs o
 | `claudeMode` | boolean | `true` = starts Claude Code, `false` = plain terminal |
 | `antigravityMode` | boolean | `true` = starts the Antigravity CLI (`agy`) |
 | `codexMode` | boolean | `true` = starts the Codex CLI |
+| `piMode` | boolean | `true` = starts the Pi coding agent. The workspace's current Pi launch profile supplies the command, provider, model, and thinking level |
 | `claudeAgentsMode` | boolean | `true` = starts Claude via the `claude agents` subcommand. Never receives a `prompt` — the subcommand rejects a positional prompt |
 | `dangerousMode` | boolean | `true` = Claude runs with `--dangerously-skip-permissions` |
 
-Set at most one agent mode. If `antigravityMode`, `codexMode`, or `claudeAgentsMode` is `true`, `claudeMode` is forced to `false` at spawn.
+Set at most one agent mode. If `antigravityMode`, `codexMode`, `piMode`, or `claudeAgentsMode` is `true`, `claudeMode` is forced to `false` at spawn.
 
 > **Deprecated:** `geminiMode` is the retired name for `antigravityMode`. Files using it still load (it is read as an alias), but Clave writes `antigravityMode` whenever it saves the file back. Don't emit `geminiMode` in new files.
-| `prompt` | string | Optional. A one-shot message auto-submitted to the agent the moment the session launches, so it starts already primed. Agent modes only (claude / antigravity / codex) — ignored for plain terminals and `claude agents`. Free text; supports the path tokens below. |
+| `prompt` | string | Optional. A one-shot message auto-submitted to the agent the moment the session launches, so it starts already primed. Agent modes only (claude / antigravity / codex / pi) — ignored for plain terminals and `claude agents`. Free text; supports the path tokens below. |
 | `rootSession` | boolean | Optional. `true` = spawn the session at the **workspace root** (the folder whose `.clave/workspaces/` the umbrella auto-discovered), instead of at `cwd`. `cwd` still names the project dir that feeds the prompt tokens. It also anchors the group's `+`: a tab opened there later starts at the root too, so every tab in the group sits where the declared one does. No effect when the file is opened standalone (no umbrella root known). |
 
 **Prompt path tokens** (substituted at launch, only useful with `rootSession: true`):

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { UpdaterState } from '../shared/updater-types'
+import type { LaunchProfile, LauncherFamily } from '../shared/agent-launch'
 
 /** Creates a typed IPC event listener with cleanup function. */
 function createIpcListener<T extends unknown[]>(
@@ -14,6 +15,13 @@ function createIpcListener<T extends unknown[]>(
 }
 
 const electronAPI = {
+  launchProfilesList: () => ipcRenderer.invoke('launch-profiles:list'),
+  launchProfileUpsert: (profile: LaunchProfile) => ipcRenderer.invoke('launch-profiles:upsert', profile),
+  launchProfileDelete: (profileId: string) => ipcRenderer.invoke('launch-profiles:delete', profileId),
+  launchProfileSetGlobal: (family: LauncherFamily, profileId: string | null) =>
+    ipcRenderer.invoke('launch-profiles:set-global', { family, profileId }),
+  launchProfileSetWorkspace: (workspaceId: string, family: LauncherFamily, profileId: string | null) =>
+    ipcRenderer.invoke('launch-profiles:set-workspace', { workspaceId, family, profileId }),
   spawnSession: (
     cwd: string,
     options?: {
@@ -22,9 +30,14 @@ const electronAPI = {
       claudeMode?: boolean
       antigravityMode?: boolean
       codexMode?: boolean
+      piMode?: boolean
       claudeAgentsMode?: boolean
       resumeSessionId?: string
       claudeSessionId?: string
+      piSessionId?: string
+      launchProfileId?: string
+      piProvider?: string
+      piThinking?: import('../shared/agent-launch').PiThinkingLevel
       initialCommand?: string
       autoExecute?: boolean
       initialPrompt?: string
@@ -157,8 +170,8 @@ const electronAPI = {
   // capture above; the list is the dialog's one read.
   historyStamp: (row: unknown) => ipcRenderer.send('history:stamp', row),
   historyList: () => ipcRenderer.invoke('history:list'),
-  historyConversation: (cwd: string, claudeSessionId: string) =>
-    ipcRenderer.invoke('history:conversation', { cwd, claudeSessionId }),
+  historyConversation: (cwd: string, claudeSessionId: string, provider?: 'claude' | 'pi') =>
+    ipcRenderer.invoke('history:conversation', { cwd, claudeSessionId, provider }),
   scrollSessionToText: (id: string, needle: string, fromBottom: number) =>
     ipcRenderer.invoke('session:scroll-to-text', id, needle, fromBottom),
   historySearch: (request: {
@@ -355,6 +368,7 @@ const electronAPI = {
 
   // Usage
   getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),
+  getPiUsage: (range: 'today' | '7d' | '30d' | 'all') => ipcRenderer.invoke('usage:get-pi', range),
 
   // Git
   gitCheckIgnored: (cwd: string, paths: string[]) =>

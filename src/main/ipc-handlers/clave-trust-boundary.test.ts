@@ -41,6 +41,7 @@ const session = (overrides = {}): ClaveGroupData['sessions'][number] => ({
   claudeMode: true,
   antigravityMode: false,
   codexMode: false,
+  piMode: false,
   claudeAgentsMode: false,
   dangerousMode: false,
   ...overrides
@@ -57,6 +58,14 @@ describe('describeElevated — what the review dialog must disclose', () => {
   it('discloses a session-level prompt', () => {
     const result = single(group({ sessions: [session({ prompt: 'do the thing' })] }))
     expect(describeElevated(result).prompts).toContain('do the thing')
+  })
+
+  it('treats a Pi launch prompt as elevated and strips it in safe mode', () => {
+    const loaded = single(group({ sessions: [session({ claudeMode: false, piMode: true, prompt: 'work now' })] }))
+    expect(describeElevated(loaded).prompts).toEqual(['work now'])
+    const safe = sanitizeElevated(loaded) as ClaveFileReadResult & ClaveGroupData
+    expect(safe.sessions[0].piMode).toBe(true)
+    expect(safe.sessions[0].prompt).toBeUndefined()
   })
 
   it('discloses auto-run commands and dangerousMode', () => {

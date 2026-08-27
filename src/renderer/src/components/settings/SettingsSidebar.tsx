@@ -3,13 +3,15 @@ import {
   AdjustmentsHorizontalIcon,
   SwatchIcon,
   ArrowDownTrayIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  CpuChipIcon
 } from '@heroicons/react/24/outline'
 import { useUpdaterStore } from '../../store/updater-store'
 import { useSessionStore, type SettingsSection } from '../../store/session-store'
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
   { id: 'general', label: 'General', icon: AdjustmentsHorizontalIcon },
+  { id: 'agents', label: 'Agents', icon: CpuChipIcon },
   { id: 'appearance', label: 'Appearance', icon: SwatchIcon },
   { id: 'updates', label: 'Software Update', icon: ArrowDownTrayIcon },
   { id: 'usage', label: 'Usage', icon: ChartBarIcon }

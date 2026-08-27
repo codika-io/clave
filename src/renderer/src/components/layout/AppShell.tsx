@@ -15,6 +15,7 @@ import { Sidebar } from './Sidebar'
 import { useFullScreen } from '../../hooks/use-fullscreen'
 import { launchSession } from '../../lib/launch-session'
 import { loadLaunchPrefs, type AgentSetup } from '../../store/launch-prefs'
+import { loadLaunchProfiles } from '../../store/launch-profile-store'
 import { TerminalGrid } from './TerminalGrid'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { SettingsSidebar } from '../settings/SettingsSidebar'
@@ -146,6 +147,7 @@ export function AppShell() {
     // map is keyed by workspace id and read at render time, so it does not care
     // whether it lands before or after the workspace registry.
     void loadLaunchPrefs()
+    void loadLaunchProfiles()
   }, [])
 
   useEffect(() => {
@@ -338,7 +340,7 @@ export function AppShell() {
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === 'p') {
+      if (e.metaKey && !e.shiftKey && e.key === 'p') {
         e.preventDefault()
         toggleFilePalette()
       }
@@ -409,6 +411,14 @@ export function AppShell() {
         e.preventDefault()
         void launchSession({
           setup: { kind: 'claude-agents', dangerousMode: false },
+          cwd: e.altKey ? { kind: 'ask' } : { kind: 'workspace-root' },
+          remember: true
+        })
+      }
+      if (e.metaKey && e.shiftKey && e.code === 'KeyP') {
+        e.preventDefault()
+        void launchSession({
+          setup: { kind: 'pi', dangerousMode: false },
           cwd: e.altKey ? { kind: 'ask' } : { kind: 'workspace-root' },
           remember: true
         })

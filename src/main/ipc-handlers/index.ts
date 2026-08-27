@@ -22,6 +22,7 @@ import { registerWorkspaceHandlers } from './workspace-handlers'
 import { registerExchangeHandlers } from './exchange-handlers'
 import { registerPreviewHandlers } from './preview-handlers'
 import { registerHistoryHandlers } from './history-handlers'
+import { registerLaunchProfileHandlers } from './launch-profile-handlers'
 
 export function registerIpcHandlers(): void {
   registerAppHandlers()
@@ -48,4 +49,5 @@ export function registerIpcHandlers(): void {
   registerExchangeHandlers()
   registerPreviewHandlers()
   registerHistoryHandlers()
+  registerLaunchProfileHandlers()
 }

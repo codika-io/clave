@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils'
 import { useSessionStore, type Session } from '../../store/session-store'
 import { useLocationStore } from '../../store/location-store'
 import { CommandLineIcon, BoltIcon, RectangleGroupIcon } from '@heroicons/react/24/outline'
-import { ClaudeLogo, AntigravityLogo, CodexLogo, ClaudeVariantGlyph } from '../icons/cli-logos'
+import { ClaudeLogo, AntigravityLogo, CodexLogo, PiLogo, ClaudeVariantGlyph } from '../icons/cli-logos'
 import { SidebarTabItem } from './SidebarTabItem'
 
 function LocationBadge({ locationId }: { locationId: string }) {
@@ -66,6 +66,8 @@ function SessionIcon({ session }: { session: Session }) {
       ? AntigravityLogo
       : session.codexMode
         ? CodexLogo
+        : session.piMode
+          ? PiLogo
         : (session.claudeMode || session.claudeAgentsMode)
           ? ClaudeLogo
           : CommandLineIcon
@@ -79,18 +81,15 @@ function SessionIcon({ session }: { session: Session }) {
   //   ended → dimmed icon, no dot
   // Antigravity/Codex/terminals/agents have no deterministic state signal, so they stay
   // fully neutral — no color, no dot (see ROADMAP.md).
-  const isClaudeCode =
-    session.claudeMode === true &&
-    !session.claudeAgentsMode &&
-    !session.antigravityMode &&
-    !session.codexMode &&
-    session.sessionType === 'local'
+  const isClaudeCode = session.claudeMode === true && !session.claudeAgentsMode &&
+    !session.antigravityMode && !session.codexMode && !session.piMode && session.sessionType === 'local'
+  const hasLifecycleState = isClaudeCode || (session.piMode === true && session.sessionType === 'local')
 
   const state = !session.alive ? 'ended' : session.agentState ?? 'idle'
-  const working = isClaudeCode && state === 'working'
+  const working = hasLifecycleState && state === 'working'
   const blocked = isClaudeCode && state === 'blocked'
-  const doneUnseen = isClaudeCode && state === 'done' && session.hasUnseenActivity
-  const ended = isClaudeCode && state === 'ended'
+  const doneUnseen = hasLifecycleState && state === 'done' && session.hasUnseenActivity
+  const ended = hasLifecycleState && state === 'ended'
 
   // A pending cross-tab message (accent dot) is provider-agnostic and takes
   // precedence over the Claude-only status dots — it's an explicit "another

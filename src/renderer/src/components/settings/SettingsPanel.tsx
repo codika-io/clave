@@ -22,6 +22,7 @@ import { UpdatesTab } from './UpdatesTab'
 import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsSection, SettingsCard, SettingsRow, ToggleRow } from './primitives'
 import { cn } from '../../lib/utils'
+import { AgentsSettings } from './AgentsSettings'
 
 const themes: { id: Theme; label: string; colors: { bg: string; surface: string; text: string; border: string } }[] = [
   {
@@ -200,6 +201,7 @@ export function SettingsPanel() {
     <div className="flex-1 overflow-y-auto p-8">
       <div className="max-w-xl mx-auto w-full">
         {settingsSection === 'general' && <GeneralSettings />}
+        {settingsSection === 'agents' && <AgentsSettings />}
         {settingsSection === 'appearance' && <AppearanceSettings />}
         {settingsSection === 'updates' && <UpdatesTab />}
         {settingsSection === 'usage' && <UsageSettings />}

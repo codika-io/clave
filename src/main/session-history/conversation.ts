@@ -1,5 +1,5 @@
 import * as fs from 'fs'
-import { scopedTexts } from './search'
+import { piScopedTexts, scopedTexts } from './search'
 
 /**
  * The conversation behind a LIVE tab, read off its transcript for the message
@@ -47,14 +47,14 @@ function headLine(text: string, cap: number): string {
 export function foldConversationLine(turns: ConversationTurn[], line: string): void {
   // Cheap gate before any JSON.parse: only user and assistant entries can
   // contribute, and most lines are tool traffic.
-  if (!line.includes('"type":"user"') && !line.includes('"type":"assistant"')) return
+  if (!line.includes('"type":"user"') && !line.includes('"type":"assistant"') && !line.includes('"type":"message"')) return
   let entry: any
   try {
     entry = JSON.parse(line)
   } catch {
     return
   }
-  const human = scopedTexts(entry, 'human')
+  const human = [...scopedTexts(entry, 'human'), ...piScopedTexts(entry, 'human')]
   if (human.length > 0) {
     const text = human.join('\n')
     turns.push({
@@ -65,7 +65,7 @@ export function foldConversationLine(turns: ConversationTurn[], line: string): v
     return
   }
   if (turns.length === 0) return
-  const agent = scopedTexts(entry, 'agent').filter((t) => t.trim() !== '')
+  const agent = [...scopedTexts(entry, 'agent'), ...piScopedTexts(entry, 'agent')].filter((t) => t.trim() !== '')
   if (agent.length > 0) {
     // Later text for the same turn overwrites: the final word wins.
     turns[turns.length - 1].replyHead = headLine(agent.join('\n'), REPLY_HEAD_MAX)
