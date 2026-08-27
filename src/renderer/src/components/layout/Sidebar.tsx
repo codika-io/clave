@@ -1629,6 +1629,7 @@ export function Sidebar() {
                           group.sessionIds.length > 0 &&
                           group.sessionIds.every((id) => selectedSessionIds.includes(id))
                         const groupColorHex = resolveColorHex(group.color)
+                        const railShut = group.collapsed || group.sessionIds.length === 0
                         return (
                           <div key={group.id}>
                             <DropGap active={gapBefore} />
@@ -1686,17 +1687,28 @@ export function Sidebar() {
                                 isDragging={draggedIds.includes(group.id)}
                                 dragActive={isDragging}
                               />
+                              {/* Shut for a group with no rows exactly as for a
+                                  collapsed one. The rail's 4px of padding and the
+                                  2px drop strip are there to hold rows off the
+                                  card's edges; with nothing between them they are
+                                  6px of dead space under the header, and the card
+                                  reads bottom-heavy — a group carrying terminals
+                                  and no sessions is where that shows. */}
                               <div
                                 className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
-                                style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
+                                style={{ gridTemplateRows: railShut ? '0fr' : '1fr', opacity: railShut ? 0 : 1, transform: railShut ? 'translateY(-4px)' : 'translateY(0)' }}
                               >
                                 <div className="overflow-hidden">
                                   {/* px-1 narrows the child-tab highlight so it doesn't touch the group border.
                                       The rail carries the group's colour down its
                                       sessions so the boundary reads at a glance —
-                                      groups are containers, not filters. */}
+                                      groups are containers, not filters.
+                                      pt-0.5, not the sides' 4px: the header is a
+                                      row, so the space over the first session is
+                                      the seam BETWEEN two rows and reads as one
+                                      stack at 2px. At 4px the header floated. */}
                                   <div
-                                    className="px-1 pt-1 space-y-0.5 group-rail"
+                                    className="px-1 pt-0.5 space-y-0.5 group-rail"
                                     data-selected={allGroupSelected ? 'true' : undefined}
                                     // The rows stay in the DOM while collapsed (the
                                     // grid track animates to 0); the drag hit-test

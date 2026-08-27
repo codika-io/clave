@@ -1425,8 +1425,8 @@ body,
   position: absolute;
   left: 8px;
   right: 8px;
-  /* Centred in the seam ABOVE the wrapper (--drop-seam: 2px in a rail, 4px at
-     the top level, set by the containers). */
+  /* Centred in the seam ABOVE the wrapper (--drop-seam: 2px in a rail, 6px
+     between the cards at the top level, set by the containers). */
   top: calc(var(--drop-seam, 2px) / -2 - 1.5px);
   height: 3px;
   border-radius: 9999px;
@@ -1442,13 +1442,6 @@ body,
   top: auto;
   bottom: calc(var(--drop-seam, 2px) / -2 - 1.5px);
 }
-/* The first row of a rail has the rail's top padding (4px) above it rather
-   than a 2px seam; centre the line in that padding so the collapse container's
-   overflow clip never cuts it. */
-.group-rail > :first-child {
-  --drop-seam: 4px;
-}
-
 /* The group header's two controls (PRDCT-1670). The terminals button carries
    the whole terminal story in one glyph: its colour is the first RUNNING
    terminal's (set inline) and the count beside it is how many are attached;
@@ -1568,13 +1561,17 @@ body,
 .group-rail {
   position: relative;
   padding-left: 0.5rem;    /* clears the rail */
+  /* Every seam in a rail is the 2px between two rows — the header counts as the
+     row above the first one. Stated here because the list container outside sets
+     6px inline and that inherits all the way down. */
+  --drop-seam: 2px;
 }
 .group-rail::before {
   content: '';
   position: absolute;
   left: 0.125rem;
-  /* Spans the rows, not the rail's 4px padding above and below them. */
-  top: 0.25rem;
+  /* Spans the rows: 2px of rail above them, 4px below. */
+  top: 0.125rem;
   bottom: 0.25rem;
   width: 2px;
   border-radius: 1px;
