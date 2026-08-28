@@ -37,6 +37,36 @@ export function treeRuleMultiplier(intensity: TreeRuleIntensity): number {
 }
 
 /**
+ * Which folder the side panel hangs from — the Files tab, the Git tab, and the
+ * root chip that switches between them. `session` is the focused tab's own
+ * folder, `group` the folder its group was declared on, `workspace` the
+ * workspace root. Ordered as the chip's menu lists them, widest first.
+ *
+ * One table rather than a union with three maps beside it: the glyph, the
+ * label and the phrase the tooltips read are all per-rung copy, and a rung
+ * added with only some of them renders blank rather than failing.
+ */
+export const PANEL_ROOTS = [
+  { id: 'workspace', label: 'Workspace', glyph: 'W', home: 'the workspace root' },
+  { id: 'group', label: 'Group', glyph: 'G', home: "the group's folder" },
+  { id: 'session', label: 'Session', glyph: 'S', home: "the session's folder" }
+] as const
+
+export type PanelScope = (typeof PANEL_ROOTS)[number]['id']
+
+/**
+ * The order the panel tries the rungs in, given the preferred root: the
+ * preference first, then the rest, narrowest first. Which rung a tab actually
+ * lands on is a ladder rather than a fixed choice — a tab outside any group
+ * has no group folder, and a window with no tab focused has neither that nor a
+ * session folder, so a fixed rung would leave the panel pointed at nothing.
+ */
+export function panelRootLadder(preferred: PanelScope): PanelScope[] {
+  const rest: PanelScope[] = ['session', 'group', 'workspace']
+  return [preferred, ...rest.filter((s) => s !== preferred)]
+}
+
+/**
  * The themes that paint on a dark ground. The one place that answers it.
  *
  * Every `theme === 'dark'` in the app was really a light/dark test written when

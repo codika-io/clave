@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Added
+- **The side panel's default root is yours to set** — the panel's root was a fixed ladder (the focused tab's own folder, then its group's, then the workspace), so every tab in a group opened on whichever subfolder it happened to be launched in and the one folder the group is actually about was a click away on every single tab. Settings → General → Side panel → Default root now picks the rung, and it ships set to **the group**. It still falls through: the chosen rung when the tab has that folder, else the next one down, so a tab outside any group — and a window with no tab focused — lands somewhere rather than on nothing. The root chip on the panel still overrides it per tab, as before.
+
+### Changed
+- **The terminals button fits its count, and a click just opens it** — the group header's terminals button was a fixed square, so the count plus its glyph had 20px to share and the glyph was what shrank. It takes its height from the class now and grows with the count, with the padding on both edges and only when a count is actually there — which is what had been pushing that lone glyph off centre on a group with no terminals. Clicking it now opens the panel rather than toggling it: hover has usually opened it already by the time the click lands, so the toggle read as the panel refusing to open. It still closes on leaving it, on Escape, and on a click outside.
+- **The space under a group header is a seam, not a padding** — a group carrying terminals and no sessions read bottom-heavy: its empty session rail still contributed 6px of dead space under the title and none over it. That rail is shut now for a group with no rows, exactly as it already was for a collapsed one, so the card is its header and nothing else. With rows, the gap over the first session goes from 4px to 2px — the header IS a row, so what sits under it is the seam between two rows rather than a container's padding, and the group reads as one stack. Measured in the app: a terminals-only card 38px → 34px, a card with one session 74px → 72px.
+- **The agent caret is a proper button** — the caret beside the launcher's agent name was sized by its padding, 20px wide against the 28px of the folder picker next to it, so its hover fill read as a sliver between two real buttons instead of as a third one. Same box as its neighbours now.
+
+### Fixed
+- **The copy button on an open file copies the file** — opening a document and pressing copy put its *path* on the clipboard, on all three file surfaces: the preview sheet, the file tab, and the diff tab. That is the one thing the tree's right-click menu already offers twice, as a relative path and an absolute one, so the one gesture with an obvious meaning on an open document was spending itself on the only thing already covered. Copy now hands over what you are looking at — the file's text in the sheet and the tab, unsaved edits included, since it copies the live buffer rather than the disk, and the patch as git printed it in a diff — and flashes a check to say it happened, because a clipboard write is otherwise invisible. It is off, and says so, for what has no text to give: binaries, images, a file that failed to load.
+
+
 ## [1.78.0] — 2026-08-25
 
 ### Added

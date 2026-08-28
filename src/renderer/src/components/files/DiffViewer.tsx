@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react'
 import { useSessionStore, type FileTab } from '../../store/session-store'
 import { useDiff } from '../../hooks/use-diff'
+import { useCopyFeedback } from '../../hooks/use-copy-feedback'
+import { cn } from '../../lib/utils'
+import { CheckIcon } from '@heroicons/react/24/outline'
 import { DiffLinesView } from '../git/DiffLinesView'
 import { CopyIcon, FolderIcon, CloseIcon, fileActionButtonClass } from './FileActionIcons'
 
@@ -63,7 +66,7 @@ export function DiffViewer({ fileTab }: DiffViewerProps) {
   const liveTab = fileTabs.find((t) => t.id === fileTab.id) ?? fileTab
   const liveDiff = liveTab.diff ?? diff
 
-  const { diffLines, loading, error, stats } = useDiff({
+  const { diffLines, raw, loading, error, stats } = useDiff({
     cwd: liveDiff?.cwd ?? '',
     file: liveDiff?.file ?? '',
     type: liveDiff?.type ?? 'working',
@@ -75,9 +78,9 @@ export function DiffViewer({ fileTab }: DiffViewerProps) {
 
   const filename = fileTab.filePath.split('/').pop() ?? ''
 
-  const handleCopyPath = useCallback(() => {
-    navigator.clipboard.writeText(fileTab.filePath)
-  }, [fileTab.filePath])
+  const { copied, copy } = useCopyFeedback()
+  // What you are looking at here is the patch, so that is what the button hands over.
+  const canCopyPatch = !loading && !error && raw.length > 0
 
   const handleRevealInFinder = useCallback(() => {
     window.electronAPI?.showItemInFolder(fileTab.filePath)
@@ -143,8 +146,13 @@ export function DiffViewer({ fileTab }: DiffViewerProps) {
               {liveDiff.hash.slice(0, 7)}
             </span>
           )}
-          <button onClick={handleCopyPath} className={fileActionButtonClass} title="Copy path">
-            <CopyIcon />
+          <button
+            onClick={() => copy(raw)}
+            disabled={!canCopyPatch}
+            className={cn(fileActionButtonClass, copied && 'text-status-ready')}
+            title={canCopyPatch ? 'Copy diff' : 'Nothing to copy'}
+          >
+            {copied ? <CheckIcon className="w-3 h-3" /> : <CopyIcon />}
           </button>
           <button
             onClick={handleRevealInFinder}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
-import { type Theme, TREE_RULE_INTENSITIES, useSessionStore } from '../../store/session-store'
+import { type Theme, TREE_RULE_INTENSITIES, PANEL_ROOTS, useSessionStore } from '../../store/session-store'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { useUserStore, USER_ICONS } from '../../store/user-store'
 import { PALETTE_KEYS, PALETTE_LABELS, fieldInk } from '../../lib/brand-field'
@@ -216,6 +216,7 @@ function GeneralSettings() {
         <ProfileSection />
         <WorkspacesSection />
         <LocationsTab />
+        <SidePanelSection />
         <GitSection />
         <SessionsSection />
         <ClaudeProfilesSection />
@@ -554,6 +555,36 @@ function MissionControlSection(): ReactNode {
           checked={enabled}
           onChange={handleToggle}
         />
+      </SettingsCard>
+    </SettingsSection>
+  )
+}
+
+function SidePanelSection(): ReactNode {
+  const defaultPanelRoot = useSessionStore((s) => s.defaultPanelRoot)
+  const setDefaultPanelRoot = useSessionStore((s) => s.setDefaultPanelRoot)
+
+  return (
+    <SettingsSection title="Side panel">
+      <SettingsCard>
+        <SettingsRow
+          label="Default root"
+          description="Which folder the Files and Git panels open a tab on. A tab with nothing on the chosen root falls to the next one down — a tab outside any group opens on its own folder — and the panel's root chip still overrides it per tab."
+        >
+          <div className="segmented">
+            {PANEL_ROOTS.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setDefaultPanelRoot(id)}
+                className="segmented-item"
+                data-active={defaultPanelRoot === id ? 'true' : undefined}
+                data-panel-root-option={id}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </SettingsRow>
       </SettingsCard>
     </SettingsSection>
   )

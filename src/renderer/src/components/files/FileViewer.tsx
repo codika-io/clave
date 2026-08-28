@@ -5,6 +5,8 @@ import { ViewModeToggle } from './ViewModeToggle'
 import { HTML_MODES } from './file-types'
 import { useFileEditor } from '../../hooks/use-file-editor'
 import { useFileViewMode } from '../../hooks/use-file-view-mode'
+import { useCopyFeedback } from '../../hooks/use-copy-feedback'
+import { cn } from '../../lib/utils'
 import { DocumentTextIcon, CheckIcon } from '@heroicons/react/24/outline'
 import {
   CopyIcon,
@@ -32,15 +34,16 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
   const relativePath = filename
 
   const editor = useFileEditor({ cwd, filePath: relativePath })
-  const { isDirty, saving, canEdit, save } = editor
+  const { fileData, content, isDirty, saving, canEdit, isImage, loadError, save } = editor
   const { isMarkdown, isHtml, viewMode, setViewMode } = useFileViewMode(
     fileTab.filePath,
     fileTab.view
   )
 
-  const handleCopyPath = useCallback(() => {
-    navigator.clipboard.writeText(fileTab.filePath)
-  }, [fileTab.filePath])
+  const { copied, copy } = useCopyFeedback()
+  // Copies the buffer you are looking at, unsaved edits included. Nothing to
+  // copy for a binary, an image, or a file that failed to load.
+  const canCopyContent = !!fileData && !fileData.binary && !isImage && !loadError
 
   const handleRevealInFinder = useCallback(() => {
     window.electronAPI?.showItemInFolder(fileTab.filePath)
@@ -93,8 +96,13 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
               <ExternalLinkIcon />
             </button>
           )}
-          <button onClick={handleCopyPath} className={fileActionButtonClass} title="Copy path">
-            <CopyIcon />
+          <button
+            onClick={() => copy(content)}
+            disabled={!canCopyContent}
+            className={cn(fileActionButtonClass, copied && 'text-status-ready')}
+            title={canCopyContent ? 'Copy contents' : 'Nothing to copy'}
+          >
+            {copied ? <CheckIcon className="w-3 h-3" /> : <CopyIcon />}
           </button>
           <button
             onClick={handleRevealInFinder}

@@ -8,14 +8,17 @@
  * the four things it promises:
  *
  * 1. With no session focused the panel roots at the WORKSPACE, and lists it.
- * 2. The default is a ladder: a focused session's own folder first, then its
- *    group's, then the workspace — a session inside a group still opens on its
- *    own folder, the group is one click up.
+ * 2. The default is a ladder, and which rung it starts on is a SETTING
+ *    (Settings → General → Side panel → Default root, `defaultPanelRoot`).
+ *    It ships on the GROUP: a session inside a group opens on the group's
+ *    folder, and a session outside any group falls down the ladder to its own.
  * 3. Each rung is greyed when there is nothing on it: a tab outside any group
  *    has no group rung, an empty window has neither group nor session.
  * 4. The choice is remembered PER SESSION: switch A to the workspace, B to its
- *    group, and focusing each brings its own back. Closing both lands on the
- *    workspace again.
+ *    own folder, and focusing each brings its own back. Closing both lands on
+ *    the workspace again.
+ * 5. Flipping the setting to Session moves the default: the same group,
+ *    relaunched, opens its tab on the tab's own folder instead of the group's.
  *
  * The fixture is a plain folder tree, no git — the Files tab is enough to see
  * which folder the panel is pointed at, and the git tab reads the same `cwd`.
@@ -115,6 +118,26 @@ async function pick(win, option) {
   await win.waitForTimeout(900)
 }
 
+/** Set Settings → General → Side panel → Default root, and return what it was
+ *  before the click — the shipped default, read off the pane rather than
+ *  assumed. Leaves the app back on the sessions view. */
+async function pickDefaultRoot(win, id) {
+  await win.evaluate(() => {
+    document.querySelector('.sidebar-footer-btn[aria-label="Settings"]')?.click()
+  })
+  await win.waitForTimeout(700)
+  const was = await win.evaluate(
+    () =>
+      document.querySelector('[data-panel-root-option][data-active="true"]')?.dataset
+        .panelRootOption ?? null
+  )
+  await win.click(`[data-panel-root-option="${id}"]`)
+  await win.waitForTimeout(400)
+  await win.click('button[aria-label="Back to sessions"]')
+  await win.waitForTimeout(700)
+  return was
+}
+
 export async function run(t) {
   seedTree()
   seedWorkspaces(DIR, { workspaces: [WS], activeWorkspaceId: WS.id, fresh: true })
@@ -202,23 +225,28 @@ export async function run(t) {
     await callMcp(app, 'focus', { sessionId: b.sessionId })
     await win.waitForTimeout(1200)
     const onB = await readPanel(win)
-    t.equal('a session inside a group still opens on its own folder', onB.scope, 'session')
-    t.check('with its own tree', has(onB.rows, 'two.txt'), onB.rows)
+    t.equal('a session inside a group opens on the group’s folder', onB.scope, 'group')
+    t.check(
+      'with the group’s tree: both apps, not the workspace',
+      has(onB.rows, 'one') && has(onB.rows, 'two') && !has(onB.rows, 'README.md'),
+      onB.rows
+    )
 
     menu = await openMenu(win)
     t.check(
-      'but the group rung is open now, and names the group’s folder',
-      rung(menu, 'group')?.disabled === false && rung(menu, 'group')?.hint === 'apps',
+      'the group rung is the lit one, and names the group’s folder',
+      rung(menu, 'group')?.selected === true && rung(menu, 'group')?.hint === 'apps',
       menu
     )
-    await pick(win, 'group')
-    const bOnG = await readPanel(win)
-    t.equal('picking group re-roots the panel at the group’s folder', bOnG.scope, 'group')
     t.check(
-      'and the tree is the group’s folder: both apps, not the workspace',
-      has(bOnG.rows, 'one') && has(bOnG.rows, 'two') && !has(bOnG.rows, 'README.md'),
-      bOnG.rows
+      'and the session rung is one click down, naming the tab’s own folder',
+      rung(menu, 'session')?.disabled === false && rung(menu, 'session')?.hint === 'two',
+      menu
     )
+    await pick(win, 'session')
+    const bOnS = await readPanel(win)
+    t.equal('picking session re-roots the panel at the tab’s own folder', bOnS.scope, 'session')
+    t.check('and the tree is that folder', has(bOnS.rows, 'two.txt'), bOnS.rows)
 
     // ── 5. Remembered per session ─────────────────────────────────────────
     await callMcp(app, 'focus', { sessionId: a.sessionId })
@@ -227,18 +255,24 @@ export async function run(t) {
     t.equal('focusing A brings back A’s choice (workspace)', backOnA.scope, 'workspace')
     t.check('with the workspace tree', has(backOnA.rows, 'README.md'), backOnA.rows)
 
-    await callMcp(app, 'focus', { sessionId: b.sessionId })
-    await win.waitForTimeout(900)
-    const backOnB = await readPanel(win)
-    t.equal('focusing B brings back B’s choice (group)', backOnB.scope, 'group')
-    t.check('with the group tree', has(backOnB.rows, 'one') && has(backOnB.rows, 'two'), backOnB.rows)
-
     // A choice is for the session it was made on: a fresh tab starts on the
-    // ladder, not on whatever the last tab was switched to.
+    // ladder, not on whatever the last tab was switched to — asserted from A,
+    // whose pick (workspace) is one a groupless tab could otherwise inherit.
     const c = await callMcp(app, 'openSession', { cwd: ONE, mode: 'terminal', name: 'three' })
     await win.waitForTimeout(1800)
     const onC = await readPanel(win)
-    t.equal('a new session starts on the default rung, not the last one picked', onC.scope, 'session')
+    t.equal(
+      'a new session starts on the default rung, not the last one picked',
+      onC.scope,
+      'session'
+    )
+    t.check('and outside a group that rung is its own folder', has(onC.rows, 'one.txt'), onC.rows)
+
+    await callMcp(app, 'focus', { sessionId: b.sessionId })
+    await win.waitForTimeout(900)
+    const backOnB = await readPanel(win)
+    t.equal('focusing B brings back B’s choice (session)', backOnB.scope, 'session')
+    t.check('with its own tree', has(backOnB.rows, 'two.txt'), backOnB.rows)
 
     // ── 6. Closing every session lands on the workspace again ─────────────
     for (const s of [a, b, c]) await callMcp(app, 'closeSession', { sessionId: s.sessionId })
@@ -246,6 +280,34 @@ export async function run(t) {
     const closed = await readPanel(win)
     t.equal('with every session closed, the panel is back on the workspace', closed.scope, 'workspace')
     t.check('and lists it', has(closed.rows, 'README.md'), closed.rows)
+
+    // ── 7. The default rung is a setting, and it moves the default ────────
+    // The whole loop through the real pane: the row exists, it ships on Group,
+    // and picking Session changes where the NEXT tab in a group opens. Without
+    // the relaunch this would only assert that a button turns blue.
+    const before = await pickDefaultRoot(win, 'session')
+    t.equal('Settings → Side panel ships pointed at the group', before, 'group')
+
+    // A fresh tab, put in the group that outlived its session: never touched
+    // by the chip, so what it opens on is the default and nothing else.
+    const d = await callMcp(app, 'openSession', { cwd: TWO, mode: 'terminal', name: 'four' })
+    await win.waitForTimeout(1800)
+    await callMcp(app, 'moveSession', { sessionId: d.sessionId, groupId: 'Apps' })
+    await win.waitForTimeout(1200)
+    await callMcp(app, 'focus', { sessionId: d.sessionId })
+    await win.waitForTimeout(1200)
+    const onSessionDefault = await readPanel(win)
+    t.equal(
+      'with the setting on Session, a tab in a group opens on its own folder',
+      onSessionDefault.scope,
+      'session'
+    )
+    t.check(
+      'and the tree is that folder, not the group’s',
+      has(onSessionDefault.rows, 'two.txt') && !has(onSessionDefault.rows, 'one'),
+      onSessionDefault.rows
+    )
+    await callMcp(app, 'closeSession', { sessionId: d.sessionId })
   } finally {
     await app.close().catch(() => {})
     rmSync(ROOT, { recursive: true, force: true })
