@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.79.0] — 2026-08-28
+
 ### Added
 - **The side panel's default root is yours to set** — the panel's root was a fixed ladder (the focused tab's own folder, then its group's, then the workspace), so every tab in a group opened on whichever subfolder it happened to be launched in and the one folder the group is actually about was a click away on every single tab. Settings → General → Side panel → Default root now picks the rung, and it ships set to **the group**. It still falls through: the chosen rung when the tab has that folder, else the next one down, so a tab outside any group — and a window with no tab focused — lands somewhere rather than on nothing. The root chip on the panel still overrides it per tab, as before.
 
