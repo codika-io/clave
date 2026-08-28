@@ -5,6 +5,8 @@ import { FileContent } from './FileContent'
 import { ViewModeToggle } from './ViewModeToggle'
 import { useFileEditor } from '../../hooks/use-file-editor'
 import { useFileViewMode } from '../../hooks/use-file-view-mode'
+import { useCopyFeedback } from '../../hooks/use-copy-feedback'
+import { cn } from '../../lib/utils'
 import {
   canOpenExternally as canOpenExternallyExt,
   formatSize,
@@ -14,6 +16,7 @@ import {
 import {
   DocumentDuplicateIcon,
   ArrowTopRightOnSquareIcon,
+  CheckIcon,
   XMarkIcon,
   WindowIcon
 } from '@heroicons/react/24/outline'
@@ -37,8 +40,22 @@ export function FilePreview(): React.JSX.Element | null {
   const panelRef = useRef<HTMLDivElement>(null)
 
   const editor = useFileEditor({ cwd, filePath: previewFile, locationId: previewLocationId })
-  const { fileData, filename, content, isDirty, canEdit, saving, saveError, loadError, save } =
-    editor
+  const {
+    fileData,
+    filename,
+    content,
+    isDirty,
+    canEdit,
+    isImage,
+    saving,
+    saveError,
+    loadError,
+    save
+  } = editor
+  const { copied, copy } = useCopyFeedback()
+  // Copies the buffer you are looking at, unsaved edits included. Nothing to
+  // copy for a binary, an image, or a file that failed to load.
+  const canCopyContent = !!fileData && !fileData.binary && !isImage && !loadError
   // Remote files can't be served by the local preview protocol — pin them to source.
   const { isMarkdown, isHtml, viewMode, setViewMode } = useFileViewMode(
     previewFile,
@@ -172,11 +189,16 @@ export function FilePreview(): React.JSX.Element | null {
             </button>
           )}
           <button
-            onClick={() => navigator.clipboard.writeText(`./${previewFile}`)}
-            className={fileActionButtonClass}
-            title="Copy path"
+            onClick={() => copy(content)}
+            disabled={!canCopyContent}
+            className={cn(fileActionButtonClass, copied && 'text-status-ready')}
+            title={canCopyContent ? 'Copy contents' : 'Nothing to copy'}
           >
-            <DocumentDuplicateIcon className="w-3.5 h-3.5" />
+            {copied ? (
+              <CheckIcon className="w-3.5 h-3.5" />
+            ) : (
+              <DocumentDuplicateIcon className="w-3.5 h-3.5" />
+            )}
           </button>
           <button onClick={handleClose} className={fileActionButtonClass} title="Close">
             <XMarkIcon className="w-3.5 h-3.5" />

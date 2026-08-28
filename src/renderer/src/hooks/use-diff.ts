@@ -14,6 +14,8 @@ export interface UseDiffArgs {
 
 export interface UseDiffResult {
   diffLines: DiffLine[]
+  /** The patch as git printed it — what a copy button on a diff should hand over. */
+  raw: string
   loading: boolean
   error: string | null
   stats: { additions: number; deletions: number }
@@ -88,5 +90,5 @@ export function useDiff({
     return { additions, deletions }
   }, [diffLines])
 
-  return { diffLines, loading, error, stats }
+  return { diffLines, raw: diff ?? '', loading, error, stats }
 }
