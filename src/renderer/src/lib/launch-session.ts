@@ -33,8 +33,8 @@ export interface LaunchRequest {
    *  is spawned bare and rejects a positional prompt — the same two exclusions
    *  the pinned-group spawn path applies. */
   initialPrompt?: string
-  /** Group the new session joins. Without it the session lands wherever
-   *  `addSession` puts it, which is the group the user currently has selected. */
+  /** Group the new session joins, as its first row — the group's own `+`.
+   *  Without it the session becomes the sidebar's first top-level row. */
   groupId?: string
   /** Store `setup` as the workspace's remembered default. On for the launcher's
    *  own agent launches (a caret pick is what makes an agent the remembered
@@ -107,27 +107,30 @@ export async function launchSession(req: LaunchRequest): Promise<string | null> 
       initialPrompt,
       ...profileFields
     })
-    useSessionStore.getState().addSession({
-      id: sessionInfo.id,
-      cwd: sessionInfo.cwd,
-      folderName: sessionInfo.folderName,
-      name: sessionInfo.folderName,
-      alive: sessionInfo.alive,
-      activityStatus: 'idle',
-      promptWaiting: null,
-      ...modes,
-      dangerousMode,
-      claudeSessionId: sessionInfo.claudeSessionId,
-      claudeProfileId: profile?.id,
-      claudeProfileLabel: profile?.label,
-      claudeConfigDir: profile?.configDir || undefined,
-      // Persisted so Duplicate re-primes the clone with the same prompt.
-      initialPrompt,
-      sessionType: 'local'
-    })
-    if (req.groupId) {
-      useSessionStore.getState().moveItems([sessionInfo.id], req.groupId, 'inside')
-    }
+    // One placement, not a placement and then a correction: the group's `+`
+    // has already said where this goes, so it goes there — as the group's
+    // first row, the same "newest at the top" the sidebar itself follows.
+    useSessionStore.getState().addSessionInGroup(
+      {
+        id: sessionInfo.id,
+        cwd: sessionInfo.cwd,
+        folderName: sessionInfo.folderName,
+        name: sessionInfo.folderName,
+        alive: sessionInfo.alive,
+        activityStatus: 'idle',
+        promptWaiting: null,
+        ...modes,
+        dangerousMode,
+        claudeSessionId: sessionInfo.claudeSessionId,
+        claudeProfileId: profile?.id,
+        claudeProfileLabel: profile?.label,
+        claudeConfigDir: profile?.configDir || undefined,
+        // Persisted so Duplicate re-primes the clone with the same prompt.
+        initialPrompt,
+        sessionType: 'local'
+      },
+      req.groupId ?? null
+    )
     // Remembered only after a launch actually succeeded: a cancelled picker or
     // a failed spawn must not redefine what the agent button does next.
     if (req.remember && req.setup) rememberAgentSetup(getActiveWorkspaceId(), req.setup)

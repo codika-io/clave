@@ -105,12 +105,15 @@ export async function run(t) {
     await win.click('.group-picker-card')
     await win.waitForTimeout(6000)
 
-    // Its `+` must launch on the brief the file now says. The freshly stamped
-    // group is the last card in the list, and its `+` sits in the card's HEADER
-    // — a SIBLING of .group-rail, not a descendant, since the "New session" row
-    // at the foot of the card became the header's `+`. Hence the last `+` in the
-    // list rather than the last rail's row.
-    await win.locator('.group-new-session').last().click()
+    // Its `+` must launch on the brief the file now says. Addressed BY NAME:
+    // the `+` sits in the card's HEADER — a SIBLING of .group-rail, not a
+    // descendant, since the "New session" row at the foot of the card became
+    // the header's `+` — and its aria-label carries the group's name, which is
+    // the only handle that survives the card moving. It does move: a freshly
+    // stamped group is now the FIRST card in the list, not the last, so
+    // `.last()` here clicked the stale group's `+` and the check failed on the
+    // old brief while the reload had worked perfectly.
+    await win.locator(`[aria-label^="New session in ${AFTER.name}"]`).first().click()
     await win.waitForTimeout(4000)
 
     const prompts = (await readSpawns()).map((x) => x.initialPrompt).filter(Boolean)

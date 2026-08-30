@@ -61,7 +61,7 @@ Builds require Apple code signing. Credentials in `.env` (not committed):
 - **Repo must be public** for electron-updater to check GitHub Releases without an auth token.
 - **node-pty spawn-helper** needs +x permissions — handled by `postinstall` script.
 - **No WebGL**: WebGL addon for xterm was removed (context loss issues) — canvas renderer only.
-- **macOS traffic lights**: `trafficLightPosition: { x: 16, y: 16 }` with `hiddenInset` titlebar. Toolbar adds `pl-20` when sidebar is closed to avoid overlap.
+- **macOS traffic lights**: `trafficLightPosition: { x: 16, y: 18 }` with `hiddenInset` titlebar, and ONLY on darwin — Windows and Linux keep a native frame with their controls above our content. Two pieces of chrome hold clearance for the buttons, both asking `useTrafficLights()` (darwin AND not fullscreen, never `!fullScreen` alone): the sidebar's `WordmarkStrip` (90px, dropping to the 16px gutter when they are absent) and the toolbar row (`pl-[4.75rem]`, with the sidebar closed).
 - **Terminal fit**: ResizeObserver guards against zero-size during animations; `FitAddon.fit()` wrapped in try/catch.
 
 ## Rules

@@ -392,13 +392,13 @@ export async function openSessionProgrammatically(payload: {
   })
   // renameSession sets userRenamed, protecting the name from auto-title overwrite.
   if (payload.name) useSessionStore.getState().renameSession(info.id, payload.name)
+  // An agent that asked for a group gets one; one that didn't is left where
+  // addSession put it — the sidebar's first row, top level. (There used to be
+  // a pull-back here: addSession nested a new tab into whatever group held the
+  // user's selection, which an agent spawn must never inherit. addSession does
+  // not nest at all now, so there is nothing to undo.)
   if (targetGroup) {
     useSessionStore.getState().moveItems([info.id], targetGroup.id, 'inside')
-  } else if (groupOfSession(useSessionStore.getState().groups, info.id)) {
-    // addSession auto-groups a new tab into the group the USER currently has
-    // selected. An agent that didn't ask for a group must not inherit the
-    // user's live UI selection, so pull it back to the top level.
-    useSessionStore.getState().moveItems([info.id], null, 'after')
   }
 
   // Agent-delegation spawns are transport events (PRDCT-1568): record them

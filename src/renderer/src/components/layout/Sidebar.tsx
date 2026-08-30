@@ -853,9 +853,6 @@ export function Sidebar() {
       const session = state.sessions.find((s) => s.id === sessionId)
       if (!session) return
 
-      // Find if session belongs to a group
-      const parentGroup = state.groups.find((g) => g.sessionIds.includes(sessionId))
-
       let newSessionId: string | null = null
 
       if (session.sessionType === 'remote-terminal' || session.sessionType === 'remote-claude') {
@@ -944,8 +941,11 @@ export function Sidebar() {
         }
       }
 
-      // Move new session into the same group, right after the original
-      if (newSessionId && parentGroup) {
+      // A duplicate sits right after its original, wherever that is — inside
+      // the group that holds it, or beside it at the top level. It is the one
+      // launch that is ABOUT another row, so it is the one that does not go to
+      // the top of the list with every other new session.
+      if (newSessionId) {
         useSessionStore.getState().moveItems([newSessionId], sessionId, 'after')
       }
     },
