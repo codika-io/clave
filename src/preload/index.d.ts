@@ -404,6 +404,11 @@ export interface MagicPullResult {
 
 
 export interface ElectronAPI {
+  /** `process.platform` of the main process. The renderer reads it only to
+   *  decide whether to hold room for window buttons drawn inside our own
+   *  chrome — macOS does, Windows and Linux do not. */
+  platform: NodeJS.Platform
+
   spawnSession: (
     cwd: string,
     options?: {

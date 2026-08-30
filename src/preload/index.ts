@@ -14,6 +14,15 @@ function createIpcListener<T extends unknown[]>(
 }
 
 const electronAPI = {
+  /** Which OS the window is on. The renderer needs it for exactly one class of
+   *  decision: chrome that holds room for the platform's own window buttons.
+   *  Only macOS puts them INSIDE our chrome (`titleBarStyle: 'hiddenInset'`,
+   *  src/main/index.ts); Windows and Linux keep a native frame and draw them
+   *  above it, so clearance held on those platforms is a hole. Sync, not an
+   *  invoke: it is a constant for the life of the process and chrome laid out
+   *  after a round-trip would jump on first paint. */
+  platform: process.platform,
+
   spawnSession: (
     cwd: string,
     options?: {

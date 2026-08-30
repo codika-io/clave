@@ -34,7 +34,7 @@ import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
 import { useHistoryStore } from '../../store/history-store'
 import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
-import { useFullScreen } from '../../hooks/use-fullscreen'
+import { useTrafficLights } from '../../hooks/use-traffic-lights'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
 import { Wordmark, WordmarkBy } from './Wordmark'
 import { ScrollArea } from '../ui/scroll-area'
@@ -144,7 +144,7 @@ function useOverflows(ref: React.RefObject<HTMLDivElement | null>): boolean {
 
 export function Sidebar() {
   // No traffic lights in fullscreen, so the wordmark's clearance for them goes.
-  const fullScreen = useFullScreen()
+  const trafficLights = useTrafficLights()
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   // When there's an active selection, unselected tabs/groups fade so the
@@ -1388,17 +1388,27 @@ export function Sidebar() {
           toolbar begins, so the launcher panel under it lands on the terminal
           cards' top edge rather than a few pixels below.
 
-          It also carries the wordmark. The traffic lights are placed at
-          x=16, y=18 (src/main/index.ts) and run about 52px wide by 12px tall,
-          so their centre line is y=24 and the mark starts at 84px — 16px of
-          clearance past the last button. The bottom padding is what puts the
-          mark ON that centre line rather than in the middle of the spacer.
+          It also carries the wordmark. On macOS the traffic lights are placed
+          at x=16, y=18 (src/main/index.ts) and run about 52px wide by 12px
+          tall, so their centre line is y=24 and their last edge is at 68px. The
+          mark starts at 90px — 22px past that edge. It used to start at 84px,
+          16px past, which is the window gutter's own width and read as the mark
+          being crowded against the buttons rather than standing apart from
+          them: same-size gaps say "same row of things", and the mark is not one
+          of the buttons. 22px is a nudge, not a step: enough to break that row,
+          short of the mark looking parked in the middle of the strip. The
+          bottom padding is what puts the mark ON the buttons' centre line
+          rather than in the middle of the spacer.
 
-          In FULLSCREEN there are no traffic lights, so that 84px is clearance
-          for nothing and the mark reads as pushed into the middle of the strip.
-          It takes the position the first traffic light would have had instead —
-          16px, the same x the buttons are placed at — which is the window's own
-          gutter and enough air that the mark is not sitting on the edge.
+          Whenever there are NO traffic lights over this strip the clearance is
+          a hole, and the mark takes the position the first button would have
+          had instead — 16px, the same x they are placed at, the window's own
+          gutter and enough air that the mark is not sitting on the edge. Two
+          ways for them to be absent, which is why this asks useTrafficLights()
+          rather than fullscreen alone: macOS takes them away in FULLSCREEN, and
+          on Windows and Linux they were never here — those windows keep a
+          native frame and draw their controls above our content, so clearance
+          held there is a hole from the first paint.
 
           This is the one strip of window chrome that is nobody else's, and the
           only place carrying the Antasphere mark. `pointer-events: none`
@@ -1406,11 +1416,11 @@ export function Sidebar() {
       <div
         className="wordmark-strip flex-shrink-0 flex items-center"
         data-wordmark-strip
-        data-fullscreen={fullScreen ? 'true' : 'false'}
+        data-traffic-lights={trafficLights ? 'true' : 'false'}
         style={
           {
             height: 'var(--content-top-offset)',
-            paddingLeft: fullScreen ? '16px' : '84px',
+            paddingLeft: trafficLights ? '90px' : '16px',
             // Optical, not geometric. The lockup's box is 905 frame units deep
             // against Clave's 761 of ink — the rest is descender room the
             // attribution's y and p need and the name never uses — so the ink's

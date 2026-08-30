@@ -467,7 +467,11 @@ export async function run(t) {
     // In fullscreen macOS takes the traffic lights away, so clearance held for
     // them becomes a hole. Two pieces of chrome hold it: the wordmark's strip,
     // and — with the sidebar closed, when the toolbar is what runs under the
-    // buttons — the toolbar's own row. Driven through REAL fullscreen —
+    // buttons — the toolbar's own row. (The other way for the buttons to be
+    // absent is a Windows or Linux window, which keeps a native frame; this
+    // suite only ever runs on macOS, so the platform half of the condition is
+    // read here at its darwin value and the drop is proved through fullscreen.)
+    // Driven through REAL fullscreen —
     // setFullScreen on the window, the main-process event, the renderer's
     // listener — rather than by poking the renderer's state, because every link
     // in that chain is new and any of them can be the one that breaks.
@@ -482,7 +486,7 @@ export async function run(t) {
         const strip = document.querySelector('[data-wordmark-strip]')
         return {
           pad: getComputedStyle(strip).paddingLeft,
-          flag: strip.getAttribute('data-fullscreen'),
+          flag: strip.getAttribute('data-traffic-lights'),
           markX: document.querySelector('.wordmark:not(.wordmark-by)')?.getBoundingClientRect().x
         }
       })
@@ -513,7 +517,8 @@ export async function run(t) {
     t.check('main listens for both edges of fullscreen', wired.enter >= 1 && wired.leave >= 1, wired)
 
     const windowed = await stripPad()
-    t.equal('windowed, the mark clears the traffic lights', windowed.pad, '84px')
+    t.equal('windowed, the mark clears the traffic lights', windowed.pad, '90px')
+    t.equal('and says so', windowed.flag, 'true')
     const windowedToolbar = await toolbarPad()
     t.equal(
       'and with the sidebar closed the toolbar clears them too',
@@ -525,6 +530,7 @@ export async function run(t) {
     await new Promise((r) => setTimeout(r, 2500))
     const full = await stripPad()
     t.equal('fullscreen, it takes the first light’s own place', full.pad, '16px')
+    t.equal('and says the lights are gone', full.flag, 'false')
     t.check('and the mark actually moved with it', (full.markX ?? 99) < (windowed.markX ?? 0), {
       windowed: windowed.markX,
       full: full.markX
@@ -551,11 +557,11 @@ export async function run(t) {
 
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setFullScreen(false))
     await new Promise((r) => setTimeout(r, 2500))
-    t.equal('and leaving fullscreen gives the clearance back', (await stripPad()).pad, '84px')
+    t.equal('and leaving fullscreen gives the clearance back', (await stripPad()).pad, '90px')
 
     // ── narrow enough and the attribution steps aside ─────────────────────
     // The lockup needs about 130px. The sidebar goes down to 180, and 180 minus
-    // the traffic-light clearance is 96 — so at the narrow end the second word
+    // the traffic-light clearance is 90 — so at the narrow end the second word
     // would be clipped mid-letter, which is worse than not being there.
     const byShown = () =>
       win.evaluate(() => ({

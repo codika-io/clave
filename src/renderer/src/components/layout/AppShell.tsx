@@ -12,7 +12,7 @@ import type { SessionGroup, SettingsSection } from '../../store/session-store'
 import { treeRuleMultiplier } from '../../store/session-types'
 import { useAgentStore } from '../../store/agent-store'
 import { Sidebar } from './Sidebar'
-import { useFullScreen } from '../../hooks/use-fullscreen'
+import { useTrafficLights } from '../../hooks/use-traffic-lights'
 import { launchSession } from '../../lib/launch-session'
 import { loadLaunchPrefs, type AgentSetup } from '../../store/launch-prefs'
 import { TerminalGrid } from './TerminalGrid'
@@ -82,7 +82,7 @@ const LAUNCH_SHORTCUTS: Record<string, AgentSetup | null> = {
 export function AppShell() {
   const sidebarOpen = useSessionStore((s) => s.sidebarOpen)
   // No traffic lights in fullscreen, so no clearance to hold for them.
-  const fullScreen = useFullScreen()
+  const trafficLights = useTrafficLights()
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const toggleSidebar = useSessionStore((s) => s.toggleSidebar)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
@@ -711,11 +711,13 @@ export function AppShell() {
             className={cn(
               'h-[var(--toolbar-row-h)] flex items-center justify-between px-0.5 flex-shrink-0',
               // With the sidebar closed the toolbar is what runs under the
-              // traffic lights, so it holds their width open. In fullscreen
-              // there are none, and that padding is a hole with the sidebar
-              // button parked to the right of it — so it goes, and the button
-              // sits where every other toolbar control does.
-              !sidebarOpen && !fullScreen && 'pl-[4.75rem]'
+              // traffic lights, so it holds their width open. Whenever they are
+              // not there — macOS fullscreen, or any Windows or Linux window,
+              // which keeps a native frame and its controls above our content —
+              // that padding is a hole with the sidebar button parked to the
+              // right of it, so it goes and the button sits where every other
+              // toolbar control does.
+              !sidebarOpen && trafficLights && 'pl-[4.75rem]'
             )}
             style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
           >
