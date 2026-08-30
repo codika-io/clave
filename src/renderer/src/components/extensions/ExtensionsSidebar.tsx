@@ -4,6 +4,7 @@ import {
   ServerStackIcon
 } from '@heroicons/react/24/outline'
 import { useSessionStore, type ExtensionsSection } from '../../store/session-store'
+import { WordmarkStrip } from '../layout/Wordmark'
 
 const SECTIONS: {
   id: ExtensionsSection
@@ -22,11 +23,11 @@ export function ExtensionsSidebar() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
-      {/* Draggable top spacer — clears the macOS traffic lights */}
-      <div
-        className="pt-11 pb-1 flex-shrink-0"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      />
+      {/* The same top band the sessions sidebar opens with — traffic-light
+          clearance, the mark, and the offset the panel below starts at. This
+          view replaces that sidebar whole, so the band has to come with it or
+          the app's only mark disappears the moment you step in here. */}
+      <WordmarkStrip />
 
       {/* Header: back to sessions + title */}
       <div className="px-2 pb-2 flex items-center gap-1.5 flex-shrink-0">

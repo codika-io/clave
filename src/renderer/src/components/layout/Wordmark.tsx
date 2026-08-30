@@ -1,3 +1,5 @@
+import { useTrafficLights } from '../../hooks/use-traffic-lights'
+
 /**
  * "Clave by Antasphere", beside the traffic lights. The one piece of the
  * Antasphere identity in the app, and the only thing in it not set in Geist.
@@ -108,5 +110,74 @@ export function WordmarkBy(): React.ReactElement {
         </svg>
       </button>
     </span>
+  )
+}
+
+/**
+ * The strip the lockup lives in: the top band of whichever sidebar is showing.
+ *
+ * ONE component for all three sidebars — sessions, Settings, Extensions — and
+ * that is the point. Settings and Extensions replace the sessions sidebar
+ * wholesale, and each used to open with a bare 48px drag spacer, so stepping
+ * into Settings made the app's only mark disappear and put the panel 2px out of
+ * step with the list it replaced. The band is the same band whatever is under
+ * it, so it is one thing.
+ *
+ * It is also the app's draggable top chrome, which is why the height is
+ * `--content-top-offset` rather than a number: the toolbar's row height is a
+ * token, and the first card in the content column starts at that offset, so
+ * whatever the sidebar's first panel is lands on the terminal cards' top edge.
+ *
+ * The left padding is the traffic lights' business. On macOS they are placed at
+ * x=16, y=18 (src/main/index.ts) and run about 52px wide by 12px tall — centre
+ * line y=24, last edge 68px — so the mark starts at 90px, 22px clear. It used
+ * to start at 84px, 16px past, which is the window gutter's own width and read
+ * as the mark being crowded against the buttons rather than standing apart from
+ * them: same-size gaps say "same row of things", and the mark is not one of the
+ * buttons. 22px is a nudge, not a step: enough to break that row, short of the
+ * mark looking parked in the middle of the strip.
+ *
+ * Whenever there are NO traffic lights over the strip that clearance is a hole,
+ * and the mark takes the position the first button would have had instead —
+ * 16px, the same x they are placed at, the window's own gutter and enough air
+ * that the mark is not sitting on the edge. Two ways for them to be absent,
+ * which is why this asks useTrafficLights() rather than fullscreen alone: macOS
+ * takes them away in FULLSCREEN, and on Windows and Linux they were never there
+ * — those windows keep a native frame and draw their controls above our
+ * content, so clearance held there is a hole from the first paint.
+ *
+ * `pointer-events: none` over the lockup keeps the whole strip draggable — the
+ * mark is a mark, not a target. The house's name opts back out of that in
+ * `.wordmark-link`, because it is the one thing here that IS a target.
+ */
+export function WordmarkStrip(): React.ReactElement {
+  const trafficLights = useTrafficLights()
+  return (
+    <div
+      className="wordmark-strip flex-shrink-0 flex items-center"
+      data-wordmark-strip
+      data-traffic-lights={trafficLights ? 'true' : 'false'}
+      style={
+        {
+          height: 'var(--content-top-offset)',
+          paddingLeft: trafficLights ? '90px' : '16px',
+          // Optical, not geometric. The lockup's box is 905 frame units deep
+          // against Clave's 761 of ink — the rest is descender room the
+          // attribution's y and p need and the name never uses — so the ink's
+          // mass sits 1.3px above the middle of its own box. Centre the box
+          // and you centre the wrong thing: the mark read high in the strip
+          // for as long as it has existed. 3px of top padding buys the
+          // descender back and lands Clave's ink centre on 25px, the middle
+          // of the 50px band the launcher panel starts under.
+          paddingTop: '3px',
+          WebkitAppRegion: 'drag'
+        } as React.CSSProperties
+      }
+    >
+      <span className="wordmark-lockup" style={{ pointerEvents: 'none' }}>
+        <Wordmark />
+        <WordmarkBy />
+      </span>
+    </div>
   )
 }

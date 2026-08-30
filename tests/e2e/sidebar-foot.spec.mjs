@@ -406,6 +406,31 @@ export async function run(t) {
     )
     t.check('the picker offers a painted swatch per palette', swatches >= 12, swatches)
 
+    // ── the mark comes with you into Settings ──────────────────────────────
+    // Settings replaces the sessions sidebar whole. It used to open with a bare
+    // drag spacer, so the app's one mark vanished the moment you stepped in and
+    // the panel under it sat 2px out of step with the list it replaced. Same
+    // strip, same clearance, same offset — asserted here rather than eyeballed
+    // because a missing mark looks exactly like a slightly emptier sidebar.
+    const settingsStrip = await win.evaluate(() => {
+      const strip = document.querySelector('[data-wordmark-strip]')
+      if (!strip) return null
+      const nav = document.querySelector('.settings-row')
+      return {
+        pad: getComputedStyle(strip).paddingLeft,
+        h: Math.round(strip.getBoundingClientRect().height),
+        by: !!strip.querySelector('.wordmark-by'),
+        link: !!strip.querySelector('.wordmark-link'),
+        drag: getComputedStyle(strip).webkitAppRegion,
+        hasNav: !!nav
+      }
+    })
+    t.check('the mark is still there in Settings', !!settingsStrip, settingsStrip)
+    t.equal('at the same clearance', settingsStrip?.pad, '90px')
+    t.equal('in the same 50px band', settingsStrip?.h, 50)
+    t.check('with the attribution and its link', !!settingsStrip?.by && !!settingsStrip?.link, settingsStrip)
+    t.equal('and the band still drags the window', settingsStrip?.drag, 'drag')
+
     // The settings view replaces the sidebar, so the foot panel is out of the
     // DOM while the picker is open: the repaint is read on the profile card's
     // own avatar, which is the same component on the same store.
@@ -476,9 +501,9 @@ export async function run(t) {
     // listener — rather than by poking the renderer's state, because every link
     // in that chain is new and any of them can be the one that breaks.
     //
-    // Reloaded first: the settings view above replaced the sidebar, so the
-    // strip these checks are about is not in the DOM until the app is back on
-    // its own front page.
+    // Reloaded first: the settings view above is still showing, and these
+    // checks want the strip in its own sidebar — same component either way, but
+    // the fullscreen drive below reads better against the front page.
     await win.reload()
     await win.waitForSelector('[data-wordmark-strip]', { timeout: 20000 })
     const stripPad = () =>

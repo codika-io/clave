@@ -34,9 +34,8 @@ import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
 import { useHistoryStore } from '../../store/history-store'
 import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
-import { useTrafficLights } from '../../hooks/use-traffic-lights'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
-import { Wordmark, WordmarkBy } from './Wordmark'
+import { WordmarkStrip } from './Wordmark'
 import { ScrollArea } from '../ui/scroll-area'
 import {
   PencilSquareIcon,
@@ -144,7 +143,6 @@ function useOverflows(ref: React.RefObject<HTMLDivElement | null>): boolean {
 
 export function Sidebar() {
   // No traffic lights in fullscreen, so the wordmark's clearance for them goes.
-  const trafficLights = useTrafficLights()
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   // When there's an active selection, unselected tabs/groups fade so the
@@ -1383,62 +1381,11 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
-      {/* Draggable top spacer — clears the macOS traffic lights, and carries
-          the exact offset at which the content column's first card below the
-          toolbar begins, so the launcher panel under it lands on the terminal
-          cards' top edge rather than a few pixels below.
-
-          It also carries the wordmark. On macOS the traffic lights are placed
-          at x=16, y=18 (src/main/index.ts) and run about 52px wide by 12px
-          tall, so their centre line is y=24 and their last edge is at 68px. The
-          mark starts at 90px — 22px past that edge. It used to start at 84px,
-          16px past, which is the window gutter's own width and read as the mark
-          being crowded against the buttons rather than standing apart from
-          them: same-size gaps say "same row of things", and the mark is not one
-          of the buttons. 22px is a nudge, not a step: enough to break that row,
-          short of the mark looking parked in the middle of the strip. The
-          bottom padding is what puts the mark ON the buttons' centre line
-          rather than in the middle of the spacer.
-
-          Whenever there are NO traffic lights over this strip the clearance is
-          a hole, and the mark takes the position the first button would have
-          had instead — 16px, the same x they are placed at, the window's own
-          gutter and enough air that the mark is not sitting on the edge. Two
-          ways for them to be absent, which is why this asks useTrafficLights()
-          rather than fullscreen alone: macOS takes them away in FULLSCREEN, and
-          on Windows and Linux they were never here — those windows keep a
-          native frame and draw their controls above our content, so clearance
-          held there is a hole from the first paint.
-
-          This is the one strip of window chrome that is nobody else's, and the
-          only place carrying the Antasphere mark. `pointer-events: none`
-          keeps the whole strip draggable — the mark is a mark, not a target. */}
-      <div
-        className="wordmark-strip flex-shrink-0 flex items-center"
-        data-wordmark-strip
-        data-traffic-lights={trafficLights ? 'true' : 'false'}
-        style={
-          {
-            height: 'var(--content-top-offset)',
-            paddingLeft: trafficLights ? '90px' : '16px',
-            // Optical, not geometric. The lockup's box is 905 frame units deep
-            // against Clave's 761 of ink — the rest is descender room the
-            // attribution's y and p need and the name never uses — so the ink's
-            // mass sits 1.3px above the middle of its own box. Centre the box
-            // and you centre the wrong thing: the mark read high in the strip
-            // for as long as it has existed. 3px of top padding buys the
-            // descender back and lands Clave's ink centre on 25px, the middle
-            // of the 50px band the launcher panel starts under.
-            paddingTop: '3px',
-            WebkitAppRegion: 'drag'
-          } as React.CSSProperties
-        }
-      >
-        <span className="wordmark-lockup" style={{ pointerEvents: 'none' }}>
-          <Wordmark />
-          <WordmarkBy />
-        </span>
-      </div>
+      {/* The app's draggable top band — the traffic-light clearance, the mark,
+          and the offset the first panel below it starts at. Shared with the
+          Settings and Extensions sidebars, which replace this one whole; see
+          Wordmark.tsx. */}
+      <WordmarkStrip />
 
       {/* Session launcher — pinned above the scroll area so it never scrolls
           away with the session list. (The workspace switcher used to sit here;
