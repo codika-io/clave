@@ -57,6 +57,30 @@ export async function run(t) {
 
   let { app, win } = await launchApp(DIR)
   try {
+    // Hand the renderer a fixed set of limit windows. Without this the second
+    // line renders whichever branch the RUNNING MACHINE's own Claude session
+    // happens to justify, so the headroom half — the meter, the reading, and
+    // the row-shaped control they sit in — was checked on some machines and
+    // silently skipped on others. Canned, both branches are reachable and the
+    // geometry below is always asserted against the real thing.
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('usage:get-limits')
+      ipcMain.handle('usage:get-limits', () => ({
+        windows: [
+          {
+            key: 'weekly_all',
+            label: 'Weekly limit (all models)',
+            kind: 'weekly_all',
+            scope: null,
+            usedPercentage: 38,
+            resetsAt: Date.now() + 3 * 24 * 3600 * 1000,
+            severity: 'normal'
+          }
+        ],
+        fetchedAt: Date.now()
+      }))
+    })
+
     // ── what a profile nobody has touched looks like ──
     // Read BEFORE anything is seeded, because that is the only moment the
     // defaults are what is on screen. A default that regresses is invisible to
@@ -112,6 +136,78 @@ export async function run(t) {
     t.equal('it is bordered like the launcher panel', shape?.border, '1px')
     t.equal('and rounded like it', shape?.radius, '10px')
     t.equal('nothing else sits loose at the foot', shape?.siblings, 1)
+
+    // ── the controls sit INSIDE the panel, and light up in the field ──
+    // Two regressions that look like nothing in a diff and like a broken card
+    // on screen. The second row used to be exactly one control tall inside a
+    // panel with no padding, so the chat door sat ON the bottom border and ON
+    // the fold above it — a rounded button with two corners eaten by the card.
+    // And its hover was the app's grey, which over a coloured ground reads as
+    // dirt rather than as a control waking up. Both are asserted here because
+    // both render perfectly happily.
+    const inset = await win.evaluate(() => {
+      const foot = document.querySelectorAll('.sidebar-panel')
+      const panel = foot[foot.length - 1]
+      const p = panel.getBoundingClientRect()
+      const controls = [
+        ...panel.querySelectorAll(
+          '.sidebar-footer-btn, .sidebar-footer-line, .sidebar-footer-avatar'
+        )
+      ]
+      const gaps = controls.map((el) => {
+        const r = el.getBoundingClientRect()
+        return Math.round(
+          Math.min(r.left - p.left, p.right - r.right, r.top - p.top, p.bottom - r.bottom)
+        )
+      })
+      const meta = panel.querySelector('.sidebar-footer-row--meta')
+      const door = panel.querySelector('.sidebar-footer-btn[aria-label="Talk to us"]')
+      const line = panel.querySelector('.sidebar-footer-line')
+      return {
+        count: controls.length,
+        worst: Math.min(...gaps),
+        metaH: meta ? Math.round(meta.getBoundingClientRect().height) : 0,
+        doorH: door ? Math.round(door.getBoundingClientRect().height) : 0,
+        lineH: line ? Math.round(line.getBoundingClientRect().height) : 0,
+        accent: getComputedStyle(panel).getPropertyValue('--field-accent').trim()
+      }
+    })
+    t.equal('the foot holds all four of its controls', inset.count, 4)
+    t.check('none of them touches the panel it sits in', inset.worst >= 4, inset)
+    t.check('because the second row is taller than its button', inset.metaH > inset.doorH, inset)
+    // The readout is a row, not a square, so it is the one that can quietly go
+    // back to filling its row edge to edge and running into the fold above it.
+    t.equal('and the readout is the same height as the door beside it', inset.lineH, inset.doorH)
+    // The legacy hex seeded above is Furnace's; its signature hue is the amber.
+    t.equal('the panel carries the field own accent', inset.accent, '#E89B4F')
+
+    // The hover fill has to BE that accent. Reading the computed background is
+    // the only way to tell a field tint from the app's grey: both are a fill.
+    const RGB = (css) => {
+      const n = (css.match(/[\d.]+/g) ?? []).map(Number)
+      if (n.length < 3) return null
+      const scale = css.startsWith('color(') ? 255 : 1
+      return [Math.round(n[0] * scale), Math.round(n[1] * scale), Math.round(n[2] * scale)]
+    }
+    await win.locator('.sidebar-footer-btn[aria-label="Settings"]').hover()
+    await win.waitForTimeout(250)
+    const hovered = await win.evaluate(() => {
+      const foot = document.querySelectorAll('.sidebar-panel')
+      const panel = foot[foot.length - 1]
+      return {
+        bg: getComputedStyle(panel.querySelector('.sidebar-footer-btn[aria-label="Settings"]'))
+          .backgroundColor,
+        grey: getComputedStyle(panel).getPropertyValue('--surface-100').trim()
+      }
+    })
+    const tint = RGB(hovered.bg)
+    t.check('hovering the gear fills it', tint !== null, hovered)
+    t.check(
+      'in the field own amber, not the app grey',
+      String(tint) === String([232, 155, 79]),
+      hovered
+    )
+    t.check('and translucently, so the field stays under it', /0\.3/.test(hovered.bg), hovered.bg)
 
     // ── the field actually paints ──
     const avatar = await win.evaluate(
@@ -428,7 +524,11 @@ export async function run(t) {
     t.check('the mark is still there in Settings', !!settingsStrip, settingsStrip)
     t.equal('at the same clearance', settingsStrip?.pad, '90px')
     t.equal('in the same 50px band', settingsStrip?.h, 50)
-    t.check('with the attribution and its link', !!settingsStrip?.by && !!settingsStrip?.link, settingsStrip)
+    t.check(
+      'with the attribution and its link',
+      !!settingsStrip?.by && !!settingsStrip?.link,
+      settingsStrip
+    )
     t.equal('and the band still drags the window', settingsStrip?.drag, 'drag')
 
     // The settings view replaces the sidebar, so the foot panel is out of the
@@ -539,17 +639,17 @@ export async function run(t) {
         leave: w.listenerCount('leave-full-screen')
       }
     })
-    t.check('main listens for both edges of fullscreen', wired.enter >= 1 && wired.leave >= 1, wired)
+    t.check(
+      'main listens for both edges of fullscreen',
+      wired.enter >= 1 && wired.leave >= 1,
+      wired
+    )
 
     const windowed = await stripPad()
     t.equal('windowed, the mark clears the traffic lights', windowed.pad, '90px')
     t.equal('and says so', windowed.flag, 'true')
     const windowedToolbar = await toolbarPad()
-    t.equal(
-      'and with the sidebar closed the toolbar clears them too',
-      windowedToolbar.pad,
-      '76px'
-    )
+    t.equal('and with the sidebar closed the toolbar clears them too', windowedToolbar.pad, '76px')
 
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setFullScreen(true))
     await new Promise((r) => setTimeout(r, 2500))
@@ -590,10 +690,16 @@ export async function run(t) {
     // would be clipped mid-letter, which is worse than not being there.
     const byShown = () =>
       win.evaluate(() => ({
-        strip: Math.round(document.querySelector('[data-wordmark-strip]').getBoundingClientRect().width),
+        strip: Math.round(
+          document.querySelector('[data-wordmark-strip]').getBoundingClientRect().width
+        ),
         by: getComputedStyle(document.querySelector('.wordmark-by')).display
       }))
-    t.check('at the default width the attribution shows', (await byShown()).by !== 'none', await byShown())
+    t.check(
+      'at the default width the attribution shows',
+      (await byShown()).by !== 'none',
+      await byShown()
+    )
     const drag = async (toX) => {
       const box = await win.locator('.cursor-col-resize').first().boundingBox()
       await win.mouse.move(box.x + box.width / 2, box.y + 200)

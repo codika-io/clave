@@ -30,6 +30,15 @@ export interface Palette {
   light: boolean
   base: string
   hues: readonly string[]
+  /**
+   * The one hue that stands for the field — its signature, always a member of
+   * `hues` rather than a colour invented beside them. It is what a surface
+   * made of this field lights its controls up in: over a coloured ground the
+   * app's grey hover reads as dirt on the picture, not as a control waking.
+   * Chosen as the palette's most characteristic MID-tone, so a wash of it
+   * lands on both a dark and a light app theme.
+   */
+  accent: string
 }
 
 /**
@@ -42,62 +51,74 @@ export const PALETTES: Record<string, Palette> = {
   glacier: {
     light: true,
     base: '#E9F0F3',
-    hues: ['#F8FBFC', '#DEEAF0', '#C6DAE5', '#A3C4D6', '#7FA9C2', '#EBF3EF', '#5D8CA9']
+    hues: ['#F8FBFC', '#DEEAF0', '#C6DAE5', '#A3C4D6', '#7FA9C2', '#EBF3EF', '#5D8CA9'],
+    accent: '#5D8CA9'
   },
   tide: {
     light: false,
     base: '#3A4A52',
-    hues: ['#2B3A42', '#5C7285', '#7FA3A8', '#4A6355', '#C2CCC7', '#8FA8B8', '#33413B']
+    hues: ['#2B3A42', '#5C7285', '#7FA3A8', '#4A6355', '#C2CCC7', '#8FA8B8', '#33413B'],
+    accent: '#7FA3A8'
   },
   furnace: {
     light: false,
     base: '#33261E',
-    hues: ['#4A6B66', '#2E4744', '#E89B4F', '#C25C2E', '#8A3A24', '#1F1712', '#E8C088']
+    hues: ['#4A6B66', '#2E4744', '#E89B4F', '#C25C2E', '#8A3A24', '#1F1712', '#E8C088'],
+    accent: '#E89B4F'
   },
   meadow: {
     light: false,
     base: '#22331C',
-    hues: ['#16240F', '#3E5C26', '#6E8C33', '#D9A03F', '#7FA8C9', '#E4D9BC', '#C9803F']
+    hues: ['#16240F', '#3E5C26', '#6E8C33', '#D9A03F', '#7FA8C9', '#E4D9BC', '#C9803F'],
+    accent: '#6E8C33'
   },
   aurora: {
     light: false,
     base: '#221B33',
-    hues: ['#150F22', '#3A2A63', '#6C4FA8', '#B06BC4', '#4FD0C0', '#8FE3B8', '#E5C0F0']
+    hues: ['#150F22', '#3A2A63', '#6C4FA8', '#B06BC4', '#4FD0C0', '#8FE3B8', '#E5C0F0'],
+    accent: '#B06BC4'
   },
   basalt: {
     light: false,
     base: '#26282B',
-    hues: ['#17181A', '#33373B', '#4E555C', '#6B737A', '#8C949B', '#2A3138', '#C0C4C6']
+    hues: ['#17181A', '#33373B', '#4E555C', '#6B737A', '#8C949B', '#2A3138', '#C0C4C6'],
+    accent: '#8C949B'
   },
   verdigris: {
     light: false,
     base: '#1F3A35',
-    hues: ['#132724', '#152825', '#2C5F55', '#3E8C7A', '#7FC2AC', '#C9A227', '#0F1D1B']
+    hues: ['#132724', '#152825', '#2C5F55', '#3E8C7A', '#7FC2AC', '#C9A227', '#0F1D1B'],
+    accent: '#3E8C7A'
   },
   solar: {
     light: true,
     base: '#F2E4C9',
-    hues: ['#FFF6E4', '#FBE9C4', '#F3C77E', '#E8A04F', '#F5DDB0', '#FFFDF6', '#DE8B4A']
+    hues: ['#FFF6E4', '#FBE9C4', '#F3C77E', '#E8A04F', '#F5DDB0', '#FFFDF6', '#DE8B4A'],
+    accent: '#E8A04F'
   },
   dawn: {
     light: true,
     base: '#F6E9DE',
-    hues: ['#FDF5EC', '#F9DFC9', '#F3C7AC', '#EBA284', '#DB7D5F', '#F3D6E0', '#C9664A']
+    hues: ['#FDF5EC', '#F9DFC9', '#F3C7AC', '#EBA284', '#DB7D5F', '#F3D6E0', '#C9664A'],
+    accent: '#DB7D5F'
   },
   reef: {
     light: true,
     base: '#E5F1EB',
-    hues: ['#F5FBF8', '#D4EAE0', '#B0DCCE', '#82C4B0', '#4FAB92', '#F2C9AE', '#2F8E78']
+    hues: ['#F5FBF8', '#D4EAE0', '#B0DCCE', '#82C4B0', '#4FAB92', '#F2C9AE', '#2F8E78'],
+    accent: '#4FAB92'
   },
   iris: {
     light: true,
     base: '#EAEBF7',
-    hues: ['#F8F8FD', '#DEE0F4', '#C5C9EC', '#A2A8DE', '#7E86CE', '#E9DDF1', '#5A63BA']
+    hues: ['#F8F8FD', '#DEE0F4', '#C5C9EC', '#A2A8DE', '#7E86CE', '#E9DDF1', '#5A63BA'],
+    accent: '#7E86CE'
   },
   pearl: {
     light: true,
     base: '#F0EDEE',
-    hues: ['#FBF9F9', '#E9E2F2', '#DFEBE6', '#F5E3E4', '#C9BBDF', '#AFCFC6', '#8E7CB8']
+    hues: ['#FBF9F9', '#E9E2F2', '#DFEBE6', '#F5E3E4', '#C9BBDF', '#AFCFC6', '#8E7CB8'],
+    accent: '#8E7CB8'
   }
 }
 
@@ -142,6 +163,12 @@ export function isPaletteKey(v: unknown): v is PaletteKey {
 /** The ink a field is legible in: near-black on a light ground, creme on a dark one. */
 export function fieldInk(key: PaletteKey): string {
   return PALETTES[key].light ? '#1C1915' : '#F7F4EC'
+}
+
+/** The field's signature hue — what a surface made of this field lights its
+ *  controls up in. See `Palette.accent`. */
+export function fieldAccent(key: PaletteKey): string {
+  return PALETTES[key].accent
 }
 
 /** The engine's seeded PRNG, verbatim: same seed, same field, forever. */

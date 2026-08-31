@@ -16,6 +16,7 @@ import { useUsageStore, tightestWindow, shortLabel, formatReset } from '../../st
 import { formatDuration } from '../work-tracker/utils'
 import { UserIconDisplay } from '../ui/UserIconDisplay'
 import { BrandField } from '../ui/BrandField'
+import { fieldAccent } from '../../lib/brand-field'
 import { cn } from '../../lib/utils'
 
 export function UpdateBanner(): React.ReactElement {
@@ -106,7 +107,7 @@ function UsageLine({ window: w }: { window: UsageWindow }): React.ReactElement {
   return (
     <button
       onClick={() => openSettings('usage')}
-      className="flex items-center gap-1.5 min-w-0 flex-1 h-full px-1.5 -mx-0.5 rounded-lg hover:bg-surface-100 transition-colors"
+      className="sidebar-footer-line"
       title={[w.label, `${left}% left`, reset].filter(Boolean).join(' · ')}
     >
       <span className="usage-meter" aria-hidden="true">
@@ -145,11 +146,7 @@ function WorkLine(): React.ReactElement {
     : 'text-text-secondary'
 
   return (
-    <button
-      onClick={() => openSettings('usage')}
-      className="flex items-center gap-1.5 min-w-0 flex-1 h-full px-1.5 -mx-0.5 rounded-lg hover:bg-surface-100 transition-colors"
-      title="Usage"
-    >
+    <button onClick={() => openSettings('usage')} className="sidebar-footer-line" title="Usage">
       <ClockIcon className={cn('w-3.5 h-3.5 flex-shrink-0', tone)} />
       <span className={cn('text-[11px] font-medium', tone)}>
         {formatDuration(todayTotalMinutes)}
@@ -171,10 +168,12 @@ function WorkLine(): React.ReactElement {
  * the work — the avatar and name, the day's hours, the way to reach us, and the
  * settings gear.
  *
- * Its ground is the user's own Antasphere field, bled faintly across the panel
- * and masked away before it reaches the gear (see .sidebar-footer-field). That
- * is the whole point of the block: the colour you chose is a material the panel
- * is made of, not a 20% wash behind a glyph.
+ * Its ground is the user's own Antasphere field, bled faintly across the whole
+ * panel (see .sidebar-footer-field). That is the whole point of the block: the
+ * colour you chose is a material the panel is made of, not a 20% wash behind a
+ * glyph — and every control in it lights up in that field's own hue rather than
+ * in the app's grey, which over a coloured ground reads as dirt (see
+ * .sidebar-footer in main.css, and `Palette.accent` in lib/brand-field).
  */
 export function SidebarFooter(): React.ReactElement {
   const name = useUserStore((s) => s.name)
@@ -217,7 +216,13 @@ export function SidebarFooter(): React.ReactElement {
   const showMetaRow = usage !== null || showWork || showFeedbackIcon
 
   return (
-    <div className="sidebar-panel">
+    <div
+      className="sidebar-panel sidebar-footer"
+      /* The field's own colour, handed to the CSS as the fill every control in
+         this panel highlights in. It is data (one hue per palette, twelve of
+         them), so it arrives as a custom property rather than as a class. */
+      style={{ '--field-accent': fieldAccent(avatarField) } as React.CSSProperties}
+    >
       {/* The panel's ground. Held a hair off the app's own surface and then
           grained at well over the house alpha: the gradient is genuinely there,
           you just meet the noise first — the way the website's page field sits
@@ -234,7 +239,7 @@ export function SidebarFooter(): React.ReactElement {
       <div className="sidebar-footer-row sidebar-footer-row--user">
         <button
           onClick={() => openSettings()}
-          className="relative flex-shrink-0"
+          className="sidebar-footer-avatar"
           title="Settings (⌘,)"
         >
           <UserIconDisplay icon={avatarIcon} field={avatarField} seed={avatarSeed} size="xs" />
