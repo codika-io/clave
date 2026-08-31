@@ -1,6 +1,6 @@
 # Usage Analytics
 
-Track token usage, costs, and activity patterns across all your Claude Code sessions.
+View Claude account limits and local Pi token and cost totals.
 
 [Open Usage](clave://navigate/usage)
 
@@ -13,4 +13,4 @@ Track token usage, costs, and activity patterns across all your Claude Code sess
 
 ## Data Source
 
-Usage data is read from Claude Code's session files (`~/.claude/projects/**/*.jsonl`). No data is sent anywhere, all analysis happens locally.
+Pi totals come from `~/.pi/agent/sessions/**/*.jsonl` and cover Today, 7 days, 30 days, or all retained sessions. They are local totals, not provider quota. No Pi session data leaves the machine.

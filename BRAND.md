@@ -48,6 +48,7 @@ class next to its family; never inline the styling at the call site.
 |---|---|---|
 | Inside a panel, bar, or floating box (side panel path bar, terminal header, message trail, git bar) | `.panel-icon-btn` | 28px (`--control-h-md`) box, 16px icon (`w-4 h-4`), hover `--surface-100`, `data-active="true"` = accent tint (toggles), `:disabled` = 0.4 |
 | The sidebar launcher row specifically | `.launcher-icon-btn` | identical look; launcher-local name |
+| The sidebar's foot panel | `.sidebar-footer-btn` (and `.sidebar-footer-line` for the row-shaped one) | identical box, but the hover fill is `--field-fill` — the user's own palette, not `--surface-100` |
 | The app toolbar and standalone spots | `.btn-icon btn-icon-md` (also `-sm`/`-xs`) | fixed square per size, hover `--surface-200`, `:disabled` = 0.4 |
 
 - The sizes are **boxes, not paddings** — a fixed square, glyph chosen to read
@@ -83,6 +84,23 @@ surface-200). Disabled is always `opacity: 0.4` + `cursor: not-allowed`.
   `--sidebar-gutter`, never to hand-picked padding.
 - Side-panel tree rows: `--panel-row-h` (28px); git tree section rows
   `--git-tree-row-h` (30px); hairlines between blocks use `--rule-color` only.
+
+## The one surface that is NOT grey: the sidebar's foot
+
+The foot panel is made of the user's Antasphere field, and grey is the one hover
+that cannot go over a coloured ground — it reads as dirt on the picture rather
+than as a control waking up. So `SidebarFooter` hands the panel its palette's
+signature hue as `--field-accent` (an inline custom property; the hue itself is
+`Palette.accent` in `lib/brand-field.ts`, one per palette, always a member of
+that palette's own `hues`), and `.sidebar-footer` derives `--field-fill` /
+`--field-fill-strong` from it. Every control in that panel takes those instead
+of `--surface-100` / `--surface-200`. Nothing else in the app does this: outside
+the foot, the grey ladder below is still the answer.
+
+That panel also insets its contents by the system's 3px, which the bare
+`.sidebar-panel` does not — a row exactly one control tall in a box with no
+padding puts the button ON the card's border, and it reads as a block cut out of
+the card. `tests/e2e/sidebar-foot.spec.mjs` asserts both the inset and the tint.
 
 ## The ladder of grays (per theme, never literal)
 

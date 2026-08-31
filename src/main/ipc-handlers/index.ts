@@ -22,8 +22,10 @@ import { registerWorkspaceHandlers } from './workspace-handlers'
 import { registerExchangeHandlers } from './exchange-handlers'
 import { registerPreviewHandlers } from './preview-handlers'
 import { registerHistoryHandlers } from './history-handlers'
+import { registerKeymapHandlers, type KeymapHandlerDeps } from './keymap-handlers'
+import { registerLaunchProfileHandlers } from './launch-profile-handlers'
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers(deps: KeymapHandlerDeps = {}): void {
   registerAppHandlers()
   registerUsageHandlers()
   registerGitHandlers()
@@ -48,4 +50,6 @@ export function registerIpcHandlers(): void {
   registerExchangeHandlers()
   registerPreviewHandlers()
   registerHistoryHandlers()
+  registerKeymapHandlers(deps)
+  registerLaunchProfileHandlers()
 }

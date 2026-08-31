@@ -9,6 +9,13 @@ import { stateFilePath } from './agent-state-manager'
 import { getMcpRuntime, writeSessionMcpConfig, deleteSessionMcpConfig } from './mcp/mcp-runtime'
 import { workspaceManager } from './workspace-manager'
 import { dismissSessionOffers } from './copy-offer-manager'
+import { launchProfileManager } from './launch-profile-manager'
+import {
+  buildAgentArgv,
+  type AgentKind,
+  type LaunchProfile,
+  type PiThinkingLevel
+} from '../shared/agent-launch'
 
 const isWindows = process.platform === 'win32'
 
@@ -43,11 +50,24 @@ function isValidModelName(model: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,198}[A-Za-z0-9]$|^[A-Za-z0-9]$/.test(model)
 }
 
+/** Pi accepts model patterns in addition to ids. Keep the field free-form as
+ * advertised while refusing empty/control-bearing values and flag smuggling;
+ * shellSingleQuote remains the command-injection boundary. */
+function isValidPiOptionValue(value: string): boolean {
+  // eslint-disable-next-line no-control-regex
+  return (
+    value.length <= 200 &&
+    value.trim() === value &&
+    !value.startsWith('-') &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  )
+}
+
 /**
  * Build the `--settings` argument that wires Claude Code lifecycle hooks to a
- * per-session state file owned by agent-state-manager. Returns a fully
- * shell-quoted token ready to drop into the `zsh -lc '<cmd>'` command string,
- * or null on Windows (hooks use POSIX `printf`/`grep`; the app ships macOS-only).
+ * per-session state file owned by agent-state-manager. Returns the raw JSON
+ * argument; the shared argv renderer quotes it as one shell token. Returns null
+ * on Windows (hooks use POSIX `printf`/`grep`; the app ships macOS-only).
  *
  * State words written: idle (start), working (prompt/tool activity), blocked
  * (permission/elicitation prompt), done (turn complete), ended (session end).
@@ -87,7 +107,7 @@ function buildClaudeHookSettingsArg(claveSessionId: string): string | null {
       SessionEnd: [write('ended')]
     }
   }
-  return shellSingleQuote(JSON.stringify(settings))
+  return JSON.stringify(settings)
 }
 
 let loginShellEnv: Record<string, string> | null = null
@@ -281,6 +301,7 @@ function getTmuxConfigPath(): string {
 }
 
 function agentModeTag(options?: PtySpawnOptions): string {
+  if (options?.piMode) return 'pi'
   if (options?.antigravityMode) return 'antigravity'
   if (options?.codexMode) return 'codex'
   if (options?.claudeAgentsMode) return 'agents'
@@ -346,6 +367,7 @@ export interface SessionRecord {
    *  state file (keyed by this id) keeps matching after reattach. */
   id: string
   claudeSessionId?: string
+  piSessionId?: string
   cwd: string
   folderName: string
   /** The tab label as the user sees it — a manual rename or an auto-generated
@@ -358,11 +380,15 @@ export interface SessionRecord {
   claudeMode: boolean
   antigravityMode: boolean
   codexMode: boolean
+  piMode: boolean
   claudeAgentsMode: boolean
   dangerousMode: boolean
   /** Model the session was launched on (claude/codex), so a dead-sidecar
    *  re-spawn after a reboot relaunches the CLI on the same model. */
   model?: string
+  launchProfileId?: string
+  piProvider?: string
+  piThinking?: PiThinkingLevel
   /** Claude account/profile this session runs under, so the badge + config dir
    *  survive an app restart and re-adoption. */
   configDir?: string
@@ -534,9 +560,14 @@ export interface PtySpawnOptions {
   claudeMode?: boolean
   antigravityMode?: boolean
   codexMode?: boolean
+  piMode?: boolean
   claudeAgentsMode?: boolean
   resumeSessionId?: string
   claudeSessionId?: string
+  piSessionId?: string
+  launchProfileId?: string
+  piProvider?: string
+  piThinking?: PiThinkingLevel
   initialCommand?: string
   autoExecute?: boolean
   /** Initial prompt handed to the agent CLI's interactive mode (claude/codex
@@ -611,6 +642,11 @@ export interface PtySession {
   ptyProcess: pty.IPty | null
   alive: boolean
   claudeSessionId?: string
+  piSessionId?: string
+  launchProfileId?: string
+  model?: string
+  piProvider?: string
+  piThinking?: PiThinkingLevel
   /** Set when this session is backed by a tmux session (the tmux session name). */
   tmuxName?: string
   pending?: PendingSpawn
@@ -641,21 +677,50 @@ class PtyManager {
     const useAgentsMode = options?.claudeAgentsMode === true
     const useAntigravityMode = options?.antigravityMode === true
     const useCodexMode = options?.codexMode === true
-    const useClaudeMode = options?.claudeMode !== false && !useAntigravityMode && !useCodexMode && !useAgentsMode
-
-    // Like resume ids, the model is interpolated into the shell command string
-    // (and round-trips through the tmux sidecar), so reject anything outside
-    // the model-ref alphabet loudly rather than spawn a mangled command.
-    const model = options?.model
-    if (model !== undefined && !isValidModelName(model)) {
-      throw new Error('Invalid model name')
-    }
+    const usePiMode = options?.piMode === true
+    const useClaudeMode = options?.claudeMode !== false && !useAntigravityMode && !useCodexMode && !useAgentsMode && !usePiMode
 
     let claudeSessionId: string | undefined
+    let piSessionId: string | undefined
+    const kind: AgentKind | null = usePiMode
+      ? 'pi'
+      : useAntigravityMode
+        ? 'antigravity'
+        : useCodexMode
+          ? 'codex'
+          : useAgentsMode
+            ? 'claude-agents'
+            : useClaudeMode
+              ? 'claude'
+              : null
+    const launchProfile: LaunchProfile | undefined = kind
+      ? launchProfileManager.resolve(
+          kind === 'claude-agents' ? 'claude' : kind,
+          options?.workspaceId,
+          options?.launchProfileId
+        )
+      : undefined
+    const model = options?.model ?? (usePiMode ? launchProfile?.pi?.model : undefined)
+    const piProvider = usePiMode ? options?.piProvider ?? launchProfile?.pi?.provider : undefined
+    const piThinking = usePiMode ? options?.piThinking ?? launchProfile?.pi?.thinking : undefined
+
+    // These values cross IPC and round-trip through the restore record. Shell
+    // quoting is the injection boundary; shape checks also prevent accidental
+    // flag-looking or malformed provider/model references from reaching a CLI.
+    if (model !== undefined && !(usePiMode ? isValidPiOptionValue(model) : isValidModelName(model))) {
+      throw new Error('Invalid model name')
+    }
+    if (piProvider !== undefined && !isValidPiOptionValue(piProvider)) throw new Error('Invalid Pi provider')
+    if (piThinking !== undefined && !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(piThinking)) {
+      throw new Error('Invalid Pi thinking level')
+    }
+
     let shellArgs: string[]
     if (isWindows) {
       // Windows: cmd.exe with /c to exec the command directly (no echoed prompt).
-      if (useAntigravityMode) {
+      if (usePiMode) {
+        throw new Error('Pi sessions are supported on macOS only')
+      } else if (useAntigravityMode) {
         shellArgs = ['/c', 'agy']
       } else if (useCodexMode) {
         shellArgs = model ? ['/c', 'codex', '-m', model] : ['/c', 'codex']
@@ -685,59 +750,50 @@ class PtyManager {
     } else {
       // POSIX: -l -c '<cmd>' runs the command non-interactively (no echo, no
       // prompt, no rc-file chatter like the macOS bash→zsh notice).
-      if (useAntigravityMode) {
-        shellArgs = [
-          '-l',
-          '-c',
-          options?.initialPrompt
-            ? `agy -i ${shellSingleQuote(options.initialPrompt)}`
-            : 'agy'
-        ]
-      } else if (useCodexMode) {
-        const codexParts = ['codex']
-        if (model) codexParts.push('-m', shellSingleQuote(model))
-        if (options?.initialPrompt) codexParts.push(shellSingleQuote(options.initialPrompt))
-        shellArgs = ['-l', '-c', codexParts.join(' ')]
-      } else if (useAgentsMode) {
-        // `claude agents` is an interactive subcommand and does not accept
-        // --session-id / --resume / --dangerously-skip-permissions, so spawn it bare.
-        shellArgs = ['-l', '-c', 'claude agents']
-      } else if (!useClaudeMode) {
+      if (!kind) {
         shellArgs = ['-l']
       } else {
-        const parts = ['claude']
-        if (options?.resumeSessionId) {
-          // Interpolated into the `zsh -l -c` string below — reject ids carrying
-          // shell metacharacters (e.g. from a poisoned sidecar) rather than run them.
-          if (!isValidClaudeSessionId(options.resumeSessionId)) {
-            throw new Error('Invalid resume session id')
-          }
-          parts.push('--resume', options.resumeSessionId)
-          claudeSessionId = options.resumeSessionId
-        } else {
-          const requested = options?.claudeSessionId
-          claudeSessionId = requested && isValidClaudeSessionId(requested) ? requested : randomUUID()
-          parts.push('--session-id', claudeSessionId)
+        const profile = launchProfile!
+        if ((kind === 'claude' || kind === 'pi') && options?.resumeSessionId && !isValidClaudeSessionId(options.resumeSessionId)) {
+          throw new Error('Invalid resume session id')
         }
-        if (options?.dangerousMode) parts.push('--dangerously-skip-permissions')
-        if (model) parts.push('--model', shellSingleQuote(model))
-        // Wire lifecycle hooks → per-session state file for deterministic tab status.
-        const settingsArg = buildClaudeHookSettingsArg(id)
-        if (settingsArg) parts.push('--settings', settingsArg)
-        // Wire the in-app MCP server so the agent can manipulate Clave (open
-        // tabs, create groups). The config rides in a 0600 file rather than
-        // inline JSON to keep the bearer token off ps/tmux-visible command lines.
-        const mcpConfigPath = getMcpRuntime() ? writeSessionMcpConfig(id) : null
-        if (mcpConfigPath) parts.push('--mcp-config', shellSingleQuote(mcpConfigPath))
-        // Initial prompt goes LAST after a `--` separator. `--` ends the
-        // variadic --mcp-config (so the prompt isn't read as another config
-        // path) AND stops a prompt that begins with `-` from being parsed as a
-        // flag. Verified: `claude <flags> --mcp-config F -- '<prompt>'`.
-        if (options?.initialPrompt) parts.push('--', shellSingleQuote(options.initialPrompt))
-        // CLAVE_SESSION_ID rides inside the command string, not the pty env: when
-        // a tmux server already exists, new-session inherits the server's
-        // environment, so only the command string reliably reaches claude.
-        shellArgs = ['-l', '-c', `CLAVE_SESSION_ID=${shellSingleQuote(id)} ${parts.join(' ')}`]
+        if (kind === 'claude') {
+          claudeSessionId = options?.resumeSessionId
+            ?? (options?.claudeSessionId && isValidClaudeSessionId(options.claudeSessionId)
+              ? options.claudeSessionId
+              : randomUUID())
+        }
+        if (kind === 'pi') {
+          piSessionId = options?.resumeSessionId
+            ?? (options?.piSessionId && isValidClaudeSessionId(options.piSessionId)
+              ? options.piSessionId
+              : randomUUID())
+        }
+        const mcpConfigPath = kind === 'claude' && getMcpRuntime() ? writeSessionMcpConfig(id) : null
+        const piExtensionPath = kind === 'pi'
+          ? path
+              .join(__dirname, '../../resources/pi-clave-state.js')
+              .replace('app.asar', 'app.asar.unpacked')
+          : undefined
+        const argv = buildAgentArgv({
+          kind,
+          profile,
+          sessionId: kind === 'pi' ? piSessionId : claudeSessionId,
+          resumeSessionId: options?.resumeSessionId,
+          dangerousMode: options?.dangerousMode,
+          model,
+          provider: piProvider,
+          thinking: piThinking,
+          initialPrompt: options?.initialPrompt,
+          claudeSettings: kind === 'claude' ? buildClaudeHookSettingsArg(id) ?? undefined : undefined,
+          mcpConfigPath: mcpConfigPath ?? undefined,
+          piStateExtensionPath: piExtensionPath
+        })
+        const assignments = [`CLAVE_SESSION_ID=${shellSingleQuote(id)}`]
+        if (kind === 'pi') assignments.push(`CLAVE_AGENT_STATE_FILE=${shellSingleQuote(stateFilePath(id))}`)
+        const rendered = `${assignments.join(' ')} ${argv.map(shellSingleQuote).join(' ')}`
+        const failure = `__clave_status=$?; if [ $__clave_status -ne 0 ]; then printf '\\r\\n[Clave] Agent command exited with status %d\\r\\nCommand: %s\\r\\n' $__clave_status ${shellSingleQuote(argv.map(shellSingleQuote).join(' '))}; fi; exit $__clave_status`
+        shellArgs = ['-l', '-c', `${rendered}; ${failure}`]
       }
     }
 
@@ -763,6 +819,7 @@ class PtyManager {
     const recordBase: SessionRecord = {
       id,
       claudeSessionId,
+      piSessionId,
       cwd,
       folderName,
       displayName: previous?.displayName,
@@ -770,9 +827,13 @@ class PtyManager {
       claudeMode: useClaudeMode,
       antigravityMode: useAntigravityMode,
       codexMode: useCodexMode,
+      piMode: usePiMode,
       claudeAgentsMode: useAgentsMode,
       dangerousMode: options?.dangerousMode === true,
       model,
+      launchProfileId: launchProfile?.id,
+      piProvider,
+      piThinking,
       configDir: options?.configDir,
       claudeProfileId: options?.claudeProfileId,
       claudeProfileLabel: options?.claudeProfileLabel,
@@ -857,6 +918,11 @@ class PtyManager {
       }
     }
     if (claudeSessionId) session.claudeSessionId = claudeSessionId
+    if (piSessionId) session.piSessionId = piSessionId
+    if (launchProfile) session.launchProfileId = launchProfile.id
+    if (model) session.model = model
+    if (piProvider) session.piProvider = piProvider
+    if (piThinking) session.piThinking = piThinking
     if (tmuxName) session.tmuxName = tmuxName
     this.sessions.set(id, session)
     return session

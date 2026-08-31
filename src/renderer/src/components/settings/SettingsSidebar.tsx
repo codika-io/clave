@@ -3,14 +3,19 @@ import {
   AdjustmentsHorizontalIcon,
   SwatchIcon,
   ArrowDownTrayIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  CommandLineIcon,
+  CpuChipIcon
 } from '@heroicons/react/24/outline'
 import { useUpdaterStore } from '../../store/updater-store'
 import { useSessionStore, type SettingsSection } from '../../store/session-store'
+import { WordmarkStrip } from '../layout/Wordmark'
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
   { id: 'general', label: 'General', icon: AdjustmentsHorizontalIcon },
+  { id: 'agents', label: 'Agents', icon: CpuChipIcon },
   { id: 'appearance', label: 'Appearance', icon: SwatchIcon },
+  { id: 'keymaps', label: 'Keymaps', icon: CommandLineIcon },
   { id: 'updates', label: 'Software Update', icon: ArrowDownTrayIcon },
   { id: 'usage', label: 'Usage', icon: ChartBarIcon }
 ]
@@ -27,11 +32,11 @@ export function SettingsSidebar() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
-      {/* Draggable top spacer — clears the macOS traffic lights */}
-      <div
-        className="pt-11 pb-1 flex-shrink-0"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      />
+      {/* The same top band the sessions sidebar opens with — traffic-light
+          clearance, the mark, and the offset the panel below starts at. This
+          view replaces that sidebar whole, so the band has to come with it or
+          the app's only mark disappears the moment you step in here. */}
+      <WordmarkStrip />
 
       {/* Header: back to sessions + title */}
       <div className="px-2 pb-2 flex items-center gap-1.5 flex-shrink-0">

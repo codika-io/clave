@@ -152,12 +152,15 @@ interface SessionState {
   /** Save the outgoing workspace's selection and restore (or initialize) the
    *  incoming one's. Pure view/selection change — sessions are untouched. */
   applyWorkspaceSwitch: (fromId: string | null, toId: string | null) => void
+  /** Add a session as the sidebar's FIRST top-level row. Never nested: a
+   *  session joins a group by being launched into one, not by the launch
+   *  happening to catch a selection. */
   addSession: (session: Session) => void
-  /** Add a session and place it in ONE step — inside `groupId`, or at the
-   *  top level when null — with no placement heuristic. `addSession` nests a
-   *  new tab into whatever group holds the selection; a resume from the
-   *  history dialog must land where it is told, and subscribers (the history
-   *  ledger's diff) must never see a transient placement in between. */
+  /** Add a session and place it in ONE step — as the first row inside
+   *  `groupId`, or the first row of the sidebar when null. One step because a
+   *  resume from the history dialog must land where it is told and
+   *  subscribers (the history ledger's diff) must never see a transient
+   *  placement in between. */
   addSessionInGroup: (session: Session, groupId: string | null) => void
   /** Add an ADOPTED session — a survivor at boot, a tab handed over by
    *  another window — without any placement heuristic: never nested into the
@@ -316,6 +319,7 @@ function normalizeSession(session: Session): Session {
     workspaceId,
     antigravityMode: session.antigravityMode ?? false,
     codexMode: session.codexMode ?? false,
+    piMode: session.piMode ?? false,
     claudeAgentsMode: session.claudeAgentsMode ?? false,
     detectedUrl: session.detectedUrl ?? null,
     serverStatus: session.serverStatus ?? null,
@@ -584,7 +588,6 @@ export const useSessionStore = create<SessionState>((set) => ({
       // launches, MCP caller inheritance, adoption, duplicate/resume); everyone
       // else inherits the active workspace. Mirrors the pty:spawn-side default.
       const newSession = normalizeSession(session)
-      const workspaceId = newSession.workspaceId
 
       // A spawn into a HIDDEN workspace (MCP background work) must not steal
       // the user's view: the sidebar already filters the tab out, so grabbing
@@ -599,34 +602,18 @@ export const useSessionStore = create<SessionState>((set) => ({
           }
         : {}
 
-      // Check if selected sessions all belong to a single group
-      const selectedIds = state.selectedSessionIds
-      let targetGroup: SessionGroup | undefined
-      if (selectedIds.length > 0) {
-        const group = state.groups.find((g) =>
-          selectedIds.every((sid) => g.sessionIds.includes(sid))
-        )
-        // Never auto-nest across workspaces: a hidden-workspace spawn (MCP)
-        // must not land inside the visible selection's group.
-        if (group && (group.workspaceId ?? undefined) === workspaceId) targetGroup = group
-      }
-
-      if (targetGroup) {
-        // Add session inside the selected group
-        return {
-          sessions: [...state.sessions, newSession],
-          ...focusPatch,
-          groups: state.groups.map((g) =>
-            g.id === targetGroup!.id ? { ...g, sessionIds: [...g.sessionIds, session.id] } : g
-          ),
-          displayOrder: getDisplayOrder(state)
-        }
-      }
-
+      // FIRST ROW, top level, always. A new tab used to be appended at the
+      // bottom and, when the whole selection sat in one group, nested into
+      // that group — so where a launch landed depended on where you happened
+      // to be standing, and the thing you just asked for was the thing you
+      // then had to go and find. It is the newest row now, at the top, where
+      // the eye already is; a session that belongs in a group gets there by
+      // being launched from that group's own `+` (addSessionInGroup), which
+      // is a request rather than a guess.
       return {
         sessions: [...state.sessions, newSession],
         ...focusPatch,
-        displayOrder: [...getDisplayOrder(state), session.id]
+        displayOrder: [session.id, ...getDisplayOrder(state)]
       }
     }),
 
@@ -643,12 +630,16 @@ export const useSessionStore = create<SessionState>((set) => ({
           }
         : {}
       const target = groupId ? state.groups.find((g) => g.id === groupId) : undefined
+      // Top of wherever it lands — the group's first row, or the sidebar's,
+      // the same rule addSession follows. A drag DROP onto a group still
+      // appends (moveLayoutItems, position 'inside'): a hand aiming at a
+      // group is placing the row, and it lands under what is already there.
       if (target) {
         return {
           sessions: [...state.sessions, newSession],
           ...focusPatch,
           groups: state.groups.map((g) =>
-            g.id === target.id ? { ...g, sessionIds: [...g.sessionIds, session.id] } : g
+            g.id === target.id ? { ...g, sessionIds: [session.id, ...g.sessionIds] } : g
           ),
           displayOrder: getDisplayOrder(state)
         }
@@ -656,7 +647,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       return {
         sessions: [...state.sessions, newSession],
         ...focusPatch,
-        displayOrder: [...getDisplayOrder(state), session.id]
+        displayOrder: [session.id, ...getDisplayOrder(state)]
       }
     }),
 

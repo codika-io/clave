@@ -48,7 +48,7 @@ export function registerPtyHandlers(): void {
     // and receives pty:data. Adoption and re-homing rebind through this same
     // path (the adopting window is the sender).
     if (win) windowRegistry.bindSession(session.id, win.id)
-    const isClaudeMode = options?.claudeMode !== false && !options?.antigravityMode && !options?.codexMode && !options?.claudeAgentsMode
+    const isClaudeMode = options?.claudeMode !== false && !options?.antigravityMode && !options?.codexMode && !options?.piMode && !options?.claudeAgentsMode
     const isResumed = !!options?.resumeSessionId
 
     // Schedule title generation for new Claude-mode sessions
@@ -87,7 +87,12 @@ export function registerPtyHandlers(): void {
       cwd: session.cwd,
       folderName: session.folderName,
       alive: session.alive,
-      claudeSessionId: session.claudeSessionId ?? null
+      claudeSessionId: session.claudeSessionId ?? null,
+      piSessionId: session.piSessionId ?? null,
+      launchProfileId: session.launchProfileId,
+      model: session.model,
+      piProvider: session.piProvider,
+      piThinking: session.piThinking
     }
   })
 

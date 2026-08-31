@@ -17,12 +17,14 @@
 import { mapAgentState, sessionStateTransition } from '../../../shared/session-state'
 import type { AgentRunStateWord } from '../../../shared/session-state'
 import type { Session, SessionGroup } from '../store/session-types'
+import { AGENT_CAPABILITIES } from '../../../shared/agent-launch'
 
-export type SessionMode = 'claude' | 'antigravity' | 'codex' | 'claude-agents' | 'terminal'
+export type SessionMode = 'claude' | 'antigravity' | 'codex' | 'pi' | 'claude-agents' | 'terminal'
 
 export function sessionMode(s: Session): SessionMode {
   if (s.antigravityMode) return 'antigravity'
   if (s.codexMode) return 'codex'
+  if (s.piMode) return 'pi'
   if (s.claudeAgentsMode) return 'claude-agents'
   if (s.claudeMode) return 'claude'
   return 'terminal'
@@ -46,7 +48,7 @@ export function captureEndpoint(
 ): {
   sessionId: string
   name: string
-  mode: SessionMode
+  mode: Exclude<SessionMode, 'pi'>
   cwd: string
   claudeSessionId: string | null
   groupId: string | null
@@ -54,10 +56,12 @@ export function captureEndpoint(
   model: string | null
 } {
   const group = groupOfSession(groups, s.id)
+  const mode = sessionMode(s)
+  if (mode === 'pi') throw new Error('Pi exchange capture is unsupported')
   return {
     sessionId: s.id,
     name: s.name,
-    mode: sessionMode(s),
+    mode,
     cwd: s.cwd,
     claudeSessionId: s.claudeSessionId ?? null,
     groupId: group?.id ?? null,
@@ -68,7 +72,11 @@ export function captureEndpoint(
 
 /** Terminals are not agents: like tab_spawn, their lifecycle is not captured. */
 function isAgentTab(s: Session): boolean {
-  return sessionMode(s) !== 'terminal' && s.sessionType === 'local'
+  const mode = sessionMode(s)
+  if (mode === 'terminal' || mode === 'pi') return false
+  return (
+    AGENT_CAPABILITIES[mode === 'claude-agents' ? 'claude' : mode].exchangeCapture === 'supported'
+  )
 }
 
 /**

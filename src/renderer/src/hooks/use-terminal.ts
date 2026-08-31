@@ -165,7 +165,7 @@ export function useTerminal(sessionId: string) {
       }
     })
 
-    // Deterministic Claude run state from CC lifecycle hooks (working/blocked/done).
+    // Deterministic lifecycle state from Claude hooks or Clave's bundled Pi extension.
     const cleanupAgentState = window.electronAPI.onAgentState(sessionId, (state) => {
       if (state === 'idle' || state === 'working' || state === 'blocked' || state === 'done') {
         // Capture the transition BEFORE the store applies the word: the

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { UpdaterState } from '../shared/updater-types'
+import type { LaunchProfile, LauncherFamily } from '../shared/agent-launch'
 
 /** Creates a typed IPC event listener with cleanup function. */
 function createIpcListener<T extends unknown[]>(
@@ -14,6 +15,27 @@ function createIpcListener<T extends unknown[]>(
 }
 
 const electronAPI = {
+  /** Which OS the window is on. The renderer needs it for exactly one class of
+   *  decision: chrome that holds room for the platform's own window buttons.
+   *  Only macOS puts them INSIDE our chrome (`titleBarStyle: 'hiddenInset'`,
+   *  src/main/index.ts); Windows and Linux keep a native frame and draw them
+   *  above it, so clearance held on those platforms is a hole. Sync, not an
+   *  invoke: it is a constant for the life of the process and chrome laid out
+   *  after a round-trip would jump on first paint. */
+  platform: process.platform,
+
+  launchProfilesList: () => ipcRenderer.invoke('launch-profiles:list'),
+  launchProfileUpsert: (profile: LaunchProfile) =>
+    ipcRenderer.invoke('launch-profiles:upsert', profile),
+  launchProfileDelete: (profileId: string) =>
+    ipcRenderer.invoke('launch-profiles:delete', profileId),
+  launchProfileSetGlobal: (family: LauncherFamily, profileId: string | null) =>
+    ipcRenderer.invoke('launch-profiles:set-global', { family, profileId }),
+  launchProfileSetWorkspace: (
+    workspaceId: string,
+    family: LauncherFamily,
+    profileId: string | null
+  ) => ipcRenderer.invoke('launch-profiles:set-workspace', { workspaceId, family, profileId }),
   spawnSession: (
     cwd: string,
     options?: {
@@ -22,9 +44,14 @@ const electronAPI = {
       claudeMode?: boolean
       antigravityMode?: boolean
       codexMode?: boolean
+      piMode?: boolean
       claudeAgentsMode?: boolean
       resumeSessionId?: string
       claudeSessionId?: string
+      piSessionId?: string
+      launchProfileId?: string
+      piProvider?: string
+      piThinking?: import('../shared/agent-launch').PiThinkingLevel
       initialCommand?: string
       autoExecute?: boolean
       initialPrompt?: string
@@ -157,8 +184,8 @@ const electronAPI = {
   // capture above; the list is the dialog's one read.
   historyStamp: (row: unknown) => ipcRenderer.send('history:stamp', row),
   historyList: () => ipcRenderer.invoke('history:list'),
-  historyConversation: (cwd: string, claudeSessionId: string) =>
-    ipcRenderer.invoke('history:conversation', { cwd, claudeSessionId }),
+  historyConversation: (cwd: string, claudeSessionId: string, provider?: 'claude' | 'pi') =>
+    ipcRenderer.invoke('history:conversation', { cwd, claudeSessionId, provider }),
   scrollSessionToText: (id: string, needle: string, fromBottom: number) =>
     ipcRenderer.invoke('session:scroll-to-text', id, needle, fromBottom),
   historySearch: (request: {
@@ -355,6 +382,7 @@ const electronAPI = {
 
   // Usage
   getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),
+  getPiUsage: (range: 'today' | '7d' | '30d' | 'all') => ipcRenderer.invoke('usage:get-pi', range),
 
   // Git
   gitCheckIgnored: (cwd: string, paths: string[]) =>
@@ -493,6 +521,12 @@ const electronAPI = {
   preferencesGet: (key: string) => ipcRenderer.invoke('preferences:get', key),
   preferencesSet: (key: string, value: unknown) =>
     ipcRenderer.invoke('preferences:set', key, value),
+  keymapsLoad: () => ipcRenderer.invoke('keymaps:load'),
+  keymapsSave: (value: unknown) => ipcRenderer.invoke('keymaps:save', value),
+  keymapsImport: () => ipcRenderer.invoke('keymaps:import') as Promise<string | null>,
+  keymapsExport: (json: string) => ipcRenderer.invoke('keymaps:export', json) as Promise<boolean>,
+  onKeymapsChanged: (callback: (value: unknown) => void) =>
+    createIpcListener<[unknown]>('keymaps:changed', callback),
   trustWorkspaceRoot: (root: string) =>
     ipcRenderer.invoke('clave:trust-root', root) as Promise<void>,
   untrustWorkspaceRoot: (root: string) =>

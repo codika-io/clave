@@ -34,10 +34,10 @@ import { PinnedGroupsGrid } from '../session/PinnedGroupsGrid'
 import { GroupPickerDialog } from '../session/GroupPickerDialog'
 import { useHistoryStore } from '../../store/history-store'
 import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
-import { useFullScreen } from '../../hooks/use-fullscreen'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
-import { Wordmark, WordmarkBy } from './Wordmark'
+import { WordmarkStrip } from './Wordmark'
 import { ScrollArea } from '../ui/scroll-area'
+import { shortcutLabel } from '../../store/keymap-store'
 import {
   PencilSquareIcon,
   TrashIcon,
@@ -144,7 +144,6 @@ function useOverflows(ref: React.RefObject<HTMLDivElement | null>): boolean {
 
 export function Sidebar() {
   // No traffic lights in fullscreen, so the wordmark's clearance for them goes.
-  const fullScreen = useFullScreen()
   const sessions = useSessionStore((s) => s.sessions)
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   // When there's an active selection, unselected tabs/groups fade so the
@@ -159,7 +158,6 @@ export function Sidebar() {
   const displayOrder = useSessionStore((s) => s.displayOrder)
   const createGroup = useSessionStore((s) => s.createGroup)
   const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
-  const undoSidebar = useSessionStore((s) => s.undoSidebar)
   const deleteGroup = useSessionStore((s) => s.deleteGroup)
   const setGroupColor = useSessionStore((s) => s.setGroupColor)
   const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
@@ -176,7 +174,6 @@ export function Sidebar() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null)
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
   const [terminalDialogState, setTerminalDialogState] = useState<{
     groupId: string
     terminalId: string | null // null = adding new
@@ -236,13 +233,6 @@ export function Sidebar() {
     }
   }, [addSession])
 
-  const resetSessions = useSessionStore((s) => s.resetSessions)
-
-  const handleResetSessions = useCallback(async () => {
-    setResetConfirmOpen(false)
-    await resetSessions()
-  }, [resetSessions])
-
   // Selection anchor for Cmd+Shift range select (Finder behavior)
   const selectionAnchorRef = useRef<string | null>(null)
 
@@ -276,55 +266,6 @@ export function Sidebar() {
     const isGroup = groups.some((g) => g.id === draggedIds[0])
     return isGroup ? draggedIds[0] : null
   }, [isDragging, draggedIds, groups])
-
-  // Cmd+G to group, Cmd+Alt+G to ungroup, Cmd+Shift+Delete to reset
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'g') {
-        // Cmd+G: group selected sessions
-        e.preventDefault()
-        const state = useSessionStore.getState()
-        if (state.selectedSessionIds.length >= 1) {
-          createGroup(state.selectedSessionIds)
-        }
-      }
-      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'g') {
-        // Cmd+Alt+G: ungroup
-        e.preventDefault()
-        const state = useSessionStore.getState()
-        const containingGroup = state.groups.find(
-          (g) =>
-            state.selectedSessionIds.length > 0 &&
-            state.selectedSessionIds.every((sid) => g.sessionIds.includes(sid))
-        )
-        if (containingGroup) {
-          ungroupSessions(containingGroup.id)
-        }
-      }
-      // Cmd+Shift+Delete: reset all sessions
-      if (e.metaKey && e.shiftKey && e.key === 'Backspace') {
-        e.preventDefault()
-        if (useSessionStore.getState().sessions.length > 0) {
-          setResetConfirmOpen(true)
-        }
-      }
-      // Cmd+Z: undo last sidebar group/move/rename action
-      if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
-        const target = e.target as HTMLElement | null
-        const tag = target?.tagName
-        const editable =
-          tag === 'INPUT' ||
-          tag === 'TEXTAREA' ||
-          (target instanceof HTMLElement && target.isContentEditable)
-        if (editable) return
-        if (useSessionStore.getState().sidebarUndoStack.length === 0) return
-        e.preventDefault()
-        undoSidebar()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [createGroup, ungroupSessions, undoSidebar])
 
   // Load Claude account profiles. (Workspace boot + .clave file watchers moved
   // to AppShell's sequential boot effect — adoption needs the registry first.)
@@ -855,9 +796,6 @@ export function Sidebar() {
       const session = state.sessions.find((s) => s.id === sessionId)
       if (!session) return
 
-      // Find if session belongs to a group
-      const parentGroup = state.groups.find((g) => g.sessionIds.includes(sessionId))
-
       let newSessionId: string | null = null
 
       if (session.sessionType === 'remote-terminal' || session.sessionType === 'remote-claude') {
@@ -903,7 +841,7 @@ export function Sidebar() {
       } else {
         // Local session
         try {
-          const dupOtherProvider = session.antigravityMode || session.codexMode || session.claudeAgentsMode
+          const dupOtherProvider = session.antigravityMode || session.codexMode || session.piMode || session.claudeAgentsMode
           // Re-prime the clone with the same one-shot prompt (agent modes only;
           // `claude agents` rejects a positional prompt). Undefined for a normal
           // (un-primed) session → same as today.
@@ -912,9 +850,13 @@ export function Sidebar() {
             claudeMode: dupOtherProvider ? false : session.claudeMode,
             antigravityMode: session.antigravityMode,
             codexMode: session.codexMode,
+            piMode: session.piMode,
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
             model: session.model,
+            launchProfileId: session.launchProfileId,
+            piProvider: session.piProvider,
+            piThinking: session.piThinking,
             initialPrompt,
             // A duplicate belongs where its source lives, not to the active view.
             workspaceId: session.workspaceId
@@ -930,11 +872,16 @@ export function Sidebar() {
             claudeMode: dupOtherProvider ? false : session.claudeMode,
             antigravityMode: session.antigravityMode,
             codexMode: session.codexMode,
+            piMode: session.piMode,
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
-            model: session.model,
+            model: sessionInfo.model,
             workspaceId: session.workspaceId,
             claudeSessionId: sessionInfo.claudeSessionId,
+            piSessionId: sessionInfo.piSessionId,
+            launchProfileId: sessionInfo.launchProfileId,
+            piProvider: sessionInfo.piProvider,
+            piThinking: sessionInfo.piThinking,
             // Persist so re-duplicating the clone also re-primes.
             initialPrompt,
             sessionType: 'local',
@@ -946,8 +893,11 @@ export function Sidebar() {
         }
       }
 
-      // Move new session into the same group, right after the original
-      if (newSessionId && parentGroup) {
+      // A duplicate sits right after its original, wherever that is — inside
+      // the group that holds it, or beside it at the top level. It is the one
+      // launch that is ABOUT another row, so it is the one that does not go to
+      // the top of the list with every other new session.
+      if (newSessionId) {
         useSessionStore.getState().moveItems([newSessionId], sessionId, 'after')
       }
     },
@@ -958,18 +908,25 @@ export function Sidebar() {
     async (sessionId: string, dangerousMode: boolean) => {
       const state = useSessionStore.getState()
       const session = state.sessions.find((s) => s.id === sessionId)
-      if (!session || !session.claudeSessionId) return
+      const conversationId = session?.piMode ? session.piSessionId : session?.claudeSessionId
+      if (!session || !conversationId) return
 
       try {
-        // Preserve the variant: resuming a `claude agents` session relaunches it as
-        // `claude agents --resume`, not plain `claude --resume`.
+        // Preserve the provider and resolved launch metadata from the original
+        // run. Pi resume uses its historical provider/model/thinking while the
+        // launch profile still contributes the current command and extra args.
         const isAgents = !!session.claudeAgentsMode
+        const isPi = !!session.piMode
         const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
-          claudeMode: !isAgents,
+          claudeMode: !isAgents && !isPi,
           claudeAgentsMode: isAgents,
-          dangerousMode,
+          piMode: isPi,
+          dangerousMode: isPi ? false : dangerousMode,
           model: session.model,
-          resumeSessionId: session.claudeSessionId,
+          launchProfileId: session.launchProfileId,
+          piProvider: session.piProvider,
+          piThinking: session.piThinking,
+          resumeSessionId: conversationId,
           // The resumed conversation stays in its session's workspace.
           workspaceId: session.workspaceId
         })
@@ -981,12 +938,17 @@ export function Sidebar() {
           alive: sessionInfo.alive,
           activityStatus: 'idle',
           promptWaiting: null,
-          claudeMode: !isAgents,
+          claudeMode: !isAgents && !isPi,
           claudeAgentsMode: isAgents,
-          dangerousMode,
-          model: session.model,
+          piMode: isPi,
+          dangerousMode: isPi ? false : dangerousMode,
+          model: sessionInfo.model,
           workspaceId: session.workspaceId,
           claudeSessionId: sessionInfo.claudeSessionId,
+          piSessionId: sessionInfo.piSessionId,
+          launchProfileId: sessionInfo.launchProfileId,
+          piProvider: sessionInfo.piProvider,
+          piThinking: sessionInfo.piThinking,
           sessionType: 'local'
         })
         useSessionStore.getState().selectSession(sessionInfo.id, false)
@@ -1096,18 +1058,20 @@ export function Sidebar() {
           onClick: () => handleDuplicateSession(sessionId)
         }
       ]
-      if (session && !session.alive && session.claudeMode && session.claudeSessionId) {
+      if (session && !session.alive && ((session.claudeMode && session.claudeSessionId) || (session.piMode && session.piSessionId))) {
         items.push(
           {
             label: 'Resume',
             icon: <PlayIcon className="w-3.5 h-3.5" />,
             onClick: () => handleResumeSession(sessionId, false)
           },
-          {
-            label: 'Resume (skip permissions)',
-            icon: <ShieldExclamationIcon className="w-3.5 h-3.5" />,
-            onClick: () => handleResumeSession(sessionId, true)
-          }
+          ...(session.piMode
+            ? []
+            : [{
+                label: 'Resume (skip permissions)',
+                icon: <ShieldExclamationIcon className="w-3.5 h-3.5" />,
+                onClick: () => handleResumeSession(sessionId, true)
+              }])
         )
       }
       const state = useSessionStore.getState()
@@ -1115,7 +1079,7 @@ export function Sidebar() {
         items.push({
           label: 'Group',
           icon: <Squares2X2Icon className="w-3.5 h-3.5" />,
-          shortcut: '\u2318G',
+          shortcut: shortcutLabel('groupSelectedSessions') ?? undefined,
           onClick: () => createGroup(state.selectedSessionIds)
         })
       }
@@ -1185,7 +1149,7 @@ export function Sidebar() {
           {
             label: 'History',
             icon: <ClockIcon className="w-3.5 h-3.5" />,
-            shortcut: '\u2318\u21e7H',
+            shortcut: shortcutLabel('openHistory') ?? undefined,
             onClick: () => useHistoryStore.getState().openHistory(groupId)
           },
           group?.view
@@ -1383,52 +1347,11 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full bg-surface-50">
-      {/* Draggable top spacer — clears the macOS traffic lights, and carries
-          the exact offset at which the content column's first card below the
-          toolbar begins, so the launcher panel under it lands on the terminal
-          cards' top edge rather than a few pixels below.
-
-          It also carries the wordmark. The traffic lights are placed at
-          x=16, y=18 (src/main/index.ts) and run about 52px wide by 12px tall,
-          so their centre line is y=24 and the mark starts at 84px — 16px of
-          clearance past the last button. The bottom padding is what puts the
-          mark ON that centre line rather than in the middle of the spacer.
-
-          In FULLSCREEN there are no traffic lights, so that 84px is clearance
-          for nothing and the mark reads as pushed into the middle of the strip.
-          It takes the position the first traffic light would have had instead —
-          16px, the same x the buttons are placed at — which is the window's own
-          gutter and enough air that the mark is not sitting on the edge.
-
-          This is the one strip of window chrome that is nobody else's, and the
-          only place carrying the Antasphere mark. `pointer-events: none`
-          keeps the whole strip draggable — the mark is a mark, not a target. */}
-      <div
-        className="wordmark-strip flex-shrink-0 flex items-center"
-        data-wordmark-strip
-        data-fullscreen={fullScreen ? 'true' : 'false'}
-        style={
-          {
-            height: 'var(--content-top-offset)',
-            paddingLeft: fullScreen ? '16px' : '84px',
-            // Optical, not geometric. The lockup's box is 905 frame units deep
-            // against Clave's 761 of ink — the rest is descender room the
-            // attribution's y and p need and the name never uses — so the ink's
-            // mass sits 1.3px above the middle of its own box. Centre the box
-            // and you centre the wrong thing: the mark read high in the strip
-            // for as long as it has existed. 3px of top padding buys the
-            // descender back and lands Clave's ink centre on 25px, the middle
-            // of the 50px band the launcher panel starts under.
-            paddingTop: '3px',
-            WebkitAppRegion: 'drag'
-          } as React.CSSProperties
-        }
-      >
-        <span className="wordmark-lockup" style={{ pointerEvents: 'none' }}>
-          <Wordmark />
-          <WordmarkBy />
-        </span>
-      </div>
+      {/* The app's draggable top band — the traffic-light clearance, the mark,
+          and the offset the first panel below it starts at. Shared with the
+          Settings and Extensions sidebars, which replace this one whole; see
+          Wordmark.tsx. */}
+      <WordmarkStrip />
 
       {/* Session launcher — pinned above the scroll area so it never scrolls
           away with the session list. (The workspace switcher used to sit here;
@@ -1866,15 +1789,6 @@ export function Sidebar() {
           setDeleteConfirmSessionId(null)
         }}
         onCancel={() => setDeleteConfirmSessionId(null)}
-      />
-
-      {/* Reset sessions confirmation */}
-      <ConfirmDialog
-        isOpen={resetConfirmOpen}
-        title="Reset sessions"
-        message="Close all sessions and start fresh?"
-        onConfirm={handleResetSessions}
-        onCancel={() => setResetConfirmOpen(false)}
       />
 
       {/* Group terminal configuration dialog */}

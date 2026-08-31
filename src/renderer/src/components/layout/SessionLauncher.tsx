@@ -11,6 +11,13 @@ import {
 } from '../../store/launch-prefs'
 import { launchSession, type LaunchCwd } from '../../lib/launch-session'
 import {
+  profilesFor,
+  selectedLaunchProfile,
+  setWorkspaceLaunchProfile,
+  useLaunchProfileStore
+} from '../../store/launch-profile-store'
+import type { LauncherFamily } from '../../../../shared/agent-launch'
+import {
   CommandLineIcon,
   FolderIcon,
   ChevronDownIcon,
@@ -18,7 +25,7 @@ import {
   CheckIcon
 } from '@heroicons/react/24/outline'
 import { AgentPickerPopover } from '../agents/AgentPickerPopover'
-import { ClaudeLogo, AntigravityLogo, CodexLogo } from '../icons/cli-logos'
+import { ClaudeLogo, AntigravityLogo, CodexLogo, PiLogo } from '../icons/cli-logos'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -31,6 +38,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent
 } from '../ui/dropdown-menu'
+import { useShortcutLabel } from '../../store/keymap-store'
 
 /** What the caret's remote entries hand back to the sidebar, which owns the
  *  remote directory picker (remote launches never touch the local cwd rules). */
@@ -50,14 +58,16 @@ const AGENT_LOGOS: Record<AgentKind, typeof ClaudeLogo> = {
   claude: ClaudeLogo,
   'claude-agents': ClaudeLogo,
   antigravity: AntigravityLogo,
-  codex: CodexLogo
+  codex: CodexLogo,
+  pi: PiLogo
 }
 
 const AGENT_LABELS: Record<AgentKind, string> = {
   claude: 'Claude',
   'claude-agents': 'Agents',
   antigravity: 'Antigravity',
-  codex: 'Codex'
+  codex: 'Codex',
+  pi: 'Pi'
 }
 
 /** The caret's menu drops straight DOWN from the panel — the chevron says so —
@@ -111,11 +121,20 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
   const profiles = useClaudeProfileStore((s) => s.profiles)
   const selectedProfileId = useClaudeProfileStore((s) => s.selectedProfileId)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const launchProfilePreferences = useLaunchProfileStore((s) => s.preferences)
+  void launchProfilePreferences
   // Subscribing to the map (not calling the getter) is what re-renders the
   // button when a launch changes what it remembers.
   const byWorkspace = useLaunchPrefsStore((s) => s.byWorkspace)
   void byWorkspace
   const setup = getLastAgentSetup(activeWorkspaceId)
+  const terminalShortcut = useShortcutLabel('newTerminal')
+  const claudeShortcut = useShortcutLabel('newClaude')
+  const dangerousShortcut = useShortcutLabel('newDangerousClaude')
+  const agentsShortcut = useShortcutLabel('newClaudeAgents')
+  const antigravityShortcut = useShortcutLabel('newAntigravity')
+  const codexShortcut = useShortcutLabel('newCodex')
+  const piShortcut = useShortcutLabel('newPi')
 
   const connectedRemoteLocations = locations.filter(
     (l) => l.type === 'remote' && l.status === 'connected'
@@ -125,6 +144,8 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
   const multiProfile = profiles.length > 1
 
   const AgentLogo = AGENT_LOGOS[setup.kind]
+  const setupFamily: LauncherFamily = setup.kind === 'claude-agents' ? 'claude' : setup.kind
+  const binaryProfile = selectedLaunchProfile(setupFamily, activeWorkspaceId, setup.launchProfileId)
   const profileLabel =
     multiProfile && (setup.kind === 'claude' || setup.kind === 'claude-agents')
       ? profiles.find((p) => p.id === (setup.claudeProfileId ?? selectedProfileId))?.label
@@ -158,20 +179,28 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
   const launchAgent = useCallback(
     (next: AgentSetup, cwd: LaunchCwd) => {
       setMenuOpen(false)
+      if (activeWorkspaceId && next.launchProfileId) {
+        const family: LauncherFamily = next.kind === 'claude-agents' ? 'claude' : next.kind
+        void setWorkspaceLaunchProfile(activeWorkspaceId, family, next.launchProfileId)
+      }
       void run({ setup: next, cwd, remember: true })
     },
-    [run]
+    [activeWorkspaceId, run]
   )
 
   /** A Claude entry in the caret menu. With >1 profile it becomes a submenu
    *  whose entries each launch under a specific account. */
   const renderClaudeEntry = useCallback(
     (kind: AgentKind, label: string, shortcut: string | undefined, dangerousMode: boolean) => {
-      const launch = (claudeProfileId?: string): void =>
-        launchAgent({ kind, dangerousMode, claudeProfileId }, { kind: 'workspace-root' })
-      if (!multiProfile) {
+      const binaryProfiles = profilesFor('claude')
+      const launch = (launchProfileId: string, claudeProfileId?: string): void =>
+        launchAgent(
+          { kind, dangerousMode, claudeProfileId, launchProfileId },
+          { kind: 'workspace-root' }
+        )
+      if (!multiProfile && binaryProfiles.length === 1) {
         return (
-          <DropdownMenuItem onSelect={() => launch()}>
+          <DropdownMenuItem onSelect={() => launch(binaryProfiles[0].id)}>
             <ClaudeLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
             <span className="flex-1">{label}</span>
             {shortcut && <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut>}
@@ -186,12 +215,68 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
             <span className="ml-auto text-text-tertiary">{'›'}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <DropdownMenuLabel>Account</DropdownMenuLabel>
-            {profiles.map((p: ClaudeProfile) => (
-              <DropdownMenuItem key={p.id} onSelect={() => launch(p.id)}>
-                <span className="flex-1 truncate">{p.label}</span>
-                {p.id === selectedProfileId && (
-                  <CheckIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+            <DropdownMenuLabel>Launch profile</DropdownMenuLabel>
+            {binaryProfiles.flatMap((binary) =>
+              multiProfile
+                ? profiles.map((account: ClaudeProfile) => (
+                    <DropdownMenuItem
+                      key={`${binary.id}:${account.id}`}
+                      onSelect={() => launch(binary.id, account.id)}
+                    >
+                      <span className="flex-1 truncate">
+                        {binary.name} · {account.label}
+                      </span>
+                      {binary.id === selectedLaunchProfile('claude', activeWorkspaceId).id &&
+                        account.id === selectedProfileId && (
+                          <CheckIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                        )}
+                    </DropdownMenuItem>
+                  ))
+                : [
+                    <DropdownMenuItem key={binary.id} onSelect={() => launch(binary.id)}>
+                      <span className="flex-1 truncate">{binary.name}</span>
+                      {binary.id === selectedLaunchProfile('claude', activeWorkspaceId).id && (
+                        <CheckIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                      )}
+                    </DropdownMenuItem>
+                  ]
+            )}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      )
+    },
+    [activeWorkspaceId, launchAgent, multiProfile, profiles, selectedProfileId]
+  )
+
+  const renderAgentEntry = useCallback(
+    (kind: Exclude<AgentKind, 'claude' | 'claude-agents'>, label: string, shortcut?: string) => {
+      const binaryProfiles = profilesFor(kind)
+      const Logo = AGENT_LOGOS[kind]
+      const launch = (launchProfileId: string): void =>
+        launchAgent({ kind, dangerousMode: false, launchProfileId }, { kind: 'workspace-root' })
+      if (binaryProfiles.length === 1) {
+        return (
+          <DropdownMenuItem onSelect={() => launch(binaryProfiles[0].id)}>
+            <Logo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+            <span className="flex-1">{label}</span>
+            {shortcut && <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut>}
+          </DropdownMenuItem>
+        )
+      }
+      const selected = selectedLaunchProfile(kind, activeWorkspaceId)
+      return (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Logo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+            <span className="flex-1">{label}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>Launch profile</DropdownMenuLabel>
+            {binaryProfiles.map((profile) => (
+              <DropdownMenuItem key={profile.id} onSelect={() => launch(profile.id)}>
+                <span className="flex-1 truncate">{profile.name}</span>
+                {profile.id === selected.id && (
+                  <CheckIcon className="w-3.5 h-3.5 text-text-tertiary" />
                 )}
               </DropdownMenuItem>
             ))}
@@ -199,7 +284,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
         </DropdownMenuSub>
       )
     },
-    [launchAgent, multiProfile, profiles, selectedProfileId]
+    [activeWorkspaceId, launchAgent]
   )
 
   return (
@@ -209,7 +294,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
           <button
             disabled={busy}
             className="launcher-btn"
-            title={'New terminal — workspace root (⌥ to choose a folder)'}
+            title={`New terminal — workspace root${terminalShortcut ? ` (${terminalShortcut})` : ''}; ⌥ to choose a folder`}
             onClick={(e) => void run({ setup: null, cwd: cwdFor(e) })}
           >
             <CommandLineIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
@@ -222,7 +307,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
             <button
               disabled={busy}
               className="launcher-btn"
-              title={`${describeSetup(setup, profileLabel)} — workspace root (⌥ to choose a folder)`}
+              title={`${describeSetup(setup, [binaryProfile.name, profileLabel].filter(Boolean).join(' · '))} — workspace root (⌥ to choose a folder)`}
               onClick={(e) => void run({ setup, cwd: cwdFor(e), remember: true })}
             >
               <AgentLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
@@ -259,30 +344,26 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
               >
                 {hasRemoteLocations && <DropdownMenuLabel>This Mac</DropdownMenuLabel>}
 
-                {renderClaudeEntry('claude', 'Claude Code', '⌘N', false)}
-                {renderClaudeEntry('claude', 'Claude Code (skip permissions)', '⌘D', true)}
-                {renderClaudeEntry('claude-agents', 'Claude Agents', '⌘⇧A', false)}
-                <DropdownMenuItem
-                  onSelect={() =>
-                    launchAgent(
-                      { kind: 'antigravity', dangerousMode: false },
-                      { kind: 'workspace-root' }
-                    )
-                  }
-                >
-                  <AntigravityLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                  <span className="flex-1">Antigravity CLI</span>
-                  <DropdownMenuShortcut>{'⌘I'}</DropdownMenuShortcut>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() =>
-                    launchAgent({ kind: 'codex', dangerousMode: false }, { kind: 'workspace-root' })
-                  }
-                >
-                  <CodexLogo className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                  <span className="flex-1">Codex CLI</span>
-                  <DropdownMenuShortcut>{'⌘U'}</DropdownMenuShortcut>
-                </DropdownMenuItem>
+                {renderClaudeEntry('claude', 'Claude Code', claudeShortcut ?? undefined, false)}
+                {renderClaudeEntry(
+                  'claude',
+                  'Claude Code (skip permissions)',
+                  dangerousShortcut ?? undefined,
+                  true
+                )}
+                {renderClaudeEntry(
+                  'claude-agents',
+                  'Claude Agents',
+                  agentsShortcut ?? undefined,
+                  false
+                )}
+                {renderAgentEntry(
+                  'antigravity',
+                  'Antigravity CLI',
+                  antigravityShortcut ?? undefined
+                )}
+                {renderAgentEntry('codex', 'Codex CLI', codexShortcut ?? undefined)}
+                {renderAgentEntry('pi', 'Pi', piShortcut ?? undefined)}
 
                 {connectedRemoteLocations.map((loc) => (
                   <div key={loc.id}>

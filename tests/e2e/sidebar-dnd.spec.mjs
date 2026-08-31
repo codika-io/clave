@@ -156,7 +156,14 @@ export async function run(t) {
 
     let before = await layout(win)
     t.equal('three groups are on screen', before.length, 3)
-    const [alpha, beta, gamma] = before
+    // BY NAME, never by index. A newly launched group is now the sidebar's
+    // first row, so stamping Alpha, Beta, Gamma renders them Gamma, Beta,
+    // Alpha — and a positional read quietly binds `alpha` to Gamma, which
+    // fails as "Alpha has one session" rather than as "you read the wrong
+    // lane". `layout()` already carries each card's name; use it.
+    const byName = (n) => before.find((g) => g.name === n)
+    const [alpha, beta, gamma] = [byName('Alpha'), byName('Beta'), byName('Gamma')]
+    t.check('all three lanes are named on screen', !!alpha && !!beta && !!gamma, before)
     t.equal('Alpha has three sessions', alpha.ids.length, 3)
     t.equal('Beta has one session', beta.ids.length, 1)
     t.equal('Gamma has one session', gamma.ids.length, 1)

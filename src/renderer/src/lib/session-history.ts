@@ -52,7 +52,11 @@ export async function resumeHistoryEntry(
   options: { groupId: string | null; dangerousMode: boolean }
 ): Promise<string | null> {
   const state = useSessionStore.getState()
-  const live = state.sessions.find((s) => s.alive && s.claudeSessionId === entry.claudeSessionId)
+  const live = state.sessions.find(
+    (s) =>
+      s.alive &&
+      (s.claudeSessionId === entry.claudeSessionId || s.piSessionId === entry.claudeSessionId)
+  )
   if (live) {
     state.selectSession(live.id, false)
     state.setFocusedSession(live.id)
@@ -65,9 +69,12 @@ export async function resumeHistoryEntry(
   const workspaceId = entry.workspaceId ?? getActiveWorkspaceId() ?? undefined
   try {
     const info = await window.electronAPI.spawnSession(entry.cwd, {
-      claudeMode: true,
-      dangerousMode: options.dangerousMode,
+      claudeMode: entry.provider === 'claude',
+      piMode: entry.provider === 'pi',
+      dangerousMode: entry.provider === 'claude' && options.dangerousMode,
       model: entry.model ?? undefined,
+      piProvider: entry.provider === 'pi' ? (entry.agentProvider ?? undefined) : undefined,
+      piThinking: entry.provider === 'pi' ? (entry.thinking ?? undefined) : undefined,
       resumeSessionId: entry.claudeSessionId,
       workspaceId
     })
@@ -83,13 +90,18 @@ export async function resumeHistoryEntry(
         alive: info.alive,
         activityStatus: 'idle',
         promptWaiting: null,
-        claudeMode: true,
+        claudeMode: entry.provider === 'claude',
         antigravityMode: false,
         codexMode: false,
-        dangerousMode: options.dangerousMode,
-        model: entry.model ?? undefined,
+        piMode: entry.provider === 'pi',
+        dangerousMode: entry.provider === 'claude' && options.dangerousMode,
+        model: info.model,
         workspaceId,
         claudeSessionId: info.claudeSessionId,
+        piSessionId: info.piSessionId,
+        launchProfileId: info.launchProfileId,
+        piProvider: info.piProvider,
+        piThinking: info.piThinking,
         sessionType: 'local'
       },
       target

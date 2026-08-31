@@ -1108,8 +1108,31 @@ body,
   pointer-events: none;
 }
 
+/* The foot panel proper — .sidebar-panel plus the two things only this one
+   needs.
+
+   It INSETS its contents by the system's 3px, which the plain panel does not.
+   Without it the second row was exactly one control tall, so the chat button
+   sat ON the panel's bottom border and ON the fold above it: a rounded block
+   with two of its corners cut off by the card it lives in. Nothing else in the
+   app does that, because nothing else puts a control in a box with no padding.
+
+   And it carries `--field-fill`, the fill every control in it highlights in:
+   the user's own field colour, not the app's grey. Grey is the one hover that
+   cannot go over a coloured ground — it reads as dirt on the picture rather
+   than as a control waking up. `--field-accent` is set from the palette by
+   SidebarFooter; the fallback keeps the panel alive if it ever arrives
+   without one. */
+.sidebar-footer {
+  padding: 3px;
+  --field-fill: color-mix(in srgb, var(--field-accent, var(--color-accent)) 30%, transparent);
+  --field-fill-strong: color-mix(in srgb, var(--field-accent, var(--color-accent)) 42%, transparent);
+}
+
 /* One line of the panel. The rows are the panel's own padding rather than
-   .sidebar-item's: this is chrome, like the launcher, not list. */
+   .sidebar-item's: this is chrome, like the launcher, not list. The 4px here
+   plus the panel's own 3px is the 7px keyline every control in the foot lines
+   up on, both edges. */
 .sidebar-footer-row {
   position: relative;
   z-index: 1;
@@ -1117,19 +1140,21 @@ body,
   align-items: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0 0.375rem;
+  padding: 0 4px;
   min-width: 0;
 }
 
 /* The identity row, tall enough to carry the avatar with air around it. */
 .sidebar-footer-row--user {
-  height: 2.875rem; /* 46px = 32px avatar + 7px above and below */
+  height: 2.5rem; /* 40px = 32px avatar + 4px above and below (+3px panel = 7) */
 }
 
-/* The second line: time worked on the left, the doors on the right. Shorter
-   than the row above it, because it is a footnote to it. */
+/* The second line: headroom on the left, the doors on the right. Shorter than
+   the row above it, because it is a footnote to it — but taller than the
+   control it holds, which is the whole point: a 28px button in a 28px row has
+   nowhere to be. */
 .sidebar-footer-row--meta {
-  height: var(--control-h-md);
+  height: 2.125rem; /* 34px = 28px control + 3px above and below (+3px panel = 6) */
 }
 
 /* The hairline between them. Inset from the panel's edges so it reads as a
@@ -1138,7 +1163,7 @@ body,
   position: relative;
   z-index: 1;
   height: 1px;
-  margin: 0 0.375rem;
+  margin: 0 4px;
   background-color: var(--color-border);
 }
 
@@ -1176,6 +1201,10 @@ body,
 /* An icon target inside the panel — the settings gear, the feedback door.
    Same size and the same hover fill as the launcher's trailing buttons, so the
    two panels answer to the same touch. */
+/* The panel's icon buttons — the settings gear, the chat door. The same box,
+   radius, press dip and disabled state as .panel-icon-btn, because that is
+   exactly what they are: an icon button inside a --radius-xl panel. Only the
+   hover fill differs, and it differs on purpose (see .sidebar-footer). */
 .sidebar-footer-btn {
   display: inline-flex;
   align-items: center;
@@ -1183,13 +1212,54 @@ body,
   flex-shrink: 0;
   width: var(--control-h-md);
   height: var(--control-h-md);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-control);
   color: var(--text-tertiary);
-  transition: color 150ms, background-color 150ms;
+  transition: color 150ms, background-color 150ms, opacity 150ms, scale 120ms var(--ease-out-expo);
 }
 .sidebar-footer-btn:hover {
   color: var(--text-primary);
-  background-color: var(--surface-100);
+  background-color: var(--field-fill);
+}
+.sidebar-footer-btn:active:not(:disabled) {
+  background-color: var(--field-fill-strong);
+}
+.sidebar-footer-btn:disabled {
+  opacity: 0.4;
+}
+
+/* The whole left half of the second line — the headroom meter and its reading,
+   or the hours worked — as one target that opens the Usage pane. A row rather
+   than a square: it stretches sideways where the buttons are fixed squares.
+   Its HEIGHT is the button's, not the row's: `height: 100%` filled the row
+   edge to edge, so the fill ran into the fold above it and read as a slab
+   rather than as the control beside the chat door. */
+.sidebar-footer-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--control-h-md);
+  padding: 0 0.375rem;
+  border-radius: var(--radius-control);
+  transition: background-color 150ms, scale 120ms var(--ease-out-expo);
+}
+.sidebar-footer-line:hover {
+  background-color: var(--field-fill);
+}
+.sidebar-footer-line:active {
+  background-color: var(--field-fill-strong);
+}
+
+/* The avatar's own target. No fill of its own — the tile IS the picture, and a
+   wash over it would be a second field — so it says "live" with the press dip
+   the rest of the family uses. */
+.sidebar-footer-avatar {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: var(--radius-lg);
+  transition: scale 120ms var(--ease-out-expo);
 }
 
 /* The name. Its own hover target — clicking it opens settings — but no fill of
@@ -2265,6 +2335,9 @@ body,
 .group-switcher-chip:active,
 .panel-tab:active,
 .panel-icon-btn:active:not(:disabled),
+.sidebar-footer-btn:active:not(:disabled),
+.sidebar-footer-line:active,
+.sidebar-footer-avatar:active,
 .segmented-item:active,
 .idle-group-start:active {
   scale: 0.97;
@@ -2622,6 +2695,74 @@ body,
 }
 
 /* ── Settings ── */
+
+/* Command-mode readout. It sits above every app panel but below native chrome,
+   and uses the same material as menus because it is equally transient. */
+.keymap-command-hud {
+  position: fixed;
+  z-index: 80;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.375rem 0.625rem;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.keymap-command-hud[data-state="matched"] {
+  color: var(--color-status-ready);
+}
+.keymap-command-hud[data-state="cancelled"] {
+  color: var(--text-tertiary);
+}
+
+.keymap-row {
+  min-height: var(--control-h-lg);
+}
+.keymap-bindings {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.keymap-binding {
+  min-width: 4.5rem;
+  height: var(--control-h-md);
+  padding: 0 0.5rem;
+  border: 1px solid var(--border-subtle-color);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-100);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: color 150ms, border-color 150ms, background-color 150ms;
+}
+.keymap-binding:hover,
+.keymap-binding:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--color-accent);
+  outline: none;
+}
+.keymap-json {
+  min-height: 28rem;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.keymap-message {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-subtle-color);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-100);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.keymap-message[data-tone="error"] {
+  color: var(--color-destructive);
+}
 
 /* Section label above each settings card (small, regular case) */
 .settings-section-title {

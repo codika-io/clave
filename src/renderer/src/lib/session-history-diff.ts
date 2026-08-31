@@ -83,7 +83,7 @@ function identityRow(s: Session, group: SessionGroup | undefined, ts: string): H
     kind: 'placed',
     ts,
     sessionId: s.id,
-    claudeSessionId: s.claudeSessionId ?? null,
+    claudeSessionId: s.claudeSessionId ?? s.piSessionId ?? null,
     name: s.name,
     cwd: s.cwd,
     mode: sessionMode(s),

@@ -1,6 +1,6 @@
 # Clave
 
-Mac desktop app for managing multiple coding-agent CLI sessions in parallel. Provider-agnostic: it orchestrates Claude Code (Cmd+N), Antigravity CLI (Cmd+I), and Codex CLI (Cmd+U) sessions side by side, plus plain terminals (Cmd+T) and remote agents over OpenClaw. Electron + React + TypeScript.
+Mac desktop app for managing multiple coding-agent CLI sessions in parallel. Provider-agnostic: it orchestrates Claude Code (Cmd+N), Antigravity CLI (Cmd+I), Codex CLI (Cmd+U), and Pi (Cmd+Shift+P) sessions side by side, plus plain terminals (Cmd+T) and remote agents over OpenClaw. Electron + React + TypeScript.
 
 Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` and `/clave:recover-sessions`) ships from `plugin/` in this repo — see `plugin/CLAUDE.md`. It is installed with `npx plugins add codika-io/clave`, resolved through `.claude-plugin/marketplace.json` at the root. The Electron app reads installed plugins from `~/.claude/plugins/` at runtime and never reads `plugin/` directly; the folder is here so a `.clave` format change and the skill that describes it land in the same commit (see the schema sync rule below).
 
@@ -17,7 +17,7 @@ Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` and 
 
 Three-process Electron app:
 
-- **Main** (`src/main/`): Electron window, node-pty, IPC handlers, domain managers. PTY spawns `/bin/zsh -l -c claude` per session. IPC handlers are split into modular files under `ipc-handlers/`.
+- **Main** (`src/main/`): Electron window, node-pty, IPC handlers, domain managers. Agent PTYs spawn through launch profiles, adapted through `/bin/zsh -l -c` for macOS login-shell PATH resolution. IPC handlers are split into modular files under `ipc-handlers/`.
 - **Preload** (`src/preload/`): Typed `window.electronAPI` via contextBridge. All main↔renderer communication goes through IPC.
 - **Renderer** (`src/renderer/src/`): React + Zustand + xterm.js + Tailwind v4 + Framer Motion.
 
@@ -61,7 +61,7 @@ Builds require Apple code signing. Credentials in `.env` (not committed):
 - **Repo must be public** for electron-updater to check GitHub Releases without an auth token.
 - **node-pty spawn-helper** needs +x permissions — handled by `postinstall` script.
 - **No WebGL**: WebGL addon for xterm was removed (context loss issues) — canvas renderer only.
-- **macOS traffic lights**: `trafficLightPosition: { x: 16, y: 16 }` with `hiddenInset` titlebar. Toolbar adds `pl-20` when sidebar is closed to avoid overlap.
+- **macOS traffic lights**: `trafficLightPosition: { x: 16, y: 18 }` with `hiddenInset` titlebar, and ONLY on darwin — Windows and Linux keep a native frame with their controls above our content. Two pieces of chrome hold clearance for the buttons, both asking `useTrafficLights()` (darwin AND not fullscreen, never `!fullScreen` alone): the sidebar's `WordmarkStrip` (90px, dropping to the 16px gutter when they are absent) and the toolbar row (`pl-[4.75rem]`, with the sidebar closed).
 - **Terminal fit**: ResizeObserver guards against zero-size during animations; `FitAddon.fit()` wrapped in try/catch.
 
 ## Rules

@@ -244,6 +244,7 @@ function resolveGroup(raw: { name?: string; cwd?: string; color?: string | null;
       // Accept the retired `geminiMode` key from older .clave files.
       antigravityMode: s.antigravityMode ?? s.geminiMode ?? false,
       codexMode: s.codexMode ?? false,
+      piMode: s.piMode ?? false,
       claudeAgentsMode: s.claudeAgentsMode ?? false,
       dangerousMode: s.dangerousMode ?? false,
       // Free text — no path resolution. Auto-submitted to the agent on launch.
@@ -359,7 +360,7 @@ export function registerClaveFileHandlers(): void {
           return rel === '' ? '.' : rel
         }
 
-        const serializeGroup = (g: { name: string; cwd: string | null; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; view?: string; sessions: ClaveGroupData['sessions']; terminals: ClaveGroupData['terminals'] }) => ({
+        const serializeGroup = (g: { name: string; cwd: string | null; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; view?: string; sessions: ClaveGroupData['sessions']; terminals: ClaveGroupData['terminals'] }): NonNullable<ClaveFileRaw['groups']>[number] => ({
           name: g.name,
           cwd: toRelative(g.cwd),
           color: g.color,
@@ -375,6 +376,7 @@ export function registerClaveFileHandlers(): void {
             claudeMode: s.claudeMode,
             antigravityMode: s.antigravityMode,
             codexMode: s.codexMode,
+            piMode: s.piMode,
             claudeAgentsMode: s.claudeAgentsMode,
             dangerousMode: s.dangerousMode,
             ...(s.prompt ? { prompt: s.prompt } : {}),
@@ -713,4 +715,9 @@ const preferencesManager = new PreferencesManager()
  *  tmux toggle, which the PTY spawn handler consults as a default). */
 export function getPreference(key: string): unknown {
   return preferencesManager.get(key)
+}
+
+/** Persist one app preference from a main-process feature. */
+export function setPreference(key: string, value: unknown): void {
+  preferencesManager.set(key, value)
 }

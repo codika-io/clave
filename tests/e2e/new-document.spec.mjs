@@ -44,7 +44,7 @@ export async function run(t) {
     // A session, so the tree has a cwd; then the tree.
     await win.click('.launcher-row button')
     await win.waitForTimeout(4000)
-    await win.click('button[title="File tree (Cmd+E)"]')
+    await win.click('button[title^="File tree"]')
     await win.waitForTimeout(1200)
 
     await treeContextMenu(win, 'New File')

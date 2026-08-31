@@ -40,7 +40,8 @@ export async function run(t) {
     // A session, so the tree has a cwd; then the tree.
     await win.click('.launcher-row button')
     await win.waitForTimeout(4000)
-    await win.click('button[title="File tree (Cmd+E)"]')
+    // Prefix match: the tooltip now carries the user's own binding for the panel.
+    await win.click('button[title^="File tree"]')
     await win.waitForTimeout(1200)
 
     // --- The preview sheet ---
@@ -66,11 +67,13 @@ export async function run(t) {
       'the button says so while it is copied',
       await win.evaluate(
         () =>
-          !!document.querySelector('.menu-surface--sheet button[title="Copy contents"]')
+          !!document
+            .querySelector('.menu-surface--sheet button[title="Copy contents"]')
             ?.className.includes('text-status-ready')
       ),
       await win.evaluate(
-        () => document.querySelector('.menu-surface--sheet button[title="Copy contents"]')?.className
+        () =>
+          document.querySelector('.menu-surface--sheet button[title="Copy contents"]')?.className
       )
     )
 

@@ -28,7 +28,7 @@ import { createOffer } from '../copy-offer-manager'
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company). Clave can run several WINDOWS at once: a window is the whole app once more, on whatever workspace the user put it on (several windows may show the same workspace); each tab and group lives in the window it was opened in. You address tabs by session id or name from anywhere and Clave routes each call to the window that holds the tab. Things you open land in your own window and default to your own tab's workspace; pass the window parameter (a window id from clave_list) to open them in another window, the workspace parameter to open work in another workspace WITHOUT switching the user's view, clave_open_window to open a new window, and clave_switch_workspace only when the user should look at another workspace in your window. The clave_* tools let you manipulate the app around you: list the windows, tabs and groups, open sibling tabs (claude, antigravity, codex, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups and windows, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file — .html files render as a live page), attach a web view to a group (clave_set_group_view: a dev server URL or an .html file the user sees in the main pane when clicking the group — the way to surface a live dashboard, a preview, or a presentation right where its sessions live), attach a web view to a single session (clave_set_session_view: same idea for ONE tab with no group around it — a dashboard icon appears on the session's row; with a command Clave also runs the server for it, hidden), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user; addressed to your OWN tab it logs a CHECKPOINT into the transport record instead of delivering — a solo session's internal note, written headline-first so the workstream record carries its narrative), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Clave also records the transport layer it mediates — cross-tab message deliveries with both endpoints' token usage, agent tab spawns, Task-subagent fan-outs, session state transitions and tab closes — into an append-only event store that the exos CLI lands into each workstream's record (exos workstream capture); read it there (exos workstream events, stats, log) — there is no live query tool. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
+const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company). Clave can run several WINDOWS at once: a window is the whole app once more, on whatever workspace the user put it on (several windows may show the same workspace); each tab and group lives in the window it was opened in. You address tabs by session id or name from anywhere and Clave routes each call to the window that holds the tab. Things you open land in your own window and default to your own tab's workspace; pass the window parameter (a window id from clave_list) to open them in another window, the workspace parameter to open work in another workspace WITHOUT switching the user's view, clave_open_window to open a new window, and clave_switch_workspace only when the user should look at another workspace in your window. The clave_* tools let you manipulate the app around you: list the windows, tabs and groups, open sibling tabs (claude, antigravity, codex, pi, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups and windows, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file — .html files render as a live page), attach a web view to a group (clave_set_group_view: a dev server URL or an .html file the user sees in the main pane when clicking the group — the way to surface a live dashboard, a preview, or a presentation right where its sessions live), attach a web view to a single session (clave_set_session_view: same idea for ONE tab with no group around it — a dashboard icon appears on the session's row; with a command Clave also runs the server for it, hidden), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user; addressed to your OWN tab it logs a CHECKPOINT into the transport record instead of delivering — a solo session's internal note, written headline-first so the workstream record carries its narrative), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Pi tabs can receive messages and be read through those tools, but Pi cannot call Clave tools itself and Pi exchange capture is unsupported. Clave also records the transport layer it mediates — cross-tab message deliveries with both endpoints' token usage, agent tab spawns, Task-subagent fan-outs, session state transitions and tab closes — into an append-only event store that the exos CLI lands into each workstream's record (exos workstream capture); read it there (exos workstream events, stats, log) — there is no live query tool. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -127,12 +127,14 @@ function resolveWindowArg(arg: unknown, callerSessionId: string | undefined): Br
   if (arg === undefined || arg === null) return null
   if (arg === 'mine') {
     const own = callerSessionId ? windowRegistry.getWindowForSession(callerSessionId) : null
-    if (!own) throw new Error('window "mine" needs a calling tab — this request has no tab identity')
+    if (!own)
+      throw new Error('window "mine" needs a calling tab — this request has no tab identity')
     return own
   }
   const id = typeof arg === 'number' ? arg : Number(arg)
   const win = Number.isInteger(id) ? windowRegistry.getWindow(id) : null
-  if (!win) throw new Error(`No open Clave window with id ${String(arg)} — clave_list shows the windows`)
+  if (!win)
+    throw new Error(`No open Clave window with id ${String(arg)} — clave_list shows the windows`)
   return win
 }
 
@@ -209,7 +211,10 @@ async function aggregateList(
   const scope = typeof payload.workspace === 'string' ? payload.workspace : 'all'
   const scoped =
     scope === 'active'
-      ? { ...payload, workspace: (callerWin && windowRegistry.getWorkspaceForWindow(callerWin.id)) ?? 'all' }
+      ? {
+          ...payload,
+          workspace: (callerWin && windowRegistry.getWorkspaceForWindow(callerWin.id)) ?? 'all'
+        }
       : payload
   const replies = await callRendererAll<Record<string, unknown>>('list', scoped)
   const ok = replies
@@ -220,7 +225,10 @@ async function aggregateList(
     throw new Error(firstErr ?? 'Clave window not available')
   }
   const base = (callerWin ? ok.find((o) => o.windowId === callerWin.id)?.r : undefined) ?? ok[0].r
-  const arr = (o: { windowId: number; r: Record<string, unknown> }, k: string): { id?: unknown }[] =>
+  const arr = (
+    o: { windowId: number; r: Record<string, unknown> },
+    k: string
+  ): { id?: unknown }[] =>
     Array.isArray(o.r[k])
       ? (o.r[k] as { id?: unknown }[]).map((x) => ({ ...x, windowId: o.windowId }))
       : []
@@ -230,9 +238,13 @@ async function aggregateList(
     return {
       id: w.id,
       workspaceId: ws,
-      workspaceName: ws ? (workspaceManager.getWorkspaces().find((x) => x.id === ws)?.name ?? null) : null,
+      workspaceName: ws
+        ? (workspaceManager.getWorkspaces().find((x) => x.id === ws)?.name ?? null)
+        : null,
       isPrimary: identity?.isPrimary ?? false,
-      focused: !!windowRegistry.resolveTargetWindow({}) && windowRegistry.resolveTargetWindow({})?.id === w.id,
+      focused:
+        !!windowRegistry.resolveTargetWindow({}) &&
+        windowRegistry.resolveTargetWindow({})?.id === w.id,
       mine: !!callerWin && callerWin.id === w.id
     }
   })
@@ -243,7 +255,11 @@ async function aggregateList(
     sessions: dedupeById(ok.flatMap((o) => arr(o, 'sessions'))),
     groups: dedupeById(ok.flatMap((o) => arr(o, 'groups'))),
     // Pins are per workspace and global: every window holds the same list.
-    pinnedGroups: dedupeById(ok.flatMap((o) => (Array.isArray(o.r.pinnedGroups) ? (o.r.pinnedGroups as { id?: unknown }[]) : [])))
+    pinnedGroups: dedupeById(
+      ok.flatMap((o) =>
+        Array.isArray(o.r.pinnedGroups) ? (o.r.pinnedGroups as { id?: unknown }[]) : []
+      )
+    )
   }
 }
 
@@ -404,13 +420,13 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_open_session',
     {
       description:
-        'Open a new tab in Clave: a Claude Code, Antigravity CLI, or Codex CLI session, or a plain terminal, in the given directory. Optionally place it in a group — pass a groupId, an exact group name, or "mine" for the calling tab\'s own group. Returns { sessionId, groupId }.',
+        'Open a new tab in Clave: a Claude Code, Antigravity, Codex, or Pi session, or a plain terminal, in the given directory. Optionally place it in a group — pass a groupId, an exact group name, or "mine" for the calling tab\'s own group. Returns { sessionId, groupId }.',
       inputSchema: {
         cwd: z.string().describe('Absolute path of the working directory for the new session'),
         mode: z
           // 'gemini' is kept as a deprecated alias (the Gemini CLI was retired
           // and folded into Antigravity); it maps to an antigravity session.
-          .enum(['claude', 'antigravity', 'gemini', 'codex', 'terminal'])
+          .enum(['claude', 'antigravity', 'gemini', 'codex', 'pi', 'terminal'])
           .default('claude')
           .describe('Which agent CLI to start, or terminal for a plain shell'),
         groupId: z
@@ -424,11 +440,23 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .describe('Start claude with --dangerously-skip-permissions (claude mode only)'),
         model: z
           .string()
-          .regex(/^[A-Za-z0-9][A-Za-z0-9._/:-]{0,199}$/)
+          .min(1)
+          .max(200)
           .optional()
           .describe(
-            'Model the new agent starts on: an alias ("opus", "sonnet", "haiku") or a full model id ("claude-fable-5"). claude and codex modes only; omitted = the CLI\'s default. The user can still switch later with /model inside the tab.'
+            'Model the new agent starts on: an alias ("opus", "sonnet", "haiku") or a full model id ("claude-fable-5"). claude, codex and pi modes only; omitted = the launch profile\'s default, else the CLI\'s. The user can still switch later with /model inside the tab.'
           ),
+        profile: z
+          .string()
+          .min(1)
+          .max(128)
+          .optional()
+          .describe('Named local launch profile id or name. Omit to use the workspace default.'),
+        provider: z.string().min(1).max(200).optional().describe('Pi provider id. Pi mode only.'),
+        thinking: z
+          .enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+          .optional()
+          .describe('Pi thinking level. Pi mode only.'),
         command: z
           .string()
           .optional()
@@ -735,7 +763,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         workspace: z
           .string()
           .optional()
-          .describe('Workspace (id or name) the new window opens on. Default: your own window\'s.')
+          .describe("Workspace (id or name) the new window opens on. Default: your own window's.")
       }
     },
     (args) => run('openWindow', { ...args, callerSessionId })

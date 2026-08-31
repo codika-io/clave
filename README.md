@@ -8,7 +8,7 @@
 
 **Clave is a macOS desktop app for managing multiple coding-agent sessions in parallel.**
 
-Provider-agnostic: run Claude Code, Antigravity CLI, and Codex CLI sessions side by side. Open as many as you need, arrange them in split or grid layouts, and switch between them instantly.
+Provider-agnostic: run Claude Code, Antigravity CLI, Codex CLI, and Pi sessions side by side. Open as many as you need, arrange them in split or grid layouts, and switch between them instantly.
 
 [Features](#features) · [Download](#download) · [Build from Source](#build-from-source) · [Contributing](#contributing)
 
@@ -67,7 +67,7 @@ npx plugins add codika-io/clave   # re-run to pull latest
 
 ## Features
 
-- **Run a fleet of agents** — Open unlimited CLI coding-agent sessions, each in its own PTY. Provider-agnostic: Claude Code, Antigravity CLI, and Codex CLI side by side, plus plain terminals. Arrange them single, split, or in a grid, group them by project, and queue prompts to launch with one click.
+- **Run a fleet of agents** — Open unlimited Claude Code, Antigravity, Codex, and Pi sessions, each in its own PTY, plus plain terminals. Named launch profiles can wrap a CLI with tools such as TokenOps while Clave keeps session and resume flags under its control.
 - **Git, built in** — A full git panel with diff viewer and commit history, plus MagicSync: pull, stage, write an AI commit message, commit, and push in one click.
 - **Local & remote files** — Browse and edit files with syntax-highlighted previews, on your machine or on remote hosts over SSH/SFTP.
 - **Remote sessions** — Connect to any host over SSH and run your agents there with the same UI and shortcuts.
@@ -76,7 +76,7 @@ npx plugins add codika-io/clave   # re-run to pull latest
 ## Requirements
 
 - macOS (Apple Silicon or Intel)
-- At least one supported agent CLI installed and authenticated — [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Antigravity CLI](https://github.com/google-antigravity/antigravity-cli), and/or [Codex CLI](https://github.com/openai/codex). Clave detects whichever you have.
+- At least one supported agent CLI installed and authenticated: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Antigravity CLI](https://github.com/google-antigravity/antigravity-cli), [Codex CLI](https://github.com/openai/codex), or [Pi](https://pi.dev).
 
 ## Privacy & network
 

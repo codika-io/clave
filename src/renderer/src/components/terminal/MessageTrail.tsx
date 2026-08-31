@@ -43,7 +43,8 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
   const [dir, setDir] = useState(1)
 
   const cwd = session?.cwd
-  const claudeSessionId = session?.claudeSessionId ?? null
+  const claudeSessionId = session?.claudeSessionId ?? session?.piSessionId ?? null
+  const provider = session?.piMode ? ('pi' as const) : ('claude' as const)
   const agentState = session?.agentState
 
   // A /clear rotates the transcript id: the trail follows the new
@@ -59,11 +60,11 @@ export function MessageTrail({ sessionId }: { sessionId: string }): ReactElement
   const refresh = useCallback((): void => {
     if (!cwd || !claudeSessionId) return
     window.electronAPI
-      .historyConversation(cwd, claudeSessionId)
+      .historyConversation(cwd, claudeSessionId, provider)
       .then((res) => setTurns(res.turns))
       // Best-effort: the trail just keeps what it last had.
       .catch(() => {})
-  }, [cwd, claudeSessionId])
+  }, [cwd, claudeSessionId, provider])
 
   useEffect(() => {
     refresh()

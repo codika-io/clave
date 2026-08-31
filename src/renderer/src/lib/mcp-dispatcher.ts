@@ -10,6 +10,8 @@ import type { GroupTerminalConfig, GroupViewConfig, Session, SessionGroup } from
 import { usePinnedStore, getPinnedState, togglePinnedGroup } from '../store/pinned-store'
 import type { PinnedGroupSession } from '../store/session-types'
 import { useWorkspaceStore, type Workspace } from '../store/workspace-store'
+import { profilesFor } from '../store/launch-profile-store'
+import type { PiThinkingLevel } from '../../../shared/agent-launch'
 import { setActiveWorkspace } from './workspace-actions'
 import { getRegisteredTerminal } from './terminal-registry'
 import { getDraftShadow, type DraftStash } from './draft-shadow'
@@ -158,6 +160,7 @@ function handleList(payload: { callerSessionId?: string; workspace?: string }): 
   const pinnedSessionMode = (s: PinnedGroupSession): SessionMode => {
     if (s.antigravityMode) return 'antigravity'
     if (s.codexMode) return 'codex'
+    if (s.piMode) return 'pi'
     if (s.claudeAgentsMode) return 'claude-agents'
     if (s.claudeMode) return 'claude'
     return 'terminal'
@@ -317,11 +320,14 @@ function alignSessionToGroupWorkspace(sessionId: string, group: SessionGroup): v
 
 export async function openSessionProgrammatically(payload: {
   cwd: string
-  mode?: 'claude' | 'antigravity' | 'gemini' | 'codex' | 'terminal'
+  mode?: 'claude' | 'antigravity' | 'gemini' | 'codex' | 'pi' | 'terminal'
   groupId?: string
   name?: string
   dangerous?: boolean
   model?: string
+  profile?: string
+  provider?: string
+  thinking?: PiThinkingLevel
   command?: string
   autoRun?: boolean
   prompt?: string
@@ -345,16 +351,26 @@ export async function openSessionProgrammatically(payload: {
   // 'gemini' is accepted as a deprecated alias for the retired Gemini CLI.
   const antigravityMode = mode === 'antigravity' || mode === 'gemini'
   const codexMode = mode === 'codex'
+  const piMode = mode === 'pi'
   // --dangerously-skip-permissions is a claude flag; other providers ignore it.
   const dangerousMode = claudeMode && payload.dangerous === true
   // model maps to claude --model / codex -m; antigravity and terminals have no flag.
-  const model = (claudeMode || codexMode) && payload.model ? payload.model : undefined
+  const model = (claudeMode || codexMode || piMode) && payload.model ? payload.model : undefined
+  const family = mode === 'gemini' ? 'antigravity' : mode === 'terminal' ? null : mode
+  const launchProfileId = family && payload.profile
+    ? profilesFor(family).find((profile) => profile.id === payload.profile || profile.name.toLowerCase() === payload.profile!.toLowerCase())?.id
+    : undefined
+  if (payload.profile && family && !launchProfileId) throw new Error(`Unknown ${family} launch profile "${payload.profile}"`)
   const info = await window.electronAPI.spawnSession(payload.cwd, {
     claudeMode,
     antigravityMode,
     codexMode,
+    piMode,
     dangerousMode,
     model,
+    launchProfileId,
+    piProvider: piMode ? payload.provider : undefined,
+    piThinking: piMode ? payload.thinking : undefined,
     initialCommand: mode === 'terminal' ? payload.command || undefined : undefined,
     autoExecute: mode === 'terminal' && !!payload.command && payload.autoRun !== false,
     initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined,
@@ -372,13 +388,18 @@ export async function openSessionProgrammatically(payload: {
     claudeMode,
     antigravityMode,
     codexMode,
+    piMode,
     claudeAgentsMode: false,
     dangerousMode,
-    model,
+    model: info.model,
     // Parent link for clave_send_to_session/"parent" — only set when the open
     // came from inside another tab (agent delegation), not from the app UI.
     spawnedBy: payload.callerSessionId || undefined,
     claudeSessionId: info.claudeSessionId ?? null,
+    piSessionId: info.piSessionId ?? null,
+    launchProfileId: info.launchProfileId,
+    piProvider: info.piProvider,
+    piThinking: info.piThinking,
     // Persist so Duplicate re-primes the clone with the same prompt.
     initialPrompt: mode !== 'terminal' ? payload.prompt || undefined : undefined,
     sessionType: 'local',
@@ -392,20 +413,20 @@ export async function openSessionProgrammatically(payload: {
   })
   // renameSession sets userRenamed, protecting the name from auto-title overwrite.
   if (payload.name) useSessionStore.getState().renameSession(info.id, payload.name)
+  // An agent that asked for a group gets one; one that didn't is left where
+  // addSession put it — the sidebar's first row, top level. (There used to be
+  // a pull-back here: addSession nested a new tab into whatever group held the
+  // user's selection, which an agent spawn must never inherit. addSession does
+  // not nest at all now, so there is nothing to undo.)
   if (targetGroup) {
     useSessionStore.getState().moveItems([info.id], targetGroup.id, 'inside')
-  } else if (groupOfSession(useSessionStore.getState().groups, info.id)) {
-    // addSession auto-groups a new tab into the group the USER currently has
-    // selected. An agent that didn't ask for a group must not inherit the
-    // user's live UI selection, so pull it back to the top level.
-    useSessionStore.getState().moveItems([info.id], null, 'after')
   }
 
   // Agent-delegation spawns are transport events (PRDCT-1568): record them
   // with their launch prompt. UI-originated opens have no caller identity and
   // are the human's own act, not transport — never captured. Terminals are
   // not agents; not captured either.
-  if (payload.callerSessionId && mode !== 'terminal') {
+  if (payload.callerSessionId && mode !== 'terminal' && mode !== 'pi') {
     const current = useSessionStore.getState().sessions
     const spawner = current.find((s) => s.id === payload.callerSessionId)
     const spawned = current.find((s) => s.id === info.id)
@@ -969,6 +990,7 @@ function handleSelfCheckpoint(sessionId: string, message: string): unknown {
   // the two paths cannot quietly diverge on what may enter the record.
   const self = state.sessions.find((s) => s.sessionType === 'local' && s.id === sessionId)
   if (!self) throw new Error('Calling session not found')
+  if (sessionMode(self) === 'pi') throw new Error('Pi exchange capture is not supported yet')
   const text = sanitizeForPaste(message)
   const endpoint = captureEndpointOf(self, state.groups)
   window.electronAPI.captureExchangeMessage({
@@ -1102,6 +1124,7 @@ async function handleSendToSession(payload: {
   if (sender) {
     const recordDelivery = (): void => {
       if (!submitted) return
+      if (sessionMode(sender) === 'pi' || sessionMode(target) === 'pi') return
       window.electronAPI.captureExchangeMessage({
         ts: new Date().toISOString(),
         sender: captureEndpointOf(sender, useSessionStore.getState().groups),

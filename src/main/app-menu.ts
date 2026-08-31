@@ -3,6 +3,8 @@ import { focusedOrPrimaryWindow, bringForward } from './window-routing'
 import { windowRegistry } from './window-registry'
 import { workspaceManager } from './workspace-manager'
 import { checkForUpdatesNow, openUpdaterLog, RELEASES_URL } from './auto-updater'
+import { getStoredKeymapConfig } from './ipc-handlers/keymap-handlers'
+import type { KeymapActionId } from '../shared/keymaps'
 
 const REPO_URL = 'https://github.com/codika-io/clave'
 // electron-builder's productName, stated rather than read: `app.name` is the
@@ -43,6 +45,22 @@ export interface AppMenuDeps {
 }
 
 export function buildAppMenu(deps: AppMenuDeps): void {
+  const keymaps = getStoredKeymapConfig()
+  const acceleratorFor = (actionId: KeymapActionId): string | undefined => {
+    const binding = keymaps.bindings[actionId].find(
+      (candidate) => !candidate.includes(' ') && candidate !== 'Master'
+    )
+    if (!binding) return undefined
+    return binding
+      .split('+')
+      .map((token) => {
+        if (token === 'Mod') return 'Command'
+        if (token === 'Ctrl') return 'Control'
+        if (token === 'Alt') return 'Alt'
+        return token
+      })
+      .join('+')
+  }
   // File › New Window: the app once more, on the workspace of the window
   // the user is looking at (else the last-active one). ⌘⇧N is free: ⌘N is
   // the renderer's new-session shortcut.
@@ -74,7 +92,7 @@ export function buildAppMenu(deps: AppMenuDeps): void {
         { type: 'separator' },
         {
           label: 'Settings…',
-          accelerator: 'Command+,',
+          accelerator: acceleratorFor('openSettings'),
           // Displayed but not registered: the renderer already owns ⌘, and
           // should keep owning it, so the two cannot fight.
           registerAccelerator: false,
@@ -95,7 +113,8 @@ export function buildAppMenu(deps: AppMenuDeps): void {
       submenu: [
         {
           label: 'New Window',
-          accelerator: 'CommandOrControl+Shift+N',
+          accelerator: acceleratorFor('newWindow'),
+          registerAccelerator: false,
           click: newWindow
         }
       ]
@@ -135,7 +154,11 @@ export function buildAppMenu(deps: AppMenuDeps): void {
         { role: 'zoom' },
         // ⌘W closes a file tab when one is focused and falls through to the
         // window otherwise — the behaviour the default menu already gave us.
-        { role: 'close' },
+        {
+          role: 'close',
+          accelerator: acceleratorFor('closeFocused'),
+          registerAccelerator: false
+        },
         { type: 'separator' },
         { role: 'front' }
       ]
