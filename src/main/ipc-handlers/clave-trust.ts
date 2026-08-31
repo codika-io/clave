@@ -25,7 +25,7 @@ export interface ClaveGroupData {
    *  inherit it; a session's own `prompt` still wins for that session. Same
    *  @-token vocabulary as a session prompt, substituted at spawn. */
   prompt?: string
-  sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
+  sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; piMode?: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean; /** @deprecated legacy alias for antigravityMode, read for back-compat */ geminiMode?: boolean }[]
   terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string; /** Bind this terminal's `serverUrl` as the group's web view at launch. */ groupView?: boolean }[]
   /** The group's web view when no command serves it: an http(s) URL, or a path
    *  to an .html file resolved like `cwd` (relative to the file's root dir).

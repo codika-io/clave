@@ -319,6 +319,7 @@ function normalizeSession(session: Session): Session {
     workspaceId,
     antigravityMode: session.antigravityMode ?? false,
     codexMode: session.codexMode ?? false,
+    piMode: session.piMode ?? false,
     claudeAgentsMode: session.claudeAgentsMode ?? false,
     detectedUrl: session.detectedUrl ?? null,
     serverStatus: session.serverStatus ?? null,

@@ -841,7 +841,7 @@ export function Sidebar() {
       } else {
         // Local session
         try {
-          const dupOtherProvider = session.antigravityMode || session.codexMode || session.claudeAgentsMode
+          const dupOtherProvider = session.antigravityMode || session.codexMode || session.piMode || session.claudeAgentsMode
           // Re-prime the clone with the same one-shot prompt (agent modes only;
           // `claude agents` rejects a positional prompt). Undefined for a normal
           // (un-primed) session → same as today.
@@ -850,9 +850,13 @@ export function Sidebar() {
             claudeMode: dupOtherProvider ? false : session.claudeMode,
             antigravityMode: session.antigravityMode,
             codexMode: session.codexMode,
+            piMode: session.piMode,
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
             model: session.model,
+            launchProfileId: session.launchProfileId,
+            piProvider: session.piProvider,
+            piThinking: session.piThinking,
             initialPrompt,
             // A duplicate belongs where its source lives, not to the active view.
             workspaceId: session.workspaceId
@@ -868,11 +872,16 @@ export function Sidebar() {
             claudeMode: dupOtherProvider ? false : session.claudeMode,
             antigravityMode: session.antigravityMode,
             codexMode: session.codexMode,
+            piMode: session.piMode,
             claudeAgentsMode: session.claudeAgentsMode,
             dangerousMode: session.dangerousMode,
-            model: session.model,
+            model: sessionInfo.model,
             workspaceId: session.workspaceId,
             claudeSessionId: sessionInfo.claudeSessionId,
+            piSessionId: sessionInfo.piSessionId,
+            launchProfileId: sessionInfo.launchProfileId,
+            piProvider: sessionInfo.piProvider,
+            piThinking: sessionInfo.piThinking,
             // Persist so re-duplicating the clone also re-primes.
             initialPrompt,
             sessionType: 'local',
@@ -899,18 +908,25 @@ export function Sidebar() {
     async (sessionId: string, dangerousMode: boolean) => {
       const state = useSessionStore.getState()
       const session = state.sessions.find((s) => s.id === sessionId)
-      if (!session || !session.claudeSessionId) return
+      const conversationId = session?.piMode ? session.piSessionId : session?.claudeSessionId
+      if (!session || !conversationId) return
 
       try {
-        // Preserve the variant: resuming a `claude agents` session relaunches it as
-        // `claude agents --resume`, not plain `claude --resume`.
+        // Preserve the provider and resolved launch metadata from the original
+        // run. Pi resume uses its historical provider/model/thinking while the
+        // launch profile still contributes the current command and extra args.
         const isAgents = !!session.claudeAgentsMode
+        const isPi = !!session.piMode
         const sessionInfo = await window.electronAPI.spawnSession(session.cwd, {
-          claudeMode: !isAgents,
+          claudeMode: !isAgents && !isPi,
           claudeAgentsMode: isAgents,
-          dangerousMode,
+          piMode: isPi,
+          dangerousMode: isPi ? false : dangerousMode,
           model: session.model,
-          resumeSessionId: session.claudeSessionId,
+          launchProfileId: session.launchProfileId,
+          piProvider: session.piProvider,
+          piThinking: session.piThinking,
+          resumeSessionId: conversationId,
           // The resumed conversation stays in its session's workspace.
           workspaceId: session.workspaceId
         })
@@ -922,12 +938,17 @@ export function Sidebar() {
           alive: sessionInfo.alive,
           activityStatus: 'idle',
           promptWaiting: null,
-          claudeMode: !isAgents,
+          claudeMode: !isAgents && !isPi,
           claudeAgentsMode: isAgents,
-          dangerousMode,
-          model: session.model,
+          piMode: isPi,
+          dangerousMode: isPi ? false : dangerousMode,
+          model: sessionInfo.model,
           workspaceId: session.workspaceId,
           claudeSessionId: sessionInfo.claudeSessionId,
+          piSessionId: sessionInfo.piSessionId,
+          launchProfileId: sessionInfo.launchProfileId,
+          piProvider: sessionInfo.piProvider,
+          piThinking: sessionInfo.piThinking,
           sessionType: 'local'
         })
         useSessionStore.getState().selectSession(sessionInfo.id, false)
@@ -1037,18 +1058,20 @@ export function Sidebar() {
           onClick: () => handleDuplicateSession(sessionId)
         }
       ]
-      if (session && !session.alive && session.claudeMode && session.claudeSessionId) {
+      if (session && !session.alive && ((session.claudeMode && session.claudeSessionId) || (session.piMode && session.piSessionId))) {
         items.push(
           {
             label: 'Resume',
             icon: <PlayIcon className="w-3.5 h-3.5" />,
             onClick: () => handleResumeSession(sessionId, false)
           },
-          {
-            label: 'Resume (skip permissions)',
-            icon: <ShieldExclamationIcon className="w-3.5 h-3.5" />,
-            onClick: () => handleResumeSession(sessionId, true)
-          }
+          ...(session.piMode
+            ? []
+            : [{
+                label: 'Resume (skip permissions)',
+                icon: <ShieldExclamationIcon className="w-3.5 h-3.5" />,
+                onClick: () => handleResumeSession(sessionId, true)
+              }])
         )
       }
       const state = useSessionStore.getState()

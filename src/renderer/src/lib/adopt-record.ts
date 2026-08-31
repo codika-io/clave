@@ -46,6 +46,7 @@ async function spawnFromRecord(
       claudeMode: s.claudeMode,
       antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
+      piMode: s.piMode,
       claudeAgentsMode: s.claudeAgentsMode,
       dangerousMode: s.dangerousMode,
       model: s.model,
@@ -62,10 +63,15 @@ async function spawnFromRecord(
       // Live survivor: reattach (claudeSessionId only drives the badge). Dead
       // record: re-spawn with --resume to reload the prior conversation.
       ...(s.live
-        ? { claudeSessionId: s.claudeSessionId }
+        ? { claudeSessionId: s.claudeSessionId, piSessionId: s.piSessionId }
         : s.claudeMode && s.claudeSessionId
           ? { resumeSessionId: s.claudeSessionId }
+          : s.piMode && s.piSessionId
+            ? { resumeSessionId: s.piSessionId }
           : {}),
+      launchProfileId: s.launchProfileId,
+      piProvider: s.piProvider,
+      piThinking: s.piThinking,
       configDir: s.configDir,
       claudeProfileId: s.claudeProfileId,
       claudeProfileLabel: s.claudeProfileLabel,
@@ -86,10 +92,15 @@ async function spawnFromRecord(
       claudeMode: s.claudeMode,
       antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
+      piMode: s.piMode,
       claudeAgentsMode: s.claudeAgentsMode,
       dangerousMode: s.dangerousMode,
-      model: s.model,
+      model: info.model,
       claudeSessionId: info.claudeSessionId,
+      piSessionId: info.piSessionId,
+      launchProfileId: info.launchProfileId,
+      piProvider: info.piProvider,
+      piThinking: info.piThinking,
       claudeProfileId: s.claudeProfileId,
       claudeProfileLabel: s.claudeProfileLabel,
       claudeConfigDir: s.configDir,

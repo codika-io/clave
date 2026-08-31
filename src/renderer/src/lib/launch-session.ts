@@ -76,7 +76,7 @@ export async function launchSession(req: LaunchRequest): Promise<string | null> 
 
   const modes = req.setup
     ? agentSetupToModes(req.setup)
-    : { claudeMode: false, claudeAgentsMode: false, antigravityMode: false, codexMode: false }
+    : { claudeMode: false, claudeAgentsMode: false, antigravityMode: false, codexMode: false, piMode: false }
   const dangerousMode = req.setup?.dangerousMode ?? false
 
   // The Claude account applies to Claude Code and Claude Agents only — never a
@@ -105,6 +105,7 @@ export async function launchSession(req: LaunchRequest): Promise<string | null> 
       ...modes,
       dangerousMode,
       initialPrompt,
+      launchProfileId: req.setup?.launchProfileId,
       ...profileFields
     })
     // One placement, not a placement and then a correction: the group's `+`
@@ -122,6 +123,11 @@ export async function launchSession(req: LaunchRequest): Promise<string | null> 
         ...modes,
         dangerousMode,
         claudeSessionId: sessionInfo.claudeSessionId,
+        piSessionId: sessionInfo.piSessionId,
+        launchProfileId: sessionInfo.launchProfileId,
+        model: sessionInfo.model,
+        piProvider: sessionInfo.piProvider,
+        piThinking: sessionInfo.piThinking,
         claudeProfileId: profile?.id,
         claudeProfileLabel: profile?.label,
         claudeConfigDir: profile?.configDir || undefined,

@@ -63,6 +63,7 @@ const MODES: ReadonlySet<string> = new Set([
   'claude',
   'antigravity',
   'codex',
+  'pi',
   'claude-agents',
   'terminal'
 ])

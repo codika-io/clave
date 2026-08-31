@@ -15,6 +15,7 @@ import { Sidebar } from './Sidebar'
 import { useTrafficLights } from '../../hooks/use-traffic-lights'
 import { launchSession } from '../../lib/launch-session'
 import { loadLaunchPrefs } from '../../store/launch-prefs'
+import { loadLaunchProfiles } from '../../store/launch-profile-store'
 import { TerminalGrid } from './TerminalGrid'
 import { SettingsPanel } from '../settings/SettingsPanel'
 import { SettingsSidebar } from '../settings/SettingsSidebar'
@@ -146,6 +147,7 @@ export function AppShell() {
     // map is keyed by workspace id and read at render time, so it does not care
     // whether it lands before or after the workspace registry.
     void loadLaunchPrefs()
+    void loadLaunchProfiles()
   }, [])
 
   useEffect(() => {
@@ -383,6 +385,8 @@ export function AppShell() {
       newAntigravityAtFolder: () => launch({ kind: 'antigravity', dangerousMode: false }, 'ask'),
       newCodex: () => launch({ kind: 'codex', dangerousMode: false }, 'workspace-root'),
       newCodexAtFolder: () => launch({ kind: 'codex', dangerousMode: false }, 'ask'),
+      newPi: () => launch({ kind: 'pi', dangerousMode: false }, 'workspace-root'),
+      newPiAtFolder: () => launch({ kind: 'pi', dangerousMode: false }, 'ask'),
       toggleSidebar: () => toggleSidebar(),
       toggleSidePanel: () => toggleFileTree(),
       openFilePalette: () => toggleFilePalette(),

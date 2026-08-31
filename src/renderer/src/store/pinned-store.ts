@@ -164,7 +164,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
         ...(p.logo ? { logo: p.logo } : {}),
         ...(p.prompt ? { prompt: p.prompt } : {}),
         ...(p.view ? { view: p.view } : {}),
-        sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, antigravityMode: s.antigravityMode, codexMode: s.codexMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode, ...(s.prompt ? { prompt: s.prompt } : {}), ...(s.rootSession ? { rootSession: true } : {}) })),
+        sessions: p.sessions.map((s) => ({ cwd: s.cwd, name: s.name, claudeMode: s.claudeMode, antigravityMode: s.antigravityMode, codexMode: s.codexMode, piMode: s.piMode, claudeAgentsMode: s.claudeAgentsMode, dangerousMode: s.dangerousMode, ...(s.prompt ? { prompt: s.prompt } : {}), ...(s.rootSession ? { rootSession: true } : {}) })),
         terminals: p.terminals.map((t) => ({ command: t.command, commandMode: t.commandMode, color: t.color, icon: t.icon, cwd: t.cwd, autoLaunchLocalhost: t.autoLaunchLocalhost, persistent: t.persistent, serverUrl: t.serverUrl, groupView: t.groupView })),
         ...(p.category ? { category: p.category } : {})
       })
@@ -186,7 +186,7 @@ function syncToClaveFile(pg: PinnedGroup): void {
 // ── Import / Export ──
 
 function createPinnedFromGroup(
-  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; view?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string; groupView?: boolean }[] },
+  g: { name: string; cwd: string; color: string | null; toolbar?: boolean; category?: string; logo?: string; prompt?: string; view?: string; sessions: { cwd: string; name: string; claudeMode: boolean; antigravityMode: boolean; codexMode: boolean; piMode?: boolean; claudeAgentsMode?: boolean; dangerousMode: boolean; prompt?: string; rootSession?: boolean }[]; terminals: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string; groupView?: boolean }[] },
   filePath: string,
   groupIndex?: number,
   rootDir?: string | null,
@@ -394,6 +394,7 @@ export async function exportClaveFile(pinnedId: string, folder: string, fileName
       claudeMode: s.claudeMode,
       antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
+      piMode: s.piMode,
       claudeAgentsMode: s.claudeAgentsMode,
       dangerousMode: s.dangerousMode
     })),
@@ -543,6 +544,7 @@ export function pinGroupFromCurrent(groupId: string): void {
       claudeMode: s.claudeMode,
       antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
+      piMode: s.piMode,
       claudeAgentsMode: s.claudeAgentsMode,
       dangerousMode: s.dangerousMode,
       // A root-anchored group keeps its anchor through the pin. The session is
@@ -635,7 +637,7 @@ async function spawnPinnedGroup(
 
   for (const session of pg.sessions) {
     try {
-      const pinOtherProvider = session.antigravityMode || session.codexMode || session.claudeAgentsMode
+      const pinOtherProvider = session.antigravityMode || session.codexMode || session.piMode || session.claudeAgentsMode
       // rootSession: spawn at the workspace root instead of the session's cwd
       // (which stays the project dir). No-op if the pin has no workspaceRoot.
       const atRoot = session.rootSession === true && !!pg.workspaceRoot
@@ -652,6 +654,7 @@ async function spawnPinnedGroup(
         claudeMode: pinOtherProvider ? false : session.claudeMode,
         antigravityMode: session.antigravityMode,
         codexMode: session.codexMode,
+        piMode: session.piMode,
         claudeAgentsMode: session.claudeAgentsMode,
         dangerousMode: session.dangerousMode,
         initialPrompt,
@@ -671,9 +674,15 @@ async function spawnPinnedGroup(
         claudeMode: pinOtherProvider ? false : session.claudeMode,
         antigravityMode: session.antigravityMode,
         codexMode: session.codexMode,
+        piMode: session.piMode,
         claudeAgentsMode: session.claudeAgentsMode,
         dangerousMode: session.dangerousMode,
+        model: sessionInfo.model,
         claudeSessionId: sessionInfo.claudeSessionId,
+        piSessionId: sessionInfo.piSessionId,
+        launchProfileId: sessionInfo.launchProfileId,
+        piProvider: sessionInfo.piProvider,
+        piThinking: sessionInfo.piThinking,
         // Persist so Duplicate can re-prime the clone (see Sidebar duplicate).
         initialPrompt,
         sessionType: 'local',
@@ -831,6 +840,7 @@ export function resyncPinnedGroup(groupId: string): void {
       claudeMode: s.claudeMode,
       antigravityMode: s.antigravityMode,
       codexMode: s.codexMode,
+      piMode: s.piMode,
       claudeAgentsMode: s.claudeAgentsMode,
       dangerousMode: s.dangerousMode
     }))
@@ -903,7 +913,7 @@ export function isPinnedOutOfSync(groupId: string): boolean {
     const s = sessions.find((sess) => sess.id === liveSessions[i])
     const ps = pg.sessions[i]
     if (!s || !ps) return true
-    if (s.cwd !== ps.cwd || s.claudeMode !== ps.claudeMode || s.antigravityMode !== ps.antigravityMode || s.codexMode !== ps.codexMode || (!!s.claudeAgentsMode) !== (!!ps.claudeAgentsMode) || s.dangerousMode !== ps.dangerousMode) return true
+    if (s.cwd !== ps.cwd || s.claudeMode !== ps.claudeMode || s.antigravityMode !== ps.antigravityMode || s.codexMode !== ps.codexMode || (!!s.piMode) !== (!!ps.piMode) || (!!s.claudeAgentsMode) !== (!!ps.claudeAgentsMode) || s.dangerousMode !== ps.dangerousMode) return true
   }
 
   // Compare terminal count and configs

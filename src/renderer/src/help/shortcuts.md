@@ -22,6 +22,7 @@ Unset the master key in Settings to disable command mode. Direct shortcuts keep 
 | Cmd+Shift+A | New Claude Agents session |
 | Cmd+I | New Antigravity CLI session |
 | Cmd+U | New Codex CLI session |
+| Cmd+Shift+P | New Pi session |
 | Cmd+Option plus a launch shortcut | Choose the new session's folder |
 | Cmd+Backspace | Kill focused session |
 | Cmd+W | Close focused file tab, or the window when no file tab is focused |

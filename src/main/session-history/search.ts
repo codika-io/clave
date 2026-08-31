@@ -157,6 +157,26 @@ export function codexScopedTexts(entry: any, scope: SearchScope): string[] {
   }
 }
 
+/** Pi JSONL message records use `type: message` and keep the role inside
+ * `message`; keep that vendor shape at this boundary. */
+export function piScopedTexts(entry: any, scope: SearchScope): string[] {
+  if (!entry || entry.type !== 'message' || !entry.message) return []
+  const message = entry.message
+  if (scope === 'human' && message.role === 'user') {
+    return textBlocks(message.content, 'text').filter((text) => text.trim() !== '' && !isInjected(text))
+  }
+  if (scope === 'agent' && message.role === 'assistant') return textBlocks(message.content, 'text')
+  if (scope === 'tools') {
+    if (message.role === 'assistant' && Array.isArray(message.content)) {
+      return message.content
+        .filter((block: any) => block?.type === 'toolCall')
+        .map((block: any) => `${typeof block.name === 'string' ? block.name : ''} ${safeJson(block.arguments)}`)
+    }
+    if (message.role === 'toolResult') return textBlocks(message.content, 'text')
+  }
+  return []
+}
+
 /** A window of text around the first case-insensitive match, whitespace
  *  collapsed, with ellipses where it was cut. Null when no match. */
 export function excerptAround(text: string, query: string): string | null {
@@ -196,7 +216,7 @@ export async function searchLines(
     // One hit per line at most, stamped with the first scope that matched:
     // a line is one record, however many toggles are on.
     line_scopes: for (const scope of scopes) {
-      for (const text of [...scopedTexts(entry, scope), ...codexScopedTexts(entry, scope)]) {
+      for (const text of [...scopedTexts(entry, scope), ...codexScopedTexts(entry, scope), ...piScopedTexts(entry, scope)]) {
         const excerpt = excerptAround(text, query)
         if (excerpt === null) continue
         hits.push({

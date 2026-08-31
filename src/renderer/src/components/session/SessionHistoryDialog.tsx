@@ -194,8 +194,8 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   const liveSignature = useMemo(
     () =>
       sessions
-        .filter((s) => s.alive && s.claudeSessionId)
-        .map((s) => `${s.claudeSessionId}:${s.agentState ?? 'idle'}`)
+        .filter((s) => s.alive && (s.claudeSessionId || s.piSessionId))
+        .map((s) => `${s.claudeSessionId ?? s.piSessionId}:${s.agentState ?? 'idle'}`)
         .sort()
         .join('|'),
     [sessions]
@@ -232,12 +232,14 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
     let claude = 0
     let codex = 0
     let antigravity = 0
+    let pi = 0
     for (const e of inScope) {
       if (e.provider === 'codex') codex++
+      else if (e.provider === 'pi') pi++
       else if (e.provider === 'antigravity') antigravity++
       else claude++
     }
-    return { claude, codex, antigravity }
+    return { claude, codex, pi, antigravity }
   }, [inScope])
 
   const trimmed = query.trim()
@@ -333,7 +335,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
       // Nothing to resume: a codex conversation (no resume exists), or a
       // claude one whose transcript or folder is gone while its tab is not
       // open. The dialog stays, the row's own title says why.
-      if (entry.provider !== 'claude') return
+      if (entry.provider !== 'claude' && entry.provider !== 'pi') return
       if (!liveStates.has(entry.claudeSessionId) && (!entry.transcript.exists || !entry.cwd)) return
       closeHistory()
       void resumeHistoryEntry(entry, { groupId: selectedGroup?.id ?? null, dangerousMode })
@@ -347,6 +349,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
   const countsLine = ((): string => {
     const parts = [`${counts.claude} claude session${counts.claude === 1 ? '' : 's'}`]
     parts.push(`${counts.codex} codex`)
+    parts.push(`${counts.pi} pi`)
     if (counts.antigravity > 0) parts.push(`${counts.antigravity} antigravity`)
     return parts.join(' · ')
   })()
@@ -497,7 +500,7 @@ function HistoryPanel({ presetGroupId }: { presetGroupId: string | null }): Reac
               const live = liveStates.has(e.claudeSessionId)
               const dotState = dotStateOf(live, liveStates.get(e.claudeSessionId))
               const missing = !e.transcript.exists
-              const inert = e.provider !== 'claude'
+              const inert = e.provider !== 'claude' && e.provider !== 'pi'
               const prompt = excerpt(e.transcript.lastPrompt)
               const gname =
                 latestGroupName(e) ??

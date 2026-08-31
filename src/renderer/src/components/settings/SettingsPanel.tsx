@@ -23,6 +23,7 @@ import { UsagePanel } from '../usage/UsagePanel'
 import { SettingsSection, SettingsCard, SettingsRow, ToggleRow } from './primitives'
 import { cn } from '../../lib/utils'
 import { KeymapSettings } from './KeymapSettings'
+import { AgentsSettings } from './AgentsSettings'
 
 const themes: { id: Theme; label: string; colors: { bg: string; surface: string; text: string; border: string } }[] = [
   {
@@ -201,6 +202,7 @@ export function SettingsPanel() {
     <div className="flex-1 overflow-y-auto p-8">
       <div className={cn(settingsSection === 'keymaps' ? 'max-w-3xl' : 'max-w-xl', 'mx-auto w-full')}>
         {settingsSection === 'general' && <GeneralSettings />}
+        {settingsSection === 'agents' && <AgentsSettings />}
         {settingsSection === 'appearance' && <AppearanceSettings />}
         {settingsSection === 'keymaps' && <KeymapSettings />}
         {settingsSection === 'updates' && <UpdatesTab />}

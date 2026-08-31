@@ -15,6 +15,8 @@ export const KEYMAP_ACTION_IDS = [
   'newAntigravityAtFolder',
   'newCodex',
   'newCodexAtFolder',
+  'newPi',
+  'newPiAtFolder',
   'toggleSidebar',
   'toggleSidePanel',
   'openFilePalette',
@@ -134,6 +136,10 @@ export const KEYMAP_ACTIONS: readonly KeymapActionDefinition[] = [
   action('newCodex', 'New Codex session', 'Sessions', 'global', ['Mod+U']),
   action('newCodexAtFolder', 'New Codex session in chosen folder', 'Sessions', 'global', [
     'Mod+Alt+U'
+  ]),
+  action('newPi', 'New Pi session', 'Sessions', 'global', ['Mod+Shift+P']),
+  action('newPiAtFolder', 'New Pi session in chosen folder', 'Sessions', 'global', [
+    'Mod+Alt+Shift+P'
   ]),
   action('closeFocused', 'Close focused tab or window', 'Sessions', 'global', ['Mod+W']),
   action('killFocusedSession', 'Kill focused session', 'Sessions', 'global', ['Mod+Backspace']),

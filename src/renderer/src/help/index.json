@@ -8,8 +8,8 @@
   {
     "id": "sessions",
     "title": "Sessions",
-    "subtitle": "Claude, terminal, dangerous, Antigravity, and remote session types",
-    "keywords": ["claude", "terminal", "dangerous", "antigravity", "agy", "gemini", "create", "close", "kill", "remote", "agent"]
+    "subtitle": "Claude, Pi, Codex, Antigravity, terminal, and remote sessions",
+    "keywords": ["claude", "pi", "codex", "terminal", "dangerous", "antigravity", "agy", "gemini", "create", "close", "kill", "remote", "agent"]
   },
   {
     "id": "git",
@@ -57,6 +57,6 @@
     "id": "settings",
     "title": "Settings",
     "subtitle": "Theme, profile, workspaces, locations, and templates",
-    "keywords": ["settings", "theme", "profile", "workspace", "template", "appearance", "icon"]
+    "keywords": ["settings", "theme", "profile", "agent", "command", "wrapper", "workspace", "template", "appearance", "icon"]
   }
 ]

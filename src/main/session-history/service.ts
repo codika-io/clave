@@ -17,6 +17,7 @@ import {
   type TranscriptPeek
 } from './transcript-peek'
 import { CodexCache, codexRoot, listCodexSessions } from './codex'
+import { PiCache, listPiSessions, piRoot } from './pi'
 import { searchTranscripts, type SearchHit, type SearchScope } from './search'
 import { ConversationCache, type ConversationTurn } from './conversation'
 
@@ -52,7 +53,9 @@ export interface HistoryListEntry extends HistoryEntry {
   source: 'ledger' | 'transcript'
   /** Which CLI's conversation this is — the counts line's word. Resume
    *  exists for claude only today; the others are listed and searchable. */
-  provider: 'claude' | 'codex' | 'antigravity'
+  provider: 'claude' | 'codex' | 'pi' | 'antigravity'
+  agentProvider?: string | null
+  thinking?: string | null
   /** The store dir a synthesized entry was found under — the workspace
    *  fallback when its transcript carries no cwd at all. */
   projectDir?: string
@@ -69,6 +72,7 @@ let ledger: SessionLedger | null = null
 let capture: CaptureStore | null = null
 const peekCache = new PeekCache()
 const codexCache = new CodexCache()
+const piCache = new PiCache()
 const conversations = new ConversationCache()
 /** Transcript path per session as of the last list — what a search reads. */
 const pathById = new Map<string, string | null>()
@@ -213,6 +217,43 @@ export function listHistory(): {
       lastHumanAt: lastAt
     })
   }
+  for (const p of listPiSessions(piRoot(), piCache)) {
+    if (known.has(p.id) || !p.cwd) continue
+    known.add(p.id)
+    pathById.set(p.id, p.path)
+    const firstSeenAt = p.firstAt ?? p.modifiedAt ?? ''
+    const lastAt = p.modifiedAt ?? firstSeenAt
+    entries.push({
+      claudeSessionId: p.id,
+      sessionId: '',
+      name: '',
+      cwd: p.cwd,
+      mode: 'pi',
+      model: p.model,
+      workspaceId: null,
+      groups: [],
+      firstSeenAt,
+      lastSeenAt: lastAt,
+      closedAt: null,
+      source: 'transcript',
+      provider: 'pi',
+      agentProvider: p.provider,
+      thinking: p.thinking,
+      transcript: {
+        exists: true,
+        path: p.path,
+        cwd: p.cwd,
+        firstAt: p.firstAt,
+        title: null,
+        lastPrompt: p.lastUserText,
+        lastHumanAt: null,
+        modifiedAt: p.modifiedAt,
+        sizeBytes: p.sizeBytes
+      },
+      title: firstLine(p.firstUserText) ?? `Pi conversation ${p.id.slice(0, 8)}`,
+      lastHumanAt: lastAt
+    })
+  }
   return { entries, skippedLines }
 }
 
@@ -228,11 +269,23 @@ function firstLine(text: string | null): string | null {
  *  transcript, fold what was appended since the last call. `locateTranscript`
  *  validates the id alphabet, so a traversal string resolves to nothing. */
 export function getConversation(input: unknown): { exists: boolean; turns: ConversationTurn[] } {
-  const r = input as { cwd?: unknown; claudeSessionId?: unknown } | null
+  const r = input as { cwd?: unknown; claudeSessionId?: unknown; provider?: unknown } | null
   const cwd = typeof r?.cwd === 'string' ? r.cwd : null
   const claudeSessionId = typeof r?.claudeSessionId === 'string' ? r.claudeSessionId : null
   if (!cwd || !claudeSessionId) return { exists: false, turns: [] }
-  const file = locateTranscript(transcriptsRoot(), cwd, claudeSessionId)
+  let file: string | null
+  if (r?.provider === 'pi') {
+    file = pathById.get(claudeSessionId) ?? null
+    if (!file) {
+      const session = listPiSessions(piRoot(), piCache).find(
+        (candidate) => candidate.id === claudeSessionId && candidate.cwd === cwd
+      )
+      file = session?.path ?? null
+      if (file) pathById.set(claudeSessionId, file)
+    }
+  } else {
+    file = locateTranscript(transcriptsRoot(), cwd, claudeSessionId)
+  }
   return conversations.read(file)
 }
 
