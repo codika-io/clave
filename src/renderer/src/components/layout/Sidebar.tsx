@@ -37,6 +37,7 @@ import { useSidebarDnd } from '../../hooks/use-sidebar-dnd'
 import { SidebarFooter, UpdateBanner } from './SidebarFooter'
 import { WordmarkStrip } from './Wordmark'
 import { ScrollArea } from '../ui/scroll-area'
+import { shortcutLabel } from '../../store/keymap-store'
 import {
   PencilSquareIcon,
   TrashIcon,
@@ -157,7 +158,6 @@ export function Sidebar() {
   const displayOrder = useSessionStore((s) => s.displayOrder)
   const createGroup = useSessionStore((s) => s.createGroup)
   const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
-  const undoSidebar = useSessionStore((s) => s.undoSidebar)
   const deleteGroup = useSessionStore((s) => s.deleteGroup)
   const setGroupColor = useSessionStore((s) => s.setGroupColor)
   const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
@@ -174,7 +174,6 @@ export function Sidebar() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<string | null>(null)
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
   const [terminalDialogState, setTerminalDialogState] = useState<{
     groupId: string
     terminalId: string | null // null = adding new
@@ -234,13 +233,6 @@ export function Sidebar() {
     }
   }, [addSession])
 
-  const resetSessions = useSessionStore((s) => s.resetSessions)
-
-  const handleResetSessions = useCallback(async () => {
-    setResetConfirmOpen(false)
-    await resetSessions()
-  }, [resetSessions])
-
   // Selection anchor for Cmd+Shift range select (Finder behavior)
   const selectionAnchorRef = useRef<string | null>(null)
 
@@ -274,55 +266,6 @@ export function Sidebar() {
     const isGroup = groups.some((g) => g.id === draggedIds[0])
     return isGroup ? draggedIds[0] : null
   }, [isDragging, draggedIds, groups])
-
-  // Cmd+G to group, Cmd+Alt+G to ungroup, Cmd+Shift+Delete to reset
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'g') {
-        // Cmd+G: group selected sessions
-        e.preventDefault()
-        const state = useSessionStore.getState()
-        if (state.selectedSessionIds.length >= 1) {
-          createGroup(state.selectedSessionIds)
-        }
-      }
-      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'g') {
-        // Cmd+Alt+G: ungroup
-        e.preventDefault()
-        const state = useSessionStore.getState()
-        const containingGroup = state.groups.find(
-          (g) =>
-            state.selectedSessionIds.length > 0 &&
-            state.selectedSessionIds.every((sid) => g.sessionIds.includes(sid))
-        )
-        if (containingGroup) {
-          ungroupSessions(containingGroup.id)
-        }
-      }
-      // Cmd+Shift+Delete: reset all sessions
-      if (e.metaKey && e.shiftKey && e.key === 'Backspace') {
-        e.preventDefault()
-        if (useSessionStore.getState().sessions.length > 0) {
-          setResetConfirmOpen(true)
-        }
-      }
-      // Cmd+Z: undo last sidebar group/move/rename action
-      if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
-        const target = e.target as HTMLElement | null
-        const tag = target?.tagName
-        const editable =
-          tag === 'INPUT' ||
-          tag === 'TEXTAREA' ||
-          (target instanceof HTMLElement && target.isContentEditable)
-        if (editable) return
-        if (useSessionStore.getState().sidebarUndoStack.length === 0) return
-        e.preventDefault()
-        undoSidebar()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [createGroup, ungroupSessions, undoSidebar])
 
   // Load Claude account profiles. (Workspace boot + .clave file watchers moved
   // to AppShell's sequential boot effect — adoption needs the registry first.)
@@ -1113,7 +1056,7 @@ export function Sidebar() {
         items.push({
           label: 'Group',
           icon: <Squares2X2Icon className="w-3.5 h-3.5" />,
-          shortcut: '\u2318G',
+          shortcut: shortcutLabel('groupSelectedSessions') ?? undefined,
           onClick: () => createGroup(state.selectedSessionIds)
         })
       }
@@ -1183,7 +1126,7 @@ export function Sidebar() {
           {
             label: 'History',
             icon: <ClockIcon className="w-3.5 h-3.5" />,
-            shortcut: '\u2318\u21e7H',
+            shortcut: shortcutLabel('openHistory') ?? undefined,
             onClick: () => useHistoryStore.getState().openHistory(groupId)
           },
           group?.view
@@ -1825,15 +1768,6 @@ export function Sidebar() {
         onCancel={() => setDeleteConfirmSessionId(null)}
       />
 
-      {/* Reset sessions confirmation */}
-      <ConfirmDialog
-        isOpen={resetConfirmOpen}
-        title="Reset sessions"
-        message="Close all sessions and start fresh?"
-        onConfirm={handleResetSessions}
-        onCancel={() => setResetConfirmOpen(false)}
-      />
-
       {/* Group terminal configuration dialog */}
       <GroupCommandDialog
         isOpen={terminalDialogState !== null}
@@ -2013,3 +1947,4 @@ function PinnedSection({
     </>
   )
 }
+

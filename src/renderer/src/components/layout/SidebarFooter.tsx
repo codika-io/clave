@@ -18,6 +18,7 @@ import { UserIconDisplay } from '../ui/UserIconDisplay'
 import { BrandField } from '../ui/BrandField'
 import { fieldAccent } from '../../lib/brand-field'
 import { cn } from '../../lib/utils'
+import { useShortcutLabel } from '../../store/keymap-store'
 
 export function UpdateBanner(): React.ReactElement {
   const phase = useUpdaterStore((s) => s.phase)
@@ -181,6 +182,8 @@ export function SidebarFooter(): React.ReactElement {
   const avatarField = useUserStore((s) => s.avatarField)
   const avatarSeed = useUserStore((s) => s.avatarSeed)
   const openSettings = useSessionStore((s) => s.openSettings)
+  const settingsShortcut = useShortcutLabel('openSettings')
+  const settingsTitle = `Settings${settingsShortcut ? ` (${settingsShortcut})` : ''}`
 
   const phase = useUpdaterStore((s) => s.phase)
   const version = useUpdaterStore((s) => s.availableVersion)
@@ -240,7 +243,7 @@ export function SidebarFooter(): React.ReactElement {
         <button
           onClick={() => openSettings()}
           className="sidebar-footer-avatar"
-          title="Settings (⌘,)"
+          title={settingsTitle}
         >
           <UserIconDisplay icon={avatarIcon} field={avatarField} seed={avatarSeed} size="xs" />
           {/* Update dot indicator when dismissed */}
@@ -260,7 +263,7 @@ export function SidebarFooter(): React.ReactElement {
         <button
           onClick={() => openSettings()}
           className="sidebar-footer-name"
-          title="Settings (⌘,)"
+          title={settingsTitle}
         >
           {name}
         </button>
@@ -268,7 +271,7 @@ export function SidebarFooter(): React.ReactElement {
         <button
           onClick={() => openSettings()}
           className="sidebar-footer-btn"
-          title="Settings (⌘,)"
+          title={settingsTitle}
           aria-label="Settings"
         >
           <Cog6ToothIcon className="w-4 h-4" />
