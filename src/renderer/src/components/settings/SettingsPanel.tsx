@@ -988,4 +988,3 @@ function WorkspacesSection() {
     </SettingsSection>
   )
 }
-
