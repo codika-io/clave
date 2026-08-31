@@ -2,12 +2,14 @@
  * Launch profiles and Pi are wired through the real settings UI, preload IPC,
  * main-process persistence, launcher, and keyboard shortcut.
  */
-import { mkdirSync } from 'node:fs'
-import { agentButtonLabel, launchApp, seedWorkspaces, userDataDir } from './harness.mjs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { agentButtonLabel, launchApp, seedWorkspaces, until, userDataDir } from './harness.mjs'
 
 const DIR = userDataDir('agent-launch-profiles')
 const ROOT = '/tmp/clave-e2e-agent-launch-profiles-root'
 const PI_ROOT = '/tmp/clave-e2e-agent-launch-profiles-pi'
+const RECORDER = `${ROOT}/fake-codex.sh`
+const RECORDED = `${ROOT}/fake-codex.argv`
 const WORKSPACE = {
   id: 'aaaaaaaa-0000-4000-8000-00000000000c',
   name: 'Profiles',
@@ -18,6 +20,23 @@ const WORKSPACE = {
 
 export async function run(t) {
   mkdirSync(ROOT, { recursive: true })
+  // A profile is only real if its command is what actually runs. This stands in
+  // for the agent binary and writes the argv it was handed, one token per line,
+  // so the assertion is on the spawned process rather than on the stored JSON.
+  writeFileSync(
+    RECORDER,
+    [
+      '#!/bin/sh',
+      `: > ${RECORDED}`,
+      `for a in "$@"; do echo "$a" >> ${RECORDED}; done`,
+      'sleep 30',
+      ''
+    ].join('\n')
+  )
+  chmodSync(RECORDER, 0o755)
+  // A leftover recording from an earlier run would make the argv assertion
+  // pass without the profile ever being resolved. Start from nothing.
+  rmSync(RECORDED, { force: true })
   seedWorkspaces(DIR, {
     workspaces: [WORKSPACE],
     activeWorkspaceId: WORKSPACE.id,
@@ -91,6 +110,48 @@ export async function run(t) {
       menuText.some((text) => text.includes('Pi')),
       menuText
     )
+    await win.keyboard.press('Escape')
+
+    // ── The profile's command is what runs ──────────────────────────────────
+    // Everything above proves the settings round-trip. This proves the point of
+    // the feature: a wrapper command set as a workspace default reaches the
+    // shell through the ordinary launch path, one token per argument.
+    const wrapper = await win.evaluate(
+      async ({ recorder, workspaceId }) => {
+        const saved = await window.electronAPI.launchProfileUpsert({
+          id: 'e2e-codex-wrapper',
+          name: 'Codex wrapper',
+          family: 'codex',
+          command: [recorder, 'run', '--'],
+          additionalArgs: ['--flag', 'a value with spaces']
+        })
+        await window.electronAPI.launchProfileSetWorkspace(
+          workspaceId,
+          'codex',
+          'e2e-codex-wrapper'
+        )
+        return saved.customProfiles.find((p) => p.id === 'e2e-codex-wrapper') ?? null
+      },
+      { recorder: RECORDER, workspaceId: WORKSPACE.id }
+    )
+    t.check('an argument-vector profile with a wrapper is accepted', !!wrapper, wrapper)
+
+    // ⌘U is the ordinary Codex launch — no profile named at the call site, so
+    // the workspace default is what has to be found at the spawn boundary.
+    await win.keyboard.press('Meta+u')
+    const argv = await until(
+      () =>
+        existsSync(RECORDED) ? readFileSync(RECORDED, 'utf-8').split('\n').filter(Boolean) : null,
+      { tries: 40, gapMs: 250 }
+    ).catch(() => null)
+    t.check('the profile command was the process Clave spawned', argv !== null, argv)
+    if (argv) {
+      t.equal(
+        'every profile token arrived as its own argument, spaces intact',
+        argv.join('|'),
+        'run|--|--flag|a value with spaces'
+      )
+    }
   } finally {
     await app.close()
   }

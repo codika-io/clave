@@ -5,13 +5,18 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { launchApp, openWindow, seedWorkspaces, userDataDir } from './harness.mjs'
-import { formatKeyBinding, resolveKeymapConfig } from '../../src/shared/keymaps.ts'
-
-/** The shipped master key, read from the code so this spec cannot go stale
- *  the way a hardcoded chord does. */
-const MASTER = resolveKeymapConfig().masterKey
-const MASTER_GLYPH = formatKeyBinding('Master X', MASTER).split(' ')[0]
-/** Playwright's name for the master chord (Mod is Command on macOS). */
+/** The shipped master key, read out of the source rather than hardcoded here, so
+ *  this spec cannot pass against a chord the app no longer uses. Read as text: a
+ *  spec that imports TypeScript would depend on the runner's type stripping. */
+const MASTER = readFileSync(new URL('../../src/shared/keymaps.ts', import.meta.url), 'utf-8').match(
+  /DEFAULT_MASTER_KEY = '([^']+)'/
+)?.[1]
+if (!MASTER) throw new Error('keymaps.ts no longer declares DEFAULT_MASTER_KEY')
+const GLYPHS = { Mod: '⌘', Ctrl: '⌃', Alt: '⌥', Shift: '⇧' }
+/** The master as the Keymaps pane prints it, and as Playwright presses it. */
+const MASTER_GLYPH = MASTER.split('+')
+  .map((token) => GLYPHS[token] ?? token)
+  .join('')
 const MASTER_PRESS = MASTER.replace('Mod', 'Meta').replace('Ctrl', 'Control')
 
 const DIR = userDataDir('keymaps')
