@@ -127,12 +127,14 @@ function resolveWindowArg(arg: unknown, callerSessionId: string | undefined): Br
   if (arg === undefined || arg === null) return null
   if (arg === 'mine') {
     const own = callerSessionId ? windowRegistry.getWindowForSession(callerSessionId) : null
-    if (!own) throw new Error('window "mine" needs a calling tab — this request has no tab identity')
+    if (!own)
+      throw new Error('window "mine" needs a calling tab — this request has no tab identity')
     return own
   }
   const id = typeof arg === 'number' ? arg : Number(arg)
   const win = Number.isInteger(id) ? windowRegistry.getWindow(id) : null
-  if (!win) throw new Error(`No open Clave window with id ${String(arg)} — clave_list shows the windows`)
+  if (!win)
+    throw new Error(`No open Clave window with id ${String(arg)} — clave_list shows the windows`)
   return win
 }
 
@@ -209,7 +211,10 @@ async function aggregateList(
   const scope = typeof payload.workspace === 'string' ? payload.workspace : 'all'
   const scoped =
     scope === 'active'
-      ? { ...payload, workspace: (callerWin && windowRegistry.getWorkspaceForWindow(callerWin.id)) ?? 'all' }
+      ? {
+          ...payload,
+          workspace: (callerWin && windowRegistry.getWorkspaceForWindow(callerWin.id)) ?? 'all'
+        }
       : payload
   const replies = await callRendererAll<Record<string, unknown>>('list', scoped)
   const ok = replies
@@ -220,7 +225,10 @@ async function aggregateList(
     throw new Error(firstErr ?? 'Clave window not available')
   }
   const base = (callerWin ? ok.find((o) => o.windowId === callerWin.id)?.r : undefined) ?? ok[0].r
-  const arr = (o: { windowId: number; r: Record<string, unknown> }, k: string): { id?: unknown }[] =>
+  const arr = (
+    o: { windowId: number; r: Record<string, unknown> },
+    k: string
+  ): { id?: unknown }[] =>
     Array.isArray(o.r[k])
       ? (o.r[k] as { id?: unknown }[]).map((x) => ({ ...x, windowId: o.windowId }))
       : []
@@ -230,9 +238,13 @@ async function aggregateList(
     return {
       id: w.id,
       workspaceId: ws,
-      workspaceName: ws ? (workspaceManager.getWorkspaces().find((x) => x.id === ws)?.name ?? null) : null,
+      workspaceName: ws
+        ? (workspaceManager.getWorkspaces().find((x) => x.id === ws)?.name ?? null)
+        : null,
       isPrimary: identity?.isPrimary ?? false,
-      focused: !!windowRegistry.resolveTargetWindow({}) && windowRegistry.resolveTargetWindow({})?.id === w.id,
+      focused:
+        !!windowRegistry.resolveTargetWindow({}) &&
+        windowRegistry.resolveTargetWindow({})?.id === w.id,
       mine: !!callerWin && callerWin.id === w.id
     }
   })
@@ -243,7 +255,11 @@ async function aggregateList(
     sessions: dedupeById(ok.flatMap((o) => arr(o, 'sessions'))),
     groups: dedupeById(ok.flatMap((o) => arr(o, 'groups'))),
     // Pins are per workspace and global: every window holds the same list.
-    pinnedGroups: dedupeById(ok.flatMap((o) => (Array.isArray(o.r.pinnedGroups) ? (o.r.pinnedGroups as { id?: unknown }[]) : [])))
+    pinnedGroups: dedupeById(
+      ok.flatMap((o) =>
+        Array.isArray(o.r.pinnedGroups) ? (o.r.pinnedGroups as { id?: unknown }[]) : []
+      )
+    )
   }
 }
 
@@ -404,7 +420,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_open_session',
     {
       description:
-        'Open a new tab in Clave: a Claude Code, Antigravity, Codex, or Pi session, or a plain terminal, in the given directory. Optionally place it in a group. Returns { sessionId, groupId }.',
+        'Open a new tab in Clave: a Claude Code, Antigravity, Codex, or Pi session, or a plain terminal, in the given directory. Optionally place it in a group — pass a groupId, an exact group name, or "mine" for the calling tab\'s own group. Returns { sessionId, groupId }.',
       inputSchema: {
         cwd: z.string().describe('Absolute path of the working directory for the new session'),
         mode: z
@@ -428,11 +444,19 @@ function buildServer(callerSessionId: string | undefined): McpServer {
           .max(200)
           .optional()
           .describe(
-            'Model the new agent starts on. Supported by claude, codex, and pi; omitted uses the launch profile or CLI default.'
+            'Model the new agent starts on: an alias ("opus", "sonnet", "haiku") or a full model id ("claude-fable-5"). claude, codex and pi modes only; omitted = the launch profile\'s default, else the CLI\'s. The user can still switch later with /model inside the tab.'
           ),
-        profile: z.string().min(1).max(128).optional().describe('Named local launch profile id or name. Omit to use the workspace default.'),
+        profile: z
+          .string()
+          .min(1)
+          .max(128)
+          .optional()
+          .describe('Named local launch profile id or name. Omit to use the workspace default.'),
         provider: z.string().min(1).max(200).optional().describe('Pi provider id. Pi mode only.'),
-        thinking: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional().describe('Pi thinking level. Pi mode only.'),
+        thinking: z
+          .enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+          .optional()
+          .describe('Pi thinking level. Pi mode only.'),
         command: z
           .string()
           .optional()
@@ -739,7 +763,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
         workspace: z
           .string()
           .optional()
-          .describe('Workspace (id or name) the new window opens on. Default: your own window\'s.')
+          .describe("Workspace (id or name) the new window opens on. Default: your own window's.")
       }
     },
     (args) => run('openWindow', { ...args, callerSessionId })
