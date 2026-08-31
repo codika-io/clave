@@ -76,7 +76,13 @@ export async function launchSession(req: LaunchRequest): Promise<string | null> 
 
   const modes = req.setup
     ? agentSetupToModes(req.setup)
-    : { claudeMode: false, claudeAgentsMode: false, antigravityMode: false, codexMode: false, piMode: false }
+    : {
+        claudeMode: false,
+        claudeAgentsMode: false,
+        antigravityMode: false,
+        codexMode: false,
+        piMode: false
+      }
   const dangerousMode = req.setup?.dangerousMode ?? false
 
   // The Claude account applies to Claude Code and Claude Agents only — never a

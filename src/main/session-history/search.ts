@@ -163,14 +163,19 @@ export function piScopedTexts(entry: any, scope: SearchScope): string[] {
   if (!entry || entry.type !== 'message' || !entry.message) return []
   const message = entry.message
   if (scope === 'human' && message.role === 'user') {
-    return textBlocks(message.content, 'text').filter((text) => text.trim() !== '' && !isInjected(text))
+    return textBlocks(message.content, 'text').filter(
+      (text) => text.trim() !== '' && !isInjected(text)
+    )
   }
   if (scope === 'agent' && message.role === 'assistant') return textBlocks(message.content, 'text')
   if (scope === 'tools') {
     if (message.role === 'assistant' && Array.isArray(message.content)) {
       return message.content
         .filter((block: any) => block?.type === 'toolCall')
-        .map((block: any) => `${typeof block.name === 'string' ? block.name : ''} ${safeJson(block.arguments)}`)
+        .map(
+          (block: any) =>
+            `${typeof block.name === 'string' ? block.name : ''} ${safeJson(block.arguments)}`
+        )
     }
     if (message.role === 'toolResult') return textBlocks(message.content, 'text')
   }
@@ -216,7 +221,11 @@ export async function searchLines(
     // One hit per line at most, stamped with the first scope that matched:
     // a line is one record, however many toggles are on.
     line_scopes: for (const scope of scopes) {
-      for (const text of [...scopedTexts(entry, scope), ...codexScopedTexts(entry, scope), ...piScopedTexts(entry, scope)]) {
+      for (const text of [
+        ...scopedTexts(entry, scope),
+        ...codexScopedTexts(entry, scope),
+        ...piScopedTexts(entry, scope)
+      ]) {
         const excerpt = excerptAround(text, query)
         if (excerpt === null) continue
         hits.push({

@@ -167,7 +167,11 @@ export async function run(t) {
     // and a check that only asked whether it was in a group would stay green.
     const order = await topLevel(win)
     t.equal('the launcher’s session is a loose row, not in a group', order[0]?.kind, 'row')
-    t.equal('and it is the sidebar’s FIRST item, above both groups', order[0]?.name, 'clave-e2e-placement-root')
+    t.equal(
+      'and it is the sidebar’s FIRST item, above both groups',
+      order[0]?.name,
+      'clave-e2e-placement-root'
+    )
     t.check(
       'with the two group cards below it',
       order.slice(1).filter((i) => i.kind === 'group').length === 2,

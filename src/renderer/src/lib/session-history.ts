@@ -52,8 +52,11 @@ export async function resumeHistoryEntry(
   options: { groupId: string | null; dangerousMode: boolean }
 ): Promise<string | null> {
   const state = useSessionStore.getState()
-  const live = state.sessions.find((s) =>
-    s.alive && (s.claudeSessionId === entry.claudeSessionId || s.piSessionId === entry.claudeSessionId))
+  const live = state.sessions.find(
+    (s) =>
+      s.alive &&
+      (s.claudeSessionId === entry.claudeSessionId || s.piSessionId === entry.claudeSessionId)
+  )
   if (live) {
     state.selectSession(live.id, false)
     state.setFocusedSession(live.id)
@@ -70,8 +73,8 @@ export async function resumeHistoryEntry(
       piMode: entry.provider === 'pi',
       dangerousMode: entry.provider === 'claude' && options.dangerousMode,
       model: entry.model ?? undefined,
-      piProvider: entry.provider === 'pi' ? entry.agentProvider ?? undefined : undefined,
-      piThinking: entry.provider === 'pi' ? entry.thinking ?? undefined : undefined,
+      piProvider: entry.provider === 'pi' ? (entry.agentProvider ?? undefined) : undefined,
+      piThinking: entry.provider === 'pi' ? (entry.thinking ?? undefined) : undefined,
       resumeSessionId: entry.claudeSessionId,
       workspaceId
     })

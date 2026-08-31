@@ -156,24 +156,48 @@ function PiUsage(): ReactElement {
   const [totals, setTotals] = useState<PiUsageTotals | null>(null)
   useEffect(() => {
     let cancelled = false
-    window.electronAPI.getPiUsage(range).then((value) => {
-      if (!cancelled) setTotals(value)
-    }).catch(() => {
-      if (!cancelled) setTotals(null)
-    })
-    return () => { cancelled = true }
+    window.electronAPI
+      .getPiUsage(range)
+      .then((value) => {
+        if (!cancelled) setTotals(value)
+      })
+      .catch(() => {
+        if (!cancelled) setTotals(null)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [range])
   const number = (value: number): string => new Intl.NumberFormat().format(value)
   return (
     <div className="space-y-4">
       <div className="flex gap-1.5">
-        {([['today', 'Today'], ['7d', '7d'], ['30d', '30d'], ['all', 'All']] as const).map(([id, label]) => (
-          <button key={id} className="group-switcher-chip" data-selected={range === id ? 'true' : undefined} onClick={() => setRange(id)}>{label}</button>
+        {(
+          [
+            ['today', 'Today'],
+            ['7d', '7d'],
+            ['30d', '30d'],
+            ['all', 'All']
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            className="group-switcher-chip"
+            data-selected={range === id ? 'true' : undefined}
+            onClick={() => setRange(id)}
+          >
+            {label}
+          </button>
         ))}
       </div>
-      {!totals ? <span className="text-sm text-text-tertiary">Reading local Pi sessions…</span> : (
+      {!totals ? (
+        <span className="text-sm text-text-tertiary">Reading local Pi sessions…</span>
+      ) : (
         <>
-          <p className="text-xs text-text-tertiary">Local session totals, not account quota. {totals.sessions} session{totals.sessions === 1 ? '' : 's'}.</p>
+          <p className="text-xs text-text-tertiary">
+            Local session totals, not account quota. {totals.sessions} session
+            {totals.sessions === 1 ? '' : 's'}.
+          </p>
           <div className="grid grid-cols-2 gap-3">
             {[
               ['Input', number(totals.input)],

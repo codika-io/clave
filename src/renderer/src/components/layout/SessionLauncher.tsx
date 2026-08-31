@@ -194,7 +194,10 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
     (kind: AgentKind, label: string, shortcut: string | undefined, dangerousMode: boolean) => {
       const binaryProfiles = profilesFor('claude')
       const launch = (launchProfileId: string, claudeProfileId?: string): void =>
-        launchAgent({ kind, dangerousMode, claudeProfileId, launchProfileId }, { kind: 'workspace-root' })
+        launchAgent(
+          { kind, dangerousMode, claudeProfileId, launchProfileId },
+          { kind: 'workspace-root' }
+        )
       if (!multiProfile && binaryProfiles.length === 1) {
         return (
           <DropdownMenuItem onSelect={() => launch(binaryProfiles[0].id)}>
@@ -216,21 +219,27 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
             {binaryProfiles.flatMap((binary) =>
               multiProfile
                 ? profiles.map((account: ClaudeProfile) => (
-                    <DropdownMenuItem key={`${binary.id}:${account.id}`} onSelect={() => launch(binary.id, account.id)}>
-                      <span className="flex-1 truncate">{binary.name} · {account.label}</span>
-                      {binary.id === selectedLaunchProfile('claude', activeWorkspaceId).id && account.id === selectedProfileId && (
-                        <CheckIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
-                      )}
+                    <DropdownMenuItem
+                      key={`${binary.id}:${account.id}`}
+                      onSelect={() => launch(binary.id, account.id)}
+                    >
+                      <span className="flex-1 truncate">
+                        {binary.name} · {account.label}
+                      </span>
+                      {binary.id === selectedLaunchProfile('claude', activeWorkspaceId).id &&
+                        account.id === selectedProfileId && (
+                          <CheckIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
+                        )}
                     </DropdownMenuItem>
                   ))
-                : [(
+                : [
                     <DropdownMenuItem key={binary.id} onSelect={() => launch(binary.id)}>
                       <span className="flex-1 truncate">{binary.name}</span>
                       {binary.id === selectedLaunchProfile('claude', activeWorkspaceId).id && (
                         <CheckIcon className="w-3.5 h-3.5 flex-shrink-0 text-text-tertiary" />
                       )}
                     </DropdownMenuItem>
-                  )]
+                  ]
             )}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
@@ -266,7 +275,9 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
             {binaryProfiles.map((profile) => (
               <DropdownMenuItem key={profile.id} onSelect={() => launch(profile.id)}>
                 <span className="flex-1 truncate">{profile.name}</span>
-                {profile.id === selected.id && <CheckIcon className="w-3.5 h-3.5 text-text-tertiary" />}
+                {profile.id === selected.id && (
+                  <CheckIcon className="w-3.5 h-3.5 text-text-tertiary" />
+                )}
               </DropdownMenuItem>
             ))}
           </DropdownMenuSubContent>
@@ -346,7 +357,11 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
                   agentsShortcut ?? undefined,
                   false
                 )}
-                {renderAgentEntry('antigravity', 'Antigravity CLI', antigravityShortcut ?? undefined)}
+                {renderAgentEntry(
+                  'antigravity',
+                  'Antigravity CLI',
+                  antigravityShortcut ?? undefined
+                )}
                 {renderAgentEntry('codex', 'Codex CLI', codexShortcut ?? undefined)}
                 {renderAgentEntry('pi', 'Pi', piShortcut ?? undefined)}
 

@@ -4,13 +4,13 @@ These are Clave's defaults. Open **Settings → Keymaps** to see or change the a
 
 ## Command mode
 
-`Ctrl+B` enters command mode. The next key must arrive within 300ms. A matched command runs; an unmatched or late key is consumed and exits command mode.
+`Cmd+K` enters command mode. The next key must arrive within 300ms. A matched command runs; an unmatched or late key is consumed and exits command mode.
 
 | Shortcut | Action |
 |---|---|
-| Ctrl+B C | New Claude Code session |
+| Cmd+K C | New Claude Code session |
 
-Unset the master key in Settings to disable command mode. Direct shortcuts keep working.
+The master key is a **Cmd** chord on purpose: Clave reads the key before the terminal does, so a Ctrl chord as master would eat the key inside every session — Ctrl+B is tmux's own prefix and the shell's "move left". Unset the master key in Settings to disable command mode. Direct shortcuts keep working.
 
 ## Sessions
 

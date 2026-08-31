@@ -418,4 +418,3 @@ export interface PinnedGroup {
   activeGroupId: string | null
   visible: boolean
 }
-

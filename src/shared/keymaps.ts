@@ -174,7 +174,7 @@ export const KEYMAP_ACTIONS: readonly KeymapActionDefinition[] = [
 ]
 
 const ACTION_IDS = new Set<string>(KEYMAP_ACTION_IDS)
-const DEFAULT_MASTER_KEY = 'Ctrl+B'
+const DEFAULT_MASTER_KEY = 'Mod+K'
 const MODIFIER_ORDER = ['Mod', 'Ctrl', 'Alt', 'Shift'] as const
 const MODIFIER_ALIASES: Record<string, (typeof MODIFIER_ORDER)[number]> = {
   mod: 'Mod',
@@ -290,14 +290,47 @@ export function canonicalizeBinding(binding: string): string {
     .join(' ')
 }
 
+/** The key a physical code stands for, used when `event.key` cannot be trusted.
+ *  On macOS Option REWRITES `event.key` — ⌥N is a dead key, ⌥T is `†`, ⌥G is `©`
+ *  — so every Option chord has to be read off the physical key instead. This is
+ *  the same `event.code` match the launch shortcuts used before keymaps existed;
+ *  it applies only while Alt is held (or on a dead key), so ordinary chords keep
+ *  reading `event.key` and stay true to the user's layout. */
+function codeKey(code: string | undefined): string | undefined {
+  if (!code) return undefined
+  const letter = code.match(/^Key([A-Z])$/)?.[1]
+  if (letter) return letter
+  const digit = code.match(/^Digit([0-9])$/)?.[1]
+  if (digit) return digit
+  return CODE_PUNCTUATION[code]
+}
+
+const CODE_PUNCTUATION: Record<string, string> = {
+  Backquote: '`',
+  Minus: '-',
+  Equal: '=',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Space: 'Space'
+}
+
 export function keyEventToChord(event: KeyEventLike): string | null {
   if (['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) return null
-  const deadKeyFallback = event.code?.match(/^Key([A-Z])$/)?.[1]
-  if ((event.key === 'Dead' || event.key === 'Unidentified') && !deadKeyFallback) return null
+  const physical = codeKey(event.code)
+  const deadKey = event.key === 'Dead' || event.key === 'Unidentified'
+  if (deadKey && !physical) return null
   let key: string
   try {
     const eventKey = event.shiftKey ? (SHIFTED_KEY_BASE[event.key] ?? event.key) : event.key
-    key = canonicalKey(deadKeyFallback ?? (eventKey === ' ' ? 'Space' : eventKey))
+    key = canonicalKey(
+      (event.altKey || deadKey ? physical : undefined) ?? (eventKey === ' ' ? 'Space' : eventKey)
+    )
   } catch {
     return null
   }

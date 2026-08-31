@@ -1970,4 +1970,3 @@ function PinnedSection({
     </>
   )
 }
-

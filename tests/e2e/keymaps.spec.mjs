@@ -5,6 +5,14 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { launchApp, openWindow, seedWorkspaces, userDataDir } from './harness.mjs'
+import { formatKeyBinding, resolveKeymapConfig } from '../../src/shared/keymaps.ts'
+
+/** The shipped master key, read from the code so this spec cannot go stale
+ *  the way a hardcoded chord does. */
+const MASTER = resolveKeymapConfig().masterKey
+const MASTER_GLYPH = formatKeyBinding('Master X', MASTER).split(' ')[0]
+/** Playwright's name for the master chord (Mod is Command on macOS). */
+const MASTER_PRESS = MASTER.replace('Mod', 'Meta').replace('Ctrl', 'Control')
 
 const DIR = userDataDir('keymaps')
 const ROOT = '/tmp/clave-e2e-keymaps-root'
@@ -23,7 +31,7 @@ export async function run(t) {
   seedWorkspaces(DIR, { workspaces: [WORKSPACE], activeWorkspaceId: WORKSPACE.id, fresh: true })
   writeFileSync(
     IMPORT_FILE,
-    JSON.stringify({ version: 1, bindings: { openSettings: ['Mod+K'] } }, null, 2)
+    JSON.stringify({ version: 1, bindings: { openSettings: ['Mod+Shift+K'] } }, null, 2)
   )
   const { app, win } = await launchApp(DIR)
 
@@ -37,7 +45,7 @@ export async function run(t) {
       'Settings exposes the keymap editor',
       initial.includes('Keymaps') && initial.includes('Master key')
     )
-    t.check('the default master key is Ctrl+B', initial.includes('⌃B'), initial)
+    t.check(`the default master key is ${MASTER}`, initial.includes(MASTER_GLYPH), initial)
     t.check('the editor says changes wait for Save', initial.includes('Changes stay in this draft'))
 
     const terminalRow = win.locator('.keymap-row').filter({ hasText: 'New terminal' }).first()
@@ -77,7 +85,7 @@ export async function run(t) {
       (await win.locator('body').innerText()).includes('active in every window')
     )
 
-    await second.keyboard.press('Meta+K')
+    await second.keyboard.press('Meta+Shift+K')
     await second.waitForTimeout(250)
     t.check(
       'an already-open second window uses the new binding immediately',
@@ -92,7 +100,7 @@ export async function run(t) {
     t.equal(
       'the native menu label is rebuilt from the accepted binding',
       menuAccelerator,
-      'Command+K'
+      'Command+Shift+K'
     )
 
     await app.evaluate(async ({ dialog }, exportFile) => {
@@ -102,14 +110,14 @@ export async function run(t) {
     t.equal(
       'Export writes the validated override document',
       JSON.parse(readFileSync(EXPORT_FILE, 'utf-8')).bindings.openSettings[0],
-      'Mod+K'
+      'Mod+Shift+K'
     )
 
     await win
       .getByRole('textbox', { name: 'Raw keymap JSON' })
       .fill(
         JSON.stringify(
-          { version: 1, bindings: { newTerminal: ['Mod+K'], openSettings: ['Mod+K'] } },
+          { version: 1, bindings: { newTerminal: ['Mod+Shift+K'], openSettings: ['Mod+Shift+K'] } },
           null,
           2
         )
@@ -120,7 +128,7 @@ export async function run(t) {
       (await win.locator('body').innerText()).includes('already assigned')
     )
     await second.getByRole('button', { name: 'Back to sessions' }).click()
-    await second.keyboard.press('Meta+K')
+    await second.keyboard.press('Meta+Shift+K')
     await second.waitForTimeout(250)
     t.check(
       'a rejected save leaves the last valid keymap active',
@@ -128,17 +136,17 @@ export async function run(t) {
     )
 
     await win.getByRole('button', { name: 'Back to sessions' }).click()
-    await win.keyboard.press('Control+B')
+    await win.keyboard.press(MASTER_PRESS)
     t.check(
       'the master key enters visible command mode',
       await win.evaluate(() => document.querySelector('.keymap-command-hud') !== null)
     )
     await win.keyboard.press('Escape')
-    await win.keyboard.press('Control+B')
+    await win.keyboard.press(MASTER_PRESS)
     await win.keyboard.press('c')
     await win.waitForTimeout(3500)
     const rows = await win.locator('[data-sidebar-item-type="session"]').count()
-    t.check('Ctrl+B C launches a Claude session', rows > 0, rows)
+    t.check(`${MASTER} C launches a Claude session`, rows > 0, rows)
   } finally {
     await app.close()
   }

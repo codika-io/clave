@@ -74,7 +74,9 @@ export function captureEndpoint(
 function isAgentTab(s: Session): boolean {
   const mode = sessionMode(s)
   if (mode === 'terminal' || mode === 'pi') return false
-  return AGENT_CAPABILITIES[mode === 'claude-agents' ? 'claude' : mode].exchangeCapture === 'supported'
+  return (
+    AGENT_CAPABILITIES[mode === 'claude-agents' ? 'claude' : mode].exchangeCapture === 'supported'
+  )
 }
 
 /**

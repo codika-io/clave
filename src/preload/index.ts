@@ -25,12 +25,17 @@ const electronAPI = {
   platform: process.platform,
 
   launchProfilesList: () => ipcRenderer.invoke('launch-profiles:list'),
-  launchProfileUpsert: (profile: LaunchProfile) => ipcRenderer.invoke('launch-profiles:upsert', profile),
-  launchProfileDelete: (profileId: string) => ipcRenderer.invoke('launch-profiles:delete', profileId),
+  launchProfileUpsert: (profile: LaunchProfile) =>
+    ipcRenderer.invoke('launch-profiles:upsert', profile),
+  launchProfileDelete: (profileId: string) =>
+    ipcRenderer.invoke('launch-profiles:delete', profileId),
   launchProfileSetGlobal: (family: LauncherFamily, profileId: string | null) =>
     ipcRenderer.invoke('launch-profiles:set-global', { family, profileId }),
-  launchProfileSetWorkspace: (workspaceId: string, family: LauncherFamily, profileId: string | null) =>
-    ipcRenderer.invoke('launch-profiles:set-workspace', { workspaceId, family, profileId }),
+  launchProfileSetWorkspace: (
+    workspaceId: string,
+    family: LauncherFamily,
+    profileId: string | null
+  ) => ipcRenderer.invoke('launch-profiles:set-workspace', { workspaceId, family, profileId }),
   spawnSession: (
     cwd: string,
     options?: {
