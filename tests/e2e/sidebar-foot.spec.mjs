@@ -18,7 +18,7 @@
  *    leaves the default palette, which is indistinguishable from a user who
  *    never chose one.
  */
-import { launchApp, seedWorkspaces, seedTrustedRoots, userDataDir } from './harness.mjs'
+import { launchApp, seedWorkspaces, seedTrustedRoots, until, userDataDir } from './harness.mjs'
 import { mkdirSync } from 'node:fs'
 
 const DIR = userDataDir('sidebar-foot')
@@ -651,8 +651,51 @@ export async function run(t) {
     const windowedToolbar = await toolbarPad()
     t.equal('and with the sidebar closed the toolbar clears them too', windowedToolbar.pad, '76px')
 
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setFullScreen(true))
-    await new Promise((r) => setTimeout(r, 2500))
+    // Drive the real thing when the window manager allows it, and fall back to
+    // main's own event when it does not. `--test-no-activate` never shows the
+    // window, and macOS will not put an off-screen window into fullscreen —
+    // setFullScreen is simply a no-op, isFullScreen stays false however long
+    // you wait. That is a fact about the test window, not about the chrome, and
+    // a fixed sleep turned it into six failures claiming the mark never moved.
+    // The fallback pushes the exact message main sends from 'enter-full-screen'
+    // (src/main/index.ts), so every assertion below still runs and still fails
+    // if the renderer's half of the chain is broken.
+    // Once the window manager has declined, it declines both directions — so
+    // the fallback has to stay on for the rest of the block, or leaving
+    // fullscreen would find the OS already reporting `false` and push nothing,
+    // leaving the chrome stuck at the fullscreen value it was handed.
+    let simulating = false
+    const setFullScreen = async (value) => {
+      if (!simulating) {
+        await app.evaluate(
+          ({ BrowserWindow }, v) => BrowserWindow.getAllWindows()[0].setFullScreen(v),
+          value
+        )
+        const granted = await until(
+          async () =>
+            (await app.evaluate(({ BrowserWindow }) =>
+              BrowserWindow.getAllWindows()[0].isFullScreen()
+            )) === value || null,
+          { tries: 12, gapMs: 250 }
+        )
+        if (granted) {
+          await new Promise((r) => setTimeout(r, 600))
+          return
+        }
+        simulating = true
+        console.log(
+          "        (window manager declined fullscreen for the hidden test window — driving main's own event instead)"
+        )
+      }
+      await app.evaluate(
+        ({ BrowserWindow }, v) =>
+          BrowserWindow.getAllWindows()[0].webContents.send('window:fullscreen-changed', v),
+        value
+      )
+      await new Promise((r) => setTimeout(r, 600))
+    }
+
+    await setFullScreen(true)
     const full = await stripPad()
     t.equal('fullscreen, it takes the first light’s own place', full.pad, '16px')
     t.equal('and says the lights are gone', full.flag, 'false')
@@ -678,10 +721,17 @@ export async function run(t) {
     await win.reload()
     await win.waitForSelector('[data-wordmark-strip]', { timeout: 20000 })
     await new Promise((r) => setTimeout(r, 500))
+    // A really-fullscreen window answers its own mount-time question; a
+    // simulated one has nothing to answer with, so ask it again the same way.
+    if (simulating) {
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].webContents.send('window:fullscreen-changed', true)
+      )
+      await new Promise((r) => setTimeout(r, 500))
+    }
     t.equal('a renderer that missed the event still asks', (await stripPad()).pad, '16px')
 
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setFullScreen(false))
-    await new Promise((r) => setTimeout(r, 2500))
+    await setFullScreen(false)
     t.equal('and leaving fullscreen gives the clearance back', (await stripPad()).pad, '90px')
 
     // ── narrow enough and the attribution steps aside ─────────────────────
