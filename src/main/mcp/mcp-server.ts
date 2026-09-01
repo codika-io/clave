@@ -1,7 +1,8 @@
 import * as http from 'http'
 import * as path from 'path'
 import { createHash, timingSafeEqual } from 'crypto'
-import { app } from 'electron'
+import { app, Notification } from 'electron'
+import { TEST_NO_ACTIVATE } from '../test-mode'
 import { z } from 'zod'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -15,7 +16,8 @@ import {
   saveServerState,
   setMcpRuntime,
   resolveSessionByToken,
-  rebuildSessionTokens
+  rebuildSessionTokens,
+  countStaleSessionConfigs
 } from './mcp-runtime'
 import {
   createRequest,
@@ -959,6 +961,15 @@ function secretRequestResult(request: SecretRequest): ToolResult {
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+  // Unauthenticated liveness endpoint (127.0.0.1 only). Lets anything — a
+  // health script, a booting second instance probing a taken port — tell a
+  // live Clave MCP server apart from a foreign process or a dead socket.
+  if (url.pathname === '/health' && req.method === 'GET') {
+    res
+      .writeHead(200, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ app: 'clave', version: app.getVersion(), pid: process.pid }))
+    return
+  }
   if (url.pathname !== MCP_PATH) {
     res.writeHead(404).end()
     return
@@ -1029,14 +1040,29 @@ export async function startMcpServer(): Promise<void> {
       })
     })
 
-  let boundPort: number
+  let boundPort: number | null = null
   try {
     boundPort = await listen(port)
   } catch {
-    // Persisted port taken (another app instance, or another process) — fall
-    // back to an ephemeral one. Sessions surviving from a previous run lose
-    // their endpoint, but new spawns get the fresh one.
-    boundPort = await listen(0)
+    // The persisted port is taken. Surviving tmux tabs hold this exact
+    // endpoint in memory — an agent's MCP connection is read once at spawn and
+    // can never be re-pointed — so giving the port up cuts every one of them
+    // off permanently. Fight for it first. A live Clave answering /health is
+    // ANOTHER instance (dev run beside the installed app): it won't release,
+    // skip straight to an ephemeral port. No answer means our own previous
+    // instance is still draining (quit, or an update's relaunch) — retry while
+    // it exits.
+    if (port > 0 && !(await probeClaveHealth(port))) {
+      for (let attempt = 0; attempt < 10 && boundPort === null; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        try {
+          boundPort = await listen(port)
+        } catch {
+          /* still taken */
+        }
+      }
+    }
+    if (boundPort === null) boundPort = await listen(0)
   }
 
   httpServer = server
@@ -1045,12 +1071,61 @@ export async function startMcpServer(): Promise<void> {
   // Re-map per-session tokens from surviving tabs' config files (post-restart),
   // now that runtime.token is set so the anonymous shared token is skipped.
   rebuildSessionTokens()
+  if (port > 0 && boundPort !== port) {
+    // The endpoint moved. Every surviving session whose config still carries
+    // the old URL holds it in memory too — those tabs are cut off until they
+    // restart, and nothing else in the app will ever say so. Say it here.
+    const stale = countStaleSessionConfigs(mcpUrl)
+    console.error(
+      `[mcp] persisted port ${port} was unavailable — now on ${boundPort}; ` +
+        `${stale} surviving session(s) hold the old endpoint and need a tab restart`
+    )
+    if (stale > 0 && !TEST_NO_ACTIVATE && Notification.isSupported()) {
+      new Notification({
+        title: 'Agent tabs lost Clave tools',
+        body:
+          `Clave's agent endpoint changed port on restart. ${stale} running tab` +
+          `${stale === 1 ? '' : 's'} can no longer reach Clave — restart ` +
+          `${stale === 1 ? 'that tab' : 'those tabs'} to reconnect.`,
+        silent: false
+      }).show()
+    }
+  }
   saveServerState(mcpUrl, token)
   console.log(`[mcp] listening on ${mcpUrl}`)
 }
 
+/** True when a live Clave MCP server answers /health on the port. */
+function probeClaveHealth(port: number, timeoutMs = 750): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get(
+      { host: '127.0.0.1', port, path: '/health', timeout: timeoutMs },
+      (res) => {
+        let data = ''
+        res.on('data', (chunk: Buffer) => (data += chunk))
+        res.on('end', () => {
+          try {
+            resolve(
+              res.statusCode === 200 && (JSON.parse(data) as { app?: string }).app === 'clave'
+            )
+          } catch {
+            resolve(false)
+          }
+        })
+      }
+    )
+    req.on('timeout', () => req.destroy())
+    req.on('error', () => resolve(false))
+  })
+}
+
 export function stopMcpServer(): void {
+  // close() alone waits for open keep-alive connections — agent tabs hold
+  // theirs for the life of the session — so the port could stay occupied while
+  // a replacement instance boots (the app-update relaunch). Drop them so quit
+  // actually releases the port.
   httpServer?.close()
+  httpServer?.closeAllConnections()
   httpServer = null
   setMcpRuntime(null)
 }

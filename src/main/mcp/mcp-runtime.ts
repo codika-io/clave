@@ -178,6 +178,34 @@ export function writeSessionMcpConfig(claveSessionId: string): string | null {
   }
 }
 
+/**
+ * How many per-session configs point at a DIFFERENT endpoint than the one just
+ * bound. Each such session's agent process read its config at spawn and holds
+ * that old URL in memory — it is cut off until its tab restarts. Counted at
+ * startup, before re-adoption rewrites the files and erases the evidence.
+ */
+export function countStaleSessionConfigs(currentUrl: string): number {
+  let stale = 0
+  let files: string[]
+  try {
+    files = fs.readdirSync(sessionConfigDir()).filter((f) => f.endsWith('.json'))
+  } catch {
+    return 0
+  }
+  for (const file of files) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(path.join(sessionConfigDir(), file), 'utf-8')) as {
+        mcpServers?: { clave?: { url?: string } }
+      }
+      const url = cfg.mcpServers?.clave?.url
+      if (url && url !== currentUrl) stale++
+    } catch {
+      /* malformed — not a live endpoint holder */
+    }
+  }
+  return stale
+}
+
 export function deleteSessionMcpConfig(claveSessionId: string): void {
   unregisterSessionTokensFor(claveSessionId)
   try {
