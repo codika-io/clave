@@ -97,3 +97,12 @@ export const STATUS_BATCH_CONCURRENCY = 6
 
 /** Max concurrent `git fetch` calls when refreshing many repos at once */
 export const FETCH_BATCH_CONCURRENCY = 4
+
+/** Max concurrent `git pull` calls in a Pull all batch */
+export const PULL_BATCH_CONCURRENCY = 4
+
+/** How long a git call that talks to a remote may go SILENT before it is
+ *  killed. An idle timer, not a deadline: any output resets it, so a large
+ *  fetch that is making progress is never cut off, and only a stalled remote —
+ *  the one that used to hold the whole serial batch — is. */
+export const GIT_NETWORK_TIMEOUT_MS = 20_000

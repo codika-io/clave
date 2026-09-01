@@ -8,6 +8,7 @@ import { FileTree } from '../files/FileTree'
 import { RemoteFileTree } from '../files/RemoteFileTree'
 import { GitStatusPanel, MultiRepoGitPanel } from './GitStatusPanel'
 import { MagicPullButton, MagicSyncButton, ViewModeToggle, PanelModeToggle, CollapseAllButton, CommitBarToggle, JourneyButton, GitSyncBadge } from './GitPanelControls'
+import { GitBatchProvider, GitBatchProgressBar } from './GitBatchProgress'
 import { useMultiRepoStatus } from '../../hooks/use-multi-repo-status'
 import { useGitStatus } from '../../hooks/use-git-status'
 import { shortenPath } from '../../lib/utils'
@@ -84,7 +85,24 @@ function getParentPaths(fullPath: string): { path: string; name: string }[] {
   return result
 }
 
-export function SidePanel() {
+/**
+ * The panel, with the batch-op context around it.
+ *
+ * The provider has to sit ABOVE the body rather than inside its JSX: the body
+ * calls `useMultiRepoStatus`, which reaches for the batch runner to drive its
+ * refresh, and a provider rendered by the same component is not above the hooks
+ * that component ran. It failed the way context mistakes do — the hook threw,
+ * React unmounted the subtree, and the panel simply came up blank.
+ */
+export function SidePanel(): React.JSX.Element {
+  return (
+    <GitBatchProvider>
+      <SidePanelBody />
+    </GitBatchProvider>
+  )
+}
+
+function SidePanelBody(): React.JSX.Element {
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const sessions = useSessionStore((s) => s.sessions)
   const sidePanelTab = useSessionStore((s) => s.sidePanelTab)
@@ -277,12 +295,24 @@ export function SidePanel() {
   const singleRepoChangeCount = singleRepoGit.status?.files.length ?? 0
 
 
-  // Compute repo paths for MagicSync across all git modes
+  // Every repo the panel lists — what Magic sync acts on, since committing and
+  // pushing is about each repo's own local work.
   const allRepoPaths = useMemo(() => {
     if (multiRepo.result.mode === 'multi') return multiRepo.result.repos.map((r) => r.path)
     if (isSingleRepo && cwd) return [cwd]
     return []
   }, [multiRepo.result, isSingleRepo, cwd])
+
+  // Only the repos with incoming commits — what Pull all acts on. The badges in
+  // this panel and the button's job are the same list on purpose: the button
+  // pulls what you can see, and finding more is the refresh's job.
+  const behindRepoPaths = useMemo(() => {
+    if (multiRepo.result.mode === 'multi') {
+      return multiRepo.result.repos.filter((r) => r.status.behind > 0).map((r) => r.path)
+    }
+    if (isSingleRepo && cwd && (singleRepoGit.status?.behind ?? 0) > 0) return [cwd]
+    return []
+  }, [multiRepo.result, isSingleRepo, cwd, singleRepoGit.status])
 
   const gitRefresh = useCallback(() => {
     if (multiRepo.result.mode === 'multi') multiRepo.refresh()
@@ -741,7 +771,7 @@ export function SidePanel() {
                 with the spacer — on one line the label group's slack separates
                 them, and on two the line break already has. */}
             <span className="panel-bar-controls">
-              <MagicPullButton repoPaths={allRepoPaths} onDone={gitRefresh} />
+              <MagicPullButton repoPaths={behindRepoPaths} onDone={gitRefresh} />
               <MagicSyncButton repoPaths={allRepoPaths} onDone={gitRefresh} />
               <span className="panel-sep" aria-hidden="true" />
               <CommitBarToggle />
@@ -752,6 +782,11 @@ export function SidePanel() {
               <PanelModeToggle />
               <ViewModeToggle />
   </span>
+            {/* The batch progress row. A sibling of the controls, not a child
+                of either button: the bar wraps, so a full-width item lands on
+                its own line underneath without moving anything above it. It
+                renders nothing at all when no batch is running. */}
+            <GitBatchProgressBar />
           </div>
         </div>
       )}

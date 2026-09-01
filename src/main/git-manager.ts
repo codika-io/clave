@@ -3,7 +3,36 @@ import { execFile } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
 import { getLoginShellEnv } from './pty-manager'
-import { STATUS_BATCH_CONCURRENCY, FETCH_BATCH_CONCURRENCY } from './constants'
+import type {
+  GitBatchOp,
+  GitBatchPhase,
+  GitBatchProgress,
+  GitBatchProgressFn
+} from '../shared/git-batch'
+import {
+  STATUS_BATCH_CONCURRENCY,
+  FETCH_BATCH_CONCURRENCY,
+  PULL_BATCH_CONCURRENCY,
+  GIT_NETWORK_TIMEOUT_MS
+} from './constants'
+
+/**
+ * A git instance for a call that talks to a REMOTE, and can therefore hang
+ * forever on someone else's server.
+ *
+ * `timeout.block` is an IDLE timer, not a deadline: any byte on stdout or
+ * stderr resets it, so a slow-but-progressing fetch of a large repo is left
+ * alone and only a genuinely stalled connection is killed. `GIT_TERMINAL_PROMPT=0`
+ * covers the other half — a remote that wants credentials would otherwise sit
+ * waiting on a stdin no one is attached to, producing no output at all, which
+ * is a hang the user can neither see nor answer.
+ */
+function networkGit(cwd: string): ReturnType<typeof simpleGit> {
+  return simpleGit(cwd, { timeout: { block: GIT_NETWORK_TIMEOUT_MS } }).env({
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0'
+  })
+}
 
 /** Run an async op over items with a bounded number of concurrent workers. */
 async function mapWithConcurrency<T, R>(
@@ -85,8 +114,46 @@ export interface GitJourneyResult {
   hasMore: boolean
 }
 
-export type MagicSyncStep = 'pulling' | 'staging' | 'generating' | 'committing' | 'pushing'
-export type MagicPullStep = 'fetching' | 'pulling'
+
+/**
+ * The counter behind a batch. Every repo moves it exactly once, at the end of
+ * its own pipeline, whatever happened to it — a batch where failures never
+ * counted would stall the bar short of full and read as a hang, which is the
+ * bug this whole change exists to remove.
+ */
+class BatchProgress {
+  private done = 0
+
+  constructor(
+    private readonly op: GitBatchOp,
+    private readonly total: number,
+    private readonly emit?: GitBatchProgressFn
+  ) {}
+
+  /** A repo entered a phase. The counter does not move. */
+  step(repoPath: string, phase: GitBatchPhase): void {
+    this.send(repoPath, phase)
+  }
+
+  /** A repo's pipeline ended. The counter moves, once. */
+  complete(repoPath: string, phase: GitBatchPhase): void {
+    this.done++
+    this.send(repoPath, phase)
+  }
+
+  private send(repoPath: string, phase: GitBatchPhase): void {
+    this.emit?.({
+      op: this.op,
+      phase,
+      repoPath,
+      repoName: path.basename(repoPath) || repoPath,
+      done: this.done,
+      total: this.total
+    })
+  }
+}
+
+export type { GitBatchOp, GitBatchPhase, GitBatchProgress, GitBatchProgressFn }
 
 export interface MagicSyncResult {
   repoPath: string
@@ -216,12 +283,12 @@ class GitManager {
   }
 
   async push(cwd: string): Promise<void> {
-    const git = simpleGit(cwd)
+    const git = networkGit(cwd)
     await git.push()
   }
 
   async publishBranch(cwd: string): Promise<void> {
-    const git = simpleGit(cwd)
+    const git = networkGit(cwd)
     const status = await git.status()
     const branch = status.current
     if (!branch) throw new Error('Could not determine current branch')
@@ -229,7 +296,7 @@ class GitManager {
   }
 
   async pull(cwd: string, strategy: 'auto' | 'merge' | 'rebase' | 'ff-only' = 'auto'): Promise<void> {
-    const git = simpleGit(cwd)
+    const git = networkGit(cwd)
 
     if (strategy === 'ff-only') {
       await git.pull(['--ff-only'])
@@ -303,13 +370,21 @@ class GitManager {
     }
   }
 
+  /** The lenient fetch: the background poller's, which must never surface a
+   *  transient network failure as an error the user has to dismiss. */
   async fetch(cwd: string): Promise<void> {
     try {
-      const git = simpleGit(cwd)
-      await git.fetch()
+      await this.fetchOrThrow(cwd)
     } catch (err) {
       console.warn('[git] Fetch skipped:', (err as Error).message)
     }
+  }
+
+  /** The same fetch, reporting. A batch the user CLICKED has to be able to say
+   *  that a remote failed — swallowed into a warning, a failed fetch made the
+   *  repo report "up to date", which is the one answer that is certainly wrong. */
+  async fetchOrThrow(cwd: string): Promise<void> {
+    await networkGit(cwd).fetch()
   }
 
   async checkIgnored(cwd: string, paths: string[]): Promise<string[]> {
@@ -522,25 +597,31 @@ ${diff}`
     return runClaudePrompt(prompt, env, '[git]')
   }
 
+  /**
+   * Commit and push every repo that has work in it. Serial on purpose: step 3
+   * spawns the `claude` CLI to write the message, and N of those at once is a
+   * different kind of expensive from N `git fetch`es.
+   */
   async magicSync(
     repoPaths: string[],
-    onProgress?: (repoPath: string, step: MagicSyncStep) => void
+    onProgress?: GitBatchProgressFn
   ): Promise<MagicSyncResult[]> {
+    const progress = new BatchProgress('sync', repoPaths.length, onProgress)
     const results: MagicSyncResult[] = []
 
-    for (const repoPath of repoPaths) {
+    const syncRepo = async (repoPath: string): Promise<MagicSyncResult> => {
       const result: MagicSyncResult = { repoPath, actions: [], error: null }
       try {
+        progress.step(repoPath, 'checking')
         const status = await this.getStatus(repoPath)
         if (!status.isRepo) {
           result.error = 'Not a git repository'
-          results.push(result)
-          continue
+          return result
         }
 
         // 1. Pull if behind
         if (status.behind > 0) {
-          onProgress?.(repoPath, 'pulling')
+          progress.step(repoPath, 'pulling')
           await this.pull(repoPath, 'auto')
           result.actions.push('pulled')
         }
@@ -552,79 +633,156 @@ ${diff}`
         if (files.length === 0) {
           // Nothing to commit — but maybe we pulled, so check if we need to push
           if (postPullStatus.ahead > 0) {
-            onProgress?.(repoPath, 'pushing')
+            progress.step(repoPath, 'pushing')
             await this.push(repoPath)
             result.actions.push('pushed')
           }
-          results.push(result)
-          continue
+          return result
         }
 
         // 2. Stage all files
-        onProgress?.(repoPath, 'staging')
+        progress.step(repoPath, 'staging')
         const allPaths = files.map((f) => f.path)
         await this.stage(repoPath, allPaths)
         result.actions.push('staged')
 
         // 3. Generate commit message
-        onProgress?.(repoPath, 'generating')
+        progress.step(repoPath, 'generating')
         const message = await this.generateCommitMessage(repoPath)
         result.actions.push('generated')
 
         // 4. Commit
-        onProgress?.(repoPath, 'committing')
+        progress.step(repoPath, 'committing')
         await this.commit(repoPath, message)
         result.actions.push('committed')
 
         // 5. Push
-        onProgress?.(repoPath, 'pushing')
+        progress.step(repoPath, 'pushing')
         await this.push(repoPath)
         result.actions.push('pushed')
       } catch (err) {
         result.error = err instanceof Error ? err.message : String(err)
       }
+      return result
+    }
+
+    for (const repoPath of repoPaths) {
+      const result = await syncRepo(repoPath)
+      // The counter moves once per repo, at its end, whatever became of it.
+      progress.complete(repoPath, 'pushing')
       results.push(result)
     }
 
     return results
   }
 
+  /**
+   * Pull the repos that have something to pull — and ONLY those.
+   *
+   * The caller passes the repos the panel shows as behind, and this pulls them.
+   * It does not fetch, and it does not go looking: discovery is `refreshRemotes`,
+   * which is what the panel's refresh runs, and the ↓ badges are its result.
+   *
+   * The split is the whole design. `behind` can only come from a repo's
+   * remote-tracking refs, so a button that "makes sure" by fetching every repo
+   * first is a button that talks to N remotes — a minute of network on a folder
+   * of ninety, for a click the user made because they could see three arrows.
+   * Pull all now pulls those three, in about a second, and finding the fourth is
+   * the refresh's job.
+   *
+   * Status is still re-read here rather than trusted from the renderer: the
+   * check is local and instant, and it is what stops a stale click (the repo was
+   * pulled in a terminal a moment ago) turning into a pointless `git pull`. A
+   * repo that turns out not to be behind is skipped, not an error.
+   */
   async magicPull(
     repoPaths: string[],
-    onProgress?: (repoPath: string, step: MagicPullStep) => void
+    onProgress?: GitBatchProgressFn
   ): Promise<MagicPullResult[]> {
-    const results: MagicPullResult[] = []
+    // Deduplicated: the counter counts repos, and a path listed twice would
+    // leave the bar one short of full forever.
+    const unique = [...new Set(repoPaths)]
+    const progress = new BatchProgress('pull', unique.length, onProgress)
+    const results = new Map<string, MagicPullResult>()
+    const resultFor = (repoPath: string): MagicPullResult => {
+      let result = results.get(repoPath)
+      if (!result) {
+        result = { repoPath, pulled: false, error: null }
+        results.set(repoPath, result)
+      }
+      return result
+    }
 
-    for (const repoPath of repoPaths) {
-      const result: MagicPullResult = { repoPath, pulled: false, error: null }
+    // Local, instant, and the last word on who is actually behind.
+    for (const repoPath of unique) progress.step(repoPath, 'checking')
+    const statuses = await this.getStatusBatch(unique)
+
+    const behind: string[] = []
+    for (const { path: repoPath, status } of statuses) {
+      if (!status.isRepo) {
+        resultFor(repoPath).error = 'Not a git repository'
+        progress.complete(repoPath, 'checking')
+        continue
+      }
+      if (status.behind > 0) {
+        behind.push(repoPath)
+        continue
+      }
+      // Nothing to bring — as far as anything knows without going to the
+      // remote, which is deliberately not this operation's job.
+      resultFor(repoPath)
+      progress.complete(repoPath, 'checking')
+    }
+
+    await mapWithConcurrency(behind, PULL_BATCH_CONCURRENCY, async (repoPath) => {
+      const result = resultFor(repoPath)
       try {
-        const status = await this.getStatus(repoPath)
-        if (!status.isRepo) {
-          result.error = 'Not a git repository'
-          results.push(result)
-          continue
-        }
-
-        // 1. Fetch to update remote refs
-        onProgress?.(repoPath, 'fetching')
-        await this.fetch(repoPath)
-
-        // Re-check status after fetch to see if there are incoming commits
-        const postFetchStatus = await this.getStatus(repoPath)
-
-        // 2. Pull if behind
-        if (postFetchStatus.behind > 0) {
-          onProgress?.(repoPath, 'pulling')
-          await this.pull(repoPath, 'auto')
-          result.pulled = true
-        }
+        progress.step(repoPath, 'pulling')
+        await this.pull(repoPath, 'auto')
+        result.pulled = true
       } catch (err) {
         result.error = err instanceof Error ? err.message : String(err)
       }
-      results.push(result)
-    }
+      progress.complete(repoPath, 'pulling')
+    })
 
-    return results
+    return repoPaths.map(resultFor)
+  }
+
+  /**
+   * Update every listed repo's remote-tracking refs, in parallel, reporting as
+   * it goes — the panel's refresh, and the only thing here that talks to a
+   * remote for a repo the user has not pointed at.
+   *
+   * This is the expensive half of what Pull all used to do on every click, now
+   * behind a control that says that is what it does. It reports failures per
+   * repo rather than swallowing them: a remote that is unreachable is news when
+   * you asked to go and look, even though it is noise on a background poll
+   * (`fetchBatch`, which stays silent for exactly that reason).
+   */
+  async refreshRemotes(
+    repoPaths: string[],
+    onProgress?: GitBatchProgressFn
+  ): Promise<Array<{ repoPath: string; error: string | null }>> {
+    const unique = [...new Set(repoPaths)]
+    const progress = new BatchProgress('fetch', unique.length, onProgress)
+
+    const byPath = new Map<string, { repoPath: string; error: string | null }>()
+    await mapWithConcurrency(unique, FETCH_BATCH_CONCURRENCY, async (repoPath) => {
+      const result: { repoPath: string; error: string | null } = { repoPath, error: null }
+      try {
+        progress.step(repoPath, 'fetching')
+        await this.fetchOrThrow(repoPath)
+      } catch (err) {
+        result.error = err instanceof Error ? err.message : String(err)
+      }
+      progress.complete(repoPath, 'fetching')
+      byPath.set(repoPath, result)
+    })
+
+    return repoPaths.map(
+      (repoPath) => byPath.get(repoPath) ?? { repoPath, error: 'not attempted' }
+    )
   }
 
   async getJourney(cwd: string, maxCount: number = 200): Promise<GitJourneyResult> {

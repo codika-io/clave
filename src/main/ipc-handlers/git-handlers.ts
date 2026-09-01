@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { gitManager } from '../git-manager'
 import { repoIndexManager } from '../repo-index'
-import type { MagicSyncStep, MagicPullStep } from '../git-manager'
+import type { GitBatchProgress } from '../git-manager'
 
 export function registerGitHandlers(): void {
   ipcMain.handle('git:check-ignored', (_event, cwd: string, paths: string[]) =>
@@ -64,14 +64,23 @@ export function registerGitHandlers(): void {
   ipcMain.handle('git:generate-commit-message', (_event, cwd: string) =>
     gitManager.generateCommitMessage(cwd)
   )
+  // Both batch ops report on ONE channel, with `op` saying which. That is what
+  // lets a single progress row in the git bar serve Pull all and Magic sync.
   ipcMain.handle('git:magic-sync', (event, repoPaths: string[]) =>
-    gitManager.magicSync(repoPaths, (repoPath: string, step: MagicSyncStep) => {
-      event.sender.send('git:magic-sync-progress', repoPath, step)
+    gitManager.magicSync(repoPaths, (progress: GitBatchProgress) => {
+      event.sender.send('git:batch-progress', progress)
     })
   )
   ipcMain.handle('git:magic-pull', (event, repoPaths: string[]) =>
-    gitManager.magicPull(repoPaths, (repoPath: string, step: MagicPullStep) => {
-      event.sender.send('git:magic-pull-progress', repoPath, step)
+    gitManager.magicPull(repoPaths, (progress: GitBatchProgress) => {
+      event.sender.send('git:batch-progress', progress)
+    })
+  )
+  // The discovery sweep the panel's refresh runs — the one operation that goes
+  // to every remote, reporting on the same channel as the other two.
+  ipcMain.handle('git:refresh-remotes', (event, repoPaths: string[]) =>
+    gitManager.refreshRemotes(repoPaths, (progress: GitBatchProgress) => {
+      event.sender.send('git:batch-progress', progress)
     })
   )
   ipcMain.handle('git:journey', (_event, cwd: string, maxCount?: number) =>
