@@ -415,8 +415,13 @@ export interface GitJourneyResult {
   hasMore: boolean
 }
 
-export type MagicSyncStep = 'pulling' | 'staging' | 'generating' | 'committing' | 'pushing'
-export type MagicPullStep = 'fetching' | 'pulling'
+export type {
+  GitBatchOp,
+  GitBatchPhase,
+  GitBatchProgress,
+  GitBatchProgressFn
+} from '../shared/git-batch'
+import type { GitBatchProgress } from '../shared/git-batch'
 
 export interface MagicSyncResult {
   repoPath: string
@@ -701,9 +706,13 @@ export interface ElectronAPI {
   gitCommitDiff: (cwd: string, hash: string, filePath: string) => Promise<string>
   gitGenerateCommitMessage: (cwd: string) => Promise<string>
   gitMagicSync: (repoPaths: string[]) => Promise<MagicSyncResult[]>
-  onMagicSyncProgress: (callback: (repoPath: string, step: MagicSyncStep) => void) => () => void
   gitMagicPull: (repoPaths: string[]) => Promise<MagicPullResult[]>
-  onMagicPullProgress: (callback: (repoPath: string, step: MagicPullStep) => void) => () => void
+  /** The discovery sweep: fetch every listed repo, so the ↓ badges are true. */
+  gitRefreshRemotes: (
+    repoPaths: string[]
+  ) => Promise<Array<{ repoPath: string; error: string | null }>>
+  /** Progress for BOTH batch ops — the payload's `op` says which. */
+  onGitBatchProgress: (callback: (progress: GitBatchProgress) => void) => () => void
   gitJourney: (cwd: string, maxCount?: number) => Promise<GitJourneyResult>
   gitSummarizePush: (
     cwd: string,

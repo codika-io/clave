@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { UpdaterState } from '../shared/updater-types'
 import type { LaunchProfile, LauncherFamily } from '../shared/agent-launch'
+import type { GitBatchProgress } from '../shared/git-batch'
 
 /** Creates a typed IPC event listener with cleanup function. */
 function createIpcListener<T extends unknown[]>(
@@ -416,11 +417,12 @@ const electronAPI = {
     ipcRenderer.invoke('git:commit-diff', cwd, hash, filePath),
   gitGenerateCommitMessage: (cwd: string) => ipcRenderer.invoke('git:generate-commit-message', cwd),
   gitMagicSync: (repoPaths: string[]) => ipcRenderer.invoke('git:magic-sync', repoPaths),
-  onMagicSyncProgress: (callback: (repoPath: string, step: string) => void) =>
-    createIpcListener<[string, string]>('git:magic-sync-progress', callback),
   gitMagicPull: (repoPaths: string[]) => ipcRenderer.invoke('git:magic-pull', repoPaths),
-  onMagicPullProgress: (callback: (repoPath: string, step: string) => void) =>
-    createIpcListener<[string, string]>('git:magic-pull-progress', callback),
+  gitRefreshRemotes: (repoPaths: string[]) =>
+    ipcRenderer.invoke('git:refresh-remotes', repoPaths),
+  // One channel for both batch ops — the payload's `op` says which.
+  onGitBatchProgress: (callback: (progress: GitBatchProgress) => void) =>
+    createIpcListener<[GitBatchProgress]>('git:batch-progress', callback),
   gitJourney: (cwd: string, maxCount?: number) => ipcRenderer.invoke('git:journey', cwd, maxCount),
   gitSummarizePush: (cwd: string, commitMessages: string[], diffStats: string) =>
     ipcRenderer.invoke('git:summarize-push', cwd, commitMessages, diffStats),

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { useSessionStore } from '../../store/session-store'
 import {
   ListBulletIcon,
@@ -12,7 +12,7 @@ import {
   QueueListIcon
 } from '@heroicons/react/24/outline'
 import { IconButton } from '../ui/tooltip'
-import type { MagicSyncStep, MagicPullStep } from '../../../../preload/index.d'
+import { useGitBatch } from './git-batch-context'
 
 // ---------------------------------------------------------------------------
 // Sync badges — the ↓ / ↑ / + counters that toggle a repo's sections open
@@ -231,14 +231,14 @@ export function PanelModeToggle() {
   )
 }
 
-const STEP_LABELS: Record<MagicSyncStep, string> = {
-  pulling: 'Pulling',
-  staging: 'Staging',
-  generating: 'Generating message',
-  committing: 'Committing',
-  pushing: 'Pushing'
-}
-
+/**
+ * The two batch buttons. Neither owns its own progress text any more: they set
+ * a batch running and the bar's progress row (`GitBatchProgressBar`) draws it,
+ * because a row under the whole bar cannot be rendered from inside a button.
+ * What stays on the button is the state you read at a glance — the icon moves
+ * while its own op runs, and both are disabled while either one does, since the
+ * two would fight over the same working copies.
+ */
 export function MagicSyncButton({
   repoPaths,
   onDone
@@ -246,77 +246,50 @@ export function MagicSyncButton({
   repoPaths: string[]
   onDone?: () => void
 }) {
-  const [syncing, setSyncing] = useState(false)
-  const [currentStep, setCurrentStep] = useState<string | null>(null)
-  const [resultMessage, setResultMessage] = useState<string | null>(null)
+  const { state, run } = useGitBatch()
+  const mine = state.running && state.op === 'sync'
 
-  // Listen for progress events
-  useEffect(() => {
-    if (!syncing) return
-    const cleanup = window.electronAPI.onMagicSyncProgress((_repoPath, step) => {
-      setCurrentStep(STEP_LABELS[step as MagicSyncStep] ?? step)
+  const handleSync = useCallback(() => {
+    void run('sync', async () => {
+      try {
+        const results = await window.electronAPI.gitMagicSync(repoPaths)
+        const synced = results.filter((r) => r.actions.length > 0 && !r.error)
+        const errors = results.filter((r) => r.error)
+        const skipped = results.filter((r) => r.actions.length === 0 && !r.error)
+
+        const parts: string[] = []
+        if (synced.length > 0) parts.push(`${synced.length} synced`)
+        if (skipped.length > 0) parts.push(`${skipped.length} clean`)
+        if (errors.length > 0) parts.push(`${errors.length} failed`)
+        return parts.join(', ')
+      } finally {
+        // Refresh even when the batch threw: a partial run still moved repos.
+        onDone?.()
+      }
     })
-    return cleanup
-  }, [syncing])
-
-  // Auto-clear result message
-  useEffect(() => {
-    if (!resultMessage) return
-    const timer = setTimeout(() => setResultMessage(null), 4000)
-    return () => clearTimeout(timer)
-  }, [resultMessage])
-
-  const handleSync = useCallback(async () => {
-    if (syncing || repoPaths.length === 0) return
-    setSyncing(true)
-    setCurrentStep(null)
-    setResultMessage(null)
-    try {
-      const results = await window.electronAPI.gitMagicSync(repoPaths)
-      const synced = results.filter((r) => r.actions.length > 0 && !r.error)
-      const errors = results.filter((r) => r.error)
-      const skipped = results.filter((r) => r.actions.length === 0 && !r.error)
-
-      const parts: string[] = []
-      if (synced.length > 0) parts.push(`${synced.length} synced`)
-      if (skipped.length > 0) parts.push(`${skipped.length} clean`)
-      if (errors.length > 0) parts.push(`${errors.length} failed`)
-      setResultMessage(parts.join(', '))
-    } catch (err) {
-      setResultMessage('Sync failed')
-      console.error('[magic-sync]', err)
-    } finally {
-      setSyncing(false)
-      setCurrentStep(null)
-      onDone?.()
-    }
-  }, [syncing, repoPaths, onDone])
+  }, [run, repoPaths, onDone])
 
   return (
-    <div className="relative flex items-center">
-      <IconButton
-        onClick={handleSync}
-        disabled={syncing || repoPaths.length === 0}
-        className="panel-icon-btn"
-        aria-label="Magic sync"
-        tooltip={syncing ? (currentStep ?? 'Syncing...') : 'Magic sync'}
-      >
-        <ArrowPathIcon className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-      </IconButton>
-      {(syncing || resultMessage) && (
-        <span className="ml-1 text-[10px] text-text-tertiary whitespace-nowrap">
-          {syncing ? (currentStep ?? 'Syncing...') : resultMessage}
-        </span>
-      )}
-    </div>
+    <IconButton
+      onClick={handleSync}
+      disabled={state.running || repoPaths.length === 0}
+      className="panel-icon-btn"
+      aria-label="Magic sync"
+      tooltip={mine ? 'Syncing...' : 'Magic sync'}
+    >
+      <ArrowPathIcon className={`w-3.5 h-3.5 ${mine ? 'animate-spin' : ''}`} />
+    </IconButton>
   )
 }
 
-const PULL_STEP_LABELS: Record<MagicPullStep, string> = {
-  fetching: 'Fetching',
-  pulling: 'Pulling'
-}
-
+/**
+ * Pull all: it pulls the repos the panel shows as behind, and nothing else.
+ *
+ * `repoPaths` is therefore the BADGED repos, not every repo in the tree. That
+ * is the promise — what you can see is what it does — and it is why the button
+ * disables itself when there is nothing to pull rather than going to ninety
+ * remotes to find out. Going to look is the refresh's job.
+ */
 export function MagicPullButton({
   repoPaths,
   onDone
@@ -324,131 +297,46 @@ export function MagicPullButton({
   repoPaths: string[]
   onDone?: () => void
 }) {
-  const [pulling, setPulling] = useState(false)
-  const [currentStep, setCurrentStep] = useState<string | null>(null)
-  const [resultMessage, setResultMessage] = useState<string | null>(null)
+  const { state, run } = useGitBatch()
+  const mine = state.running && state.op === 'pull'
+  const count = repoPaths.length
 
-  useEffect(() => {
-    if (!pulling) return
-    const cleanup = window.electronAPI.onMagicPullProgress((_repoPath, step) => {
-      setCurrentStep(PULL_STEP_LABELS[step as MagicPullStep] ?? step)
+  const handlePull = useCallback(() => {
+    void run('pull', async () => {
+      try {
+        const results = await window.electronAPI.gitMagicPull(repoPaths)
+        const pulled = results.filter((r) => r.pulled && !r.error)
+        const upToDate = results.filter((r) => !r.pulled && !r.error)
+        const errors = results.filter((r) => r.error)
+
+        const parts: string[] = []
+        if (pulled.length > 0) parts.push(`${pulled.length} pulled`)
+        if (upToDate.length > 0) parts.push(`${upToDate.length} up to date`)
+        if (errors.length > 0) parts.push(`${errors.length} failed`)
+        return parts.join(', ')
+      } finally {
+        // Refresh even when the batch threw: a partial run still moved repos.
+        onDone?.()
+      }
     })
-    return cleanup
-  }, [pulling])
-
-  useEffect(() => {
-    if (!resultMessage) return
-    const timer = setTimeout(() => setResultMessage(null), 4000)
-    return () => clearTimeout(timer)
-  }, [resultMessage])
-
-  const handlePull = useCallback(async () => {
-    if (pulling || repoPaths.length === 0) return
-    setPulling(true)
-    setCurrentStep(null)
-    setResultMessage(null)
-    try {
-      const results = await window.electronAPI.gitMagicPull(repoPaths)
-      const pulled = results.filter((r) => r.pulled && !r.error)
-      const upToDate = results.filter((r) => !r.pulled && !r.error)
-      const errors = results.filter((r) => r.error)
-
-      const parts: string[] = []
-      if (pulled.length > 0) parts.push(`${pulled.length} pulled`)
-      if (upToDate.length > 0) parts.push(`${upToDate.length} up to date`)
-      if (errors.length > 0) parts.push(`${errors.length} failed`)
-      setResultMessage(parts.join(', '))
-    } catch (err) {
-      setResultMessage('Pull failed')
-      console.error('[magic-pull]', err)
-    } finally {
-      setPulling(false)
-      setCurrentStep(null)
-      onDone?.()
-    }
-  }, [pulling, repoPaths, onDone])
+  }, [run, repoPaths, onDone])
 
   return (
-    <div className="relative flex items-center">
-      <IconButton
-        onClick={handlePull}
-        disabled={pulling || repoPaths.length === 0}
-        className="panel-icon-btn"
-        aria-label="Pull all"
-        tooltip={pulling ? (currentStep ?? 'Pulling...') : 'Pull all'}
-      >
-        <ArrowDownIcon className={`w-3.5 h-3.5 ${pulling ? 'animate-bounce' : ''}`} />
-      </IconButton>
-      {(pulling || resultMessage) && (
-        <span className="ml-1 text-[10px] text-text-tertiary whitespace-nowrap">
-          {pulling ? (currentStep ?? 'Pulling...') : resultMessage}
-        </span>
-      )}
-    </div>
-  )
-}
-
-export function BranchHeader({
-  branch,
-  ahead,
-  behind,
-  cwd,
-  repoName,
-  onSyncDone
-}: {
-  branch: string
-  ahead: number
-  behind: number
-  cwd?: string | null
-  repoName?: string
-  onSyncDone?: () => void
-}) {
-  const gitPanelMode = useSessionStore((s) => s.gitPanelMode)
-  return (
-    <div className="flex flex-col border-b border-border-subtle flex-shrink-0">
-      {/* Row 1: Branch info */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          className="text-text-secondary flex-shrink-0"
-        >
-          <circle cx="6" cy="2.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-          <circle cx="6" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M6 4v4" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-        <span className="text-text-primary font-medium truncate">{branch}</span>
-        {(ahead > 0 || behind > 0) && (
-          <span className="text-text-tertiary ml-auto flex-shrink-0">
-            {ahead > 0 && (
-              <span className="text-green-400">
-                {'\u2191'}
-                {ahead}
-              </span>
-            )}
-            {ahead > 0 && behind > 0 && ' '}
-            {behind > 0 && (
-              <span className="text-git-incoming">
-                {'\u2193'}
-                {behind}
-              </span>
-            )}
-          </span>
-        )}
-      </div>
-      {/* Row 2: Toolbar controls */}
-      <div className="flex items-center gap-1 px-3 py-1 border-t border-border-subtle/50">
-        {cwd && <MagicPullButton repoPaths={[cwd]} onDone={onSyncDone} />}
-        {cwd && <MagicSyncButton repoPaths={[cwd]} onDone={onSyncDone} />}
-        <span className="flex-1" />
-        {cwd && <JourneyButton cwd={cwd} repoName={repoName || branch} />}
-        <PanelModeToggle />
-        {gitPanelMode === 'changes' && <ViewModeToggle />}
-        <CollapseAllButton />
-      </div>
-    </div>
+    <IconButton
+      onClick={handlePull}
+      disabled={state.running || repoPaths.length === 0}
+      className="panel-icon-btn"
+      aria-label="Pull all"
+      tooltip={
+        mine
+          ? 'Pulling...'
+          : count === 0
+            ? 'Nothing to pull — refresh to check the remotes'
+            : `Pull ${count} repo${count === 1 ? '' : 's'}`
+      }
+    >
+      <ArrowDownIcon className={`w-3.5 h-3.5 ${mine ? 'animate-bounce' : ''}`} />
+    </IconButton>
   )
 }
 

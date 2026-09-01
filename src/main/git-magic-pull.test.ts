@@ -1,0 +1,238 @@
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+
+// The manager reaches into pty-manager for the login shell's env, which pulls
+// in node-pty — a native module built for Electron's ABI, not this runner's.
+// Only `generateCommitMessage` needs it, and nothing here calls that.
+vi.mock('./pty-manager', () => ({ getLoginShellEnv: () => process.env }))
+
+import { gitManager } from './git-manager'
+import type { GitBatchProgress } from '../shared/git-batch'
+
+/**
+ * The split between pulling and going to look, over real repositories.
+ *
+ * `magicPull` pulls the repos that are behind and NOTHING else — no fetch, no
+ * sweep. `refreshRemotes` is the half that talks to every remote. The division
+ * is the feature: Pull all used to fetch N repos serially before pulling any,
+ * which on a folder of ninety is a minute of network for a click the user made
+ * because they could already see three arrows.
+ *
+ * So the assertions are as much about what does NOT happen as what does: a repo
+ * that is behind on the server but whose refs do not know it must come back
+ * untouched from a pull, and must be found by a refresh.
+ */
+
+const git = (cwd: string, ...args: string[]): string =>
+  execFileSync('git', args, {
+    cwd,
+    encoding: 'utf-8',
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+  })
+
+let root: string
+/** Behind, and its refs know it — the badged case. */
+let behindRepo: string
+/** Behind on the server, but nothing has fetched: no badge, no pull. */
+let staleRepo: string
+/** Nothing to bring. */
+let cleanRepo: string
+/** Its remote does not exist. */
+let brokenRepo: string
+let originHead = ''
+
+function makeOriginWithClone(name: string): { origin: string; clone: string } {
+  const origin = path.join(root, `${name}.git`)
+  git(root, 'init', '--bare', '--initial-branch=main', origin)
+
+  const seed = path.join(root, `${name}-seed`)
+  git(root, 'clone', origin, seed)
+  git(seed, 'config', 'user.email', 'test@example.com')
+  git(seed, 'config', 'user.name', 'Test')
+  writeFileSync(path.join(seed, 'README.md'), '# seed\n')
+  git(seed, 'add', '.')
+  git(seed, 'commit', '-m', 'seed')
+  git(seed, 'push', 'origin', 'main')
+
+  const clone = path.join(root, name)
+  git(root, 'clone', origin, clone)
+  return { origin, clone }
+}
+
+/** Put one new commit on a repo's origin, through a throwaway clone. */
+function commitToOrigin(origin: string, name: string): string {
+  const work = path.join(root, `${name}-push-${Date.now()}`)
+  git(root, 'clone', origin, work)
+  git(work, 'config', 'user.email', 'test@example.com')
+  git(work, 'config', 'user.name', 'Test')
+  // Unique content per call: a second commit of the same bytes is not a commit.
+  writeFileSync(path.join(work, 'incoming.txt'), `from the remote: ${name} ${Date.now()}\n`)
+  git(work, 'add', '.')
+  git(work, 'commit', '-m', 'incoming')
+  git(work, 'push', 'origin', 'main')
+  return git(work, 'rev-parse', 'HEAD').trim()
+}
+
+/** What this repo's remote-tracking ref currently points at — the number the
+ *  panel's ↓ badge is computed from, and the thing only a fetch can move. */
+const trackedRef = (repo: string): string => git(repo, 'rev-parse', 'origin/main').trim()
+
+beforeAll(() => {
+  root = mkdtempSync(path.join(tmpdir(), 'clave-magic-pull-'))
+
+  const behind = makeOriginWithClone('behind')
+  behindRepo = behind.clone
+  originHead = commitToOrigin(behind.origin, 'behind')
+  git(behindRepo, 'fetch', 'origin')
+
+  const stale = makeOriginWithClone('stale')
+  staleRepo = stale.clone
+  commitToOrigin(stale.origin, 'stale')
+  // Deliberately NOT fetched: `git status` here says "up to date".
+
+  cleanRepo = makeOriginWithClone('clean').clone
+
+  brokenRepo = makeOriginWithClone('broken').clone
+  git(brokenRepo, 'remote', 'set-url', 'origin', path.join(root, 'does-not-exist.git'))
+}, 120_000)
+
+afterAll(() => {
+  if (root) rmSync(root, { recursive: true, force: true })
+})
+
+describe('magicPull', () => {
+  it('pulls the repos that are behind, and counts every repo it was given', async () => {
+    const events: GitBatchProgress[] = []
+    const repos = [behindRepo, cleanRepo]
+
+    const results = await gitManager.magicPull(repos, (p) => events.push(p))
+    const byPath = new Map(results.map((r) => [r.repoPath, r]))
+
+    expect(byPath.get(behindRepo)).toMatchObject({ pulled: true, error: null })
+    expect(git(behindRepo, 'rev-parse', 'HEAD').trim()).toBe(originHead)
+    expect(byPath.get(cleanRepo)).toMatchObject({ pulled: false, error: null })
+    expect(results.map((r) => r.repoPath)).toEqual(repos)
+
+    // The counter: one step per repo, monotonic, landing exactly on total.
+    expect(new Set(events.map((e) => e.total))).toEqual(new Set([repos.length]))
+    expect(events.every((e) => e.op === 'pull')).toBe(true)
+    expect(events.every((e) => e.repoName.length > 0)).toBe(true)
+    let last = 0
+    for (const e of events) {
+      expect(e.done).toBeGreaterThanOrEqual(last)
+      expect(e.done - last).toBeLessThanOrEqual(1)
+      last = e.done
+    }
+    expect(last).toBe(repos.length)
+  }, 120_000)
+
+  it('never goes to a remote to look for work: no fetch, ever', async () => {
+    const before = trackedRef(staleRepo)
+    const events: GitBatchProgress[] = []
+
+    const results = await gitManager.magicPull([staleRepo], (p) => events.push(p))
+
+    // The commit IS on the server. Pull all leaves it there — its job is the
+    // badges, and no badge means no work.
+    expect(results[0]).toMatchObject({ pulled: false, error: null })
+    expect(trackedRef(staleRepo)).toBe(before)
+    expect(git(staleRepo, 'log', '--oneline')).not.toContain('incoming')
+    // And it says so without ever entering the fetch phase.
+    expect(events.some((e) => e.phase === 'fetching')).toBe(false)
+  }, 120_000)
+
+  it('reports a badged repo whose remote has gone, without stopping the others', async () => {
+    // Behind by its own refs — so a pull IS attempted — and then its remote is
+    // taken away underneath it. That is the shape of a repo whose origin was
+    // renamed or whose access was revoked since the last fetch.
+    const gone = makeOriginWithClone('gone')
+    commitToOrigin(gone.origin, 'gone')
+    git(gone.clone, 'fetch', 'origin')
+    expect((await gitManager.getStatus(gone.clone)).behind).toBeGreaterThan(0)
+    git(gone.clone, 'remote', 'set-url', 'origin', path.join(root, 'does-not-exist.git'))
+
+    const results = await gitManager.magicPull([gone.clone, cleanRepo])
+    const byPath = new Map(results.map((r) => [r.repoPath, r]))
+    expect(byPath.get(gone.clone)?.error).toBeTruthy()
+    expect(byPath.get(gone.clone)?.pulled).toBe(false)
+    // The failure is that repo's alone.
+    expect(byPath.get(cleanRepo)).toMatchObject({ pulled: false, error: null })
+  }, 120_000)
+
+  it('skips a repo nothing has fetched, rather than failing it', async () => {
+    // `brokenRepo` has an unreachable remote too, but its refs say it is level
+    // — so there is nothing to pull, and "no work" is the honest answer, not an
+    // error the user has to read.
+    const results = await gitManager.magicPull([brokenRepo])
+    expect(results[0]).toMatchObject({ pulled: false, error: null })
+  }, 120_000)
+
+  it('dispatches its pulls together rather than one repo at a time', async () => {
+    // Two repos genuinely behind and aware of it.
+    const a = makeOriginWithClone('par-a')
+    const b = makeOriginWithClone('par-b')
+    commitToOrigin(a.origin, 'par-a')
+    commitToOrigin(b.origin, 'par-b')
+    git(a.clone, 'fetch', 'origin')
+    git(b.clone, 'fetch', 'origin')
+
+    const events: GitBatchProgress[] = []
+    await gitManager.magicPull([a.clone, b.clone], (p) => events.push(p))
+
+    const firstCompletion = events.findIndex((e, i) => i > 0 && e.done > events[i - 1].done)
+    const pullStarts = events
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => e.phase === 'pulling' && e.done === 0)
+
+    // Serialised, the second repo could not start until the first had finished,
+    // so a completion would sit between the two starts.
+    expect(pullStarts.length).toBe(2)
+    expect(pullStarts.every(({ i }) => firstCompletion === -1 || i < firstCompletion)).toBe(true)
+  }, 120_000)
+})
+
+describe('refreshRemotes', () => {
+  it('is what makes a stale repo visible as behind', async () => {
+    const before = trackedRef(staleRepo)
+    const events: GitBatchProgress[] = []
+
+    const results = await gitManager.refreshRemotes([staleRepo, cleanRepo], (p) => events.push(p))
+
+    expect(results.every((r) => r.error === null)).toBe(true)
+    expect(trackedRef(staleRepo)).not.toBe(before)
+
+    // And now — only now — Pull all has something to do with it.
+    const status = await gitManager.getStatus(staleRepo)
+    expect(status.behind).toBeGreaterThan(0)
+    const pulled = await gitManager.magicPull([staleRepo])
+    expect(pulled[0]).toMatchObject({ pulled: true, error: null })
+    expect(git(staleRepo, 'log', '--oneline')).toContain('incoming')
+
+    // It reports as its own op, so the bar can say which thing is running.
+    expect(events.every((e) => e.op === 'fetch')).toBe(true)
+    expect(events[events.length - 1].done).toBe(2)
+  }, 120_000)
+
+  it('reports an unreachable remote instead of swallowing it', async () => {
+    const results = await gitManager.refreshRemotes([brokenRepo, cleanRepo])
+    const byPath = new Map(results.map((r) => [r.repoPath, r]))
+    expect(byPath.get(brokenRepo)?.error).toBeTruthy()
+    expect(byPath.get(cleanRepo)?.error).toBeNull()
+  }, 120_000)
+
+  it('sweeps in parallel, not one remote after another', async () => {
+    const events: GitBatchProgress[] = []
+    await gitManager.refreshRemotes([cleanRepo, staleRepo, behindRepo], (p) => events.push(p))
+
+    const firstCompletion = events.findIndex((e, i) => i > 0 && e.done > events[i - 1].done)
+    const starts = events
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => e.phase === 'fetching' && e.done === 0)
+    expect(starts.length).toBeGreaterThanOrEqual(3)
+    expect(starts.every(({ i }) => firstCompletion === -1 || i < firstCompletion)).toBe(true)
+  }, 120_000)
+})

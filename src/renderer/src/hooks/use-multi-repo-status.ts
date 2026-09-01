@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { GitStatusResult } from '../../../preload/index.d'
 import { useSessionStore } from '../store/session-store'
+import { useGitBatch } from '../components/git/git-batch-context'
 
 const POLL_INTERVAL = 5000
 const FETCH_INTERVAL = 30000
@@ -23,6 +24,7 @@ export function useMultiRepoStatus(
   lastUpdated: number | null
   hasNestedRepos: boolean
 } {
+  const { run } = useGitBatch()
   const [result, setResult] = useState<MultiRepoMode>({ mode: 'loading' })
   const [hasNestedRepos, setHasNestedRepos] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -181,14 +183,36 @@ export function useMultiRepoStatus(
     }
   }, [focusedActivity, cwd, active, isPausedMulti, fetchAll])
 
+  /**
+   * Refresh is the DISCOVERY control: it goes to every remote, then re-reads.
+   *
+   * That is deliberately the slow one, and the only slow one. Pull all acts on
+   * the ↓ badges and is instant; the badges can only be as true as the last
+   * fetch, so something has to go and look — and it is better that the button
+   * which takes twenty seconds is the button that says "refresh" than a pull
+   * that silently sweeps ninety repos before doing what it was asked. It
+   * reports on the bar's progress row like the other batch ops, so a sweep over
+   * a large tree shows its own movement instead of a spinner.
+   */
   const refresh = useCallback(async () => {
     setRefreshing(true)
     try {
+      const paths = repoPaths.split('\n').filter(Boolean)
+      if (paths.length > 0) {
+        await run('fetch', async () => {
+          const results = await window.electronAPI.gitRefreshRemotes(paths)
+          const failed = results.filter((r) => r.error).length
+          const reached = results.length - failed
+          const parts = [`${reached} refreshed`]
+          if (failed > 0) parts.push(`${failed} unreachable`)
+          return parts.join(', ')
+        })
+      }
       await fetchAll(true)
     } finally {
       setRefreshing(false)
     }
-  }, [fetchAll])
+  }, [fetchAll, run, repoPaths])
 
   return { result, refresh, refreshing, lastUpdated, hasNestedRepos }
 }
