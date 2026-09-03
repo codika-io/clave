@@ -1,6 +1,7 @@
 import type { SessionRecord } from '../../../preload/index.d'
 import { useSessionStore } from '../store/session-store'
 import type { Session, SessionViewConfig } from '../store/session-types'
+import { resolveHiddenOwner } from './boot-adoption'
 
 /**
  * Bring one persisted session record back as a live tab in THIS window's
@@ -130,11 +131,14 @@ async function spawnFromRecord(
  * copy of that relationship that survives a quit.
  *
  * The owner can legitimately be gone (the group was deleted, the owning tab
- * did not come back). Then the session becomes an ordinary tab: it is a
- * process the user started and can still see and stop, and killing it here
- * to keep the sidebar tidy would take a running dev server with it.
+ * did not come back). Then the record is DISCARDED — its process stopped and
+ * its file removed — never surfaced as a tab (PRDCT-2038, reversing the
+ * PRDCT-1756 choice): a deletion now stops the group's terminals itself, so
+ * an orphan here is a group that no longer exists, and the record holds
+ * nothing that would let the group be rebuilt around it. The rule is
+ * `resolveHiddenOwner`, pure and pinned by its tests.
  *
- * Returns the adopted session id, or null on failure.
+ * Returns the adopted session id, or null when nothing was adopted.
  */
 export async function adoptHiddenRecord(
   s: SessionRecord,
@@ -149,22 +153,19 @@ export async function adoptHiddenRecord(
     link.kind === 'session-view'
       ? (state.sessions.find((o) => o.id === link.ownerId)?.view ?? null)
       : null
-  const hasOwner =
-    link.kind === 'group-terminal'
-      ? state.groups.some(
-          (g) => g.id === link.groupId && g.terminals.some((t) => t.id === link.terminalId)
-        )
-      : ownerView !== null
+  if (resolveHiddenOwner(link, state) === 'discard') {
+    console.warn(
+      '[boot] discarding hidden session record with no owner:',
+      s.tmuxName ?? s.id,
+      link
+    )
+    void window.electronAPI?.discardSessionRecord?.(s.tmuxName ?? s.id)
+    return null
+  }
 
   const spawned = await spawnFromRecord(s, activeWorkspaceId)
   if (!spawned) return null
   const store = useSessionStore.getState()
-  if (!hasOwner) {
-    // No home for it any more — surface it rather than hide a live process.
-    store.adoptSessionInPlace(spawned.session)
-    return spawned.session.id
-  }
-
   store.addHiddenSession(spawned.session)
   // Hidden panes are never measured, so the pty would sit unspawned and the
   // tmux client would never reattach: kick it exactly as the spawn paths do.

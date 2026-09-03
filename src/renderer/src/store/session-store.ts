@@ -899,14 +899,33 @@ export const useSessionStore = create<SessionState>((set) => ({
       if (!group) return {}
       const sidebarUndoStack = pushSidebarSnapshot(state.sidebarUndoStack, snapshotSidebar(state))
 
+      // The members become tabs; the quick-launch terminals do not — a
+      // terminal belongs to its group and is stopped with it (the caller,
+      // lib/group-dissolve.ts, kills the processes; this drops the sessions
+      // so they cannot linger invisibly outside any order, PRDCT-2038).
+      const terminalSessionIds = new Set(
+        group.terminals.map((t) => t.sessionId).filter((id): id is string => id !== null)
+      )
+      const sessions = state.sessions.filter((s) => !terminalSessionIds.has(s.id))
+      const selectedSessionIds = state.selectedSessionIds.filter(
+        (sid) => !terminalSessionIds.has(sid)
+      )
+      const focusedSessionId =
+        state.focusedSessionId && terminalSessionIds.has(state.focusedSessionId)
+          ? (selectedSessionIds[0] ?? null)
+          : state.focusedSessionId
+
       // Replace group ID in displayOrder with its session IDs
-      const displayOrder = getDisplayOrder(state)
+      const displayOrder = getDisplayOrder(state).filter((did) => !terminalSessionIds.has(did))
       const idx = displayOrder.indexOf(groupId)
       if (idx !== -1) {
         displayOrder.splice(idx, 1, ...group.sessionIds)
       }
 
       return {
+        sessions,
+        selectedSessionIds,
+        focusedSessionId,
         groups: state.groups.filter((g) => g.id !== groupId),
         displayOrder,
         sidebarUndoStack

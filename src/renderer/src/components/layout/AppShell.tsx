@@ -47,6 +47,7 @@ import { promptRestore } from '../../store/restore-prompt-store'
 import { RestorePromptDialog } from '../ui/RestorePromptDialog'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
 import { adoptRecord, adoptRehomed, adoptHiddenRecord } from '../../lib/adopt-record'
+import { requestGroupDissolve } from '../../lib/group-dissolve'
 import { planBootAdoption, survivingIds } from '../../lib/boot-adoption'
 import { parkToolbarSurvivor } from '../../lib/toolbar-terminal-registry'
 import { initSecretStore } from '../../store/secret-store'
@@ -447,7 +448,7 @@ export function AppShell() {
             state.selectedSessionIds.length > 0 &&
             state.selectedSessionIds.every((id) => candidate.sessionIds.includes(id))
         )
-        if (group) state.ungroupSessions(group.id)
+        if (group) void requestGroupDissolve(group.id, 'ungroup')
       },
       resetSessions: () => {
         if (useSessionStore.getState().sessions.length > 0) setResetConfirmOpen(true)

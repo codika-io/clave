@@ -78,3 +78,49 @@ describe('survivingIds — what the layout merge must treat as alive', () => {
     expect(survivingIds(plan, [])).toEqual([])
   })
 })
+
+import { resolveHiddenOwner } from './boot-adoption'
+
+describe('resolveHiddenOwner — an ownerless hidden half is discarded, never surfaced', () => {
+  const state = {
+    groups: [{ id: 'g1', terminals: [{ id: 't1' }] }],
+    sessions: [
+      { id: 'owner', view: { url: 'http://127.0.0.1:4740' } },
+      { id: 'plain' }
+    ]
+  }
+
+  it('links a group terminal back to a group that still carries its terminal', () => {
+    expect(
+      resolveHiddenOwner({ kind: 'group-terminal', groupId: 'g1', terminalId: 't1' }, state)
+    ).toBe('link')
+  })
+
+  it('discards a group terminal whose group was deleted (the seven mystery tabs of 2026-09-03)', () => {
+    expect(
+      resolveHiddenOwner(
+        { kind: 'group-terminal', groupId: 'group-1788296388304-2', terminalId: 't1' },
+        state
+      )
+    ).toBe('discard')
+  })
+
+  it('discards a group terminal whose group lost that terminal', () => {
+    expect(
+      resolveHiddenOwner({ kind: 'group-terminal', groupId: 'g1', terminalId: 'gone' }, state)
+    ).toBe('discard')
+  })
+
+  it('links a view server to an owning tab that still carries a view', () => {
+    expect(resolveHiddenOwner({ kind: 'session-view', ownerId: 'owner' }, state)).toBe('link')
+  })
+
+  it('discards a view server whose owner is gone or viewless', () => {
+    expect(resolveHiddenOwner({ kind: 'session-view', ownerId: 'nope' }, state)).toBe('discard')
+    expect(resolveHiddenOwner({ kind: 'session-view', ownerId: 'plain' }, state)).toBe('discard')
+  })
+
+  it('a toolbar link is never a sidebar owner here', () => {
+    expect(resolveHiddenOwner({ kind: 'toolbar', key: 'pin:0' }, state)).toBe('discard')
+  })
+})

@@ -11,6 +11,7 @@ import { workspaceManager } from './workspace-manager'
 import { dismissSessionOffers } from './copy-offer-manager'
 import { launchProfileManager } from './launch-profile-manager'
 import { resolvePosixShellLaunch } from './shell-launch'
+import { tmuxKillSessionArgs } from './tmux-args'
 import {
   buildAgentArgv,
   type AgentKind,
@@ -1062,11 +1063,7 @@ class PtyManager {
         if (session.tmuxName) {
           const tmuxPath = detectTmux()
           if (tmuxPath) {
-            execFile(
-              tmuxPath,
-              ['-L', TMUX_SOCKET, 'kill-session', '-t', session.tmuxName],
-              () => {}
-            )
+            execFile(tmuxPath, tmuxKillSessionArgs(TMUX_SOCKET, session.tmuxName), () => {})
           }
         }
         deleteSessionRecord(session.tmuxName ?? id)
@@ -1263,7 +1260,7 @@ class PtyManager {
     if (isValidTmuxName(key)) {
       const tmuxPath = detectTmux()
       if (tmuxPath) {
-        execFile(tmuxPath, ['-L', TMUX_SOCKET, 'kill-session', '-t', key], () => {})
+        execFile(tmuxPath, tmuxKillSessionArgs(TMUX_SOCKET, key), () => {})
       }
     }
     deleteSessionRecord(key)

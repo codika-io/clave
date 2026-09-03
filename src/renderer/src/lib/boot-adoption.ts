@@ -83,3 +83,40 @@ export function survivingIds<R extends BootRecordLike>(
     ...plan.hidden.map((r) => r.id)
   ]
 }
+
+/** The store shape the hidden-owner lookup reads. */
+export interface OwnerLookupState {
+  groups: { id: string; terminals: { id: string }[] }[]
+  sessions: { id: string; view?: unknown }[]
+}
+
+/**
+ * What a hidden half's record does at boot, given who is around to own it:
+ * `link` back to its owner when the owner is there, `discard` when it is not.
+ *
+ * The owner can legitimately be gone: the group was deleted, the owning tab
+ * did not come back. Until PRDCT-2038 an ownerless hidden half became an
+ * ordinary tab ("a process the user started, don't kill it to tidy the
+ * sidebar") — and that is exactly how a deleted group's `npm run dev` came
+ * back as a mystery tab at every restart. Now a deletion stops the group's
+ * terminals, so an orphan record means a group that no longer exists, and
+ * the record carries nothing (no group name, no terminal config) that would
+ * let the group be rebuilt around it. Discard: the process is stopped and
+ * the record removed, never surfaced. Pure so vitest pins it.
+ */
+export function resolveHiddenOwner(
+  link: NonNullable<SessionRecord['link']>,
+  state: OwnerLookupState
+): 'link' | 'discard' {
+  if (link.kind === 'group-terminal') {
+    const owned = state.groups.some(
+      (g) => g.id === link.groupId && g.terminals.some((t) => t.id === link.terminalId)
+    )
+    return owned ? 'link' : 'discard'
+  }
+  if (link.kind === 'session-view') {
+    const owner = state.sessions.find((s) => s.id === link.ownerId)
+    return owner && owner.view ? 'link' : 'discard'
+  }
+  return 'discard'
+}
