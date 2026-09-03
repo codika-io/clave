@@ -3,11 +3,20 @@
  * main-process persistence, launcher, and keyboard shortcut.
  */
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { agentButtonLabel, launchApp, seedWorkspaces, until, userDataDir } from './harness.mjs'
+import {
+  agentButtonLabel,
+  callMcp,
+  killLeakedE2eTmux,
+  launchApp,
+  seedWorkspaces,
+  until,
+  userDataDir
+} from './harness.mjs'
 
 const DIR = userDataDir('agent-launch-profiles')
 const ROOT = '/tmp/clave-e2e-agent-launch-profiles-root'
 const PI_ROOT = '/tmp/clave-e2e-agent-launch-profiles-pi'
+const USER_SHELL = `${ROOT}/fake-user-shell.sh`
 const RECORDER = `${ROOT}/fake-codex.sh`
 const RECORDED = `${ROOT}/fake-codex.argv`
 const WORKSPACE = {
@@ -20,6 +29,21 @@ const WORKSPACE = {
 
 export async function run(t) {
   mkdirSync(ROOT, { recursive: true })
+  // Nushell and Fish cannot parse the POSIX command wrapper Clave uses for
+  // agent launches. This stand-in still supports Clave's environment probe and
+  // plain interactive terminals, but fails if Clave asks it to parse a command.
+  writeFileSync(
+    USER_SHELL,
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "-lic" ]; then exec /bin/zsh "$@"; fi',
+      'if [ "$1" = "-l" ] && [ "$#" -eq 1 ]; then exec /bin/zsh -l; fi',
+      'echo "user shell cannot parse POSIX agent commands" >&2',
+      'exit 91',
+      ''
+    ].join('\n')
+  )
+  chmodSync(USER_SHELL, 0o755)
   // A profile is only real if its command is what actually runs. This stands in
   // for the agent binary and writes the argv it was handed, one token per line,
   // so the assertion is on the spawned process rather than on the stored JSON.
@@ -29,7 +53,7 @@ export async function run(t) {
       '#!/bin/sh',
       `: > ${RECORDED}`,
       `for a in "$@"; do echo "$a" >> ${RECORDED}; done`,
-      'sleep 30',
+      'sleep 60',
       ''
     ].join('\n')
   )
@@ -43,13 +67,13 @@ export async function run(t) {
     fresh: true
   })
 
-  const { app, win } = await launchApp(DIR, {
-    env: {
-      CLAVE_PI_ROOT: PI_ROOT,
-      // Pi's own test-only override keeps the real ~/.pi session store untouched.
-      PI_CODING_AGENT_SESSION_DIR: PI_ROOT
-    }
-  })
+  const launchEnv = {
+    CLAVE_PI_ROOT: PI_ROOT,
+    SHELL: USER_SHELL,
+    // Pi's own test-only override keeps the real ~/.pi session store untouched.
+    PI_CODING_AGENT_SESSION_DIR: PI_ROOT
+  }
+  let { app, win } = await launchApp(DIR, { env: launchEnv })
   try {
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].webContents.send('menu:open-settings-section', 'agents')
@@ -144,7 +168,17 @@ export async function run(t) {
         existsSync(RECORDED) ? readFileSync(RECORDED, 'utf-8').split('\n').filter(Boolean) : null,
       { tries: 40, gapMs: 250 }
     ).catch(() => null)
-    t.check('the profile command was the process Clave spawned', argv !== null, argv)
+    const terminalText = argv
+      ? null
+      : await win
+          .locator('.xterm-rows')
+          .last()
+          .textContent()
+          .catch(() => null)
+    t.check('the profile command was the process Clave spawned', argv !== null, {
+      argv,
+      terminalText
+    })
     if (argv) {
       t.equal(
         'every profile token arrived as its own argument, spaces intact',
@@ -152,7 +186,35 @@ export async function run(t) {
         'run|--|--flag|a value with spaces'
       )
     }
-  } finally {
+
+    const beforeRestart = await callMcp(app, 'list', {})
+    const launchedSession = beforeRestart.sessions.find((session) => session.mode === 'codex')
+    t.check('the cross-shell agent is alive before restart', launchedSession?.alive === true, {
+      launchedSession,
+      sessions: beforeRestart.sessions
+    })
+
     await app.close()
+    app = null
+    const relaunched = await launchApp(DIR, { env: launchEnv, settleMs: 6000 })
+    app = relaunched.app
+    win = relaunched.win
+
+    const restoredSession = launchedSession
+      ? await until(async () => {
+          const list = await callMcp(app, 'list', {})
+          return list.sessions.find(
+            (session) => session.id === launchedSession.id && session.alive === true
+          )
+        })
+      : null
+    t.check(
+      'the same cross-shell agent session reattaches after restart',
+      !!launchedSession && restoredSession?.id === launchedSession.id,
+      { launchedSession, restoredSession }
+    )
+  } finally {
+    if (app) await app.close()
+    killLeakedE2eTmux()
   }
 }

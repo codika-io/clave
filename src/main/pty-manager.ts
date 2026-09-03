@@ -10,6 +10,7 @@ import { getMcpRuntime, writeSessionMcpConfig, deleteSessionMcpConfig } from './
 import { workspaceManager } from './workspace-manager'
 import { dismissSessionOffers } from './copy-offer-manager'
 import { launchProfileManager } from './launch-profile-manager'
+import { resolvePosixShellLaunch } from './shell-launch'
 import {
   buildAgentArgv,
   type AgentKind,
@@ -716,6 +717,7 @@ class PtyManager {
     }
 
     let shellArgs: string[]
+    let posixAgentCommand: string | undefined
     if (isWindows) {
       // Windows: cmd.exe with /c to exec the command directly (no echoed prompt).
       if (usePiMode) {
@@ -748,8 +750,8 @@ class PtyManager {
         shellArgs = ['/c', ...parts]
       }
     } else {
-      // POSIX: -l -c '<cmd>' runs the command non-interactively (no echo, no
-      // prompt, no rc-file chatter like the macOS bash→zsh notice).
+      // POSIX agent commands run non-interactively through Clave's command
+      // shell. Plain terminals still open the user's login shell.
       if (!kind) {
         shellArgs = ['-l']
       } else {
@@ -793,16 +795,21 @@ class PtyManager {
         if (kind === 'pi') assignments.push(`CLAVE_AGENT_STATE_FILE=${shellSingleQuote(stateFilePath(id))}`)
         const rendered = `${assignments.join(' ')} ${argv.map(shellSingleQuote).join(' ')}`
         const failure = `__clave_status=$?; if [ $__clave_status -ne 0 ]; then printf '\\r\\n[Clave] Agent command exited with status %d\\r\\nCommand: %s\\r\\n' $__clave_status ${shellSingleQuote(argv.map(shellSingleQuote).join(' '))}; fi; exit $__clave_status`
-        shellArgs = ['-l', '-c', `${rendered}; ${failure}`]
+        posixAgentCommand = `${rendered}; ${failure}`
+        shellArgs = []
       }
     }
 
-    // By default we spawn the user's shell directly. When tmux mode is opted in
-    // (and tmux is installed), we instead spawn a tmux client that runs the very
-    // same shell command inside a persistent, named tmux session.
-    const shellName = getUserShell()
+    // Plain terminals belong to the user's shell. Agent commands use Clave's
+    // POSIX command shell, so selecting Nushell or Fish cannot make the wrapper
+    // a syntax error. tmux receives the same resolved file and arguments.
+    const userShell = getUserShell()
+    const directLaunch = isWindows
+      ? { file: userShell, args: shellArgs }
+      : resolvePosixShellLaunch(userShell, posixAgentCommand)
+    const shellName = directLaunch.file
     let spawnFile = shellName
-    let spawnArgs = shellArgs
+    let spawnArgs = directLaunch.args
     let tmuxName: string | undefined
 
     // Adoption/relaunch rewrites the record from scratch, so carry the tab's
@@ -882,7 +889,7 @@ class PtyManager {
         // run the shell command. Attaching never re-runs the command. Fresh names
         // are guaranteed not to collide with a survivor, so `-A` only reattaches
         // on the explicit adoption path.
-        tmuxArgs.push('new-session', '-A', '-s', tmuxName, shellName, ...shellArgs)
+        tmuxArgs.push('new-session', '-A', '-s', tmuxName, shellName, ...directLaunch.args)
         spawnFile = tmuxPath
         spawnArgs = tmuxArgs
       }
