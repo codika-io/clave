@@ -30,8 +30,9 @@ const WORKSPACE = {
 export async function run(t) {
   mkdirSync(ROOT, { recursive: true })
   // Nushell and Fish cannot parse the POSIX command wrapper Clave uses for
-  // agent launches. This stand-in still supports Clave's environment probe and
-  // plain interactive terminals, but fails if Clave asks it to parse a command.
+  // agent launches. This stand-in (a name off the POSIX allowlist, like theirs)
+  // still supports Clave's environment probe and plain interactive terminals,
+  // but fails if Clave asks it to parse a command.
   writeFileSync(
     USER_SHELL,
     [

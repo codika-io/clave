@@ -716,7 +716,9 @@ class PtyManager {
       throw new Error('Invalid Pi thinking level')
     }
 
-    let shellArgs: string[]
+    // Windows spawns the user shell with these args. POSIX renders the agent
+    // wrapper instead and lets resolvePosixShellLaunch pick file and args.
+    let shellArgs: string[] = []
     let posixAgentCommand: string | undefined
     if (isWindows) {
       // Windows: cmd.exe with /c to exec the command directly (no echoed prompt).
@@ -750,11 +752,9 @@ class PtyManager {
         shellArgs = ['/c', ...parts]
       }
     } else {
-      // POSIX agent commands run non-interactively through Clave's command
-      // shell. Plain terminals still open the user's login shell.
-      if (!kind) {
-        shellArgs = ['-l']
-      } else {
+      // POSIX agent commands run non-interactively (no echo, no prompt, no
+      // rc-file chatter). Plain terminals open the user's login shell.
+      if (kind) {
         const profile = launchProfile!
         if ((kind === 'claude' || kind === 'pi') && options?.resumeSessionId && !isValidClaudeSessionId(options.resumeSessionId)) {
           throw new Error('Invalid resume session id')
@@ -796,13 +796,13 @@ class PtyManager {
         const rendered = `${assignments.join(' ')} ${argv.map(shellSingleQuote).join(' ')}`
         const failure = `__clave_status=$?; if [ $__clave_status -ne 0 ]; then printf '\\r\\n[Clave] Agent command exited with status %d\\r\\nCommand: %s\\r\\n' $__clave_status ${shellSingleQuote(argv.map(shellSingleQuote).join(' '))}; fi; exit $__clave_status`
         posixAgentCommand = `${rendered}; ${failure}`
-        shellArgs = []
       }
     }
 
-    // Plain terminals belong to the user's shell. Agent commands use Clave's
-    // POSIX command shell, so selecting Nushell or Fish cannot make the wrapper
-    // a syntax error. tmux receives the same resolved file and arguments.
+    // Plain terminals belong to the user's shell, and so do agent commands
+    // while that shell speaks POSIX. Selecting Nushell or Fish diverts the
+    // wrapper to a shell that can parse it instead of making it a syntax
+    // error. tmux receives the same resolved file and arguments.
     const userShell = getUserShell()
     const directLaunch = isWindows
       ? { file: userShell, args: shellArgs }
