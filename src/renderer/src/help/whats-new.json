@@ -1,6 +1,6 @@
 [
   {
-    "version": "next",
+    "version": "1.81.1",
     "title": "Your own shell starts your agents again",
     "description": "Clave started every agent on macOS through `/bin/zsh`, whatever your login shell was. That looked like a no-op and was not.\n\nmacOS runs `path_helper` on login, and it *reorders* `PATH` — system directories first. A bash user's `.bash_profile` then puts their own entries back in front; their `.zshrc` never runs, because a `-l` zsh reads `.zprofile`, which they do not have. So an agent launched through zsh got the system binary where the same command in your own terminal got yours: a newer `git`, a `pyenv` shim, a `tar` you installed — shadowed, silently, inside every session.\n\nClave now keeps your shell for the launch when it is a POSIX one — `sh`, `bash`, `zsh`, `dash`, `ksh`, `mksh`, `ash` — and diverts only the shells that cannot parse the wrapper it needs to run: `nu`, `fish` and the like. Nothing to set; if your login shell was already zsh, nothing changes."
   },

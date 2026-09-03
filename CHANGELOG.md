@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.81.1] — 2026-09-03
+
 ### Fixed
 - **Your own shell starts your agents again** — every agent on macOS was launched through `/bin/zsh` regardless of the user's login shell, which looked like a no-op and was not. `path_helper` (run by `/etc/zprofile` and `/etc/profile` alike) reorders `PATH` on every login, system directories first; a bash user's `.bash_profile` puts their own entries back in front, and their absent `.zprofile` does not. So anyone shadowing a system binary from bash — a newer `git`, a `pyenv` shim — got the system one inside every agent session, while the same command in their own terminal resolved correctly. Reproduced with a user `tar` shadowing the system one: `bash -l -c` found the user's, `zsh -l -c` found `/usr/bin/tar`, and the probed env passed to the pty does not save it because zsh reorders that `PATH` again. `resolvePosixShellLaunch` now keeps the user's shell for the wrapper whenever its basename is a POSIX one (`sh`, `bash`, `zsh`, `dash`, `ksh`, `mksh`, `ash`) and diverts only the shells that cannot parse it — `/bin/zsh` on macOS, `/bin/sh` elsewhere — with `-l` kept on the fallback so Linux does not lose its login shell either.
 
