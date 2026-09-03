@@ -17,7 +17,7 @@ Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` and 
 
 Three-process Electron app:
 
-- **Main** (`src/main/`): Electron window, node-pty, IPC handlers, domain managers. Agent PTYs spawn through launch profiles, adapted through `/bin/zsh -l -c` for macOS login-shell PATH resolution. IPC handlers are split into modular files under `ipc-handlers/`.
+- **Main** (`src/main/`): Electron window, node-pty, IPC handlers, domain managers. Agent PTYs spawn through launch profiles as `<shell> -l -c '<wrapper>'`, where the shell is the user's own while it speaks POSIX and Clave's (`/bin/zsh` on macOS, `/bin/sh` elsewhere) when it does not — Nushell and Fish cannot parse the wrapper (`src/main/shell-launch.ts`). IPC handlers are split into modular files under `ipc-handlers/`.
 - **Preload** (`src/preload/`): Typed `window.electronAPI` via contextBridge. All main↔renderer communication goes through IPC.
 - **Renderer** (`src/renderer/src/`): React + Zustand + xterm.js + Tailwind v4 + Framer Motion.
 
