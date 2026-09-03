@@ -142,6 +142,76 @@ elif [[ -z "${CSC_LINK:-}" ]]; then
   error "No .env and no CSC_LINK in the environment — cannot sign"
 fi
 
+# ── Signing keychain ───────────────────────────────────────────────
+# We build the keychain ourselves rather than letting electron-builder do it.
+# Its createKeychain() calls
+#   security set-key-partition-list ... -k "$CSC_KEY_PASSWORD" <keychain>
+# passing the CERTIFICATE's password where security expects the KEYCHAIN's, so
+# the call only ever worked while the freshly created keychain happened to still
+# be unlocked. Runner image macos-26-arm64 20260831.0337 locks it first, and the
+# build dies with a misleading "SecKeychainUnlock: the user name or passphrase
+# you entered is not correct". Still present in 26.16.0, so upgrading is no fix.
+#
+# electron-builder skips its own keychain entirely when CSC_LINK is unset and
+# uses CSC_KEYCHAIN as given (macPackager.js: `selected == null` →
+# `{ keychainFile: process.env.CSC_KEYCHAIN }`), which is the seam we use: import
+# the cert here, unlock it correctly, hand over the keychain, and unset CSC_LINK
+# for the build so the buggy path is never entered.
+setup_keychain() {
+  local p12 keychain_pass
+  KEYCHAIN="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/clave-signing-$$.keychain-db"
+  keychain_pass="$(openssl rand -base64 24)"
+  p12="$(mktemp -t clave-cert).p12"
+
+  # CSC_LINK is a base64 .p12 in CI, a file path locally.
+  if [[ -f "$CSC_LINK" ]]; then
+    cp "$CSC_LINK" "$p12"
+  else
+    base64 --decode <<<"$CSC_LINK" > "$p12"
+  fi
+
+  security create-keychain -p "$keychain_pass" "$KEYCHAIN"
+  # No -t/-u: never auto-lock this keychain for the life of the build. This is
+  # the half electron-builder omits and the reason the new image broke it.
+  security set-keychain-settings "$KEYCHAIN"
+  security unlock-keychain -p "$keychain_pass" "$KEYCHAIN"
+
+  security import "$p12" -k "$KEYCHAIN" -P "${CSC_KEY_PASSWORD:-}" \
+    -T /usr/bin/codesign -T /usr/bin/productbuild >/dev/null
+  rm -f "$p12"
+
+  # -k takes the KEYCHAIN password — the argument electron-builder gets wrong.
+  security set-key-partition-list -S apple-tool:,apple: -s \
+    -k "$keychain_pass" "$KEYCHAIN" >/dev/null
+
+  # Keep it on the search list so codesign can find the identity.
+  security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+
+  # Report what landed. Not fatal on its own: electron-builder fails clearly
+  # enough if the identity is genuinely missing, and a mis-parse here should
+  # never be what blocks a release.
+  local found
+  found=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep -c "Developer ID Application" || true)
+  if [[ "$found" -gt 0 ]]; then
+    info "Signing keychain ready ($found Developer ID Application identity)"
+  else
+    warn "No Developer ID Application identity found after import — letting the build be the judge"
+    security find-identity -v -p codesigning "$KEYCHAIN" || true
+  fi
+}
+
+cleanup_keychain() {
+  [[ -n "${KEYCHAIN:-}" && -f "$KEYCHAIN" ]] || return 0
+  security list-keychains -d user -s $(security list-keychains -d user | tr -d '"' | grep -v "$KEYCHAIN") 2>/dev/null || true
+  security delete-keychain "$KEYCHAIN" 2>/dev/null || true
+}
+trap cleanup_keychain EXIT
+
+setup_keychain
+export CSC_KEYCHAIN="$KEYCHAIN"
+# Must be unset, or electron-builder creates its own keychain down the buggy path.
+unset CSC_LINK CSC_KEY_PASSWORD
+
 npm run build:mac
 
 # ── Verify artifacts ───────────────────────────────────────────────
