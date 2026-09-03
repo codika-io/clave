@@ -110,6 +110,55 @@ npm run dev          # development with hot reload
 npm run build:mac    # build macOS .dmg (requires signing credentials)
 ```
 
+### macOS signing: why we build the keychain ourselves
+
+`scripts/release.sh` imports the signing certificate into a keychain of its own
+and hands it to electron-builder through `CSC_KEYCHAIN`, instead of letting
+electron-builder create one from `CSC_LINK`. If you are wiring up your own
+pipeline and wondering why, or you hit this error:
+
+```
+security: SecKeychainUnlock: The user name or passphrase you entered is not correct.
+```
+
+That message points at the wrong thing. It is not your `CSC_KEY_PASSWORD`
+secret, and rotating credentials will not help.
+
+electron-builder's `importCerts()` runs two commands per certificate:
+
+```sh
+security import <cert.p12> -k <keychain> -P <certificate password>       # -P: correct
+security set-key-partition-list ... -k <certificate password> <keychain> # -k: see below
+```
+
+On the second command, `-k` is *the password that unlocks the keychain* — but
+the certificate's password is passed. Since electron-builder generates a random
+keychain password, the two never match. We could not reproduce a green run of
+that command locally with mismatched passwords, yet it clearly worked in our CI
+for a long time before it stopped, and we have not established what changed. Our
+last successful and first failing builds differ only in the GitHub runner image
+(`macos-26-arm64` `20260728.0273` → `20260831.0337`) — same code, same
+electron-builder 26.7.0, same credentials — so something in the environment is
+the trigger, but we cannot say what, and the original build logs have since
+expired.
+
+What we did verify, and what the workaround rests on:
+
+- `security set-key-partition-list -k` validates its argument against the
+  keychain, and rejects the certificate password unless it happens to *be* the
+  keychain's password.
+- The call is `await`ed unguarded, so a failure fails the build.
+- The same line is present in electron-builder 26.7.0 through 26.16.0 (latest at
+  the time of writing), so upgrading is not a fix.
+
+`macPackager` uses `CSC_KEYCHAIN` as given when `CSC_LINK` is unset, which is the
+seam `release.sh` uses: it creates the keychain, imports the certificate,
+unlocks it, sets the partition list with the keychain's own password, and runs
+the build with `CSC_LINK`/`CSC_KEY_PASSWORD` unset so the upstream path is never
+entered. Notarization is unaffected — it reads `APPLE_ID`,
+`APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` only. An `EXIT` trap restores
+the keychain search list and deletes the keychain.
+
 ## Tech stack
 
 [Electron](https://www.electronjs.org/) · [React 19](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [Zustand](https://zustand.docs.pmnd.rs/) · [Tailwind CSS v4](https://tailwindcss.com/) · [Framer Motion](https://motion.dev/) · [shiki](https://shiki.style/) · [simple-git](https://github.com/steveukx/git-js) · [ssh2](https://github.com/mscdex/ssh2)
