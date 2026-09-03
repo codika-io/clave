@@ -185,11 +185,14 @@ export async function run(t) {
     await win.locator('.modal-card button', { hasText: 'Ungroup' }).click()
     const afterUngroup = await until(async () => {
       const list = await callMcp(app, 'list', {})
-      return !list.groups.some((g) => g.id === ung.group.groupId) &&
-        !list.sessions.some((s) => s.id === ung.terminal.sessionId)
-        ? list
-        : null
+      return !list.groups.some((g) => g.id === ung.group.groupId) ? list : null
     })
+    t.check('the group dissolved', !!afterUngroup, 'group still listed')
+    t.check(
+      'the ungrouped terminal left the session list (not lingering invisibly in the store)',
+      !!afterUngroup && !afterUngroup.sessions.some((s) => s.id === ung.terminal.sessionId),
+      afterUngroup?.sessions.map((s) => s.id)
+    )
     const freedMember = afterUngroup?.sessions.find((s) => s.id === ung.member.sessionId)
     t.check(
       'the member survived as a top-level tab',
@@ -213,6 +216,69 @@ export async function run(t) {
       'a group with nothing running ungroups with no question',
       !(await win.evaluate(() => !!document.querySelector('.modal-card'))) &&
         !(await callMcp(app, 'list', {})).groups.some((g) => g.id === quiet.group.groupId)
+    )
+
+    // ── 2b. The ungroup KEYBINDING, with the sidebar closed: the dialog
+    //        still shows (it lives in the shell, not the sidebar), Cancel
+    //        changes nothing, confirm ungroups, and nothing ghosts later ──
+    const kb = await makeGroupWithTerminal(app, 'Keybinding', 'sleep 900')
+    const kbRecord = sessionRecords().find((r) => r.id === kb.terminal.sessionId)
+    await callMcp(app, 'focus', { sessionId: kb.member.sessionId })
+    await win.keyboard.press('Meta+B')
+    await win.waitForTimeout(600)
+    t.check(
+      'the sidebar is closed',
+      !(await win.evaluate(() => !!document.querySelector('[data-sidebar-shell]')))
+    )
+    await win.keyboard.press('Meta+Alt+G')
+    await win.waitForSelector('.modal-card', { timeout: 5000 })
+    const kbText = await dialogText(win)
+    t.check(
+      'Mod+Alt+G with the sidebar closed still asks about the running terminal',
+      /Ungroup/.test(kbText ?? '') && /1 running terminal/.test(kbText ?? ''),
+      kbText
+    )
+    await win.locator('.modal-card button', { hasText: 'Cancel' }).click()
+    await win.waitForTimeout(600)
+    const afterCancel = await callMcp(app, 'list', {})
+    t.check(
+      'Cancel changes nothing: group intact, terminal still linked and alive',
+      afterCancel.groups.find((g) => g.id === kb.group.groupId)?.terminals?.[0]?.sessionId ===
+        kb.terminal.sessionId &&
+        !!kbRecord?.tmuxName &&
+        tmuxSessionAlive(kbRecord.tmuxName) &&
+        !(await win.evaluate(() => !!document.querySelector('.modal-card'))),
+      afterCancel.groups.find((g) => g.id === kb.group.groupId)
+    )
+    await win.keyboard.press('Meta+Alt+G')
+    await win.waitForSelector('.modal-card', { timeout: 5000 })
+    await win.locator('.modal-card button', { hasText: 'Ungroup' }).click()
+    const afterKb = await until(async () => {
+      const list = await callMcp(app, 'list', {})
+      return !list.groups.some((g) => g.id === kb.group.groupId) ? list : null
+    })
+    t.check(
+      'confirming the keybinding dialog ungroups: member a tab, terminal gone',
+      !!afterKb &&
+        afterKb.sessions.find((s) => s.id === kb.member.sessionId)?.groupId === null &&
+        !afterKb.sessions.some((s) => s.id === kb.terminal.sessionId) &&
+        !!kbRecord?.tmuxName &&
+        !tmuxSessionAlive(kbRecord.tmuxName),
+      afterKb?.sessions
+    )
+    // Reopen through the toolbar button (the same store action as Mod+B; the
+    // shortcut from a bare body after a dialog is not what this spec is about).
+    await win.click('button[title="Show sidebar"]')
+    await win.waitForTimeout(800)
+    const reopened = await win.evaluate(() => ({
+      sidebar: !!document.querySelector('[data-sidebar-shell]'),
+      dialog: document.querySelector('.modal-card')?.textContent ?? null,
+      active: document.activeElement?.tagName ?? null
+    }))
+    t.check(
+      'reopening the sidebar raises no ghost dialog',
+      reopened.sidebar && !reopened.dialog,
+      reopened
     )
 
     // ── 3. The boot: an ownerless linked record is discarded, exactly ──

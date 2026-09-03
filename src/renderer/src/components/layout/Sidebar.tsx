@@ -1,5 +1,5 @@
 import { emitTabClosed } from '../../lib/exchange-capture'
-import { requestGroupDissolve, useDissolveStore } from '../../lib/group-dissolve'
+import { requestGroupDissolve } from '../../lib/group-dissolve'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   useSessionStore,
@@ -638,16 +638,14 @@ export function Sidebar() {
 
   // Delete and Ungroup both dissolve the group and stop its quick-launch
   // terminals (lib/group-dissolve.ts owns what dies and when to ask first);
-  // the confirmation, when one is due, renders below from useDissolveStore.
+  // the confirmation, when one is due, is rendered by AppShell, which is
+  // mounted whether or not this sidebar is.
   const handleDeleteGroup = useCallback((groupId: string) => {
     void requestGroupDissolve(groupId, 'delete')
   }, [])
   const handleUngroup = useCallback((groupId: string) => {
     void requestGroupDissolve(groupId, 'ungroup')
   }, [])
-  const dissolvePending = useDissolveStore((s) => s.pending)
-  const confirmDissolve = useDissolveStore((s) => s.confirm)
-  const cancelDissolve = useDissolveStore((s) => s.cancel)
 
   // Spawn a group terminal and auto-focus it
   const spawnGroupTerminal = useCallback(
@@ -1780,16 +1778,6 @@ export function Sidebar() {
           setDeleteConfirmSessionId(null)
         }}
         onCancel={() => setDeleteConfirmSessionId(null)}
-      />
-
-      {/* Delete / Ungroup a group whose quick-launch terminals are running */}
-      <ConfirmDialog
-        isOpen={dissolvePending !== null}
-        title={dissolvePending?.confirmation.title ?? ''}
-        message={dissolvePending?.confirmation.message ?? ''}
-        confirmLabel={dissolvePending?.confirmation.confirmLabel}
-        onConfirm={() => void confirmDissolve()}
-        onCancel={cancelDissolve}
       />
 
       {/* Group terminal configuration dialog */}

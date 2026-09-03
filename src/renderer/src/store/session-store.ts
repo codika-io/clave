@@ -919,7 +919,8 @@ export const useSessionStore = create<SessionState>((set) => ({
       const displayOrder = getDisplayOrder(state).filter((did) => !terminalSessionIds.has(did))
       const idx = displayOrder.indexOf(groupId)
       if (idx !== -1) {
-        displayOrder.splice(idx, 1, ...group.sessionIds)
+        // A member that is also a terminal was killed above: never back in the order.
+        displayOrder.splice(idx, 1, ...group.sessionIds.filter((id) => !terminalSessionIds.has(id)))
       }
 
       return {

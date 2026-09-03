@@ -115,7 +115,7 @@ describe('resolveHiddenOwner — an ownerless hidden half is discarded, never su
     expect(resolveHiddenOwner({ kind: 'session-view', ownerId: 'owner' }, state)).toBe('link')
   })
 
-  it('discards a view server whose owner is gone or viewless', () => {
+  it('discards a view server whose owner is gone or viewless (a declined restore leaves it no start action: stopped, never a tab)', () => {
     expect(resolveHiddenOwner({ kind: 'session-view', ownerId: 'nope' }, state)).toBe('discard')
     expect(resolveHiddenOwner({ kind: 'session-view', ownerId: 'plain' }, state)).toBe('discard')
   })

@@ -47,7 +47,7 @@ import { promptRestore } from '../../store/restore-prompt-store'
 import { RestorePromptDialog } from '../ui/RestorePromptDialog'
 import { initMcpDispatcher } from '../../lib/mcp-dispatcher'
 import { adoptRecord, adoptRehomed, adoptHiddenRecord } from '../../lib/adopt-record'
-import { requestGroupDissolve } from '../../lib/group-dissolve'
+import { requestGroupDissolve, useDissolveStore } from '../../lib/group-dissolve'
 import { planBootAdoption, survivingIds } from '../../lib/boot-adoption'
 import { parkToolbarSurvivor } from '../../lib/toolbar-terminal-registry'
 import { initSecretStore } from '../../store/secret-store'
@@ -818,7 +818,30 @@ export function AppShell() {
         }}
         onCancel={() => setResetConfirmOpen(false)}
       />
+      {/* Delete / Ungroup a group whose quick-launch terminals are running.
+          Rendered HERE, not in the Sidebar: the ungroup keybinding is global
+          and fires with the sidebar closed or Settings open, when the
+          Sidebar is unmounted — a dialog living there would never show and
+          the pending answer would pop up as a ghost the next time the
+          sidebar opened. */}
+      <DissolveConfirmDialog />
     </div>
+  )
+}
+
+function DissolveConfirmDialog(): React.JSX.Element {
+  const pending = useDissolveStore((s) => s.pending)
+  const confirm = useDissolveStore((s) => s.confirm)
+  const cancel = useDissolveStore((s) => s.cancel)
+  return (
+    <ConfirmDialog
+      isOpen={pending !== null}
+      title={pending?.confirmation.title ?? ''}
+      message={pending?.confirmation.message ?? ''}
+      confirmLabel={pending?.confirmation.confirmLabel}
+      onConfirm={() => void confirm()}
+      onCancel={cancel}
+    />
   )
 }
 
