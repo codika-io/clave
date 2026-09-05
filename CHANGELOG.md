@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Fixed
+- **A group added to a `.clave` file no longer multiplies by one on every restart** — append a group to a workspace file while Clave is running and the sidebar showed it once, then twice after the next launch, then three times, then four. The file was right the whole time: the pin the file watcher created for the new group carried no workspace stamp, so it landed in the state file's unstamped partition; the boot refresh then re-stamped it and wrote the workspace's partition, but never rewrote the one it had left — boot hydration had not recorded what the file held, so that partition never counted as changed. The stale copy survived, hydrated beside the re-stamped one at the next launch, was re-stamped in its turn, and the workspace partition gained one more copy of the same pin per boot. Three guards now, each sufficient on its own: the watcher stamps a new pin with the file's workspace, boot seeds the persisted-partition map so a partition a pin leaves is written back empty, and main's partition merge lets a pin id live in exactly one partition of the file. A state file already carrying duplicates is cleaned on the first launch of this build.
+
 ## [1.81.1] — 2026-09-03
 
 ### Fixed

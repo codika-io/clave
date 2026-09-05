@@ -118,6 +118,33 @@ function pinPartition(pin: unknown): string | null {
   return typeof ws === 'string' ? ws : null
 }
 
+/** Replace the `scope` partition of `existing` with `incoming`. A pin id names
+ *  ONE pin: a pin that arrives stamped for `scope` leaves whichever other
+ *  partition still holds it (the renderer re-stamps a pin from null to a
+ *  workspace id on its boot refresh; the write for the new partition must not
+ *  leave the old copy behind, or the two hydrate side by side at the next
+ *  boot and the group shows twice — then three times, then four). Exported
+ *  for the unit test; `updatePins` is its only caller. */
+export function mergePinsPartition(
+  existing: unknown[],
+  scope: string | null | 'all',
+  pins: unknown[]
+): unknown[] {
+  const incoming = Array.isArray(pins) ? pins : []
+  if (scope === 'all') return incoming
+  const incomingIds = new Set<string>()
+  for (const p of incoming) {
+    const id = (p as { id?: unknown })?.id
+    if (typeof id === 'string') incomingIds.add(id)
+  }
+  const kept = existing.filter((p) => {
+    if (pinPartition(p) === scope) return false
+    const id = (p as { id?: unknown })?.id
+    return !(typeof id === 'string' && incomingIds.has(id))
+  })
+  return [...kept, ...incoming]
+}
+
 /** Persisted workspace registry + pins. Same philosophy as the sidebar
  *  layouts: synchronous write-then-rename on every change (survives a hard
  *  kill), the renderer as source of truth during a run, and an in-memory
@@ -200,9 +227,7 @@ class WorkspaceManager {
    *  are now migrated. */
   updatePins(scope: string | null | 'all', pins: unknown[]): void {
     const state = this.load()
-    const incoming = Array.isArray(pins) ? pins : []
-    const kept = scope === 'all' ? [] : state.pins.filter((p) => pinPartition(p) !== scope)
-    this.cache = { ...state, pins: [...kept, ...incoming], pinsMigrated: true }
+    this.cache = { ...state, pins: mergePinsPartition(state.pins, scope, pins), pinsMigrated: true }
     this.persist()
   }
 

@@ -4,6 +4,7 @@ import {
   usePinnedStore,
   hydratePinnedGroups,
   serializePinnedGroups,
+  dedupePinsById,
   refreshWorkspacePins,
   type PinnedGroup,
   type PinnedGroupBlueprint
@@ -85,6 +86,25 @@ function applyIdentity(identity: WindowIdentity): void {
   })
 }
 
+/** Record `blueprints` as what the state file holds, partition by partition,
+ *  so the next persist rewrites exactly the partitions that changed — and
+ *  rewrites a partition a pin LEFT as empty. Without the seed a pin re-stamped
+ *  from null to a workspace id is written into its new partition while the
+ *  null partition, never having been "persisted" by this window, is not
+ *  touched: the stale copy survives in the file and hydrates beside the
+ *  re-stamped one at the next boot. */
+function seedPersistedPins(blueprints: PinnedGroupBlueprint[]): void {
+  const byKey = new Map<string | null, PinnedGroupBlueprint[]>()
+  for (const bp of blueprints) {
+    const key = pinPartition(bp)
+    byKey.set(key, [...(byKey.get(key) ?? []), bp])
+  }
+  lastPersistedPins.clear()
+  for (const [key, list] of byKey) {
+    lastPersistedPins.set(key, JSON.stringify(serializePinnedGroups(list as PinnedGroup[])))
+  }
+}
+
 /** Fold a change another window made. The registry is taken whole; the pin
  *  blueprints are replaced from the file, keeping the runtime state (the
  *  launched group, visibility) of every pin already known here. The folded
@@ -92,8 +112,10 @@ function applyIdentity(identity: WindowIdentity): void {
  *  Groups and sessions are never touched. */
 function foldExternalState(state: { workspaces: Workspace[]; pins: unknown[] }): void {
   useWorkspaceStore.setState({ workspaces: state.workspaces })
-  const blueprints = (state.pins as PinnedGroupBlueprint[]).filter(
-    (bp) => typeof bp === 'object' && bp !== null && typeof bp.id === 'string'
+  const blueprints = dedupePinsById(
+    (state.pins as PinnedGroupBlueprint[]).filter(
+      (bp) => typeof bp === 'object' && bp !== null && typeof bp.id === 'string'
+    )
   )
   usePinnedStore.setState((s) => {
     const known = new Map(s.pinnedGroups.map((pg) => [pg.id, pg]))
@@ -112,15 +134,7 @@ function foldExternalState(state: { workspaces: Workspace[]; pins: unknown[] }):
     })
     return { pinnedGroups: next }
   })
-  const byKey = new Map<string | null, PinnedGroupBlueprint[]>()
-  for (const bp of blueprints) {
-    const key = pinPartition(bp)
-    byKey.set(key, [...(byKey.get(key) ?? []), bp])
-  }
-  lastPersistedPins.clear()
-  for (const [key, list] of byKey) {
-    lastPersistedPins.set(key, JSON.stringify(serializePinnedGroups(list as PinnedGroup[])))
-  }
+  seedPersistedPins(blueprints)
   // The workspace this window shows was removed from another window: land on
   // the first remaining one, else the unscoped state.
   const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
@@ -250,6 +264,10 @@ export async function bootWorkspaces(): Promise<void> {
   pins = pins.filter((p) => p.workspaceId == null || validIds.has(p.workspaceId))
 
   hydratePinnedGroups(pins)
+  // What the file holds is what this window has "persisted": the boot refresh
+  // that follows re-stamps and prunes against it, and a partition that empties
+  // must be written back empty.
+  seedPersistedPins(serializePinnedGroups(usePinnedStore.getState().pinnedGroups))
   enableWorkspacePersistence()
 
   if (state && !state.pinsMigrated) {

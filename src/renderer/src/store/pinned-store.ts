@@ -46,10 +46,26 @@ export function serializePinnedGroups(groups: PinnedGroup[]): PinnedGroupBluepri
   }))
 }
 
+/** A pin id names ONE pin. The state file is written partition by partition
+ *  (one per workspace id), so the same id can end up in two partitions when a
+ *  pin is re-stamped between writes; whichever copy comes first wins here, so
+ *  a file that already carries duplicates hydrates clean and is rewritten
+ *  clean on the next persist. */
+export function dedupePinsById<T extends { id: string }>(pins: T[]): T[] {
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const pin of pins) {
+    if (seen.has(pin.id)) continue
+    seen.add(pin.id)
+    out.push(pin)
+  }
+  return out
+}
+
 /** Hydrate pins from persisted blueprints (workspace:load at boot). Replaces
  *  the retired localStorage read; runtime state starts reset, as always. */
 export function hydratePinnedGroups(blueprints: PinnedGroupBlueprint[]): void {
-  const groups: PinnedGroup[] = blueprints.map((bp) => ({
+  const groups: PinnedGroup[] = dedupePinsById(blueprints).map((bp) => ({
     ...bp,
     // Back-compat: blueprints persisted before the Antigravity switch key their
     // sessions by the retired `geminiMode`. Map it forward so the pin still
@@ -504,10 +520,14 @@ export function initClaveFileWatchers(): () => void {
       }
     }
 
-    // Groups added to the file → new pins (never auto-launched)
+    // Groups added to the file → new pins (never auto-launched). The new pin
+    // inherits the file's workspace stamp: an unstamped pin lands in the null
+    // partition of the state file, gets re-stamped on the next boot refresh,
+    // and the stale null copy is then re-hydrated beside it — one more copy
+    // of the group per boot.
     for (let i = pinsForFile.length; i < groups.length; i++) {
       const g = groups[i]
-      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, firstPin.rootDir, firstPin.discoveredBy, firstPin.workspaceRoot)
+      const pinned = createPinnedFromGroup(g, filePath, result.type === 'multi' ? i : undefined, firstPin.rootDir, firstPin.discoveredBy, firstPin.workspaceRoot, firstPin.workspaceId)
       usePinnedStore.getState().addPinnedGroup(pinned)
     }
 
