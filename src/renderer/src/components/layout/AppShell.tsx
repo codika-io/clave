@@ -385,6 +385,8 @@ export function AppShell() {
       newAntigravityAtFolder: () => launch({ kind: 'antigravity', dangerousMode: false }, 'ask'),
       newCodex: () => launch({ kind: 'codex', dangerousMode: false }, 'workspace-root'),
       newCodexAtFolder: () => launch({ kind: 'codex', dangerousMode: false }, 'ask'),
+      newYoloCodex: () => launch({ kind: 'codex', dangerousMode: true }, 'workspace-root'),
+      newYoloCodexAtFolder: () => launch({ kind: 'codex', dangerousMode: true }, 'ask'),
       newPi: () => launch({ kind: 'pi', dangerousMode: false }, 'workspace-root'),
       newPiAtFolder: () => launch({ kind: 'pi', dangerousMode: false }, 'ask'),
       toggleSidebar: () => toggleSidebar(),

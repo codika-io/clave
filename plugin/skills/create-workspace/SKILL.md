@@ -105,7 +105,7 @@ Each session spawns a terminal process in a specific directory. A session runs o
 | `codexMode` | boolean | `true` = starts the Codex CLI |
 | `piMode` | boolean | `true` = starts the Pi coding agent. The workspace's current Pi launch profile supplies the command, provider, model, and thinking level |
 | `claudeAgentsMode` | boolean | `true` = starts Claude via the `claude agents` subcommand. Never receives a `prompt` — the subcommand rejects a positional prompt |
-| `dangerousMode` | boolean | `true` = Claude runs with `--dangerously-skip-permissions` |
+| `dangerousMode` | boolean | `true` = Claude runs with `--dangerously-skip-permissions`; Codex runs with `--yolo` |
 
 Set at most one agent mode. If `antigravityMode`, `codexMode`, `piMode`, or `claudeAgentsMode` is `true`, `claudeMode` is forced to `false` at spawn.
 

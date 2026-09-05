@@ -131,8 +131,9 @@ export async function run(t) {
     await win.click('.launcher-caret')
     const menuText = await win.locator('[role="menu"]').allTextContents()
     t.check(
-      'the launcher exposes Pi and its launch profiles',
-      menuText.some((text) => text.includes('Pi')),
+      'the launcher exposes Pi, Codex YOLO, and its launch profiles',
+      menuText.some((text) => text.includes('Pi')) &&
+        menuText.some((text) => text.includes('Codex CLI (YOLO)')),
       menuText
     )
     await win.keyboard.press('Escape')
@@ -185,6 +186,25 @@ export async function run(t) {
         'every profile token arrived as its own argument, spaces intact',
         argv.join('|'),
         'run|--|--flag|a value with spaces'
+      )
+    }
+
+    // Cmd+Y reuses that same Codex profile but must add the Clave-owned YOLO
+    // flag after the profile's tokens. The fake binary makes this an assertion
+    // on the process actually spawned, rather than on the renderer's intent.
+    rmSync(RECORDED, { force: true })
+    await win.keyboard.press('Meta+y')
+    const yoloArgv = await until(
+      () =>
+        existsSync(RECORDED) ? readFileSync(RECORDED, 'utf-8').split('\n').filter(Boolean) : null,
+      { tries: 40, gapMs: 250 }
+    ).catch(() => null)
+    t.check('Cmd+Y launches the Codex profile in YOLO mode', yoloArgv !== null, yoloArgv)
+    if (yoloArgv) {
+      t.equal(
+        'the spawned Codex command receives --yolo after profile arguments',
+        yoloArgv.join('|'),
+        'run|--|--flag|a value with spaces|--yolo'
       )
     }
 

@@ -73,6 +73,23 @@ describe('launch profile policy', () => {
 })
 
 describe('agent argv', () => {
+  it('adds the Clave-owned YOLO flag to elevated Codex sessions', () => {
+    expect(
+      buildAgentArgv({
+        kind: 'codex',
+        profile: {
+          id: 'codex',
+          name: 'Codex',
+          family: 'codex',
+          command: ['codex'],
+          additionalArgs: []
+        },
+        dangerousMode: true,
+        model: 'gpt-5.5'
+      })
+    ).toEqual(['codex', '--yolo', '-m', 'gpt-5.5'])
+  })
+
   it('preserves the TokenOps command vector and appends Clave-owned Claude args', () => {
     const profile = prefs.customProfiles[0]
     expect(

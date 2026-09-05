@@ -268,6 +268,7 @@ export function buildAgentArgv(input: {
     if (input.claudeSettings) argv.push('--settings', input.claudeSettings)
     if (input.mcpConfigPath) argv.push('--mcp-config', input.mcpConfigPath)
   } else if (input.kind === 'codex') {
+    if (input.dangerousMode) argv.push('--yolo')
     if (input.model) argv.push('-m', input.model)
   } else if (input.kind === 'antigravity') {
     if (input.initialPrompt) argv.push('-i', input.initialPrompt)

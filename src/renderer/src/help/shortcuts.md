@@ -22,6 +22,7 @@ The master key is a **Cmd** chord on purpose: Clave reads the key before the ter
 | Cmd+Shift+A | New Claude Agents session |
 | Cmd+I | New Antigravity CLI session |
 | Cmd+U | New Codex CLI session |
+| Cmd+Y | New Codex CLI session in YOLO mode |
 | Cmd+Shift+P | New Pi session |
 | Cmd+Option plus a launch shortcut | Choose the new session's folder |
 | Cmd+Backspace | Kill focused session |

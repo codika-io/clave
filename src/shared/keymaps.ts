@@ -15,6 +15,8 @@ export const KEYMAP_ACTION_IDS = [
   'newAntigravityAtFolder',
   'newCodex',
   'newCodexAtFolder',
+  'newYoloCodex',
+  'newYoloCodexAtFolder',
   'newPi',
   'newPiAtFolder',
   'toggleSidebar',
@@ -137,6 +139,14 @@ export const KEYMAP_ACTIONS: readonly KeymapActionDefinition[] = [
   action('newCodexAtFolder', 'New Codex session in chosen folder', 'Sessions', 'global', [
     'Mod+Alt+U'
   ]),
+  action('newYoloCodex', 'New Codex session in YOLO mode', 'Sessions', 'global', ['Mod+Y']),
+  action(
+    'newYoloCodexAtFolder',
+    'New Codex session in YOLO mode in chosen folder',
+    'Sessions',
+    'global',
+    ['Mod+Alt+Y']
+  ),
   action('newPi', 'New Pi session', 'Sessions', 'global', ['Mod+Shift+P']),
   action('newPiAtFolder', 'New Pi session in chosen folder', 'Sessions', 'global', [
     'Mod+Alt+Shift+P'

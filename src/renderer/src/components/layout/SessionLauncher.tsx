@@ -89,7 +89,7 @@ const MENU_SIDE_OFFSET = 9
 function describeSetup(setup: AgentSetup, profileLabel?: string): string {
   const parts = [AGENT_LABELS[setup.kind]]
   if (setup.kind === 'claude-agents') parts[0] = 'Claude Agents'
-  if (setup.dangerousMode) parts.push('(skip permissions)')
+  if (setup.dangerousMode) parts.push(setup.kind === 'codex' ? '(YOLO)' : '(skip permissions)')
   if (profileLabel) parts.push(`· ${profileLabel}`)
   return `New session — ${parts.join(' ')}`
 }
@@ -134,6 +134,7 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
   const agentsShortcut = useShortcutLabel('newClaudeAgents')
   const antigravityShortcut = useShortcutLabel('newAntigravity')
   const codexShortcut = useShortcutLabel('newCodex')
+  const yoloCodexShortcut = useShortcutLabel('newYoloCodex')
   const piShortcut = useShortcutLabel('newPi')
 
   const connectedRemoteLocations = locations.filter(
@@ -249,11 +250,16 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
   )
 
   const renderAgentEntry = useCallback(
-    (kind: Exclude<AgentKind, 'claude' | 'claude-agents'>, label: string, shortcut?: string) => {
+    (
+      kind: Exclude<AgentKind, 'claude' | 'claude-agents'>,
+      label: string,
+      shortcut?: string,
+      dangerousMode = false
+    ) => {
       const binaryProfiles = profilesFor(kind)
       const Logo = AGENT_LOGOS[kind]
       const launch = (launchProfileId: string): void =>
-        launchAgent({ kind, dangerousMode: false, launchProfileId }, { kind: 'workspace-root' })
+        launchAgent({ kind, dangerousMode, launchProfileId }, { kind: 'workspace-root' })
       if (binaryProfiles.length === 1) {
         return (
           <DropdownMenuItem onSelect={() => launch(binaryProfiles[0].id)}>
@@ -363,6 +369,12 @@ export function SessionLauncher({ onRemoteLaunch }: SessionLauncherProps): React
                   antigravityShortcut ?? undefined
                 )}
                 {renderAgentEntry('codex', 'Codex CLI', codexShortcut ?? undefined)}
+                {renderAgentEntry(
+                  'codex',
+                  'Codex CLI (YOLO)',
+                  yoloCodexShortcut ?? undefined,
+                  true
+                )}
                 {renderAgentEntry('pi', 'Pi', piShortcut ?? undefined)}
 
                 {connectedRemoteLocations.map((loc) => (

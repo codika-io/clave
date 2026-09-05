@@ -22,12 +22,13 @@ describe('keymap defaults', () => {
     expect(config.bindings.newClaudeAgents).toContain('Mod+Shift+A')
     expect(config.bindings.newAntigravity).toContain('Mod+I')
     expect(config.bindings.newCodex).toContain('Mod+U')
+    expect(config.bindings.newYoloCodex).toContain('Mod+Y')
     expect(config.bindings.resetSessions).toEqual(['Mod+Shift+Backspace'])
     expect(config.bindings.killFocusedSession).toEqual(['Mod+Backspace'])
     expect(config.bindings.newPi).toContain('Mod+Shift+P')
     expect(config.bindings.newClaudeAtFolder).toEqual(['Mod+Alt+N'])
     expect(config.bindings.newPiAtFolder).toEqual(['Mod+Alt+Shift+P'])
-    expect(KEYMAP_ACTIONS).toHaveLength(42)
+    expect(KEYMAP_ACTIONS).toHaveLength(44)
   })
 
   it('keeps the master key off the chords a terminal owns', () => {

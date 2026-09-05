@@ -727,7 +727,10 @@ class PtyManager {
       } else if (useAntigravityMode) {
         shellArgs = ['/c', 'agy']
       } else if (useCodexMode) {
-        shellArgs = model ? ['/c', 'codex', '-m', model] : ['/c', 'codex']
+        const parts = ['codex']
+        if (options?.dangerousMode) parts.push('--yolo')
+        if (model) parts.push('-m', model)
+        shellArgs = ['/c', ...parts]
       } else if (useAgentsMode) {
         // `claude agents` is an interactive subcommand and does not accept
         // --session-id / --resume / --dangerously-skip-permissions, so spawn it bare.
