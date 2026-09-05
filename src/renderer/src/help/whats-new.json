@@ -1,6 +1,6 @@
 [
   {
-    "version": "next",
+    "version": "1.81.2",
     "title": "A group added to a .clave file stays one group",
     "description": "Add a group to a workspace `.clave` file while Clave is running and it showed up once — then twice after the next launch, then three times, then four. The file was never wrong.\n\nThe pin the file watcher created for the new group carried no workspace stamp, and the next launch re-stamped it without clearing the copy it had left behind. Each restart hydrated both, stamped both, and saved one more.\n\nA new pin now takes its workspace from the file it came from, a launch writes back every partition a pin moved out of, and the state file refuses to hold the same pin twice. A sidebar already showing duplicates is cleaned on the first launch of this build."
   },
