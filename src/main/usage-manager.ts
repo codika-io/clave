@@ -36,6 +36,7 @@ export interface UsageWindow {
 export interface UsageLimits {
   windows: UsageWindow[]
   fetchedAt: number
+  message?: string
 }
 
 // Distinguishes "we couldn't load it" from "it loaded and you're at 0%".

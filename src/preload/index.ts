@@ -383,6 +383,7 @@ const electronAPI = {
 
   // Usage
   getUsageLimits: () => ipcRenderer.invoke('usage:get-limits'),
+  getCodexUsageLimits: () => ipcRenderer.invoke('usage:get-codex-limits'),
   getPiUsage: (range: 'today' | '7d' | '30d' | 'all') => ipcRenderer.invoke('usage:get-pi', range),
 
   // Git

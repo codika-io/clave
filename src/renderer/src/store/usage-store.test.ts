@@ -1,6 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { tightestWindow, shortLabel, formatReset } from './usage-store'
+import { tightestWindow, shortLabel, formatReset, usageProviderForSession } from './usage-store'
 import type { UsageWindow } from '../../../preload/index.d'
+
+describe('focused session usage provider', () => {
+  const local = {
+    sessionType: 'local' as const,
+    claudeMode: false,
+    codexMode: false,
+    antigravityMode: false
+  }
+  it('selects each agent, including Claude agents mode', () => {
+    expect(usageProviderForSession({ ...local, claudeMode: true })).toBe('claude')
+    expect(usageProviderForSession({ ...local, claudeAgentsMode: true })).toBe('claude')
+    expect(usageProviderForSession({ ...local, claudeMode: true, codexMode: true })).toBe('codex')
+    expect(usageProviderForSession({ ...local, claudeMode: true, piMode: true })).toBe('pi')
+    expect(usageProviderForSession({ ...local, antigravityMode: true })).toBe('antigravity')
+  })
+  it('never assigns local account limits to terminal, file, or remote sessions', () => {
+    expect(usageProviderForSession(local)).toBeNull()
+    expect(usageProviderForSession(undefined)).toBeNull()
+    expect(
+      usageProviderForSession({ ...local, sessionType: 'remote-claude', claudeMode: true })
+    ).toBeNull()
+  })
+})
 
 /**
  * The auto-detection: which cap the foot of the sidebar names.

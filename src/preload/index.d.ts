@@ -336,6 +336,7 @@ export interface UsageWindow {
 export interface UsageLimits {
   windows: UsageWindow[]
   fetchedAt: number
+  message?: string
 }
 
 export interface PiUsageTotals {
@@ -676,6 +677,7 @@ export interface ElectronAPI {
   windowMoveSessions: (sessionIds: string[], targetWindowId: number) => Promise<MoveResult>
   windowMoveGroup: (group: unknown, targetWindowId: number) => Promise<MoveResult & { ok: boolean }>
   getUsageLimits: () => Promise<UsageLimits | UsageError>
+  getCodexUsageLimits: () => Promise<UsageLimits | UsageError>
   getPiUsage: (range: PiUsageTotals['range']) => Promise<PiUsageTotals>
   gitCheckIgnored: (cwd: string, paths: string[]) => Promise<string[]>
   getGitStatus: (cwd: string) => Promise<GitStatusResult>

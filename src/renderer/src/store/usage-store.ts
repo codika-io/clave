@@ -1,101 +1,76 @@
 import { create } from 'zustand'
-import type { UsageWindow } from '../../../preload/index.d'
+import type { PiUsageTotals, UsageError, UsageLimits, UsageWindow } from '../../../preload/index.d'
+import type { Session } from './session-types'
+import { createUsageResource } from './usage-resource'
 
-/**
- * The Claude rate-limit windows, fetched once for the whole renderer.
- *
- * Two places read them — the foot of the sidebar and the Usage settings pane —
- * and each used to own its own fetch, so opening settings hit the network again
- * and the refresh button moved one of them and not the other. One store, one
- * request, both live.
- *
- * The fetch goes over the network from the main process, so it is cached and
- * paced: nothing refetches inside `FRESH_MS`, a slow poll keeps the foot honest
- * while the app is open, and coming back to the window refreshes a stale read
- * rather than waiting out the poll.
- */
-const FRESH_MS = 60_000
-const POLL_MS = 5 * 60_000
-/* A first read can fail for reasons that clear on their own — no network yet at
-   launch, a laptop still waking, a keychain prompt someone had not answered.
-   Retry those on a short ramp before dropping to the slow poll, or the foot of
-   the sidebar simply has no second line for five minutes and nothing on screen
-   says why. Reset the moment a read succeeds. */
-const RETRY_MS = [3_000, 8_000, 20_000, 45_000]
-
-export type UsageStatus = 'idle' | 'loading' | 'ready' | 'error'
-
-interface UsageState {
-  status: UsageStatus
-  windows: UsageWindow[]
-  fetchedAt: number | null
-  error: string | null
-  /** Fetch unless a fresh read is already in hand. `force` ignores the cache. */
-  load: (opts?: { force?: boolean }) => Promise<void>
+export type UsageProvider = 'claude' | 'codex' | 'pi' | 'antigravity'
+export const USAGE_PROVIDER_LABELS = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  pi: 'Pi',
+  antigravity: 'Antigravity'
 }
 
-let inFlight: Promise<void> | null = null
-let failures = 0
-let retryTimer: ReturnType<typeof setTimeout> | null = null
-
-function scheduleRetry(): void {
-  if (retryTimer) return
-  const delay = RETRY_MS[Math.min(failures - 1, RETRY_MS.length - 1)]
-  retryTimer = setTimeout(() => {
-    retryTimer = null
-    void useUsageStore.getState().load({ force: true })
-  }, delay)
+/** Local account data cannot describe a remote terminal's account. With no
+ * selected tab we retain the default Claude overview; plain terminals have no quota. */
+export function usageProviderForSession(
+  session:
+    | Pick<
+        Session,
+        | 'sessionType'
+        | 'claudeMode'
+        | 'claudeAgentsMode'
+        | 'codexMode'
+        | 'piMode'
+        | 'antigravityMode'
+      >
+    | undefined
+): UsageProvider | null {
+  if (!session) return null
+  if (session.sessionType !== 'local') return null
+  if (session.piMode) return 'pi'
+  if (session.codexMode) return 'codex'
+  if (session.antigravityMode) return 'antigravity'
+  return session.claudeMode || session.claudeAgentsMode ? 'claude' : null
 }
 
-export const useUsageStore = create<UsageState>((set, get) => ({
-  status: 'idle',
-  windows: [],
-  fetchedAt: null,
-  error: null,
+async function limits(result: Promise<UsageLimits | UsageError>): Promise<UsageLimits> {
+  const value = await result
+  if ('error' in value) throw new Error(value.error)
+  return value
+}
 
-  load: async ({ force = false } = {}) => {
-    const { fetchedAt, status } = get()
-    if (!force && fetchedAt !== null && Date.now() - fetchedAt < FRESH_MS) return
-    // Never two requests in the air: the pane mounting during a poll would
-    // otherwise race it and the loser's result would win.
-    if (inFlight) return inFlight
-    if (!window.electronAPI?.getUsageLimits) {
-      set({ status: 'error', error: 'Usage is only available in the desktop app.' })
-      return
-    }
+// One cache per provider and Pi range, shared by the pane and sidebar. Switching
+// tabs cannot let an outstanding request overwrite another provider's data.
+export const useUsageStore = createUsageResource(() => limits(window.electronAPI.getUsageLimits()))
+export const useCodexUsageStore = createUsageResource(() =>
+  limits(window.electronAPI.getCodexUsageLimits())
+)
+export const piUsageStores = {
+  today: createUsageResource(() => window.electronAPI.getPiUsage('today')),
+  '7d': createUsageResource(() => window.electronAPI.getPiUsage('7d')),
+  '30d': createUsageResource(() => window.electronAPI.getPiUsage('30d')),
+  all: createUsageResource(() => window.electronAPI.getPiUsage('all'))
+}
+export const quotaUsageStores = { claude: useUsageStore, codex: useCodexUsageStore }
 
-    // Keep whatever is on screen while refreshing a read we already have —
-    // flashing skeletons over a good number every five minutes is worse than
-    // a number that is a few minutes old.
-    if (status !== 'ready') set({ status: 'loading', error: null })
-
-    inFlight = (async () => {
-      try {
-        const result = await window.electronAPI.getUsageLimits()
-        if ('error' in result) {
-          failures++
-          set({ status: 'error', error: result.error, windows: [], fetchedAt: Date.now() })
-          scheduleRetry()
-          return
-        }
-        failures = 0
-        set({
-          status: 'ready',
-          windows: result.windows,
-          fetchedAt: result.fetchedAt,
-          error: null
-        })
-      } catch {
-        failures++
-        set({ status: 'error', error: 'Failed to load usage.', fetchedAt: Date.now() })
-        scheduleRetry()
-      } finally {
-        inFlight = null
-      }
-    })()
-    return inFlight
-  }
+// The footer and pane share the selected provider, including when settings is open.
+export const useUsageNavigation = create<{
+  provider: UsageProvider | null
+  select: (provider: UsageProvider) => void
+}>((set) => ({
+  provider: null,
+  select: (provider) => set({ provider })
 }))
+
+export function formatPiTokens(value: number): string {
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(
+    value
+  )
+}
+export function piTodaySummary(totals: PiUsageTotals): string {
+  return `${formatPiTokens(totals.totalTokens)} tokens · $${totals.cost.toFixed(2)} today`
+}
 
 /**
  * The window that is actually going to stop you: the one with the least left,
@@ -143,18 +118,17 @@ export function formatReset(resetsAt: number | null): string | null {
   return 'resets shortly'
 }
 
-// One poll for the process, started with the renderer. `load` is cached, so
-// every tick below is cheap when something else has already refreshed.
-//
-// `visibilitychange` as well as `focus`: a window that was occluded or a machine
-// that was asleep comes back with a reading that is hours old, and it does not
-// necessarily get a focus event on the way — a stale number presented as current
-// is worse than none.
+// Poll only providers/ranges that have been viewed. Codex is never started just
+// because a Claude-only user opened Clave. Focus/wake refreshes stale data too.
 if (typeof window !== 'undefined') {
-  void useUsageStore.getState().load()
-  setInterval(() => void useUsageStore.getState().load(), POLL_MS)
-  window.addEventListener('focus', () => void useUsageStore.getState().load())
+  const refresh = (): void => {
+    for (const store of [useUsageStore, useCodexUsageStore, ...Object.values(piUsageStores)]) {
+      if (store.getState().status !== 'idle') void store.getState().load()
+    }
+  }
+  setInterval(refresh, 5 * 60_000)
+  window.addEventListener('focus', refresh)
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) void useUsageStore.getState().load()
+    if (!document.hidden) refresh()
   })
 }

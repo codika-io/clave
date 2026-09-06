@@ -1,7 +1,12 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import type { PiUsageTotals, UsageWindow } from '../../../../preload/index.d'
-import { useUsageStore, formatReset } from '../../store/usage-store'
+import {
+  quotaUsageStores,
+  piUsageStores,
+  useUsageNavigation,
+  formatReset
+} from '../../store/usage-store'
 import { ClaudeLogo, CodexLogo, AntigravityLogo, PiLogo } from '../icons/cli-logos'
 
 type Tool = 'claude' | 'codex' | 'antigravity' | 'pi'
@@ -31,10 +36,15 @@ function UsageBar({ window }: { window: UsageWindow }): ReactElement {
   const pct = Math.round(window.usedPercentage)
   const reset = formatReset(window.resetsAt)
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" data-usage-window={window.key}>
       <div className="flex items-baseline justify-between">
         <span className="text-sm font-medium text-text-primary">{window.label}</span>
-        <span className="text-sm tabular-nums font-semibold text-text-primary">{pct}%</span>
+        <span
+          className="text-sm tabular-nums font-semibold text-text-primary"
+          aria-label={`${pct}% used`}
+        >
+          {pct}%
+        </span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-surface-200">
         <div
@@ -56,11 +66,9 @@ function ToolToggle({ tool, onChange }: { tool: Tool; onChange: (t: Tool) => voi
           <button
             key={key}
             onClick={() => onChange(key)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              active
-                ? 'bg-surface-200 text-text-primary'
-                : 'text-text-tertiary hover:text-text-primary'
-            }`}
+            className="panel-tab flex flex-1 items-center justify-center gap-1.5"
+            data-selected={active ? 'true' : undefined}
+            aria-pressed={active}
           >
             <Logo className="w-3.5 h-3.5 flex-shrink-0" />
             {label}
@@ -71,21 +79,15 @@ function ToolToggle({ tool, onChange }: { tool: Tool; onChange: (t: Tool) => voi
   )
 }
 
-function ClaudeUsage(): ReactElement {
-  // The same store the sidebar's foot reads, so one request serves both and
-  // this button refreshes the number down there too. It used to own a fetch of
-  // its own, which meant opening this pane hit the network again and the two
-  // readouts could disagree.
-  const status = useUsageStore((s) => s.status)
-  const windows = useUsageStore((s) => s.windows)
-  const error = useUsageStore((s) => s.error)
-  const load = useUsageStore((s) => s.load)
+function AccountUsage({ provider }: { provider: 'claude' | 'codex' }): ReactElement {
+  const { status, data, error, load, refreshing } = quotaUsageStores[provider]()
+  const windows = data?.windows ?? []
 
   useEffect(() => {
     load()
   }, [load])
 
-  const loading = status === 'loading'
+  const loading = refreshing
 
   return (
     <div className="space-y-4">
@@ -93,8 +95,9 @@ function ClaudeUsage(): ReactElement {
         <button
           onClick={() => load({ force: true })}
           disabled={loading}
-          className="btn-icon btn-icon-xs disabled:opacity-50"
-          title="Refresh"
+          className="panel-icon-btn"
+          title="Refresh usage"
+          aria-label="Refresh usage"
         >
           <ArrowPathIcon className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -114,17 +117,16 @@ function ClaudeUsage(): ReactElement {
       {status === 'error' && (
         <div className="flex flex-col items-start gap-3 py-4">
           <span className="text-sm text-text-tertiary">{error}</span>
-          <button
-            onClick={() => load({ force: true })}
-            className="text-xs text-accent transition-colors hover:text-accent-hover"
-          >
+          <button onClick={() => load({ force: true })} className="btn-secondary">
             Retry
           </button>
         </div>
       )}
 
       {status === 'ready' && windows.length === 0 && (
-        <span className="text-sm text-text-tertiary">No usage limits to show yet.</span>
+        <span className="text-sm text-text-tertiary">
+          {data?.message ?? 'No usage limits to show yet.'}
+        </span>
       )}
 
       {status === 'ready' && windows.length > 0 && (
@@ -153,21 +155,10 @@ function ComingSoon({ label }: { label: string }): ReactElement {
 
 function PiUsage(): ReactElement {
   const [range, setRange] = useState<PiUsageTotals['range']>('today')
-  const [totals, setTotals] = useState<PiUsageTotals | null>(null)
+  const { data: totals, status, error, load, refreshing } = piUsageStores[range]()
   useEffect(() => {
-    let cancelled = false
-    window.electronAPI
-      .getPiUsage(range)
-      .then((value) => {
-        if (!cancelled) setTotals(value)
-      })
-      .catch(() => {
-        if (!cancelled) setTotals(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [range])
+    void load()
+  }, [load])
   const number = (value: number): string => new Intl.NumberFormat().format(value)
   return (
     <div className="space-y-4">
@@ -190,7 +181,25 @@ function PiUsage(): ReactElement {
           </button>
         ))}
       </div>
-      {!totals ? (
+      <div className="flex justify-end">
+        <button
+          className="panel-icon-btn"
+          title="Refresh usage"
+          aria-label="Refresh usage"
+          disabled={refreshing}
+          onClick={() => load({ force: true })}
+        >
+          <ArrowPathIcon className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      {status === 'error' ? (
+        <div className="space-y-3">
+          <p className="text-sm text-text-tertiary">{error}</p>
+          <button className="btn-secondary" onClick={() => load({ force: true })}>
+            Retry
+          </button>
+        </div>
+      ) : !totals ? (
         <span className="text-sm text-text-tertiary">Reading local Pi sessions…</span>
       ) : (
         <>
@@ -221,15 +230,16 @@ function PiUsage(): ReactElement {
 
 /** Usage limits content — embedded in the settings page's Usage section. */
 export function UsagePanel(): ReactElement {
-  const [tool, setTool] = useState<Tool>('claude')
+  const tool = useUsageNavigation((s) => s.provider) ?? 'claude'
+  const setTool = useUsageNavigation((s) => s.select)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-usage-provider={tool}>
       <ToolToggle tool={tool} onChange={setTool} />
       <div className="settings-card">
         <div className="px-3.5 py-3">
-          {tool === 'claude' && <ClaudeUsage />}
-          {tool === 'codex' && <ComingSoon label="Codex" />}
+          {tool === 'claude' && <AccountUsage provider="claude" />}
+          {tool === 'codex' && <AccountUsage provider="codex" />}
           {tool === 'antigravity' && <ComingSoon label="Antigravity" />}
           {tool === 'pi' && <PiUsage />}
         </div>

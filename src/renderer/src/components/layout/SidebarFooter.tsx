@@ -12,7 +12,19 @@ import { useSessionStore } from '../../store/session-store'
 import { useUpdaterStore } from '../../store/updater-store'
 import { useWorkTrackerStore } from '../../store/work-tracker-store'
 import { useFeedbackStore } from '../../store/feedback-store'
-import { useUsageStore, tightestWindow, shortLabel, formatReset } from '../../store/usage-store'
+import {
+  quotaUsageStores,
+  piUsageStores,
+  tightestWindow,
+  shortLabel,
+  formatReset,
+  usageProviderForSession,
+  useUsageNavigation,
+  USAGE_PROVIDER_LABELS,
+  piTodaySummary,
+  type UsageProvider
+} from '../../store/usage-store'
+import { PiLogo } from '../icons/cli-logos'
 import { formatDuration } from '../work-tracker/utils'
 import { UserIconDisplay } from '../ui/UserIconDisplay'
 import { BrandField } from '../ui/BrandField'
@@ -87,7 +99,13 @@ export function UpdateBanner(): React.ReactElement {
  * Percent LEFT, not percent used. The old line here counted minutes worked
  * today, which said nothing about whether you could keep going.
  */
-function UsageLine({ window: w }: { window: UsageWindow }): React.ReactElement {
+function UsageLine({
+  window: w,
+  provider
+}: {
+  window: UsageWindow
+  provider: 'claude' | 'codex'
+}): React.ReactElement {
   const openSettings = useSessionStore((s) => s.openSettings)
 
   const left = Math.max(0, Math.round(100 - w.usedPercentage))
@@ -107,9 +125,15 @@ function UsageLine({ window: w }: { window: UsageWindow }): React.ReactElement {
 
   return (
     <button
-      onClick={() => openSettings('usage')}
+      onClick={() => {
+        useUsageNavigation.getState().select(provider)
+        openSettings('usage')
+      }}
       className="sidebar-footer-line"
-      title={[w.label, `${left}% left`, reset].filter(Boolean).join(' · ')}
+      data-usage-provider={provider}
+      title={[USAGE_PROVIDER_LABELS[provider], w.label, `${left}% left`, reset]
+        .filter(Boolean)
+        .join(' · ')}
     >
       <span className="usage-meter" aria-hidden="true">
         <span
@@ -120,7 +144,9 @@ function UsageLine({ window: w }: { window: UsageWindow }): React.ReactElement {
       <span className={cn('text-[11px] font-medium tabular-nums flex-shrink-0', tone)}>
         {left}% left
       </span>
-      <span className="text-[11px] text-text-tertiary truncate">· {shortLabel(w)}</span>
+      <span className="text-[11px] text-text-tertiary truncate">
+        · {provider === 'codex' ? 'Codex' : 'Claude'} · {shortLabel(w)}
+      </span>
     </button>
   )
 }
@@ -190,21 +216,29 @@ export function SidebarFooter(): React.ReactElement {
   const dismissed = useUpdaterStore((s) => s.dismissed)
   const undismiss = useUpdaterStore((s) => s.undismiss)
 
-  const usageStatus = useUsageStore((s) => s.status)
-  const usageWindows = useUsageStore((s) => s.windows)
-  const loadUsage = useUsageStore((s) => s.load)
+  const provider = useSessionStore((s) =>
+    s.focusedSessionId === null
+      ? 'claude'
+      : usageProviderForSession(s.sessions.find((session) => session.id === s.focusedSessionId))
+  )
+  const quota = quotaUsageStores[provider === 'codex' ? 'codex' : 'claude']()
+  const pi = piUsageStores.today()
+  const loadUsage =
+    provider === 'pi' ? pi.load : provider === 'claude' || provider === 'codex' ? quota.load : null
   const trackerEnabled = useWorkTrackerStore((s) => s.enabled)
   const trackerMinutes = useWorkTrackerStore((s) => s.todayTotalMinutes)
   const feedbackCollapsed = useFeedbackStore((s) => s.collapsed)
   const openFeedback = useFeedbackStore((s) => s.setDialogOpen)
 
-  // The store also fetches when it is first imported; this is the belt to that
-  // brace. Mounting is the moment the line is actually about to be looked at,
-  // and `load` is cached, so asking again here costs nothing when the boot
-  // fetch already landed and rescues the line when it did not.
   useEffect(() => {
-    void loadUsage()
-  }, [loadUsage])
+    if (provider) useUsageNavigation.getState().select(provider)
+    void loadUsage?.()
+  }, [loadUsage, provider])
+
+  const openUsage = (target: UsageProvider): void => {
+    useUsageNavigation.getState().select(target)
+    openSettings('usage')
+  }
 
   const showUpdateDot = dismissed && version !== null && phase === 'available'
   // The card above is showing while `collapsed === false`; the icon is the
@@ -214,9 +248,16 @@ export function SidebarFooter(): React.ReactElement {
   // What the second line says, in order of what is worth knowing: the agent's
   // remaining headroom, else the hours worked, else nothing — and if that
   // leaves only the feedback icon, the row still carries it.
-  const usage = usageStatus === 'error' ? null : tightestWindow(usageWindows)
-  const showWork = !usage && trackerEnabled && trackerMinutes > 0
-  const showMetaRow = usage !== null || showWork || showFeedbackIcon
+  const quotaProvider = provider === 'claude' || provider === 'codex' ? provider : null
+  const usage =
+    quotaProvider && quota.status !== 'error' ? tightestWindow(quota.data?.windows ?? []) : null
+  const piTotals = provider === 'pi' && pi.status !== 'error' ? pi.data : null
+  const providerStatus = provider === 'pi' ? pi.status : quota.status
+  const showProviderStatus = (quotaProvider !== null || provider === 'pi') && !usage && !piTotals
+  const showWork =
+    !usage && !piTotals && !showProviderStatus && trackerEnabled && trackerMinutes > 0
+  const showMetaRow =
+    usage !== null || piTotals !== null || showProviderStatus || showWork || showFeedbackIcon
 
   return (
     <div
@@ -282,8 +323,36 @@ export function SidebarFooter(): React.ReactElement {
         <>
           <div className="sidebar-footer-sep" />
           <div className="sidebar-footer-row sidebar-footer-row--meta">
-            {usage ? (
-              <UsageLine window={usage} />
+            {usage && quotaProvider ? (
+              <UsageLine window={usage} provider={quotaProvider} />
+            ) : piTotals ? (
+              <button
+                className="sidebar-footer-line"
+                data-usage-provider="pi"
+                onClick={() => openUsage('pi')}
+                title={`Pi · ${piTodaySummary(piTotals)} · Local totals, not account quota`}
+              >
+                <PiLogo className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="text-[11px] text-text-secondary tabular-nums truncate">
+                  {piTodaySummary(piTotals)}
+                </span>
+              </button>
+            ) : showProviderStatus && provider ? (
+              <button
+                className="sidebar-footer-line"
+                data-usage-provider={provider}
+                onClick={() => openUsage(provider)}
+                title={`${USAGE_PROVIDER_LABELS[provider]} usage`}
+              >
+                <span className="text-[11px] text-text-tertiary truncate">
+                  {USAGE_PROVIDER_LABELS[provider]} ·{' '}
+                  {providerStatus === 'idle' || providerStatus === 'loading'
+                    ? 'Loading usage…'
+                    : providerStatus === 'error'
+                      ? 'Usage unavailable'
+                      : 'No quota reported'}
+                </span>
+              </button>
             ) : showWork ? (
               <WorkLine />
             ) : (
