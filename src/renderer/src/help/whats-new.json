@@ -1,6 +1,6 @@
 [
   {
-    "version": "next",
+    "version": "1.83.0",
     "title": "Codex usage and activity at a glance",
     "description": "Codex now has a usage panel with your account's reported limits and reset times. The sidebar footer follows the selected agent: remaining capacity for Claude Code and Codex, or today's recorded tokens and cost for Pi. Click it to open that provider's usage panel.\n\nThe OpenAI icon now pulses blue while Codex works and clears when it is ready, needs your input, or exits. It works in background tabs and tmux sessions too. Relaunch existing Codex sessions to enable the indicator."
   },

@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.83.0] — 2026-09-06
+
 ### Added
 - **Codex usage panel** — see the account's reported usage windows, remaining capacity, and reset times in Settings → Usage.
 - **Codex activity glow** — the OpenAI icon pulses blue while Codex works, including in background tabs and tmux sessions. It clears when Codex is ready, needs input, or exits. Relaunch existing Codex sessions to enable this indicator.
