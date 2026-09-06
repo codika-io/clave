@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Added
+- **Codex usage panel** — see the account's reported usage windows, remaining capacity, and reset times in Settings → Usage.
+- **Codex activity glow** — the OpenAI icon pulses blue while Codex works, including in background tabs and tmux sessions. It clears when Codex is ready, needs input, or exits. Relaunch existing Codex sessions to enable this indicator.
+
+### Changed
+- **Usage follows the active agent** — the sidebar footer shows Claude Code or Codex remaining capacity for the selected session, or today's recorded tokens and cost for Pi. Clicking it opens that provider's usage panel.
+
 ## [1.81.2] — 2026-09-05
 
 ### Fixed

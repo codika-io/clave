@@ -4,7 +4,7 @@ Forward-looking counterpart to [CHANGELOG.md](./CHANGELOG.md). Tracks work we kn
 
 ## Deferred
 
-### Agent tab status indicators for non-Claude providers
-The tab status system (neutral / working / blocked / done, via icon color + dot) relies on deterministic Claude Code signals (lifecycle hooks + `~/.claude/sessions/<pid>.json`). Antigravity CLI and Codex CLI expose no equivalent, so they intentionally show a **neutral icon and no dot, always**. Revisit if/when those CLIs gain comparable lifecycle signals (hooks, a status file, or a machine-readable state channel) — until then, scraping their terminal output for state is explicitly out of scope.
+### Agent tab status indicators for Antigravity
+Claude Code uses lifecycle hooks, Pi uses its bundled extension, and newly launched Codex sessions use the CLI's explicit runtime status in OSC terminal titles. Codex's working/thinking/background-wait states pulse blue; Ready and action-required states clear the glow. Antigravity remains neutral until it exposes a comparable state channel. Scraping terminal body text or guessing from output activity remains out of scope.
 
 _Related: GitHub issue #18._

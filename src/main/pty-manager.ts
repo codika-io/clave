@@ -11,6 +11,7 @@ import { workspaceManager } from './workspace-manager'
 import { dismissSessionOffers } from './copy-offer-manager'
 import { launchProfileManager } from './launch-profile-manager'
 import { resolvePosixShellLaunch } from './shell-launch'
+import { CODEX_TITLE_CONFIG } from '../shared/codex-state'
 import {
   buildAgentArgv,
   type AgentKind,
@@ -272,6 +273,10 @@ function getTmuxConfigPath(): string {
     'set -g history-limit 50000',
     'set -sg escape-time 10',
     'set -g focus-events on',
+    // Forward each pane's OSC title to its attached xterm. Codex includes its
+    // runtime state here, including when a surviving session is reattached.
+    'set -g set-titles on',
+    'set -g set-titles-string "#{pane_title}"',
     // Mouse on, but with scrollback wiring: a bare `set -g mouse on` makes the
     // wheel send arrow keys to the shell (it mangles the prompt). Instead, the
     // wheel scrolls tmux's scrollback (entering copy-mode) unless the app inside
@@ -523,6 +528,13 @@ function deleteSessionRecord(key: string): void {
  *  (Starting a server here would race that load, so we only touch a live one.) */
 function reconcileTmuxBindings(tmuxPath: string): void {
   if (liveTmuxSessions(tmuxPath).size === 0) return
+  try {
+    execFileSync(tmuxPath, ['-L', TMUX_SOCKET,
+      'set-option', '-g', 'set-titles', 'on', ';',
+      'set-option', '-g', 'set-titles-string', '#{pane_title}'], { stdio: 'ignore' })
+  } catch {
+    // Older tmux versions may not support title forwarding.
+  }
   // Drop the legacy `MouseDown1Pane -> cancel` binding: the press fires before
   // the drag, so it snapped scrollback to the bottom on click and made
   // highlighting impossible. Without it, copy-mode's default drag-select works.
@@ -730,6 +742,7 @@ class PtyManager {
         const parts = ['codex']
         if (options?.dangerousMode) parts.push('--yolo')
         if (model) parts.push('-m', model)
+        parts.push('-c', CODEX_TITLE_CONFIG)
         shellArgs = ['/c', ...parts]
       } else if (useAgentsMode) {
         // `claude agents` is an interactive subcommand and does not accept

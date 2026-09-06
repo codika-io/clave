@@ -56,6 +56,8 @@ Builds require Apple code signing. Credentials in `.env` (not committed):
 
 ## Gotchas
 
+- **Codex icon state**: Codex launches include an invocation-only `tui.terminal_title` override with `app-name`, `status`, and `spinner`. `shared/codex-state.ts` interprets the CLI's runtime title; xterm's `onTitleChange` drives `agentState` without scanning terminal body text. tmux must forward `#{pane_title}` with `set-titles on`, including on older servers. Existing Codex processes launched before this integration need a relaunch to receive the title configuration. Unknown/cleared titles stay neutral; PTY exit overrides working state.
+
 - **PATH resolution in packaged app (CRITICAL)**: Packaged Electron apps have a minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`). The user's full PATH must be resolved by spawning a login shell. **NEVER use `execSync`** — it goes through `/bin/sh` which expands `$PATH` before zsh starts. Always use `execFileSync('/bin/zsh', ['-lic', 'echo __PATH__$PATH'])` so zsh sources `.zprofile`/`.zshrc` first. This is the root cause of `command not found: claude` in packaged builds.
 - **electron-updater targets**: Both `zip` and `dmg` targets are required in `electron-builder.yml` — zip for silent background updates, dmg for fresh installs.
 - **Repo must be public** for electron-updater to check GitHub Releases without an auth token.

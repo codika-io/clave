@@ -10,8 +10,8 @@ import { join } from 'path'
  * to `<userData>/agent-state/<claveSessionId>.state`. This manager owns that
  * directory and watches it, forwarding transitions to the renderer.
  *
- * This is Claude-only: Antigravity/Codex CLIs expose no equivalent signal, so their
- * tabs stay neutral (see ROADMAP.md).
+ * Pi's bundled extension writes the same state words. Codex uses its TUI's OSC
+ * runtime titles instead, consumed by use-terminal.ts. Antigravity stays neutral.
  */
 export type AgentState = 'idle' | 'working' | 'blocked' | 'done' | 'ended'
 

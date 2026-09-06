@@ -1,3 +1,5 @@
+import { CODEX_TITLE_CONFIG } from './codex-state'
+
 export type LauncherFamily = 'claude' | 'antigravity' | 'codex' | 'pi'
 export type AgentKind = LauncherFamily | 'claude-agents'
 export type PiThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -270,6 +272,7 @@ export function buildAgentArgv(input: {
   } else if (input.kind === 'codex') {
     if (input.dangerousMode) argv.push('--yolo')
     if (input.model) argv.push('-m', input.model)
+    argv.push('-c', CODEX_TITLE_CONFIG)
   } else if (input.kind === 'antigravity') {
     if (input.initialPrompt) argv.push('-i', input.initialPrompt)
     return argv

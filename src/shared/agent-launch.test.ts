@@ -87,7 +87,7 @@ describe('agent argv', () => {
         dangerousMode: true,
         model: 'gpt-5.5'
       })
-    ).toEqual(['codex', '--yolo', '-m', 'gpt-5.5'])
+    ).toEqual(['codex', '--yolo', '-m', 'gpt-5.5', '-c', 'tui.terminal_title=["app-name","status","spinner"]'])
   })
 
   it('preserves the TokenOps command vector and appends Clave-owned Claude args', () => {

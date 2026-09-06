@@ -72,22 +72,23 @@ function SessionIcon({ session }: { session: Session }) {
           ? ClaudeLogo
           : CommandLineIcon
 
-  // Tab status visuals are Claude Code only and complementary, not redundant:
+  // Lifecycle-aware providers share these complementary status visuals:
   // the ICON color carries "is it running" and the DOT carries "does it need me".
   //   working → blue pulsing icon, no dot
   //   blocked → neutral icon, amber dot (waiting on a permission/selection prompt)
   //   done & unseen → neutral icon, green dot (finished while you were away; clears on view)
   //   idle / done-seen / empty → neutral icon, no dot
   //   ended → dimmed icon, no dot
-  // Antigravity/Codex/terminals/agents have no deterministic state signal, so they stay
+  // Antigravity/terminals/agents have no deterministic state signal, so they stay
   // fully neutral — no color, no dot (see ROADMAP.md).
   const isClaudeCode = session.claudeMode === true && !session.claudeAgentsMode &&
     !session.antigravityMode && !session.codexMode && !session.piMode && session.sessionType === 'local'
-  const hasLifecycleState = isClaudeCode || (session.piMode === true && session.sessionType === 'local')
+  const isCodex = session.codexMode === true && session.sessionType === 'local'
+  const hasLifecycleState = isClaudeCode || isCodex || (session.piMode === true && session.sessionType === 'local')
 
   const state = !session.alive ? 'ended' : session.agentState ?? 'idle'
   const working = hasLifecycleState && state === 'working'
-  const blocked = isClaudeCode && state === 'blocked'
+  const blocked = (isClaudeCode || isCodex) && state === 'blocked'
   const doneUnseen = hasLifecycleState && state === 'done' && session.hasUnseenActivity
   const ended = hasLifecycleState && state === 'ended'
 

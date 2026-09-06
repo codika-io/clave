@@ -1,4 +1,5 @@
 import { emitAgentStateWord, emitSessionExited } from '../lib/exchange-capture'
+import { codexStateFromTitle } from '../../../shared/codex-state'
 import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -163,6 +164,16 @@ export function useTerminal(sessionId: string) {
         useSessionStore.getState().setClaudeSessionId(sessionId, newClaudeSessionId)
         void window.electronAPI.setSessionClaudeSessionId?.(sessionId, newClaudeSessionId)
       }
+    })
+
+    // Codex's TUI publishes its runtime state through OSC titles. xterm handles
+    // fragmented escape sequences and both BEL/ST terminators for us. This
+    // stays subscribed for background tabs, like the Claude/Pi hook listener.
+    const titleDisposable = terminal.onTitleChange((title) => {
+      const current = useSessionStore.getState()
+      const session = current.sessions.find((s) => s.id === sessionId)
+      if (!session?.codexMode || session.sessionType !== 'local' || !session.alive) return
+      setAgentState(sessionId, codexStateFromTitle(title))
     })
 
     // Deterministic lifecycle state from Claude hooks or Clave's bundled Pi extension.
@@ -473,6 +484,7 @@ export function useTerminal(sessionId: string) {
       cleanupPlanDetected()
       cleanupClearDetected()
       cleanupAgentState()
+      titleDisposable.dispose()
       cleanupData()
       cleanupExit()
       resizeObserver.disconnect()
