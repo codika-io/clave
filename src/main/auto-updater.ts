@@ -2,9 +2,14 @@ import { app, shell } from 'electron'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import log from 'electron-log/main'
 import { broadcastToAllWindows } from './window-routing'
-import type { DownloadProgress, UpdatePhase, UpdaterState } from '../shared/updater-types'
+import type {
+  DownloadProgress,
+  ReleaseNote,
+  UpdatePhase,
+  UpdaterState
+} from '../shared/updater-types'
 
-export type { DownloadProgress, UpdatePhase, UpdaterState }
+export type { DownloadProgress, ReleaseNote, UpdatePhase, UpdaterState }
 
 const CHECK_INTERVAL = 30 * 60 * 1000 // 30 minutes
 const INITIAL_DELAY = 5000
@@ -102,6 +107,7 @@ let state: UpdaterState = {
   // file — as the tests do — does not need a live Electron app object.
   currentVersion: '',
   availableVersion: null,
+  releaseNotes: null,
   progress: initialProgress,
   errorMessage: null,
   checkErrorMessage: null,
@@ -114,6 +120,75 @@ let isDownloading = false
 /** Guards the one automatic retry so a hard failure cannot loop. */
 let autoRetried = false
 let checkInterval: ReturnType<typeof setInterval> | null = null
+
+/**
+ * What electron-updater hands back for `releaseNotes`, before we have decided
+ * it is usable. The GitHub provider gives a single string when `fullChangelog`
+ * is off and an array of `{version, note}` when it is on; either can be null,
+ * and either can carry an empty body for a release published with no notes.
+ */
+export type RawReleaseNotes = string | Array<{ version?: string; note?: string | null }> | null
+
+/**
+ * Normalise the provider's release notes into the one shape the UI reads.
+ *
+ * Every branch here is a real thing the GitHub provider does, and each one
+ * fails the same quiet way if unhandled — a disclosure that opens onto nothing,
+ * which reads as a broken control rather than as an absent changelog. So the
+ * rule is: return null when there is nothing worth opening, never an empty
+ * array or an array of blanks, and let the caller hide the affordance entirely.
+ *
+ * `fallbackVersion` names the release a bare string belongs to, since the
+ * string form carries no version of its own.
+ */
+export function normalizeReleaseNotes(
+  raw: RawReleaseNotes,
+  fallbackVersion: string
+): ReleaseNote[] | null {
+  if (raw == null) return null
+
+  if (typeof raw === 'string') {
+    const note = raw.trim()
+    return note ? [{ version: fallbackVersion, note }] : null
+  }
+
+  if (!Array.isArray(raw)) return null
+
+  const notes: ReleaseNote[] = []
+  for (const entry of raw) {
+    const note = (entry?.note ?? '').trim()
+    // A release published with an empty body is skipped, not rendered as a
+    // version heading with nothing under it.
+    if (!note) continue
+    notes.push({ version: (entry?.version ?? '').trim() || fallbackVersion, note })
+  }
+  return notes.length > 0 ? notes : null
+}
+
+/**
+ * The state patch an `update-available` event produces.
+ *
+ * Pulled out of the handler for one reason: the handler itself cannot be
+ * reached from a test. `initAutoUpdater` early-returns unless the app is
+ * packaged and then subscribes to the electron-updater singleton, so the line
+ * that carries the release notes from the provider into the state — the whole
+ * point of the update banner's disclosure — had no coverage at all. Dropping it
+ * left every unit test green and the disclosure permanently absent, which is
+ * indistinguishable from a release that simply had no notes.
+ *
+ * `phase` is decided by the caller, which owns the download-in-flight flag.
+ */
+export function availableStatePatch(
+  info: { version: string; releaseNotes?: RawReleaseNotes },
+  now: number
+): Pick<UpdaterState, 'availableVersion' | 'releaseNotes' | 'lastCheckedAt' | 'checkErrorMessage'> {
+  return {
+    availableVersion: info.version,
+    releaseNotes: normalizeReleaseNotes(info.releaseNotes ?? null, info.version),
+    lastCheckedAt: now,
+    checkErrorMessage: null
+  }
+}
 
 function sendToRenderer(channel: string, ...args: unknown[]): void {
   // Update state is app-level; every window's updater overlay must hear it.
@@ -160,6 +235,11 @@ export function initAutoUpdater(): void {
 
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
+  // Gather EVERY release between the running version and the latest, not just
+  // the newest one's body. A user who skipped two versions is told what all
+  // three change; without this they are shown the top release's notes and
+  // silently miss the rest.
+  autoUpdater.fullChangelog = true
 
   autoUpdater.on('checking-for-update', () => {
     log.info('[updater] Checking for update...')
@@ -172,9 +252,12 @@ export function initAutoUpdater(): void {
   autoUpdater.on('update-available', (info) => {
     log.info(`[updater] Update available: ${info.version}`)
     setState({
-      availableVersion: info.version,
-      lastCheckedAt: Date.now(),
-      checkErrorMessage: null,
+      // Includes the release notes, which this event is the only source of:
+      // built in `availableStatePatch` so the carry-through is testable.
+      ...availableStatePatch(
+        { version: info.version, releaseNotes: info.releaseNotes as RawReleaseNotes },
+        Date.now()
+      ),
       // Never demote an in-flight or finished download back to "available".
       phase: phaseOnAvailable(state.phase, isDownloading)
     })
@@ -185,6 +268,10 @@ export function initAutoUpdater(): void {
     log.info('[updater] App is up to date')
     setState({
       availableVersion: null,
+      // Cleared with the version they describe. Notes outliving their update
+      // would let the banner open onto the changelog of a version that is no
+      // longer on offer.
+      releaseNotes: null,
       lastCheckedAt: Date.now(),
       checkErrorMessage: null,
       phase: phaseOnNotAvailable(state.phase)

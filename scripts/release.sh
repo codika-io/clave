@@ -146,11 +146,19 @@ fi
 # We build the keychain ourselves rather than letting electron-builder do it.
 # Its createKeychain() calls
 #   security set-key-partition-list ... -k "$CSC_KEY_PASSWORD" <keychain>
-# passing the CERTIFICATE's password where security expects the KEYCHAIN's, so
-# the call only ever worked while the freshly created keychain happened to still
-# be unlocked. Runner image macos-26-arm64 20260831.0337 locks it first, and the
-# build dies with a misleading "SecKeychainUnlock: the user name or passphrase
-# you entered is not correct". Still present in 26.16.0, so upgrading is no fix.
+# passing the CERTIFICATE's password where security expects the KEYCHAIN's (the
+# latter being a random string it generates), and fails the build with a
+# misleading "SecKeychainUnlock: the user name or passphrase you entered is not
+# correct" — which reads as a bad CSC_KEY_PASSWORD secret and is not one.
+#
+# This worked in our CI for a long time and then stopped. The last green and
+# first red builds differ only in the GitHub runner image (macos-26-arm64
+# 20260728.0273 -> 20260831.0337): same code, same electron-builder 26.7.0, same
+# credentials. We could not reproduce a passing set-key-partition-list with
+# mismatched passwords locally, so what the old environment did differently is
+# unexplained — the original logs expired before we could dig further. Verified:
+# -k is validated against the keychain, the call is awaited unguarded so a
+# failure is fatal, and the line is unchanged in 26.16.0, so upgrading is no fix.
 #
 # electron-builder skips its own keychain entirely when CSC_LINK is unset and
 # uses CSC_KEYCHAIN as given (macPackager.js: `selected == null` →
@@ -171,8 +179,8 @@ setup_keychain() {
   fi
 
   security create-keychain -p "$keychain_pass" "$KEYCHAIN"
-  # No -t/-u: never auto-lock this keychain for the life of the build. This is
-  # the half electron-builder omits and the reason the new image broke it.
+  # No -t/-u: clears the default lock-on-sleep timeout, so the keychain stays
+  # usable for the whole build.
   security set-keychain-settings "$KEYCHAIN"
   security unlock-keychain -p "$keychain_pass" "$KEYCHAIN"
 

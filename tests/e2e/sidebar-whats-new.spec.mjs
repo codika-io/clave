@@ -10,6 +10,14 @@
  *    has overflow-y: auto" is true of a box that never overflows, and a height
  *    cap alone is true of a box whose text is simply clipped.
  *
+ *    The card is now a headline with the note behind a disclosure, so the
+ *    overflow this guards moved WITH the note into its expanded state — which
+ *    is the only state it was ever about. The note is opened before measuring;
+ *    the assertions underneath are otherwise the ones originally written, since
+ *    the failure they describe is unchanged and expanding is exactly when it
+ *    would come back. `announcement-disclosure.spec.mjs` covers the collapsing
+ *    itself.
+ *
  * 2. The repeating hairline between blocks of the Files and Git trees, in light
  *    mode. Asserted as the composited difference against the ground it is drawn
  *    on, in 0-255 levels, not as a hex: what "too dark" means is how far off the
@@ -96,13 +104,39 @@ export async function run(t) {
     await win.waitForLoadState('domcontentloaded')
     await win.waitForTimeout(4000)
 
+    // Open the disclosure: the note, and the cap this spec is about, live
+    // behind it now.
+    const openedIt = await win.evaluate(() => {
+      const heading = [...document.querySelectorAll('span')].find((s) =>
+        /^New in /.test(s.textContent ?? '')
+      )
+      if (!heading) return false
+      const card = heading.closest('div.rounded-xl')
+      const toggle = [...card.querySelectorAll('button')].find((b) =>
+        /What's changed/.test(b.textContent ?? '')
+      )
+      if (!toggle) return false
+      toggle.click()
+      return true
+    })
+    t.check(
+      'the note can be opened',
+      openedIt === true,
+      'no “What’s changed” disclosure on the card'
+    )
+    await win.waitForTimeout(500)
+
     const banner = await win.evaluate(() => {
       const heading = [...document.querySelectorAll('span')].find((s) =>
         /^New in /.test(s.textContent ?? '')
       )
       if (!heading) return { present: false }
       const card = heading.closest('div.rounded-xl')
-      const body = card?.querySelector('p')
+      // The scrolling box the opened note lives in — not the headline `p`
+      // above it, which is one line by design.
+      const body = [...card.querySelectorAll('div')].find(
+        (d) => getComputedStyle(d).overflowY === 'auto'
+      )
       if (!body) return { present: true, body: false }
       const cs = getComputedStyle(body)
       body.scrollTop = 9999

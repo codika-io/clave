@@ -11,6 +11,13 @@
 
 export type UpdatePhase = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'
 
+/** One release's notes: the version it belongs to, and its body as Markdown. */
+export interface ReleaseNote {
+  version: string
+  /** The release body, Markdown. Empty bodies are dropped before this point. */
+  note: string
+}
+
 export interface DownloadProgress {
   percent: number
   bytesPerSecond: number
@@ -25,6 +32,19 @@ export interface UpdaterState {
   currentVersion: string
   /** The version on the server once a check has found one. */
   availableVersion: string | null
+  /**
+   * What the available version changes, as Markdown, straight from the GitHub
+   * release bodies — the ONLY changelog a running app can have for a version it
+   * has not installed. `help/whats-new.json` is stamped and bundled at build
+   * time, so v1.79 ships no note for v1.80; that note exists only inside the
+   * v1.80 binary. This field is how "what's in the update" can be read BEFORE
+   * taking it.
+   *
+   * With `fullChangelog` on, it is every release between the running version
+   * and the latest, newest first — a user three versions behind sees all three.
+   * Null when no check has found an update, or when the provider gave no body.
+   */
+  releaseNotes: ReleaseNote[] | null
   progress: DownloadProgress
   /** Set only in the `error` phase — a download that failed. */
   errorMessage: string | null

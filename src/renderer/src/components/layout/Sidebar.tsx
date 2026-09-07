@@ -1,4 +1,5 @@
 import { emitTabClosed } from '../../lib/exchange-capture'
+import { requestGroupDissolve } from '../../lib/group-dissolve'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   useSessionStore,
@@ -157,8 +158,6 @@ export function Sidebar() {
   const groups = useSessionStore((s) => s.groups)
   const displayOrder = useSessionStore((s) => s.displayOrder)
   const createGroup = useSessionStore((s) => s.createGroup)
-  const ungroupSessions = useSessionStore((s) => s.ungroupSessions)
-  const deleteGroup = useSessionStore((s) => s.deleteGroup)
   const setGroupColor = useSessionStore((s) => s.setGroupColor)
   const toggleGroupCollapsed = useSessionStore((s) => s.toggleGroupCollapsed)
   const setGroupView = useSessionStore((s) => s.setGroupView)
@@ -637,26 +636,16 @@ export function Sidebar() {
     })
   }, [])
 
-  const handleDeleteGroup = useCallback(
-    async (groupId: string) => {
-      const current = useSessionStore.getState()
-      const group = current.groups.find((g) => g.id === groupId)
-      if (!group) return
-      await Promise.all(
-        group.sessionIds.map(async (sid) => {
-          const session = current.sessions.find((s) => s.id === sid)
-          if (session) emitTabClosed(session, current.groups, 'user', null)
-          try {
-            await window.electronAPI.killSession(sid)
-          } catch {
-            // session may already be dead
-          }
-        })
-      )
-      deleteGroup(groupId)
-    },
-    [deleteGroup]
-  )
+  // Delete and Ungroup both dissolve the group and stop its quick-launch
+  // terminals (lib/group-dissolve.ts owns what dies and when to ask first);
+  // the confirmation, when one is due, is rendered by AppShell, which is
+  // mounted whether or not this sidebar is.
+  const handleDeleteGroup = useCallback((groupId: string) => {
+    void requestGroupDissolve(groupId, 'delete')
+  }, [])
+  const handleUngroup = useCallback((groupId: string) => {
+    void requestGroupDissolve(groupId, 'ungroup')
+  }, [])
 
   // Spawn a group terminal and auto-focus it
   const spawnGroupTerminal = useCallback(
@@ -1169,7 +1158,7 @@ export function Sidebar() {
           {
             label: 'Ungroup',
             icon: <FolderMinusIcon className="w-3.5 h-3.5" />,
-            onClick: () => ungroupSessions(groupId)
+            onClick: () => handleUngroup(groupId)
           },
           {
             label: 'Delete',
@@ -1192,7 +1181,7 @@ export function Sidebar() {
         )
       })
     },
-    [ungroupSessions, handleDeleteGroup, setGroupColor, setGroupView, setActiveGroupView, moveToWindowItems, moveGroupToWindow]
+    [handleUngroup, handleDeleteGroup, setGroupColor, setGroupView, setActiveGroupView, moveToWindowItems, moveGroupToWindow]
   )
 
   const handleFileTabContextMenu = useCallback(

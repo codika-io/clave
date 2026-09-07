@@ -576,3 +576,19 @@ const electronAPI = {
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
+
+/**
+ * `--test-no-activate` again, this time so the RENDERER can see it.
+ *
+ * The main process reads this flag off the app's own command line
+ * (`src/main/test-mode.ts`) and, when it is set, repeats it into the window's
+ * `additionalArguments` — which is what puts it on the argv read here. A
+ * preload's own `process.argv` is the RENDERER process's command line and
+ * carries Chromium's switches, not the app's, so without that repeat this
+ * lookup finds nothing.
+ *
+ * What it gates: the E2E-only seams that must not exist in a shipped app, such
+ * as the updater store handle a spec writes through. Never passed in a build a
+ * user runs, so those seams are absent there.
+ */
+contextBridge.exposeInMainWorld('__claveTestMode', process.argv.includes('--test-no-activate'))

@@ -150,7 +150,17 @@ function createWindow(entry: PersistedWindow): BrowserWindow {
       // A test window is never put on screen (see below); without this
       // Chromium would treat the hidden page as background and stop its
       // timers and animation frames — the driver needs them running.
-      ...(TEST_NO_ACTIVATE ? { backgroundThrottling: false } : {})
+      //
+      // `additionalArguments` is how the flag reaches the PRELOAD. A preload's
+      // own `process.argv` is the renderer process's command line, which
+      // carries Chromium's switches and none of the app's, so reading
+      // `--test-no-activate` there finds nothing. This is the supported way to
+      // put a value on it, and it is the seam the renderer's E2E-only hooks
+      // are gated on — so in a shipped app, where this flag is never passed,
+      // those hooks do not exist.
+      ...(TEST_NO_ACTIVATE
+        ? { backgroundThrottling: false, additionalArguments: ['--test-no-activate'] }
+        : {})
     }
   })
 
