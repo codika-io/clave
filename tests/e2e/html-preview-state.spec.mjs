@@ -31,11 +31,16 @@
  * explicit reload bumps the count), so a counter wired to nothing cannot read as a
  * pass.
  *
- * MUTATION-TESTED. Restoring the bug in `TerminalGrid.tsx` — filtering the file-tab
- * loop back down to the selected ids — turns 5 of these 16 assertions red, and
- * which 5 is the point: "coming back, the preview is there" and "at a usable size"
- * stay GREEN on the broken code. Those are the checks a spec written the obvious
- * way would have made, and they would have shipped the bug.
+ *   3. THE SCROLL OFFSET ITSELF. The app cannot read it, but the test driver can
+ *      evaluate inside the frame, so the user-facing symptom is asserted directly
+ *      on both surfaces (file tab and session view), not inferred from 1 and 2.
+ *
+ * MUTATION-TESTED against the pre-fix source (git checkout HEAD~1 on the layout
+ * folder): 11 of these 28 assertions go red — identity, load count and scroll,
+ * on both surfaces — and which ones STAY green is the point: "coming back, the
+ * preview is there" and "at a usable size" pass on the broken code. Those are the
+ * checks a spec written the obvious way would have made, and they would have
+ * shipped the bug.
  *
  * What this spec does NOT pin down, deliberately, is the `visibility: hidden`
  * choice: swapping it for `display: none` leaves every assertion here green,
@@ -52,6 +57,7 @@ const DIR = userDataDir('html-preview-state')
 const ROOT = '/tmp/clave-e2e-html-preview-state-root'
 const PAGE = `${ROOT}/report.html`
 const OTHER = `${ROOT}/other.txt`
+const VIEW_PAGE = `${ROOT}/dash.html`
 const WS = {
   id: 'eeeeeeee-0000-4000-8000-0000000000a2',
   name: 'Previews',
@@ -107,6 +113,36 @@ function clickSidebarTab(win, id) {
   }, id)
 }
 
+/** The preview frame's own window, reached through the driver. The APP cannot
+ *  look in here (opaque origin) — that is the whole reason the fix preserves
+ *  the document instead of restoring state — but Playwright can, which is what
+ *  lets the scroll offset itself be asserted rather than inferred. */
+function previewFrame(win) {
+  return win.frames().find((f) => f.url().startsWith('clave-preview://')) ?? null
+}
+
+/** Scroll the preview's document and report where it landed. */
+async function scrollPreviewTo(win, y) {
+  const f = previewFrame(win)
+  if (!f) return null
+  return f.evaluate((to) => {
+    window.scrollTo(0, to)
+    return window.scrollY
+  }, y)
+}
+
+/** Where the preview's document is scrolled to now (null = no frame). */
+async function previewScrollY(win) {
+  const f = previewFrame(win)
+  if (!f) return null
+  try {
+    return await f.evaluate(() => window.scrollY)
+  } catch {
+    // A detached frame (the document was destroyed) throws — that IS the bug.
+    return 'detached'
+  }
+}
+
 export async function run(t) {
   mkdirSync(ROOT, { recursive: true })
   // A page tall enough to scroll and holding state of its own, so what it stands
@@ -121,6 +157,10 @@ export async function run(t) {
      </body></html>`
   )
   writeFileSync(OTHER, 'a second tab to switch to\n')
+  writeFileSync(
+    VIEW_PAGE,
+    '<html><body style="margin:0"><div style="height:3000px"><h1>DASH</h1></div></body></html>'
+  )
   seedWorkspaces(DIR, { workspaces: [WS], activeWorkspaceId: WS.id, fresh: true })
   seedTrustedRoots(DIR, [ROOT])
 
@@ -156,6 +196,10 @@ export async function run(t) {
       f.__e2eLoads = 1
     })
 
+    // Scroll the page — the state the report is about — before looking away.
+    const scrolled = await scrollPreviewTo(win, 1500)
+    t.equal('the page scrolls (the fixture is tall enough to)', scrolled, 1500)
+
     // Open a SECOND tab and switch to it — a real switch through the store the
     // sidebar writes, which is what deselects the html tab.
     const openedOther = await callMcp(app, 'openFile', { path: OTHER })
@@ -187,6 +231,85 @@ export async function run(t) {
       (back.width ?? 0) > 100 && (back.height ?? 0) > 100,
       back
     )
+    // THE USER-FACING ASSERTION: the scroll position is where it was left.
+    t.equal('and the scroll offset survived the switch', await previewScrollY(win), 1500)
+
+    // ── The other surface: a session's attached web view ─────────────────────
+    // A view panel used to mount only while it was the active one; now an
+    // opened panel stays mounted and hidden. Same assertions, driven through
+    // the row's dashboard icon and the View/Terminal toggle, as session-view
+    // does.
+    const opened = await callMcp(app, 'openSession', {
+      mode: 'terminal',
+      cwd: ROOT,
+      name: 'viewer'
+    })
+    const sessionId = opened?.sessionId
+    t.check('a session opens to carry a view', typeof sessionId === 'string', opened)
+    await sleep(2500)
+    await callMcp(app, 'setSessionView', { sessionId, url: VIEW_PAGE, title: 'Dash' })
+    await sleep(1000)
+    const openView = () =>
+      win.evaluate(() => {
+        const icon = [
+          ...document.querySelectorAll('[data-sidebar-item-type="session"] span[role="button"]')
+        ].find((s) => s.getAttribute('title') === 'Dash')
+        icon?.click()
+        return !!icon
+      })
+    t.check('the view opens from the row icon', await openView())
+    await sleep(2500)
+
+    // Stamp the VIEW's frame — a different file, so the two frames are told
+    // apart by src, never by which one querySelector happens to find first.
+    const viewFrameState = () =>
+      win.evaluate((needle) => {
+        const f = [...document.querySelectorAll('iframe[src^="clave-preview://"]')].find((x) =>
+          x.getAttribute('src').includes(needle)
+        )
+        if (!f) return { present: false }
+        return { present: true, stamp: f.__e2eStamp ?? null, loads: f.__e2eLoads ?? null }
+      }, 'dash.html')
+    const viewStamped = await win.evaluate((needle) => {
+      const f = [...document.querySelectorAll('iframe[src^="clave-preview://"]')].find((x) =>
+        x.getAttribute('src').includes(needle)
+      )
+      if (!f) return false
+      f.__e2eStamp = 'VIEW'
+      f.__e2eLoads = 1
+      f.addEventListener('load', () => {
+        f.__e2eLoads = (f.__e2eLoads ?? 0) + 1
+      })
+      return true
+    }, 'dash.html')
+    t.check("the session view's frame is rendered and stamped", viewStamped)
+    const viewFrame = win.frames().find((f) => f.url().includes('dash.html'))
+    const viewScrolled = viewFrame
+      ? await viewFrame.evaluate(() => {
+          window.scrollTo(0, 900)
+          return window.scrollY
+        })
+      : null
+    t.equal('the view page scrolls', viewScrolled, 900)
+
+    // Leave the view for the terminal, then come back through the icon.
+    await win.click('.segmented-item:has-text("Terminal")')
+    await sleep(1500)
+    const viewHidden = await viewFrameState()
+    t.check('the view stays mounted behind the terminal', viewHidden.present, viewHidden)
+    t.equal('as the same element', viewHidden.stamp, 'VIEW')
+    t.check('the view reopens from the row icon', await openView())
+    await sleep(1500)
+    const viewBack = await viewFrameState()
+    t.equal('coming back to the view, it is the same element', viewBack.stamp, 'VIEW')
+    t.equal('and it never reloaded', viewBack.loads, 1)
+    let viewScrollBack = null
+    try {
+      viewScrollBack = viewFrame ? await viewFrame.evaluate(() => window.scrollY) : null
+    } catch {
+      viewScrollBack = 'detached'
+    }
+    t.equal("and the view's scroll offset survived", viewScrollBack, 900)
   } finally {
     await app.close()
   }
