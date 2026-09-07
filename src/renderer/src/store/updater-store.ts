@@ -1,7 +1,12 @@
 import { create } from 'zustand'
-import type { DownloadProgress, UpdatePhase, UpdaterState } from '../../../shared/updater-types'
+import type {
+  DownloadProgress,
+  ReleaseNote,
+  UpdatePhase,
+  UpdaterState
+} from '../../../shared/updater-types'
 
-export type { DownloadProgress, UpdatePhase, UpdaterState }
+export type { DownloadProgress, ReleaseNote, UpdatePhase, UpdaterState }
 
 const initialProgress: DownloadProgress = {
   percent: 0,
@@ -65,6 +70,7 @@ const initialState: UpdaterState = {
   phase: 'idle',
   currentVersion: '',
   availableVersion: null,
+  releaseNotes: null,
   progress: initialProgress,
   errorMessage: null,
   checkErrorMessage: null,
@@ -81,7 +87,8 @@ export const useUpdaterStore = create<UpdaterStore>((set, get) => ({
       ...state,
       // A "Later" only silences the version it was given for; a newer one
       // brings the banner back on its own.
-      dismissed: state.availableVersion !== null && getDismissedVersion() === state.availableVersion,
+      dismissed:
+        state.availableVersion !== null && getDismissedVersion() === state.availableVersion,
       // A fresh download attempt clears a previously acknowledged failure.
       errorAcknowledged: state.phase === 'error' ? get().errorAcknowledged : false
     }),
@@ -125,6 +132,31 @@ export const useUpdaterStore = create<UpdaterStore>((set, get) => ({
 
   acknowledgeError: () => set({ errorAcknowledged: true })
 }))
+
+declare global {
+  interface Window {
+    /** Set by the preload from `--test-no-activate`; false in every shipped build. */
+    __claveTestMode?: boolean
+    /**
+     * E2E seam: the updater store, so a spec can put the app into an update
+     * phase. A dev build reports `supported: false` and never reaches
+     * `available`, so the update banner is otherwise unreachable outside a
+     * signed, packaged, genuinely-out-of-date app — which is to say untestable.
+     *
+     * Writing through the STORE rather than faking the DOM is what keeps the
+     * check honest: it is the same seam the main process pushes state into, so
+     * if the shape main sends and the shape the UI reads ever diverge, the
+     * spec goes red instead of passing against a fixture of its own making.
+     *
+     * Gated on the test flag, so this handle does not exist in a user's app.
+     */
+    __claveUpdaterStoreForTests?: typeof useUpdaterStore
+  }
+}
+
+if (typeof window !== 'undefined' && window.__claveTestMode) {
+  window.__claveUpdaterStoreForTests = useUpdaterStore
+}
 
 /**
  * Subscribe once, from the app shell, and pull the current truth immediately.

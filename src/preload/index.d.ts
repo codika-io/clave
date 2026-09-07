@@ -4,10 +4,10 @@ import type {
   MutationScope
 } from '../shared/extensions-types'
 import type { WindowIdentity, Workspace, WorkspaceStateFile } from '../shared/workspace-types'
-import type { DownloadProgress, UpdaterState } from '../shared/updater-types'
+import type { DownloadProgress, ReleaseNote, UpdaterState } from '../shared/updater-types'
 import type { LaunchProfile, LaunchProfilePreferences, LauncherFamily, PiThinkingLevel } from '../shared/agent-launch'
 
-export type { DownloadProgress, UpdaterState, WindowIdentity }
+export type { DownloadProgress, ReleaseNote, UpdaterState, WindowIdentity }
 export type { LaunchProfile, LaunchProfilePreferences, LauncherFamily, PiThinkingLevel }
 
 /** Main's answer to `windowSetWorkspace`. Any window may show any workspace;

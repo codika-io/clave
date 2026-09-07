@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { XMarkIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import { navigateTo } from '../../lib/navigation'
+import { useBannerNote } from './use-banner-note'
 import whatsNewData from '../../help/whats-new.json'
 
 interface WhatsNewEntry {
   version: string
   title: string
   description: string
-  action: { type: string; target: string }
+  /** Absent on entries that announce something with nowhere to navigate to. */
+  action?: { type: string; target: string }
 }
 
 const LAST_SEEN_KEY = 'clave-whats-new-last-seen-version'
@@ -57,11 +59,18 @@ export function WhatsNewBanner(): ReactNode {
   }
 
   function handleTryIt(): void {
-    if (entry?.action.type === 'navigate') {
+    if (entry?.action?.type === 'navigate') {
       navigateTo(entry.action.target)
     }
     dismiss()
   }
+
+  // Above the early return: a hook cannot be called conditionally, and the
+  // banner returns null whenever there is nothing to announce.
+  const { trigger, note } = useBannerNote(
+    <p className="whitespace-pre-line">{entry?.description}</p>,
+    `what's new in ${entry?.version ?? ''}`
+  )
 
   if (!visible || !entry) return null
 
@@ -75,27 +84,36 @@ export function WhatsNewBanner(): ReactNode {
               <span className="text-[12px] font-medium text-text-primary truncate">
                 New in {entry.version}
               </span>
-              <button
-                onClick={dismiss}
-                className="btn-icon btn-icon-xs flex-shrink-0"
-              >
+              <button onClick={dismiss} className="btn-icon btn-icon-xs flex-shrink-0">
                 <XMarkIcon className="w-3 h-3" />
               </button>
             </div>
-            {/* A release note is a changelog, not a line: the entries run to
-                several paragraphs, and unbounded they pushed the session list
-                and the foot panel off the bottom of the sidebar. Capped and
-                scrolled, so a long note reads inside the card instead of
-                growing it. */}
-            <p className="text-[11px] text-text-secondary mt-0.5 leading-relaxed max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line">
-              {entry.title}. {entry.description}
-            </p>
-            <button
-              onClick={handleTryIt}
-              className="text-[11px] text-accent hover:text-accent-hover font-medium mt-1"
-            >
-              Try it
-            </button>
+            {/* The headline at rest. The description underneath it is a
+                changelog, not a line — the entries run to several paragraphs —
+                so it lives behind the disclosure rather than in the card: an
+                announcement should say what changed in one line and let the
+                reader ask for the rest. The cap and the scroll move with it
+                (see BannerNote): unbounded, this block pushed the session list
+                and the foot panel off the bottom of the sidebar. */}
+            <p className="text-[11px] text-text-secondary mt-0.5 leading-relaxed">{entry.title}</p>
+
+            {/* The trigger shares this row with "Try it"; the note does NOT.
+                Inside the row it would be laid out as a flex child beside the
+                chevron — the paragraphs rendered in a narrow column, still
+                capped and still scrolling, so nothing measuring height or
+                overflow would see it. */}
+            <div className="flex items-center gap-3">
+              {trigger}
+              {entry.action && (
+                <button
+                  onClick={handleTryIt}
+                  className="text-[11px] text-accent hover:text-accent-hover font-medium mt-1"
+                >
+                  Try it
+                </button>
+              )}
+            </div>
+            {note}
           </div>
         </div>
       </div>

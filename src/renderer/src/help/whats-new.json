@@ -1,6 +1,11 @@
 [
   {
     "version": "next",
+    "title": "See what an update contains before you take it",
+    "description": "The update card in the sidebar named a version and asked for a download. What was actually in that version, you found out afterwards — the release note ships inside the build it describes, so the copy running on your machine has never held the note for the version it is offering you.\n\nIt now reads the release notes off GitHub as part of the update check, and folds them under a **What's changed** line on the card. If you are several versions behind, every release between yours and the latest is there, newest first. A release published without notes shows no such line at all, rather than one that opens onto nothing.\n\nThe what's-new card underneath it opens the same way, and now stays a single headline until you ask — these notes run to several paragraphs, and it was printing all of them at you unprompted."
+  },
+  {
+    "version": "next",
     "title": "Your own shell starts your agents again",
     "description": "Clave started every agent on macOS through `/bin/zsh`, whatever your login shell was. That looked like a no-op and was not.\n\nmacOS runs `path_helper` on login, and it *reorders* `PATH` — system directories first. A bash user's `.bash_profile` then puts their own entries back in front; their `.zshrc` never runs, because a `-l` zsh reads `.zprofile`, which they do not have. So an agent launched through zsh got the system binary where the same command in your own terminal got yours: a newer `git`, a `pyenv` shim, a `tar` you installed — shadowed, silently, inside every session.\n\nClave now keeps your shell for the launch when it is a POSIX one — `sh`, `bash`, `zsh`, `dash`, `ksh`, `mksh`, `ash` — and diverts only the shells that cannot parse the wrapper it needs to run: `nu`, `fish` and the like. Nothing to set; if your login shell was already zsh, nothing changes."
   },
