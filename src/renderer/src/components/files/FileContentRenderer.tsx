@@ -1,6 +1,6 @@
 import { FileContent } from './FileContent'
 import { useFileEditor } from '../../hooks/use-file-editor'
-import { formatSize, countLines, type FileViewMode } from './file-types'
+import { formatSize, type FileViewMode } from './file-types'
 
 interface FileContentRendererProps {
   editor: ReturnType<typeof useFileEditor>
@@ -17,7 +17,7 @@ export function FileContentRenderer({
   viewMode,
   className
 }: FileContentRendererProps): React.JSX.Element | null {
-  const { fileData, content, saveError, loadError } = editor
+  const { fileData, saveError } = editor
 
   if (!filePath) return null
 
@@ -39,14 +39,6 @@ export function FileContentRenderer({
           </div>
         )}
       </div>
-
-      {/* Footer */}
-      {fileData && !loadError && (
-        <div className="flex items-center justify-between px-4 py-1.5 border-t border-border-subtle text-[10px] text-text-tertiary flex-shrink-0">
-          <span>{formatSize(fileData.size)}</span>
-          {!fileData.binary && <span>{countLines(content)} lines</span>}
-        </div>
-      )}
     </div>
   )
 }

@@ -3,16 +3,12 @@ import { motion } from 'framer-motion'
 import { useSessionStore } from '../../store/session-store'
 import { FileContent } from './FileContent'
 import { ViewModeToggle } from './ViewModeToggle'
+import { FileInfoTooltip } from './FileInfoTooltip'
 import { useFileEditor } from '../../hooks/use-file-editor'
 import { useFileViewMode } from '../../hooks/use-file-view-mode'
 import { useCopyFeedback } from '../../hooks/use-copy-feedback'
 import { cn } from '../../lib/utils'
-import {
-  canOpenExternally as canOpenExternallyExt,
-  formatSize,
-  countLines,
-  HTML_MODES
-} from './file-types'
+import { canOpenExternally as canOpenExternallyExt, formatSize, HTML_MODES } from './file-types'
 import {
   DocumentDuplicateIcon,
   ArrowTopRightOnSquareIcon,
@@ -147,20 +143,22 @@ export function FilePreview(): React.JSX.Element | null {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle flex-shrink-0">
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-text-primary truncate flex items-center gap-1.5">
-              {filename}
-              {isDirty && (
-                <span
-                  className="inline-block w-2 h-2 rounded-full bg-accent flex-shrink-0"
-                  title="Unsaved changes"
-                />
+          <FileInfoTooltip cwd={cwd} filePath={previewFile} fileData={fileData} content={content}>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-text-primary truncate flex items-center gap-1.5">
+                {filename}
+                {isDirty && (
+                  <span
+                    className="inline-block w-2 h-2 rounded-full bg-accent flex-shrink-0"
+                    title="Unsaved changes"
+                  />
+                )}
+              </div>
+              {previewFile !== filename && (
+                <div className="text-xs text-text-tertiary truncate">{previewFile}</div>
               )}
             </div>
-            {previewFile !== filename && (
-              <div className="text-xs text-text-tertiary truncate">{previewFile}</div>
-            )}
-          </div>
+          </FileInfoTooltip>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
           {isMarkdown && <ViewModeToggle mode={viewMode} onChange={setViewMode} />}
@@ -222,14 +220,6 @@ export function FilePreview(): React.JSX.Element | null {
           </div>
         )}
       </div>
-
-      {/* Footer — file info */}
-      {fileData && !loadError && (
-        <div className="flex items-center justify-between px-4 py-1.5 border-t border-border-subtle text-[10px] text-text-tertiary flex-shrink-0">
-          <span>{formatSize(fileData.size)}</span>
-          {!fileData.binary && <span>{countLines(content)} lines</span>}
-        </div>
-      )}
     </motion.div>
   )
 }

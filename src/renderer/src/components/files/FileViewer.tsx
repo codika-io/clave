@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useSessionStore, type FileTab } from '../../store/session-store'
 import { FileContentRenderer } from './FileContentRenderer'
 import { ViewModeToggle } from './ViewModeToggle'
+import { FileInfoTooltip } from './FileInfoTooltip'
 import { HTML_MODES } from './file-types'
 import { useFileEditor } from '../../hooks/use-file-editor'
 import { useFileViewMode } from '../../hooks/use-file-view-mode'
@@ -57,15 +58,17 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
     <div className="flex flex-col h-full bg-surface-0">
       {/* Header bar: name + path, view mode, save state, actions — one row */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border-subtle flex-shrink-0">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <DocumentTextIcon className="w-4 h-4 text-text-tertiary flex-shrink-0" />
-          <span className="text-sm font-medium text-text-primary truncate flex-shrink-0 max-w-[40%]">
-            {fileTab.name}
-          </span>
-          <span className="text-[11px] text-text-tertiary truncate hidden sm:inline flex-1 min-w-0">
-            {fileTab.filePath.replace(/^\/Users\/[^/]+/, '~')}
-          </span>
-        </div>
+        <FileInfoTooltip cwd={cwd} filePath={relativePath} fileData={fileData} content={content}>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <DocumentTextIcon className="w-4 h-4 text-text-tertiary flex-shrink-0" />
+            <span className="text-sm font-medium text-text-primary truncate flex-shrink-0 max-w-[40%]">
+              {fileTab.name}
+            </span>
+            <span className="text-[11px] text-text-tertiary truncate hidden sm:inline flex-1 min-w-0">
+              {fileTab.filePath.replace(/^\/Users\/[^/]+/, '~')}
+            </span>
+          </div>
+        </FileInfoTooltip>
         {isMarkdown && <ViewModeToggle mode={viewMode} onChange={setViewMode} />}
         {isHtml && <ViewModeToggle mode={viewMode} onChange={setViewMode} modes={HTML_MODES} />}
         {canEdit &&
