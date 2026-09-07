@@ -1,6 +1,6 @@
 [
   {
-    "version": "next",
+    "version": "1.84.0",
     "title": "A rendered page keeps its place — and the update card says what it brings",
     "description": "Open an HTML file as a page, scroll into it, switch to another tab and come back: it used to start over — scroll at the top, the in-page tab you had picked closed, a chart's zoom reset. Only the tabs you were looking at were actually kept alive; the others were torn down and rebuilt on return. A dashboard or a workstream page now stays exactly where you left it, whether it is a file tab or a group's web view, the same way a terminal has always survived a switch.\n\nThe update card in the sidebar named a version and asked for a download. What was actually in that version, you found out afterwards — the release note ships inside the build it describes, so the copy running on your machine has never held the note for the version it is offering you. It now reads the release notes off GitHub as part of the update check and folds them under a **What's changed** line on the card; if you are several versions behind, every release between yours and the latest is there, newest first. The what's-new card underneath opens the same way, and stays a single headline until you ask.\n\nAnd deleting a group now stops the quick-launch terminals it carried. It used to leave them running in tmux with no group to belong to, and the next launch adopted each one as a mystery tab. Delete and Ungroup ask first when a terminal is running, and say what they stop."
   },

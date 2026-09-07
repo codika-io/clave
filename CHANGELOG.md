@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.84.0] — 2026-09-07
+
 ### Added
 - **The changelog is readable before you take the update** — the update card in the sidebar named a version and asked for a 220 MB download and a restart, without saying what was in it. It could not: `help/whats-new.json` is stamped at build time and bundled, so the note describing v1.80 exists only inside the v1.80 binary, and the copy running on the machine has never held a note for the version it is offering. The one source a running app does have is the GitHub release bodies, which `electron-updater` already fetches on the availability check and threw away. `fullChangelog` is on, so a user several versions behind gets every release between theirs and the latest, newest first, rendered as markdown under a **What's changed** disclosure on the card. A release published with an empty body normalises to `null` rather than to an empty array, and the disclosure is then absent rather than opening onto blank space.
 
