@@ -99,6 +99,30 @@ function readLedger() {
     })
 }
 
+/** Is a web view actually PAINTED over the main pane? A mounted-but-hidden view
+ *  panel (see PRDCT-2122) is still in the DOM, so this asks what is on top at the
+ *  centre of the pane rather than what merely exists.
+ *
+ *  The guard is the PAIR of calls below, not either alone: the positive one
+ *  ("the group's web view covers the pane") is what proves this helper can still
+ *  see a view that IS on top — delete the grid's `visibility` rule in
+ *  TerminalGrid.tsx, so no view can ever cover the terminal, and it goes red. A
+ *  lone negative assertion would pass just as well on a helper that had quietly
+ *  stopped finding anything. */
+function webViewCoversPane(win) {
+  return win.evaluate(() => {
+    const frame = document.querySelector('iframe, webview')
+    if (!frame) return false
+    const r = frame.getBoundingClientRect()
+    if (r.width < 2 || r.height < 2) return false
+    const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+    for (let el = top; el; el = el.parentElement) {
+      if (el === frame) return true
+    }
+    return false
+  })
+}
+
 export async function run(t) {
   mkdirSync(ROOT, { recursive: true })
   rmSync(TRANSCRIPTS, { recursive: true, force: true })
@@ -475,7 +499,7 @@ export async function run(t) {
     await win.waitForTimeout(350)
     await win.locator('.menu-surface .menu-item', { hasText: 'Show web view' }).click()
     await win.waitForTimeout(500)
-    t.check("the group's web view covers the pane", await win.evaluate(() => !!document.querySelector('iframe, webview')))
+    t.check("the group's web view covers the pane", await webViewCoversPane(win))
     await win.click(`[data-sidebar-item-id="${liveGroupId}"] > button`, { button: 'right' })
     await win.waitForTimeout(350)
     await win.locator('.menu-surface .menu-item', { hasText: 'History' }).click()
@@ -489,7 +513,13 @@ export async function run(t) {
     t.check('as a Claude session, without skipping permissions', spawns[0]?.claudeMode === true && spawns[0]?.dangerousMode === false, spawns[0])
     t.equal("in the conversation's own cwd", spawns[0]?.cwd, ROOT)
     t.check('the dialog closed on the click', await win.evaluate(() => !document.querySelector('[data-history-dialog]')))
-    t.check('and the resume revealed the terminal: the web view no longer covers the pane', await win.evaluate(() => !document.querySelector('iframe, webview')))
+    // "Is the board still in the way?" is a HIT TEST, not a DOM query. Since
+    // PRDCT-2122 a view that has been opened stays MOUNTED and is hidden with
+    // `visibility` when something else takes the pane — so its page survives a
+    // switch away instead of reloading — which means querySelector('iframe')
+    // now answers "was one ever opened", not "is one covering the terminal".
+    // What this assertion has always meant is the latter.
+    t.check('and the resume revealed the terminal: the web view no longer covers the pane', !(await webViewCoversPane(win)))
     const placed = await until(async () => {
       const list = await callMcp(app, 'list', {})
       const s = list.sessions.find((x) => x.groupId === liveGroupId && x.name === 'Export button')

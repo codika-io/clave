@@ -18,6 +18,10 @@ export interface WebViewPaneProps {
   onBack: () => void
   /** The start action shown when the probe says down; null = no way to start. */
   start: { label: string; run: () => Promise<void> } | null
+  /** False while the pane is mounted but hidden behind whatever the user is
+   *  actually looking at. The frame stays alive (that is the whole point of
+   *  keeping it mounted), but a pane nobody can see stops polling its server. */
+  active?: boolean
 }
 
 /**
@@ -29,7 +33,14 @@ export interface WebViewPaneProps {
  * wired to whatever serves it, not a broken frame. Extracted from the group
  * view panel so session views share one probe/header/frame implementation.
  */
-export function WebViewPane({ url, title, backLabel, onBack, start }: WebViewPaneProps): React.JSX.Element {
+export function WebViewPane({
+  url,
+  title,
+  backLabel,
+  onBack,
+  start,
+  active = true
+}: WebViewPaneProps): React.JSX.Element {
   const isFile = url.startsWith('/')
   const [probe, setProbe] = useState<ProbeState>(isFile ? 'up' : 'unknown')
   const [nonce, setNonce] = useState(0)
@@ -63,9 +74,11 @@ export function WebViewPane({ url, title, backLabel, onBack, start }: WebViewPan
   }, [isFile, url])
 
   // Probe on mount and keep the dot honest while the app is focused; the
-  // starting window polls faster so a booting server appears promptly.
+  // starting window polls faster so a booting server appears promptly. A hidden
+  // pane polls nothing and picks it up again on the probe this effect runs when
+  // it comes back — the frame it is holding open costs nothing to leave alone.
   useEffect(() => {
-    if (isFile) return
+    if (isFile || !active) return
     const initialProbe = setTimeout(() => void probeNow(), 0)
     const interval = setInterval(() => {
       if (probeRef.current !== 'starting' && !document.hasFocus()) return
@@ -82,7 +95,7 @@ export function WebViewPane({ url, title, backLabel, onBack, start }: WebViewPan
       clearInterval(fastInterval)
       window.removeEventListener('focus', onFocus)
     }
-  }, [isFile, probeNow])
+  }, [isFile, active, probeNow])
 
   const handleStart = useCallback(() => {
     if (!start) return

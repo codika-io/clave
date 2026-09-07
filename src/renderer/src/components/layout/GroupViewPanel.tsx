@@ -8,7 +8,14 @@ import { WebViewPane } from './WebViewPane'
  * the start action runs the group terminal that serves the page, and "back"
  * returns to the mosaic. The probe/header/frame machinery lives in the pane.
  */
-export function GroupViewPanel({ group }: { group: SessionGroup }): React.JSX.Element | null {
+export function GroupViewPanel({
+  group,
+  active = true
+}: {
+  group: SessionGroup
+  /** False while this pane is mounted but hidden behind another. */
+  active?: boolean
+}): React.JSX.Element | null {
   const setActiveGroupView = useSessionStore((s) => s.setActiveGroupView)
   const view = group.view
   if (!view) return null
@@ -22,6 +29,7 @@ export function GroupViewPanel({ group }: { group: SessionGroup }): React.JSX.El
       url={view.url}
       title={view.title || group.name}
       backLabel="Sessions"
+      active={active}
       onBack={() => setActiveGroupView(null)}
       start={
         linkedTerminal

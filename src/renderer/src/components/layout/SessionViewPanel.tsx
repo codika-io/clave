@@ -10,7 +10,14 @@ import { WebViewPane } from './WebViewPane'
  * its server: after a restart the probe finds the page down and one click
  * brings it back.
  */
-export function SessionViewPanel({ session }: { session: Session }): React.JSX.Element | null {
+export function SessionViewPanel({
+  session,
+  active = true
+}: {
+  session: Session
+  /** False while this pane is mounted but hidden behind another. */
+  active?: boolean
+}): React.JSX.Element | null {
   const setActiveSessionView = useSessionStore((s) => s.setActiveSessionView)
   const view = session.view
   if (!view) return null
@@ -20,6 +27,7 @@ export function SessionViewPanel({ session }: { session: Session }): React.JSX.E
       url={view.url}
       title={view.title || session.name}
       backLabel="Terminal"
+      active={active}
       onBack={() => setActiveSessionView(null)}
       start={
         view.command
