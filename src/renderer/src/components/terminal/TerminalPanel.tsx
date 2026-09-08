@@ -9,7 +9,7 @@ interface TerminalPanelProps {
   sessionId: string
 }
 
-export function TerminalPanel({ sessionId }: TerminalPanelProps) {
+export function TerminalPanel({ sessionId }: TerminalPanelProps): React.JSX.Element {
   const { containerRef, focus } = useTerminal(sessionId)
   const focusedSessionId = useSessionStore((s) => s.focusedSessionId)
   const setFocusedSession = useSessionStore((s) => s.setFocusedSession)
@@ -19,7 +19,9 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
   useEffect(() => {
     if (isFocused) {
       // Small delay lets xterm fully initialize on first mount
-      const timer = setTimeout(() => focus(), 50)
+      const timer = setTimeout(() => {
+        if (!document.activeElement?.closest('[data-testid="linked-document-panel"]')) focus()
+      }, 50)
       return () => clearTimeout(timer)
     }
     return undefined
@@ -27,8 +29,11 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 
   // Auto-focus xterm when the window regains focus (Cmd+Tab, clicking from another app)
   useEffect(() => {
-    const handleWindowFocus = () => {
-      if (useSessionStore.getState().focusedSessionId === sessionId) {
+    const handleWindowFocus = (): void => {
+      if (
+        useSessionStore.getState().focusedSessionId === sessionId &&
+        !document.activeElement?.closest('[data-testid="linked-document-panel"]')
+      ) {
         focus()
       }
     }
@@ -45,10 +50,7 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 
   return (
     <div
-      className={cn(
-        'flex flex-col h-full bg-surface-0 transition-shadow',
-        ''
-      )}
+      className={cn('flex flex-col h-full bg-surface-0 transition-shadow', '')}
       onMouseDown={handleClick}
     >
       <TerminalHeader sessionId={sessionId} />

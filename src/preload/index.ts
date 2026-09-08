@@ -210,6 +210,18 @@ const electronAPI = {
   onSecretRequestsChanged: (callback: (requests: unknown[]) => void) =>
     createIpcListener<[unknown[]]>('secret:requests-changed', callback),
 
+  linkedDocuments: {
+    list: () => ipcRenderer.invoke('linked-documents:list'),
+    open: (sessionId: string, input: unknown) =>
+      ipcRenderer.invoke('linked-documents:open', sessionId, input),
+    update: (id: string, revision: number, input: unknown) =>
+      ipcRenderer.invoke('linked-documents:update', id, revision, input),
+    openAttachment: (id: string, attachmentId: string) =>
+      ipcRenderer.invoke('linked-documents:open-attachment', id, attachmentId),
+    chooseFiles: (signature?: boolean) =>
+      ipcRenderer.invoke('linked-documents:choose-files', signature),
+    onChanged: (callback: () => void) => createIpcListener<[]>('linked-documents:changed', callback)
+  },
   copyOfferList: () => ipcRenderer.invoke('copy-offer:list'),
 
   copyOfferCopy: (id: string) => ipcRenderer.invoke('copy-offer:copy', id),
@@ -418,8 +430,7 @@ const electronAPI = {
   gitGenerateCommitMessage: (cwd: string) => ipcRenderer.invoke('git:generate-commit-message', cwd),
   gitMagicSync: (repoPaths: string[]) => ipcRenderer.invoke('git:magic-sync', repoPaths),
   gitMagicPull: (repoPaths: string[]) => ipcRenderer.invoke('git:magic-pull', repoPaths),
-  gitRefreshRemotes: (repoPaths: string[]) =>
-    ipcRenderer.invoke('git:refresh-remotes', repoPaths),
+  gitRefreshRemotes: (repoPaths: string[]) => ipcRenderer.invoke('git:refresh-remotes', repoPaths),
   // One channel for both batch ops — the payload's `op` says which.
   onGitBatchProgress: (callback: (progress: GitBatchProgress) => void) =>
     createIpcListener<[GitBatchProgress]>('git:batch-progress', callback),

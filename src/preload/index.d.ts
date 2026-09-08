@@ -1,11 +1,13 @@
-import type {
-  ExtensionsInventory,
-  MutationResult,
-  MutationScope
-} from '../shared/extensions-types'
+import type { LinkedDocumentsAPI } from '../shared/linked-documents'
+import type { ExtensionsInventory, MutationResult, MutationScope } from '../shared/extensions-types'
 import type { WindowIdentity, Workspace, WorkspaceStateFile } from '../shared/workspace-types'
 import type { DownloadProgress, ReleaseNote, UpdaterState } from '../shared/updater-types'
-import type { LaunchProfile, LaunchProfilePreferences, LauncherFamily, PiThinkingLevel } from '../shared/agent-launch'
+import type {
+  LaunchProfile,
+  LaunchProfilePreferences,
+  LauncherFamily,
+  PiThinkingLevel
+} from '../shared/agent-launch'
 
 export type { DownloadProgress, ReleaseNote, UpdaterState, WindowIdentity }
 export type { LaunchProfile, LaunchProfilePreferences, LauncherFamily, PiThinkingLevel }
@@ -17,9 +19,7 @@ export type SetWorkspaceResult =
   | { ok: false; reason: 'unknown-workspace' | 'no-window' }
 
 /** Main's answer to a state write (layout, pins). */
-export type WriteResult =
-  | { ok: true }
-  | { ok: false; reason: 'invalid-key' | 'no-window' }
+export type WriteResult = { ok: true } | { ok: false; reason: 'invalid-key' | 'no-window' }
 
 export interface HistoryLedgerRow {
   v: 1
@@ -204,7 +204,16 @@ export interface ClaveFileWriteData {
     prompt?: string
     rootSession?: boolean
   }[]
-  terminals?: { command: string; commandMode: 'prefill' | 'auto'; color: string; icon?: string; cwd?: string | null; autoLaunchLocalhost?: boolean; persistent?: boolean; serverUrl?: string }[]
+  terminals?: {
+    command: string
+    commandMode: 'prefill' | 'auto'
+    color: string
+    icon?: string
+    cwd?: string | null
+    autoLaunchLocalhost?: boolean
+    persistent?: boolean
+    serverUrl?: string
+  }[]
   groups?: Array<{
     name: string
     cwd: string | null
@@ -435,7 +444,6 @@ export interface MagicPullResult {
   error: string | null
 }
 
-
 export interface ElectronAPI {
   /** `process.platform` of the main process. The renderer reads it only to
    *  decide whether to hold room for window buttons drawn inside our own
@@ -511,7 +519,10 @@ export interface ElectronAPI {
   onSessionExit: (id: string, callback: (exitCode: number) => void) => () => void
   onSessionAutoTitle: (sessionId: string, callback: (title: string) => void) => () => void
   onPlanDetected: (sessionId: string, callback: (planPath: string) => void) => () => void
-  onClearDetected: (sessionId: string, callback: (newClaudeSessionId: string | null) => void) => () => void
+  onClearDetected: (
+    sessionId: string,
+    callback: (newClaudeSessionId: string | null) => void
+  ) => () => void
   onAgentState: (sessionId: string, callback: (state: string) => void) => () => void
   onMcpCommand: (
     callback: (msg: { requestId: string; command: string; payload: unknown }) => void
@@ -586,6 +597,7 @@ export interface ElectronAPI {
   secretSubmit: (id: string, secret: string) => Promise<SecretRequestView>
   secretDismiss: (id: string) => Promise<SecretRequestView>
   onSecretRequestsChanged: (callback: (requests: SecretRequestView[]) => void) => () => void
+  linkedDocuments: LinkedDocumentsAPI
   copyOfferList: () => Promise<CopyOfferView[]>
   copyOfferCopy: (id: string) => Promise<CopyOfferView>
   copyOfferDismiss: (id: string) => Promise<void>
@@ -701,7 +713,11 @@ export interface ElectronAPI {
   gitOutgoingCommits: (cwd: string) => Promise<GitLogEntry[]>
   gitIncomingCommits: (cwd: string) => Promise<GitLogEntry[]>
   gitRangeFiles: (cwd: string, direction: 'incoming' | 'outgoing') => Promise<GitCommitFileStatus[]>
-  gitRangeDiff: (cwd: string, direction: 'incoming' | 'outgoing', filePath: string) => Promise<string>
+  gitRangeDiff: (
+    cwd: string,
+    direction: 'incoming' | 'outgoing',
+    filePath: string
+  ) => Promise<string>
   gitCommitFiles: (cwd: string, hash: string) => Promise<GitCommitFileStatus[]>
   gitCommitDiff: (cwd: string, hash: string, filePath: string) => Promise<string>
   gitGenerateCommitMessage: (cwd: string) => Promise<string>
