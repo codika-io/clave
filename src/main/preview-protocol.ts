@@ -2,6 +2,7 @@ import { protocol } from 'electron'
 import { randomBytes } from 'crypto'
 import * as path from 'path'
 import * as fs from 'fs'
+import { previewContentType } from './preview-content-type'
 
 /**
  * clave-preview:// — serves a registered HTML file and its sibling assets to
@@ -17,37 +18,6 @@ import * as fs from 'fs'
 
 const ROOT_BY_TOKEN = new Map<string, string>()
 const TOKEN_BY_FILE = new Map<string, string>()
-
-const MIME_BY_EXT: Record<string, string> = {
-  html: 'text/html',
-  htm: 'text/html',
-  css: 'text/css',
-  js: 'text/javascript',
-  mjs: 'text/javascript',
-  json: 'application/json',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  svg: 'image/svg+xml',
-  webp: 'image/webp',
-  ico: 'image/x-icon',
-  avif: 'image/avif',
-  woff: 'font/woff',
-  woff2: 'font/woff2',
-  ttf: 'font/ttf',
-  otf: 'font/otf',
-  mp4: 'video/mp4',
-  webm: 'video/webm',
-  mp3: 'audio/mpeg',
-  wav: 'audio/wav',
-  pdf: 'application/pdf',
-  txt: 'text/plain',
-  md: 'text/plain',
-  xml: 'application/xml',
-  map: 'application/json',
-  wasm: 'application/wasm'
-}
 
 /** MUST run before app ready — grants the scheme URL semantics (host + relative
  *  resolution) and fetch()-ability from the sandboxed preview frames. */
@@ -115,7 +85,9 @@ export function installPreviewProtocol(): void {
       return new Response(data, {
         status: 200,
         headers: {
-          'Content-Type': MIME_BY_EXT[ext] ?? 'application/octet-stream',
+          // MIME by extension; text types get `charset=utf-8` unless the file
+          // declares its own encoding or is not UTF-8 (preview-content-type.ts).
+          'Content-Type': previewContentType(ext, data),
           // Opaque-origin frames (sandbox without allow-same-origin) fetch
           // their assets cross-origin; the wildcard keeps those requests alive.
           'Access-Control-Allow-Origin': '*',
