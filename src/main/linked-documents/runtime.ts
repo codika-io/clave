@@ -16,6 +16,13 @@ export function registerLinkedDocumentHandlers(): void {
     if (!window || windowRegistry.getWindowForSession(sessionId)?.id !== window.id)
       throw new Error('Session belongs to another window')
   }
+  ipcMain.handle('linked-documents:get-default-signature', () =>
+    linkedDocuments().getDefaultSignature()
+  )
+  ipcMain.handle('linked-documents:set-default-signature', (_event, path: string) => {
+    if (typeof path !== 'string') throw new Error('Expected signature file path')
+    return linkedDocuments().setDefaultSignature(path)
+  })
   ipcMain.handle('linked-documents:list', (event) =>
     linkedDocuments()
       .list()

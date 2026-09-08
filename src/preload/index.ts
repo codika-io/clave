@@ -211,6 +211,9 @@ const electronAPI = {
     createIpcListener<[unknown[]]>('secret:requests-changed', callback),
 
   linkedDocuments: {
+    getDefaultSignature: () => ipcRenderer.invoke('linked-documents:get-default-signature'),
+    setDefaultSignature: (path: string) =>
+      ipcRenderer.invoke('linked-documents:set-default-signature', path),
     list: () => ipcRenderer.invoke('linked-documents:list'),
     open: (sessionId: string, input: unknown) =>
       ipcRenderer.invoke('linked-documents:open', sessionId, input),

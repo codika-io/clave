@@ -278,3 +278,85 @@ describe('linked documents boundaries', () => {
     ).toBe('unknown')
   })
 })
+
+describe('default signature snapshots', () => {
+  it('persists a file pointer, stages new drafts, and keeps existing snapshots after file/preference changes', async () => {
+    const { root, store } = fixture()
+    const path = join(root, 'signature.html')
+    writeFileSync(path, '<p>First signature</p>')
+    writeFileSync(join(root, 'signature.txt'), 'Text twin')
+    await store.setDefaultSignature(path)
+    const reopened = new LinkedDocumentStore(join(root, 'store'))
+    expect(reopened.getDefaultSignature()).toEqual({ path, textPath: join(root, 'signature.txt') })
+    const first = await reopened.open('first', { email: { ...email(), signatureHtml: '' } })
+    expect(first.signatureMode).toBe('default')
+    expect(first.email!.signatureHtml).toContain('First signature')
+    expect(first.email!.signatureText).toBe('Text twin')
+    writeFileSync(path, '<p>Second signature</p>')
+    const second = await reopened.open('second', { email: { ...email(), signatureHtml: '' } })
+    expect(second.email!.signatureHtml).toContain('Second signature')
+    expect(reopened.get(first.id).email!.signatureHtml).toContain('First signature')
+    const other = join(root, 'other.html')
+    writeFileSync(other, '<p>Other signature</p>')
+    await reopened.setDefaultSignature(other)
+    expect(reopened.get(second.id).email!.signatureHtml).toContain('Second signature')
+    const applied = await reopened.update(first.id, first.revision, { signatureMode: 'default' })
+    expect(applied.email).toEqual({
+      ...first.email,
+      signatureHtml: '<p>Other signature</p>',
+      signatureText: ''
+    })
+    expect(applied.revision).toBe(first.revision + 1)
+    await expect(
+      reopened.update(first.id, first.revision, { signatureMode: 'none' })
+    ).rejects.toThrow('Revision conflict')
+    const none = await reopened.open('none', { email: email(), signatureMode: 'none' })
+    expect(none.email!.signatureHtml).toBe('')
+    const custom = await reopened.open('custom', { email: email() })
+    expect(custom.signatureMode).toBe('custom')
+    expect(custom.email!.signatureHtml).toBe(email().signatureHtml)
+    const without = await reopened.update(custom.id, custom.revision, { signatureMode: 'none' })
+    const restored = await reopened.update(custom.id, without.revision, { signatureMode: 'custom' })
+    expect(restored.email!.signatureHtml).toBe(custom.email!.signatureHtml)
+  })
+  it('keeps a missing default visible and blocks prepare until explicitly recovered', async () => {
+    const { root, store } = fixture()
+    const path = join(root, 'signature.html')
+    writeFileSync(path, '<p>Default</p>')
+    await store.setDefaultSignature(path)
+    rmSync(path)
+    const draft = await store.open('missing', { email: { ...email(), signatureHtml: '' } })
+    expect(draft.signatureError).toContain('Default signature could not be loaded')
+    await expect(store.prepare(draft.id, draft.revision, 'missing')).rejects.toThrow(
+      'Default signature'
+    )
+    await expect(
+      store.update(draft.id, draft.revision, { signatureMode: 'default' })
+    ).rejects.toThrow('Default signature')
+    expect(store.get(draft.id).revision).toBe(draft.revision)
+    const recovered = await store.update(draft.id, draft.revision, { signatureMode: 'none' })
+    expect(recovered.signatureError).toBeUndefined()
+    expect(recovered.email!.bodyHtml).toBe(draft.email!.bodyHtml)
+    await expect(
+      store.prepare(recovered.id, recovered.revision, 'missing')
+    ).resolves.toHaveProperty('raw')
+    writeFileSync(path, '<script>unsafe</script>')
+    await expect(store.setDefaultSignature(path)).rejects.toThrow()
+    expect(store.getDefaultSignature()!.path).toBe(path)
+  })
+})
+
+it('rejects contradictory signature choices without mutating draft or preference', async () => {
+  const { root, store } = fixture()
+  const path = join(root, 'signature.html')
+  writeFileSync(path, '<p>Signature</p>')
+  await expect(
+    store.open('one', { email: email(), signaturePath: path, signatureMode: 'none' })
+  ).rejects.toThrow('Choose signatureMode or signaturePath')
+  const draft = await store.open('one', { email: email() })
+  await expect(
+    store.update(draft.id, draft.revision, { signaturePath: path, signatureMode: 'none' })
+  ).rejects.toThrow('Choose signatureMode or signaturePath')
+  expect(store.get(draft.id)).toEqual(draft)
+  expect(store.getDefaultSignature()).toBeNull()
+})

@@ -190,6 +190,10 @@ export async function run(t) {
     )
 
     if (process.env.CLAVE_LINKED_CAPTURE) await chooseTheme('Light')
+    await win.evaluate(
+      (path) => window.electronAPI.linkedDocuments.setDefaultSignature(path),
+      `${ROOT}/signature.html`
+    )
     const email = await client.call('clave_open_linked_document', {
       email: {
         from: 'sender@example.test',
@@ -197,11 +201,51 @@ export async function run(t) {
         subject: 'Synthetic email',
         bodyHtml: '<p>Hello reader.</p>'
       },
-      attachments: [`${ROOT}/attachment.txt`],
-      signaturePath: `${ROOT}/signature.html`
+      attachments: [`${ROOT}/attachment.txt`]
     })
     t.check('structured email opens with signature and attachments', !toolErrored(email), email)
     const emailDoc = toolPayload(email)
+    t.equal('fresh MCP email applies profile default', emailDoc.signatureMode, 'default')
+    await win.getByLabel('Signature choice').selectOption('none')
+    const optedOut = toolPayload(await client.call('clave_linked_document', { action: 'read' }))
+    t.equal('composer can opt out of default', optedOut.email.signatureHtml, '')
+    await win.getByLabel('Signature choice').selectOption('default')
+    const reapplied = toolPayload(await client.call('clave_linked_document', { action: 'read' }))
+    t.check(
+      'applying default preserves body recipients and attachment',
+      reapplied.email.bodyHtml === emailDoc.email.bodyHtml &&
+        reapplied.email.to === emailDoc.email.to &&
+        reapplied.attachments[0].sha256 === emailDoc.attachments[0].sha256
+    )
+    await app.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
+    }, `${ROOT}/signature.html`)
+    await win.getByRole('button', { name: 'Change default', exact: true }).click()
+    await win.getByLabel('Subject', { exact: true }).fill('Subject while applying default')
+    const duringDefault = toolPayload(
+      await client.call('clave_linked_document', { action: 'read' })
+    )
+    t.equal(
+      'editing while picker applies default keeps final subject',
+      duringDefault.email.subject,
+      'Subject while applying default'
+    )
+    t.check(
+      'editing while picker applies default retains staged signature',
+      duringDefault.email.signatureHtml.includes('Example team')
+    )
+    t.equal(
+      'optional copy recipients start collapsed',
+      await win.getByLabel('Cc', { exact: true }).count(),
+      0
+    )
+    await win.getByRole('button', { name: 'Cc / Bcc' }).click()
+    await win.getByLabel('Cc', { exact: true }).fill('copy@example.test')
+    await win.getByRole('button', { name: 'Cc / Bcc' }).click()
+    t.check(
+      'nonempty Cc remains visible when disclosure collapses',
+      await win.getByLabel('Cc', { exact: true }).isVisible()
+    )
     rmSync(`${ROOT}/attachment.txt`)
     rmSync(`${ROOT}/signature.html`)
     await win.getByLabel('Subject', { exact: true }).fill('Final subject')
@@ -312,6 +356,16 @@ export async function run(t) {
       'restart preserves exact edited subject',
       restored.email.subject,
       'Unsent revision after delivery'
+    )
+    t.equal(
+      'default file pointer survives restart',
+      (await win.evaluate(() => window.electronAPI.linkedDocuments.getDefaultSignature())).path,
+      `${ROOT}/signature.html`
+    )
+    t.equal(
+      'restart preserves signature snapshot despite deleted default source',
+      restored.email.signatureHtml,
+      final.email.signatureHtml
     )
     t.equal('restart preserves delivery revision', restored.delivery.status, 'sent')
     await callMcp(app, 'focus', { sessionId: agent.sessionId })

@@ -91,3 +91,10 @@ npm run test:e2e -- html-preview-state
 ```
 
 The Playwright suite drives real Electron IPC and authenticated MCP, substitutes Gmail fetch in the isolated test instance, and asserts byte-for-byte package transport. It never uses live email credentials. The existing repository-wide lint has baseline errors; this feature's changed/new files are checked separately and compared against the scope base.
+
+
+Default signatures are stored as an HTML file pointer in the current app profile. In the composer, **Set default** / **Change default** chooses a file, applies a staged copy to this email and uses the file for future drafts. An adjacent `.txt` twin supplies the plain-text signature when present. Existing drafts retain their staged copies when the source file or default preference changes.
+
+The **Signature choice** menu applies the latest default explicitly, removes the signature for this email, or restores this email's custom signature. Import HTML stages a custom signature for only this draft. A missing or invalid default shows a recoverable error and prevents preparation until you choose a valid file or No signature. Body, recipients and attachments remain intact.
+
+Agents can pass `signatureMode: "none"` when opening an email to opt out, or `signatureMode: "default"` to request the configured default explicitly. Fresh emails without custom signature content/path use the default automatically. Updates accept `signatureMode: "default" | "none" | "custom"`; `custom` restores a previously staged custom signature. Do not combine `signatureMode` with `signaturePath`. Optional Cc/Bcc controls expand from the composer; populated copy fields stay visible.

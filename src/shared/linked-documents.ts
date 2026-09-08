@@ -45,6 +45,9 @@ export interface LinkedDocument {
   sourceHash?: string
   conflict?: string
   email?: LinkedEmail
+  signatureMode?: 'default' | 'custom' | 'none'
+  signatureError?: string
+  customSignature?: { html: string; text: string }
   attachments: LinkedAttachment[]
   hidden: boolean
   split: number
@@ -61,9 +64,11 @@ export const linkedOpenSchema = z
     email: emailSchema.optional(),
     attachments: z.array(z.string()).max(30).optional(),
     signaturePath: z.string().optional(),
+    signatureMode: z.enum(['default', 'none']).optional(),
     signatureTextPath: z.string().optional()
   })
   .strict()
+  .refine((v) => !(v.signatureMode && v.signaturePath), 'Choose signatureMode or signaturePath')
   .refine((v) => Boolean(v.path) !== Boolean(v.email), 'Supply exactly one of path or email')
 export type LinkedOpen = z.infer<typeof linkedOpenSchema>
 export const linkedUpdateSchema = z
@@ -76,10 +81,12 @@ export const linkedUpdateSchema = z
     addAttachments: z.array(z.string()).max(30).optional(),
     removeAttachments: z.array(z.string()).optional(),
     signaturePath: z.string().optional(),
+    signatureMode: z.enum(['default', 'none', 'custom']).optional(),
     signatureTextPath: z.string().optional(),
     reloadExternal: z.boolean().optional()
   })
   .strict()
+  .refine((v) => !(v.signatureMode && v.signaturePath), 'Choose signatureMode or signaturePath')
 export type LinkedUpdate = z.infer<typeof linkedUpdateSchema>
 export interface PreparedEmail {
   id: string
@@ -91,7 +98,14 @@ export interface PreparedEmail {
   threadId?: string
   messageId: string
 }
+export interface DefaultSignature {
+  path: string
+  textPath?: string
+}
 export interface LinkedDocumentsAPI {
+  getDefaultSignature: () => Promise<DefaultSignature | null>
+  setDefaultSignature: (path: string) => Promise<DefaultSignature>
+
   list: () => Promise<LinkedDocument[]>
   open: (sessionId: string, input: LinkedOpen) => Promise<LinkedDocument>
   update: (id: string, revision: number, input: LinkedUpdate) => Promise<LinkedDocument>

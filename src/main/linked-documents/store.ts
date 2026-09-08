@@ -5,6 +5,7 @@ import {
   linkedOpenSchema,
   linkedUpdateSchema,
   type LinkedDocument,
+  type DefaultSignature,
   type LinkedDelivery,
   type LinkedOpen,
   type LinkedUpdate,
@@ -111,6 +112,35 @@ export class LinkedDocumentStore {
       doc.email.signatureText = textPath ? this.readText(textPath) : ''
     }
   }
+  getDefaultSignature(): DefaultSignature | null {
+    const file = join(this.root, 'preferences.json')
+    return existsSync(file)
+      ? (JSON.parse(readFileSync(file, 'utf8')).defaultSignature ?? null)
+      : null
+  }
+  async setDefaultSignature(path: string): Promise<DefaultSignature> {
+    const abs = this.resolveFile(path)
+    await importSignature(abs)
+    const twin = abs.replace(/\.html?$/i, '.txt')
+    const value = { path: abs, ...(twin !== abs && existsSync(twin) ? { textPath: twin } : {}) }
+    if (value.textPath) this.readText(value.textPath)
+    this.write(join(this.root, 'preferences.json'), { defaultSignature: value })
+    this.changed()
+    return value
+  }
+  private async defaultSignature(): Promise<{ html: string; text: string }> {
+    const pointer = this.getDefaultSignature()
+    if (!pointer)
+      throw new Error('No default signature set. Choose an HTML file or select No signature.')
+    try {
+      const html = await importSignature(this.resolveFile(pointer.path))
+      return { html, text: pointer.textPath ? this.readText(pointer.textPath) : '' }
+    } catch (error) {
+      throw new Error(
+        `Default signature could not be loaded. Change the default file or select No signature. ${String(error)}`
+      )
+    }
+  }
   async open(sessionId: string, raw: LinkedOpen): Promise<LinkedDocument> {
     if (!sessionId) throw new Error('Calling session is required')
     const input = linkedOpenSchema.parse(raw)
@@ -141,11 +171,34 @@ export class LinkedDocumentStore {
       scroll: 0
     }
     if (doc.email) {
+      doc.signatureMode = input.signaturePath || doc.email.signatureHtml ? 'custom' : 'none'
+      const useDefault =
+        input.signatureMode === 'default' ||
+        (input.signatureMode !== 'none' &&
+          !input.signaturePath &&
+          !input.email?.signatureHtml &&
+          !!this.getDefaultSignature())
+      if (useDefault) {
+        doc.signatureMode = 'default'
+        try {
+          const staged = await this.defaultSignature()
+          doc.email.signatureHtml = staged.html
+          doc.email.signatureText = staged.text
+        } catch (error) {
+          doc.signatureError = String(error)
+        }
+      } else if (input.signatureMode === 'none') {
+        doc.signatureMode = 'none'
+        doc.email.signatureHtml = ''
+        doc.email.signatureText = ''
+      }
       validateEmailHtml(doc.email.bodyHtml)
       validateEmailHtml(doc.email.signatureHtml)
       if (input.signaturePath) this.signature(doc, signature, input.signatureTextPath)
+      if (doc.signatureMode === 'custom')
+        doc.customSignature = { html: doc.email.signatureHtml, text: doc.email.signatureText }
       this.attachments(doc, input.attachments ?? [])
-    } else if (input.attachments?.length || input.signaturePath)
+    } else if (input.attachments?.length || input.signaturePath || input.signatureMode)
       throw new Error('Attachments and signatures require an email')
     this.write(this.file(doc.id), doc)
     const index = this.index()
@@ -165,6 +218,8 @@ export class LinkedDocumentStore {
     const signature = input.signaturePath
       ? await importSignature(this.resolveFile(input.signaturePath))
       : undefined
+    const defaultSignature =
+      input.signatureMode === 'default' ? await this.defaultSignature() : undefined
     const doc = this.get(id, sessionId)
     this.check(doc, revision)
     const changesContent =
@@ -173,20 +228,58 @@ export class LinkedDocumentStore {
       input.addAttachments !== undefined ||
       input.removeAttachments !== undefined ||
       input.signaturePath !== undefined ||
+      input.signatureMode !== undefined ||
       input.reloadExternal
     if (doc.kind === 'email') {
       if (input.content !== undefined || input.reloadExternal) throw new Error('Use email fields')
       if (input.email) {
         validateEmailHtml(input.email.bodyHtml)
         validateEmailHtml(input.email.signatureHtml)
+        if (
+          input.email.signatureHtml !== doc.email!.signatureHtml ||
+          input.email.signatureText !== doc.email!.signatureText
+        ) {
+          doc.signatureMode = input.email.signatureHtml ? 'custom' : 'none'
+          if (input.email.signatureHtml)
+            doc.customSignature = {
+              html: input.email.signatureHtml,
+              text: input.email.signatureText
+            }
+          delete doc.signatureError
+        }
         doc.email = input.email
       }
       if (input.removeAttachments)
         doc.attachments = doc.attachments.filter((a) => !input.removeAttachments!.includes(a.id))
-      if (input.signaturePath) this.signature(doc, signature, input.signatureTextPath)
+      if (input.signaturePath) {
+        this.signature(doc, signature, input.signatureTextPath)
+        doc.signatureMode = 'custom'
+        doc.customSignature = { html: doc.email!.signatureHtml, text: doc.email!.signatureText }
+        delete doc.signatureError
+      }
+      if (input.signatureMode) {
+        if (
+          !doc.customSignature &&
+          (doc.signatureMode === 'custom' || (!doc.signatureMode && doc.email!.signatureHtml))
+        )
+          doc.customSignature = { html: doc.email!.signatureHtml, text: doc.email!.signatureText }
+        if (input.signatureMode === 'custom' && !doc.customSignature)
+          throw new Error('No custom signature saved for this email')
+        const staged = input.signatureMode === 'custom' ? doc.customSignature : defaultSignature
+        doc.email!.signatureHtml = staged?.html ?? ''
+        doc.email!.signatureText = staged?.text ?? ''
+        doc.signatureMode = input.signatureMode
+        delete doc.signatureError
+      }
       if (input.addAttachments) this.attachments(doc, input.addAttachments)
     } else {
-      if (input.email || input.addAttachments || input.removeAttachments || input.signaturePath)
+      if (
+        input.email ||
+        input.addAttachments ||
+        input.removeAttachments ||
+        input.signaturePath ||
+        input.signatureMode
+      )
         throw new Error('Email fields require an email')
       if (input.reloadExternal) {
         doc.content = this.readText(doc.path!)
@@ -241,6 +334,7 @@ export class LinkedDocumentStore {
     const doc = this.get(id, sessionId)
     this.check(doc, revision)
     if (!doc.email) throw new Error('Only emails can be prepared')
+    if (doc.signatureError) throw new Error(doc.signatureError)
     const delivery = this.deliveryAt(doc, revision)
     if (delivery && delivery.status !== 'failed')
       throw new Error(
