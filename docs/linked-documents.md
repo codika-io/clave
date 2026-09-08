@@ -27,7 +27,7 @@ The agent supplies a structured email:
 }
 ```
 
-Recipients are comma-separated bare email addresses. The composer edits From, To, Cc, Bcc, Subject and the rendered body. The signature is a separate preview: **Import HTML** replaces it, **Remove** removes it. **Add files** copies attachment bytes into Clave's private profile; clicking an attachment opens the retained file with its original filename and extension. Removing a source file afterward does not affect the draft.
+Recipients are comma-separated bare email addresses. The composer edits From, To, Cc, Bcc, Subject and the rendered body. The signature is a separate preview: **Import HTML** replaces it; choose **No signature** in the **Signature choice** menu to remove it. **Add files** copies attachment bytes into Clave's private profile; clicking an attachment opens the retained file with its original filename and extension. Removing a source file afterward does not affect the draft.
 
 Signature imports accept ordinary email tables, presentation attributes and inline styles. Local, data and HTTPS PNG/JPEG/GIF/WebP images are staged once and embedded as CID attachments at preparation. Self-contained data-URL SVG background layers are validated and rasterized to PNG at import; scripts, fonts and external SVG resources cannot load. The original dimensions, CSS layout and repeated layers are retained, and identical images share a CID part. Source URLs are never re-fetched at send time. Raster types are identified from their bytes, so a JPEG served as `application/octet-stream` works; a misleading image header does not make other content acceptable. HTTPS redirects, active content, unstaged image URLs, SVG with external resources, style blocks and unsupported markup are explicitly rejected; Clave does not silently strip the signature. SVG inputs are limited to 100 KB, 500 elements and explicit dimensions no greater than 1024 × 1024, with bounded filters. Each image is limited to 2 MB, signature images to 3 MB total, attachments to 18 MB total (30 files), and linked files to 2 MB. `signatureTextPath` optionally supplies the plain-text signature twin. Otherwise text is derived from the reviewed HTML. Email clients can render HTML differently.
 
@@ -69,7 +69,7 @@ npm install
 npm run dev -- -- --user-data-dir=/tmp/clave-linked-documents-dev
 ```
 
-This opens a separate development profile and does not replace your installed Clave. Add a disposable workspace folder, start Claude Code or Codex there, and use the prompts above. Newly started sessions discover the new MCP tools; old sessions in the installed version do not.
+This opens a separate development profile and does not replace your installed Clave. If this dev process is already running from an earlier revision, stop and restart it with the same command and user-data directory to load the new main-process and preload IPC handlers; renderer HMR alone is insufficient. Add a disposable workspace folder, start Claude Code or Codex there, and use the prompts above. Newly started sessions discover the new MCP tools; old sessions in the installed version do not.
 
 Suggested walkthrough:
 
