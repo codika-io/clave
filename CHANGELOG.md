@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+## [1.86.0] — 2026-09-08
+
 ### Fixed
 - **Update notes render as formatting, not as tags** — the update card's changelog arrived as `<h3>Added</h3> <ul> <li><strong>…` in plain visible text. The card ran the body through a Markdown renderer, but the source it reads is GitHub's releases *feed*, whose `<content>` carries each body already rendered to HTML — so the renderer escaped what it could not parse and printed the markup at the reader. The body's shape is now decided where it arrives: an HTML one is sanitised in the main process against a fixed tag allowlist (scripts, images and wrappers dropped, links forced to open in the browser) and labelled, a Markdown one is left alone, and the card renders each accordingly. The allowlist is applied a second time at the line that injects the markup, so the guard sits on the operation rather than one process away.
 
