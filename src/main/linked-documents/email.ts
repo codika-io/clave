@@ -1,6 +1,6 @@
 import { Parser } from 'htmlparser2'
 import { readFileSync, statSync } from 'fs'
-import { resolve, dirname, extname } from 'path'
+import { resolve, dirname } from 'path'
 import nodemailer from 'nodemailer'
 import sanitizeHtml from 'sanitize-html'
 import { createHash, randomUUID } from 'crypto'
@@ -114,6 +114,18 @@ export function validateEmailHtml(html: string): void {
         !/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(attrs.src ?? '')
       )
         invalid = true
+      if (tag === 'img') {
+        const data = /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$/.exec(
+          attrs.src ?? ''
+        )
+        if (data) {
+          try {
+            if (rasterMediaType(Buffer.from(data[2], 'base64')) !== data[1]) invalid = true
+          } catch {
+            invalid = true
+          }
+        }
+      }
       if (attrs.href && !/^(https?:|mailto:|tel:|#)/i.test(attrs.href)) invalid = true
       if (/(?:url\s*\(|expression\s*\(|@import|\\)/i.test(attrs.style ?? '')) invalid = true
     }
@@ -122,6 +134,22 @@ export function validateEmailHtml(html: string): void {
     throw new Error(
       'Unsupported email HTML: use text, links, tables and inline styles. Import image signatures from an HTML file to stage local/HTTPS assets. Scripts, style blocks and embedded content are unsupported.'
     )
+}
+/** Trust supported raster file signatures, not server MIME labels or filename extensions. */
+export function rasterMediaType(bytes: Buffer): string {
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')))
+    return 'image/png'
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+    return 'image/jpeg'
+  if (bytes.length >= 6 && /GIF8[79]a/.test(bytes.subarray(0, 6).toString('ascii')))
+    return 'image/gif'
+  if (
+    bytes.length >= 12 &&
+    bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+  )
+    return 'image/webp'
+  throw new Error('Signature images must contain PNG, JPEG, GIF or WebP bytes')
 }
 /** Stage signature assets once; preview/restart/send all use these same bytes. */
 export async function importSignature(
@@ -140,19 +168,18 @@ export async function importSignature(
   let total = 0
   for (const source of sources) {
     if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(source)) {
-      total += Buffer.from(source.split(',')[1], 'base64').length
-      replacements.set(source, source)
+      const bytes = Buffer.from(source.split(',')[1], 'base64')
+      if (bytes.length > 2000000) throw new Error('Signature image exceeds 2 MB')
+      total += bytes.length
+      replacements.set(source, `data:${rasterMediaType(bytes)};base64,${bytes.toString('base64')}`)
     } else {
-      let bytes: Buffer, type: string
+      let bytes: Buffer
       if (source.startsWith('https://')) {
         const response = await request(source, {
           signal: AbortSignal.timeout(15000),
           redirect: 'error'
         })
         if (!response.ok) throw new Error(`Signature image unavailable (HTTP ${response.status})`)
-        type = (response.headers.get('content-type') ?? '').split(';')[0]
-        if (!/^image\/(png|jpeg|gif|webp)$/.test(type))
-          throw new Error('Signature images must be PNG, JPEG, GIF or WebP')
         const reader = response.body?.getReader()
         if (!reader) throw new Error('Empty signature image')
         const chunks: Uint8Array[] = []
@@ -173,20 +200,10 @@ export async function importSignature(
           throw new Error('Signature image must be a local path, data image or HTTPS URL')
         const p = resolve(dirname(file), source)
         if (statSync(p).size > 2000000) throw new Error('Signature image exceeds 2 MB')
-        type = (
-          {
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp'
-          } as Record<string, string>
-        )[extname(p).toLowerCase()]
-        if (!type) throw new Error('Signature images must be PNG, JPEG, GIF or WebP')
         bytes = readFileSync(p)
       }
       total += bytes.length
-      replacements.set(source, `data:${type};base64,${bytes.toString('base64')}`)
+      replacements.set(source, `data:${rasterMediaType(bytes)};base64,${bytes.toString('base64')}`)
     }
     if (total > 3000000) throw new Error('Signature images exceed 3 MB total')
   }

@@ -27,6 +27,13 @@ export interface LinkedAttachment {
   size: number
   sha256: string
 }
+export interface LinkedDelivery {
+  revision: number
+  packageId: string
+  status: 'sent' | 'failed' | 'unknown'
+  messageId?: string
+  detail?: string
+}
 export interface LinkedDocument {
   id: string
   sessionId: string
@@ -42,13 +49,10 @@ export interface LinkedDocument {
   hidden: boolean
   split: number
   scroll: number
-  delivery?: {
-    revision: number
-    packageId: string
-    status: 'sent' | 'failed' | 'unknown'
-    messageId?: string
-    detail?: string
-  }
+  delivery?: LinkedDelivery
+  deliveries?: Record<string, LinkedDelivery>
+  /** Authoritative seals cover the complete immutable package, not only MIME bytes. */
+  preparedPackages?: Record<string, string>
 }
 export const linkedOpenSchema = z
   .object({

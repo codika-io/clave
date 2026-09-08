@@ -21,6 +21,99 @@ const email = (): ReturnType<typeof emailSchema.parse> =>
     signatureHtml: '<table cellpadding="0"><tr><td>Example team</td></tr></table>'
   })
 describe('linked documents boundaries', () => {
+  // Independent verifier repros: an old in-flight completion and an altered package revision.
+  it.each(['sent', 'failed', 'unknown'] as const)(
+    'keeps the newer revision guarded when an older %s result arrives last',
+    async (oldStatus) => {
+      const { root, store } = fixture()
+      const doc = await store.open('one', { email: email() })
+      const oldPackage = await store.prepare(doc.id, 1, 'one')
+      let finish!: () => void
+      const barrier = new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      const oldSend = store.send(oldPackage.id, 'one', async () => {
+        await barrier
+        return { status: oldStatus }
+      })
+      await store.update(doc.id, 1, { email: { ...email(), subject: 'New reviewed subject' } })
+      const newPackage = await store.prepare(doc.id, 2, 'one')
+      let calls = 0
+      await store.send(newPackage.id, 'one', async () => {
+        calls++
+        return { status: 'sent', messageId: 'new-message' }
+      })
+      finish()
+      await oldSend
+      const restarted = new LinkedDocumentStore(join(root, 'store'))
+      const current = restarted.get(doc.id)
+      expect(current.email?.subject).toBe('New reviewed subject')
+      expect(current.delivery).toMatchObject({
+        revision: 2,
+        status: 'sent',
+        messageId: 'new-message'
+      })
+      expect(current.deliveries?.['1'].status).toBe(oldStatus)
+      expect(current.deliveries?.['2'].status).toBe('sent')
+      await expect(
+        restarted.send(newPackage.id, 'one', async () => {
+          calls++
+          return { status: 'sent' }
+        })
+      ).rejects.toThrow('already attempted')
+      expect(calls).toBe(1)
+    }
+  )
+
+  it.each(['revision', 'threadId', 'messageId', 'sessionId', 'id'] as const)(
+    'refuses altered frozen package %s metadata before transport',
+    async (field) => {
+      const { root, store } = fixture()
+      const doc = await store.open('one', { email: email() })
+      const pkg = await store.prepare(doc.id, 1, 'one')
+      if (field === 'revision')
+        await store.update(doc.id, 1, { email: { ...email(), subject: 'New reviewed subject' } })
+      writeFileSync(
+        join(root, 'store', pkg.id + '.package.json'),
+        JSON.stringify({ ...pkg, [field]: field === 'revision' ? 2 : 'altered' })
+      )
+      let calls = 0
+      await expect(
+        store.send(pkg.id, 'one', async () => {
+          calls++
+          return { status: 'sent' }
+        })
+      ).rejects.toThrow('integrity')
+      expect(calls).toBe(0)
+    }
+  )
+
+  it('stages a generic HTTP response only when its bytes identify a supported raster image', async () => {
+    const { root } = fixture()
+    const path = join(root, 'signature.html')
+    writeFileSync(path, '<img src="https://synthetic.example.test/avatar" alt="Synthetic" />')
+    // Synthetic JPEG signature and body; no personal image or remote URL is retained.
+    const bytes = Buffer.concat([
+      Buffer.from('ffd8ffe000104a46494600010100000100010000', 'hex'),
+      Buffer.alloc(54_407),
+      Buffer.from('ffd9', 'hex')
+    ])
+    const html = await importSignature(
+      path,
+      async () => new Response(bytes, { headers: { 'content-type': 'application/octet-stream' } })
+    )
+    expect(html).toContain(`data:image/jpeg;base64,${bytes.toString('base64')}`)
+    for (const type of ['application/octet-stream', 'image/jpeg']) {
+      await expect(
+        importSignature(
+          path,
+          async () =>
+            new Response('<svg>not a raster image</svg>', { headers: { 'content-type': type } })
+        )
+      ).rejects.toThrow('must contain')
+    }
+  })
+
   it('plain text decodes HTML entities and retains paragraph breaks', () => {
     expect(plainText('<p>Caf&eacute; &amp; tea</p><p>&#x1F44B;</p>')).toBe('Café & tea\n👋')
   })

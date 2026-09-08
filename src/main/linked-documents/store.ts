@@ -5,6 +5,7 @@ import {
   linkedOpenSchema,
   linkedUpdateSchema,
   type LinkedDocument,
+  type LinkedDelivery,
   type LinkedOpen,
   type LinkedUpdate,
   type PreparedEmail
@@ -223,13 +224,27 @@ export class LinkedDocumentStore {
       doc.attachments.find((a) => a.id === attachmentId)!.name
     )
   }
+  private deliveryAt(doc: LinkedDocument, revision: number): LinkedDelivery | undefined {
+    return (
+      doc.deliveries?.[revision] ?? (doc.delivery?.revision === revision ? doc.delivery : undefined)
+    )
+  }
+  private recordDelivery(doc: LinkedDocument, delivery: LinkedDelivery): void {
+    doc.deliveries ??= {}
+    if (doc.delivery && !doc.deliveries[doc.delivery.revision])
+      doc.deliveries[doc.delivery.revision] = doc.delivery
+    doc.deliveries[delivery.revision] = delivery
+    // A slower old send must not replace the newer revision's displayed result or retry guard.
+    if (!doc.delivery || delivery.revision >= doc.delivery.revision) doc.delivery = delivery
+  }
   async prepare(id: string, revision: number, sessionId: string): Promise<PreparedEmail> {
     const doc = this.get(id, sessionId)
     this.check(doc, revision)
     if (!doc.email) throw new Error('Only emails can be prepared')
-    if (doc.delivery?.revision === revision && doc.delivery.status !== 'failed')
+    const delivery = this.deliveryAt(doc, revision)
+    if (delivery && delivery.status !== 'failed')
       throw new Error(
-        `Revision already has a delivery attempt (${doc.delivery.status}); inspect its result, do not prepare a duplicate`
+        `Revision already has a delivery attempt (${delivery.status}); inspect its result, do not prepare a duplicate`
       )
     const files = doc.attachments.map((a) => {
       const bytes = readFileSync(this.attachmentPath(id, a.id))
@@ -237,8 +252,12 @@ export class LinkedDocumentStore {
       return { filename: a.name, content: bytes }
     })
     const pkg = await prepareMime(doc, files)
-    this.check(this.get(id, sessionId), revision)
+    const latest = this.get(id, sessionId)
+    this.check(latest, revision)
     this.write(join(this.root, pkg.id + '.package.json'), pkg)
+    latest.preparedPackages ??= {}
+    latest.preparedPackages[pkg.id] = digest(JSON.stringify(pkg))
+    this.save(latest)
     return pkg
   }
   async send(
@@ -253,17 +272,23 @@ export class LinkedDocumentStore {
     const doc = this.get(pkg.documentId, sessionId)
     if (this.current(sessionId).id !== pkg.documentId)
       throw new Error('Package is no longer the linked email; reopen and review it before sending')
-    if (pkg.sessionId !== sessionId || digest(Buffer.from(pkg.raw, 'base64url')) !== pkg.sha256)
+    if (
+      pkg.id !== packageId ||
+      doc.preparedPackages?.[packageId] !== digest(JSON.stringify(pkg)) ||
+      pkg.sessionId !== sessionId ||
+      digest(Buffer.from(pkg.raw, 'base64url')) !== pkg.sha256
+    )
       throw new Error('Package ownership or integrity mismatch')
     this.check(doc, pkg.revision)
-    if (doc.delivery?.revision === pkg.revision && doc.delivery.status !== 'failed')
-      throw new Error(`Delivery already attempted (${doc.delivery.status}); no automatic retry`)
-    doc.delivery = {
+    const delivery = this.deliveryAt(doc, pkg.revision)
+    if (delivery && delivery.status !== 'failed')
+      throw new Error(`Delivery already attempted (${delivery.status}); no automatic retry`)
+    this.recordDelivery(doc, {
       revision: pkg.revision,
       packageId,
       status: 'unknown',
       detail: 'Submission started; outcome not yet known. Do not retry.'
-    }
+    })
     this.save(doc)
     let result: Awaited<ReturnType<RawSender>>
     try {
@@ -276,7 +301,7 @@ export class LinkedDocumentStore {
     }
     // Preserve any user edits made while the send was in flight.
     const latest = this.get(doc.id, sessionId)
-    latest.delivery = { revision: pkg.revision, packageId, ...result }
+    this.recordDelivery(latest, { revision: pkg.revision, packageId, ...result })
     return this.save(latest)
   }
 }
