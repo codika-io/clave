@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Added
+- **Edit beside your agent conversation** — ask Claude Code or Codex to open a linked Markdown file, HTML file or email. The conversation and editor stay together when you switch sessions, with autosaved edits and protection against conflicting changes.
+- **Compose emails in Clave** — edit recipients and the rendered body, preview signatures and keep copied attachments with the draft. Set a default signature file for new emails while existing drafts retain their reviewed copy. Ask your agent to send the exact reviewed version through the configured Gmail connection.
+
 ## [1.84.0] — 2026-09-07
 
 ### Added

@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { initLinkedDocuments, useLinkedDocumentStore } from '../../store/linked-document-store'
+import { LinkedDocumentPanel } from '../files/LinkedDocumentPanel'
+import { useEffect, useMemo, useState } from 'react'
 import {
   useSessionStore,
   getDisplayOrder,
@@ -48,8 +50,13 @@ function computeGridLayout(count: number): { cols: number; rows: number } {
 }
 
 export function TerminalGrid(): React.JSX.Element {
+  const linked = useLinkedDocumentStore((s) => s.documents)
+  useEffect(() => initLinkedDocuments(), [])
   const selectedSessionIds = useSessionStore((s) => s.selectedSessionIds)
   const sessions = useSessionStore((s) => s.sessions)
+  useEffect(() => {
+    void useLinkedDocumentStore.getState().refresh().catch(console.error)
+  }, [sessions.length])
   const fileTabs = useSessionStore((s) => s.fileTabs)
   const groups = useSessionStore((s) => s.groups)
   const displayOrder = useSessionStore((s) => s.displayOrder)
@@ -125,6 +132,11 @@ export function TerminalGrid(): React.JSX.Element {
     (id) => !isFileTabId(id) && !agentSessionIds.has(id)
   )
 
+  const linkedActive =
+    selectedSessionIds.length === 1 && !viewGroup && !viewSession
+      ? linked.find((d) => d.sessionId === selectedSessionIds[0] && !d.hidden)
+      : undefined
+
   if (sessions.length === 0 && fileTabs.length === 0) {
     return <EmptyState />
   }
@@ -186,11 +198,76 @@ export function TerminalGrid(): React.JSX.Element {
         </div>
       ))}
 
+      {linked.map((doc) => (
+        <div
+          key={doc.id}
+          className="linked-document-slot"
+          style={{
+            left: `${doc.split * 100}%`,
+            display: linkedActive?.id === doc.id ? undefined : 'none'
+          }}
+        >
+          <div
+            className="linked-document-divider"
+            role="separator"
+            aria-label="Resize linked document"
+            aria-orientation="vertical"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault()
+                void window.electronAPI.linkedDocuments.update(doc.id, doc.revision, {
+                  split: Math.max(
+                    0.25,
+                    Math.min(0.75, doc.split + (event.key === 'ArrowLeft' ? -0.05 : 0.05))
+                  )
+                })
+              }
+            }}
+            onPointerDown={(event) => {
+              event.preventDefault()
+              const parent = event.currentTarget.parentElement?.parentElement
+              if (!parent) return
+              const bounds = parent.getBoundingClientRect()
+              const move = (e: PointerEvent): void => {
+                void window.electronAPI.linkedDocuments
+                  .update(doc.id, doc.revision, {
+                    split: Math.max(0.25, Math.min(0.75, (e.clientX - bounds.left) / bounds.width))
+                  })
+                  .catch(console.error)
+              }
+              const up = (): void => {
+                window.removeEventListener('pointermove', move)
+                window.removeEventListener('pointerup', up)
+              }
+              window.addEventListener('pointermove', move)
+              window.addEventListener('pointerup', up)
+            }}
+          />
+          <LinkedDocumentPanel document={doc} />
+        </div>
+      ))}
+      {selectedSessionIds.length === 1 &&
+        linked.find((d) => d.sessionId === selectedSessionIds[0] && d.hidden) && (
+          <button
+            className="panel-tab linked-document-reopen"
+            onClick={() => {
+              const doc = linked.find((d) => d.sessionId === selectedSessionIds[0])!
+              void window.electronAPI.linkedDocuments.update(doc.id, doc.revision, {
+                hidden: false
+              })
+            }}
+          >
+            Open linked document
+          </button>
+        )}
+
       {/* Grid renders ALL terminals and ALL file tabs to keep them alive; the
           unselected ones are hidden (see each loop below). */}
       <div
         className="h-full grid gap-2"
         style={{
+          width: linkedActive ? `${linkedActive.split * 100}%` : '100%',
           gridTemplateColumns: `repeat(${cols}, 1fr)`,
           gridTemplateRows: `repeat(${rows}, 1fr)`,
           // EITHER view hides the mosaic, and `visibility` (not `display`) is

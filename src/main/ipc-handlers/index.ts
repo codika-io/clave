@@ -1,3 +1,4 @@
+import { registerLinkedDocumentHandlers } from '../linked-documents/runtime'
 import { registerAppHandlers } from './app-handlers'
 import { registerUsageHandlers } from './usage-handlers'
 import { registerGitHandlers } from './git-handlers'
@@ -44,6 +45,7 @@ export function registerIpcHandlers(deps: KeymapHandlerDeps = {}): void {
   registerSidebarLayoutHandlers()
   registerSecretHandlers()
   registerCopyOfferHandlers()
+  registerLinkedDocumentHandlers()
   registerExtensionsHandlers()
   registerMissionControlHandlers()
   registerWorkspaceHandlers()

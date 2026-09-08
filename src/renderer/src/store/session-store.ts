@@ -1,3 +1,4 @@
+import { linkedEditorBlocksClose } from './linked-document-store'
 import { emitTabClosed } from '../lib/exchange-capture'
 import { create } from 'zustand'
 import type {
@@ -759,6 +760,7 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   removeSession: (id) =>
     set((state) => {
+      if (linkedEditorBlocksClose(id)) return state
       // A closed session takes its hidden serving session (session.view) with
       // it: nothing else owns that process, and an orphan would idle invisibly.
       const owner = state.sessions.find((s) => s.id === id)

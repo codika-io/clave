@@ -13,6 +13,7 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!plugin'
   - '!.claude-plugin'
+beforePack: scripts/prepare-resvg.cjs
 asarUnpack:
   - resources/**
 win:

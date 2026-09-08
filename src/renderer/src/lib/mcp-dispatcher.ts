@@ -1,3 +1,5 @@
+import { flushLinkedDocument } from '../store/linked-document-store'
+import type { LinkedOpen } from '../../../shared/linked-documents'
 import {
   captureEndpoint as captureEndpointOf,
   emitTabClosed,
@@ -6,7 +8,12 @@ import {
   type SessionMode
 } from './exchange-capture'
 import { useSessionStore, fileTabDedupKey, inActiveWorkspace } from '../store/session-store'
-import type { GroupTerminalConfig, GroupViewConfig, Session, SessionGroup } from '../store/session-store'
+import type {
+  GroupTerminalConfig,
+  GroupViewConfig,
+  Session,
+  SessionGroup
+} from '../store/session-store'
 import { usePinnedStore, getPinnedState, togglePinnedGroup } from '../store/pinned-store'
 import type { PinnedGroupSession } from '../store/session-types'
 import { useWorkspaceStore, type Workspace } from '../store/workspace-store'
@@ -43,9 +50,7 @@ function resolveWorkspace(ref: string): Workspace {
     workspaces.find((w) => w.name === ref) ??
     workspaces.find((w) => w.name.toLowerCase() === ref.toLowerCase())
   if (!ws) {
-    throw new Error(
-      `No workspace "${ref}". Available: ${workspaces.map((w) => w.name).join(', ')}`
-    )
+    throw new Error(`No workspace "${ref}". Available: ${workspaces.map((w) => w.name).join(', ')}`)
   }
   return ws
 }
@@ -105,7 +110,9 @@ function resolveGroup(
   const qualified = named
     .map((g) => `${workspaceNameOf(g.workspaceId) ?? '?'}/${g.name} (${g.id})`)
     .join(', ')
-  throw new Error(`Group name "${ref}" is ambiguous across workspaces — use an id. Candidates: ${qualified}`)
+  throw new Error(
+    `Group name "${ref}" is ambiguous across workspaces — use an id. Candidates: ${qualified}`
+  )
 }
 
 function handleList(payload: { callerSessionId?: string; workspace?: string }): unknown {
@@ -229,7 +236,8 @@ async function handleLaunchGroup(payload: {
   let pg = named.length === 1 ? named[0] : undefined
   if (!pg && named.length > 1) {
     const callerWs = payload.callerSessionId
-      ? useSessionStore.getState().sessions.find((s) => s.id === payload.callerSessionId)?.workspaceId
+      ? useSessionStore.getState().sessions.find((s) => s.id === payload.callerSessionId)
+          ?.workspaceId
       : undefined
     const inCallerWs = callerWs ? named.filter((p) => p.workspaceId === callerWs) : []
     if (inCallerWs.length === 1) pg = inCallerWs[0]
@@ -357,10 +365,16 @@ export async function openSessionProgrammatically(payload: {
   // model maps to claude --model / codex -m; antigravity and terminals have no flag.
   const model = (claudeMode || codexMode || piMode) && payload.model ? payload.model : undefined
   const family = mode === 'gemini' ? 'antigravity' : mode === 'terminal' ? null : mode
-  const launchProfileId = family && payload.profile
-    ? profilesFor(family).find((profile) => profile.id === payload.profile || profile.name.toLowerCase() === payload.profile!.toLowerCase())?.id
-    : undefined
-  if (payload.profile && family && !launchProfileId) throw new Error(`Unknown ${family} launch profile "${payload.profile}"`)
+  const launchProfileId =
+    family && payload.profile
+      ? profilesFor(family).find(
+          (profile) =>
+            profile.id === payload.profile ||
+            profile.name.toLowerCase() === payload.profile!.toLowerCase()
+        )?.id
+      : undefined
+  if (payload.profile && family && !launchProfileId)
+    throw new Error(`Unknown ${family} launch profile "${payload.profile}"`)
   const info = await window.electronAPI.spawnSession(payload.cwd, {
     claudeMode,
     antigravityMode,
@@ -567,7 +581,10 @@ async function handleAddGroupTerminal(payload: {
     ],
     // Focus only when the group's workspace is the visible one — a terminal
     // added to a hidden workspace's group must not steal the user's view.
-    ...(inActiveWorkspace({ workspaceId: group.workspaceId }, useWorkspaceStore.getState().activeWorkspaceId)
+    ...(inActiveWorkspace(
+      { workspaceId: group.workspaceId },
+      useWorkspaceStore.getState().activeWorkspaceId
+    )
       ? { selectedSessionIds: [info.id], focusedSessionId: info.id }
       : {})
   })
@@ -598,7 +615,10 @@ async function handleSetGroupView(payload: {
     }
     const slash = url.lastIndexOf('/')
     try {
-      const stat = await window.electronAPI.statFile(url.substring(0, slash) || '/', url.substring(slash + 1))
+      const stat = await window.electronAPI.statFile(
+        url.substring(0, slash) || '/',
+        url.substring(slash + 1)
+      )
       if (stat.type === 'directory') throw new Error('directory')
     } catch {
       throw new Error(`No file at "${url}"`)
@@ -667,12 +687,16 @@ async function handleSetSessionView(payload: {
     }
     const slash = url.lastIndexOf('/')
     try {
-      const stat = await window.electronAPI.statFile(url.substring(0, slash) || '/', url.substring(slash + 1))
+      const stat = await window.electronAPI.statFile(
+        url.substring(0, slash) || '/',
+        url.substring(slash + 1)
+      )
       if (stat.type === 'directory') throw new Error('directory')
     } catch {
       throw new Error(`No file at "${url}"`)
     }
-    if (payload.command) throw new Error('A file view has no server — command only applies to http(s) URLs')
+    if (payload.command)
+      throw new Error('A file view has no server — command only applies to http(s) URLs')
   } else if (!/^https?:\/\//i.test(url)) {
     throw new Error('url must be an http(s) URL or an absolute .html file path')
   }
@@ -874,8 +898,11 @@ function handleResolveSessionRef(payload: { ref: string }): unknown {
     return { found: false, windowId }
   }
   const sessions = useSessionStore.getState().sessions.filter((s) => s.sessionType === 'local')
-  const found = sessions.find((s) => s.id === payload.ref) ?? sessions.find((s) => s.name === payload.ref)
-  return found ? { found: true, sessionId: found.id, name: found.name, windowId } : { found: false, windowId }
+  const found =
+    sessions.find((s) => s.id === payload.ref) ?? sessions.find((s) => s.name === payload.ref)
+  return found
+    ? { found: true, sessionId: found.id, name: found.name, windowId }
+    : { found: false, windowId }
 }
 
 /** Resolve a messaging/readback target: a session id, an exact tab name, or
@@ -887,9 +914,7 @@ function resolveTargetSession(ref: string, callerSessionId: string | undefined):
       throw new Error('Target "parent" requires the call to come from inside a Clave session')
     }
     const caller = sessions.find((s) => s.id === callerSessionId)
-    const parent = caller?.spawnedBy
-      ? sessions.find((s) => s.id === caller.spawnedBy)
-      : undefined
+    const parent = caller?.spawnedBy ? sessions.find((s) => s.id === caller.spawnedBy) : undefined
     if (!parent) {
       throw new Error(
         'This session has no live parent — only tabs opened via clave_open_session know their opener, and the link does not survive an app restart. Use clave_list and target a session id or name instead.'
@@ -1142,7 +1167,8 @@ async function handleSendToSession(payload: {
   // The target can exit during the 150ms envelope→submit gap; the PTY write is
   // then a silent no-op, so report what actually happened rather than a blanket
   // delivered:true.
-  const stillAlive = useSessionStore.getState().sessions.find((s) => s.id === targetId)?.alive === true
+  const stillAlive =
+    useSessionStore.getState().sessions.find((s) => s.id === targetId)?.alive === true
   if (stillAlive) {
     // Visible, non-spoofable signal that a sibling wrote here — the sidebar
     // marks the tab and names the sender, so a cross-tab message is never
@@ -1256,6 +1282,20 @@ async function execute(command: string, payload: unknown): Promise<unknown> {
       return handleSendToSession(payload as Parameters<typeof handleSendToSession>[0])
     case 'readSession':
       return handleReadSession(payload as Parameters<typeof handleReadSession>[0])
+    case 'flushLinkedDocument': {
+      const p = payload as { sessionId: string; allowConflict?: boolean }
+      await flushLinkedDocument(p.sessionId, p.allowConflict)
+      return { flushed: true }
+    }
+    case 'openLinkedDocument': {
+      const p = payload as { callerSessionId?: string; input: LinkedOpen }
+      const caller = useSessionStore.getState().sessions.find((s) => s.id === p.callerSessionId)
+      if (!caller) throw new Error('Open linked documents from their originating Clave session')
+      await flushLinkedDocument(caller.id)
+      const result = await window.electronAPI.linkedDocuments.open(caller.id, p.input)
+      handleFocus({ sessionId: caller.id })
+      return result
+    }
     case 'openFile':
       return handleOpenFile(payload as Parameters<typeof handleOpenFile>[0])
     case 'notify':

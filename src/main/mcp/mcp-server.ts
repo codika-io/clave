@@ -1,3 +1,5 @@
+import { linkedDocuments } from '../linked-documents/runtime'
+import { linkedOpenSchema, linkedUpdateSchema } from '../../shared/linked-documents'
 import * as http from 'http'
 import * as path from 'path'
 import { createHash, timingSafeEqual } from 'crypto'
@@ -729,6 +731,75 @@ function buildServer(callerSessionId: string | undefined): McpServer {
       }
     },
     (args) => run('readSession', { ...args, callerSessionId })
+  )
+
+  server.registerTool(
+    'clave_open_linked_document',
+    {
+      description:
+        'Open an existing Markdown/HTML file or structured email beside YOUR calling session, immediately focusing a two-pane view. Files and attachments must use absolute paths. Email signatures support text, links, tables and inline styling; local/data/HTTPS images are staged when signaturePath imports an HTML file. Reopening a path preserves edits. Use clave_linked_document to read/update/prepare/send. Never send without an explicit user instruction.',
+      inputSchema: linkedOpenSchema
+    },
+    async (args) => {
+      if (!callerSessionId)
+        return {
+          content: [{ type: 'text' as const, text: 'Requires an authenticated Clave session' }],
+          isError: true
+        }
+      return run('openLinkedDocument', { callerSessionId, input: args })
+    }
+  )
+  server.registerTool(
+    'clave_linked_document',
+    {
+      description:
+        'Read your session linked document, update with expected revision, prepare an immutable email package, or send a prepared package via Gmail. Read returns exact current content. Revision conflicts require reading again, never overwriting user edits. Prepare is NOT send. Send ONLY after explicit user instruction, with the returned packageId and userConfirmed=true. Do not reconstruct MIME. Sent/failed/unknown results are persisted; never automatically retry an unknown result or create duplicate revisions to bypass delivery guards.',
+      inputSchema: {
+        action: z.enum(['read', 'update', 'prepare', 'send']),
+        revision: z.number().int().positive().optional(),
+        update: linkedUpdateSchema.optional(),
+        packageId: z.string().optional(),
+        userConfirmed: z.boolean().optional()
+      }
+    },
+    async (args) => {
+      try {
+        if (!callerSessionId) throw new Error('Requires an authenticated Clave session')
+        const owner = windowRegistry.getWindowForSession(callerSessionId)
+        if (!owner) throw new Error('Calling session window unavailable')
+        await callRenderer('flushLinkedDocument', { sessionId: callerSessionId }, owner)
+        const store = linkedDocuments(),
+          doc = store.current(callerSessionId)
+        let result: unknown
+        if (args.action === 'read') result = doc
+        else if (args.action === 'update') {
+          if (args.revision === undefined || !args.update)
+            throw new Error('revision and update required')
+          result = await store.update(doc.id, args.revision, args.update, callerSessionId)
+        } else if (args.action === 'prepare') {
+          if (args.revision === undefined) throw new Error('revision required')
+          const pkg = await store.prepare(doc.id, args.revision, callerSessionId)
+          result = {
+            packageId: pkg.id,
+            revision: pkg.revision,
+            sha256: pkg.sha256,
+            messageId: pkg.messageId
+          }
+        } else {
+          if (!args.packageId || args.userConfirmed !== true)
+            throw new Error('Explicit user instruction required: packageId and userConfirmed=true')
+          result = await store.send(args.packageId, callerSessionId)
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+      } catch (error) {
+        return {
+          content: [
+            { type: 'text' as const, text: error instanceof Error ? error.message : String(error) }
+          ],
+          isError: true
+        }
+      }
+    }
   )
 
   server.registerTool(

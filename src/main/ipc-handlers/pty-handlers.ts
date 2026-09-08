@@ -1,3 +1,5 @@
+import { linkedDocuments } from '../linked-documents/runtime'
+import { callRenderer } from '../mcp/mcp-bridge'
 import { ipcMain, BrowserWindow } from 'electron'
 import {
   ptyManager,
@@ -10,7 +12,10 @@ import { workspaceManager } from '../workspace-manager'
 import { windowRegistry } from '../window-registry'
 import { windowState } from '../window-state'
 import * as titleGenerator from '../title-generator'
-import { startWatching as startAgentStateWatching, clearState as clearAgentState } from '../agent-state-manager'
+import {
+  startWatching as startAgentStateWatching,
+  clearState as clearAgentState
+} from '../agent-state-manager'
 
 export function registerPtyHandlers(): void {
   // Buffer PTY input per session to detect /clear command
@@ -48,7 +53,12 @@ export function registerPtyHandlers(): void {
     // and receives pty:data. Adoption and re-homing rebind through this same
     // path (the adopting window is the sender).
     if (win) windowRegistry.bindSession(session.id, win.id)
-    const isClaudeMode = options?.claudeMode !== false && !options?.antigravityMode && !options?.codexMode && !options?.piMode && !options?.claudeAgentsMode
+    const isClaudeMode =
+      options?.claudeMode !== false &&
+      !options?.antigravityMode &&
+      !options?.codexMode &&
+      !options?.piMode &&
+      !options?.claudeAgentsMode
     const isResumed = !!options?.resumeSessionId
 
     // Schedule title generation for new Claude-mode sessions
@@ -130,7 +140,16 @@ export function registerPtyHandlers(): void {
     ptyManager.resize(id, cols, rows)
   })
 
-  ipcMain.handle('pty:kill', (_event, id: string) => {
+  ipcMain.handle('pty:kill', async (_event, id: string) => {
+    const owner = windowRegistry.getWindowForSession(id)
+    if (
+      owner &&
+      linkedDocuments()
+        .list()
+        .some((d) => d.sessionId === id)
+    ) {
+      await callRenderer('flushLinkedDocument', { sessionId: id, allowConflict: true }, owner)
+    }
     ptyManager.kill(id)
     // A session that never started has no exit event to unbind it.
     windowRegistry.unbindSession(id)
@@ -180,7 +199,11 @@ export function registerPtyHandlers(): void {
   // and must not smuggle extra keys into the record file.
   ipcMain.handle(
     'session:set-view',
-    (_event, id: string, view: { url?: unknown; title?: unknown; command?: unknown; cwd?: unknown } | null) => {
+    (
+      _event,
+      id: string,
+      view: { url?: unknown; title?: unknown; command?: unknown; cwd?: unknown } | null
+    ) => {
       const clean =
         view && typeof view.url === 'string' && view.url.length > 0
           ? {
