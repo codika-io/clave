@@ -80,7 +80,7 @@ export async function run(t) {
       cwd: ROOT,
       name: 'Other document session'
     })
-    const opened = await client.call('clave_open_linked_document', { path: `${ROOT}/draft.md` })
+    const opened = await client.call('clave_open_side_panel', { path: `${ROOT}/draft.md` })
     t.check('actual MCP opens linked Markdown', !toolErrored(opened), opened)
     const doc = toolPayload(opened)
     await win.locator('[data-testid="linked-document-panel"]').waitFor({ state: 'visible' })
@@ -109,7 +109,7 @@ export async function run(t) {
     await win.keyboard.type(' Final character Z')
     if (process.env.CLAVE_LINKED_CAPTURE)
       await win.screenshot({ path: '/tmp/clave-linked-markdown.png' })
-    const immediate = toolPayload(await client.call('clave_linked_document', { action: 'read' }))
+    const immediate = toolPayload(await client.call('clave_side_panel', { action: 'read' }))
     t.check(
       'immediate agent handoff flushes final typed character',
       immediate.content.includes('Final character Z'),
@@ -140,7 +140,7 @@ export async function run(t) {
       readFileSync(`${ROOT}/draft.md`, 'utf8'),
       '# External writer\n'
     )
-    await client.call('clave_linked_document', { action: 'read' }) // flushes even when conflict result is an error
+    await client.call('clave_side_panel', { action: 'read' }) // flushes even when conflict result is an error
     const conflictEditor = await editor.textContent()
     const focusAtConflict = await win.evaluate(() =>
       document.activeElement?.outerHTML.slice(0, 300)
@@ -158,13 +158,13 @@ export async function run(t) {
         .count()
         .then((c) => c === 0)
     )
-    const html = await client.call('clave_open_linked_document', { path: `${ROOT}/page.html` })
+    const html = await client.call('clave_open_side_panel', { path: `${ROOT}/page.html` })
     t.check('HTML link opens through same MCP flow', !toolErrored(html), html)
     const source = win.locator('[data-testid="linked-document-panel"] .cm-content')
     await source.fill(
       '<link rel="stylesheet" href="page.css"><h1>Edited HTML</h1><script>window.linkedLoads = 1</script>'
     )
-    await client.call('clave_linked_document', { action: 'read' })
+    await client.call('clave_side_panel', { action: 'read' })
     t.equal(
       'HTML source autosaves',
       readFileSync(`${ROOT}/page.html`, 'utf8'),
@@ -194,7 +194,7 @@ export async function run(t) {
       (path) => window.electronAPI.linkedDocuments.setDefaultSignature(path),
       `${ROOT}/signature.html`
     )
-    const email = await client.call('clave_open_linked_document', {
+    const email = await client.call('clave_open_side_panel', {
       email: {
         from: 'sender@example.test',
         to: 'reader@example.test',
@@ -207,10 +207,10 @@ export async function run(t) {
     const emailDoc = toolPayload(email)
     t.equal('fresh MCP email applies profile default', emailDoc.signatureMode, 'default')
     await win.getByLabel('Signature choice').selectOption('none')
-    const optedOut = toolPayload(await client.call('clave_linked_document', { action: 'read' }))
+    const optedOut = toolPayload(await client.call('clave_side_panel', { action: 'read' }))
     t.equal('composer can opt out of default', optedOut.email.signatureHtml, '')
     await win.getByLabel('Signature choice').selectOption('default')
-    const reapplied = toolPayload(await client.call('clave_linked_document', { action: 'read' }))
+    const reapplied = toolPayload(await client.call('clave_side_panel', { action: 'read' }))
     t.check(
       'applying default preserves body recipients and attachment',
       reapplied.email.bodyHtml === emailDoc.email.bodyHtml &&
@@ -223,7 +223,7 @@ export async function run(t) {
     await win.getByRole('button', { name: 'Change default', exact: true }).click()
     await win.getByLabel('Subject', { exact: true }).fill('Subject while applying default')
     const duringDefault = toolPayload(
-      await client.call('clave_linked_document', { action: 'read' })
+      await client.call('clave_side_panel', { action: 'read' })
     )
     t.equal(
       'editing while picker applies default keeps final subject',
@@ -251,7 +251,7 @@ export async function run(t) {
     await win.getByLabel('Subject', { exact: true }).fill('Final subject')
     const emailBody = win.frameLocator('iframe[title="Email body"]').locator('body')
     await emailBody.fill('Reviewed body and final Z')
-    const final = toolPayload(await client.call('clave_linked_document', { action: 'read' }))
+    const final = toolPayload(await client.call('clave_side_panel', { action: 'read' }))
     t.equal(
       'rich email body hands off exact last edit',
       final.email.bodyHtml,
@@ -270,7 +270,7 @@ export async function run(t) {
     )
     if (process.env.CLAVE_LINKED_CAPTURE)
       await win.screenshot({ path: '/tmp/clave-linked-email.png' })
-    const prepared = await client.call('clave_linked_document', {
+    const prepared = await client.call('clave_side_panel', {
       action: 'prepare',
       revision: final.revision
     })
@@ -308,9 +308,9 @@ export async function run(t) {
     })
     t.check(
       'send requires explicit user confirmation',
-      toolErrored(await client.call('clave_linked_document', { action: 'send', packageId: pkg.id }))
+      toolErrored(await client.call('clave_side_panel', { action: 'send', packageId: pkg.id }))
     )
-    const sent = await client.call('clave_linked_document', {
+    const sent = await client.call('clave_side_panel', {
       action: 'send',
       packageId: pkg.id,
       userConfirmed: true
@@ -325,7 +325,7 @@ export async function run(t) {
     t.check(
       'duplicate send is refused',
       toolErrored(
-        await client.call('clave_linked_document', {
+        await client.call('clave_side_panel', {
           action: 'send',
           packageId: pkg.id,
           userConfirmed: true
@@ -333,7 +333,7 @@ export async function run(t) {
       )
     )
     await win.getByLabel('Subject', { exact: true }).fill('Unsent revision after delivery')
-    await client.call('clave_linked_document', { action: 'read' })
+    await client.call('clave_side_panel', { action: 'read' })
     t.check(
       'UI distinguishes current unsent edits from earlier sent revision',
       (await win.getByText(/current edits are unsent/).count()) > 0
@@ -343,7 +343,7 @@ export async function run(t) {
     await win.getByRole('button', { name: 'Open linked document' }).click()
     await win.getByLabel('Subject', { exact: true }).waitFor()
     // Restart against the SAME isolated profile; durable document survives renderer/main teardown.
-    await client.call('clave_linked_document', { action: 'read' })
+    await client.call('clave_side_panel', { action: 'read' })
     await app.close()
     ;({ app, win } = await launchApp(DIR, { settleMs: 8000 }))
     if (await win.getByRole('button', { name: 'Restore', exact: true }).count())

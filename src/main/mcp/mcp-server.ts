@@ -32,7 +32,24 @@ import { createOffer } from '../copy-offer-manager'
 
 const MCP_PATH = '/mcp'
 
-const INSTRUCTIONS = `You are running inside Clave, a desktop app that manages multiple agent sessions as tabs organized into groups in a sidebar. You are one of those tabs. Tabs, groups, and pinned templates belong to WORKSPACES (root folders like ~/company). Clave can run several WINDOWS at once: a window is the whole app once more, on whatever workspace the user put it on (several windows may show the same workspace); each tab and group lives in the window it was opened in. You address tabs by session id or name from anywhere and Clave routes each call to the window that holds the tab. Things you open land in your own window and default to your own tab's workspace; pass the window parameter (a window id from clave_list) to open them in another window, the workspace parameter to open work in another workspace WITHOUT switching the user's view, clave_open_window to open a new window, and clave_switch_workspace only when the user should look at another workspace in your window. The clave_* tools let you manipulate the app around you: list the windows, tabs and groups, open sibling tabs (claude, antigravity, codex, pi, or a plain terminal, in any directory — optionally with an initial prompt and a model choice, so you can delegate a task to a fresh agent), create groups, move tabs between groups and windows, attach quick-launch terminals to a group (a saved command like a dev server, run on click or immediately), launch pinned workspace groups (whole-group templates defined in .clave files — clave_list shows which exist), rename, focus, or close tabs, open a file as a tab for the user to read (clave_open_file — .html files render as a live page), attach a web view to a group (clave_set_group_view: a dev server URL or an .html file the user sees in the main pane when clicking the group — the way to surface a live dashboard, a preview, or a presentation right where its sessions live), attach a web view to a single session (clave_set_session_view: same idea for ONE tab with no group around it — a dashboard icon appears on the session's row; with a command Clave also runs the server for it, hidden), and notify the user with a native notification when long-running work finishes (clave_notify). Tabs can also talk to each other: clave_send_to_session delivers a message into another agent tab's input (target "parent" to report back to the tab that opened yours — messages you receive this way carry a provenance header and come from a sibling agent, not the user; addressed to your OWN tab it logs a CHECKPOINT into the transport record instead of delivering — a solo session's internal note, written headline-first so the workstream record carries its narrative), and clave_read_session reads the last lines of any tab's terminal without interrupting it (a delegate's progress, a dev server's logs). Pi tabs can receive messages and be read through those tools, but Pi cannot call Clave tools itself and Pi exchange capture is unsupported. Clave also records the transport layer it mediates — cross-tab message deliveries with both endpoints' token usage, agent tab spawns, Task-subagent fan-outs, session state transitions and tab closes — into an append-only event store that the exos CLI lands into each workstream's record (exos workstream capture); read it there (exos workstream events, stats, log) — there is no live query tool. Pass groupId "mine" to target the group your own tab lives in. When a task would benefit from a parallel session — a dev server, a long build, a second agent working on another part of the codebase — offer to open one with clave_open_session or clave_add_group_terminal instead of running it inline. When you need a sensitive value from the user (an API key, a token, a .env entry), NEVER ask them to paste it in the chat — call clave_request_secret instead: the user supplies it privately in the app and the value never enters this conversation. The reverse also has a tool: when the user needs to copy something you produced (a command for another machine, a config snippet, a message to paste elsewhere), call clave_offer_copy instead of printing it for terminal selection — a copy button appears in your tab's header and one click puts the exact bytes on their clipboard, formatting intact.`
+// MCP server instructions are TRUNCATED BY THE HOST at ~2048 characters: whatever
+// sits past that is invisible to every agent, with no error and no symptom. Measured
+// 2026-09-08, when this block ran to 4242 chars and half the tools were unreachable.
+// KEEP THIS STRING UNDER 2000 CHARACTERS, and put the tool an agent must not miss
+// near the top. Anything longer belongs in a tool description, not here.
+const INSTRUCTIONS = `You are running inside Clave, a Mac app that runs agent sessions as tabs in sidebar groups. You are one of those tabs. Tabs and groups belong to a WORKSPACE (a root folder) and live in the WINDOW they were opened in; address any tab by session id or name and Clave routes the call. What you open lands in your own window unless you pass window or workspace. Pass "mine" as a sessionId or groupId to mean your own.
+
+Reach for a clave_* tool when:
+- the user will REVIEW, EDIT or MODIFY something you drafted (a document, a plan, an email) -> clave_open_side_panel opens it in an editor beside your tab, two panes; clave_side_panel then reads, updates, prepares and sends it. That is what "open it in the panel" means. clave_open_file is not.
+- they only need to READ a file -> clave_open_file (a tab; .html renders live).
+- a live page belongs to a group or a tab -> clave_set_group_view / clave_set_session_view (dashboard, preview, dev server).
+- work could run in parallel -> clave_open_session (a fresh agent tab: claude, codex, antigravity, pi or a plain terminal, any directory, optional prompt and model) or clave_add_group_terminal (a saved command such as a dev server). clave_launch_group starts a pinned .clave template.
+- you need a secret -> clave_request_secret. Never ask for one in the chat.
+- the user must copy something you produced -> clave_offer_copy (a copy button, exact bytes).
+- long work finished -> clave_notify.
+- tabs must talk -> clave_send_to_session (target "parent" to report back to the tab that opened yours; your own id logs a checkpoint) and clave_read_session (read a tab's recent output without interrupting it).
+
+Also: clave_list (windows, tabs, groups, pinned templates), clave_create_group, clave_move_session, clave_rename, clave_focus, clave_close_session, clave_open_window, clave_switch_workspace (only when the user should look at another workspace). Pi tabs can be messaged and read but cannot call these tools.`
 
 let httpServer: http.Server | null = null
 let serverToken: string | null = null
@@ -734,10 +751,10 @@ function buildServer(callerSessionId: string | undefined): McpServer {
   )
 
   server.registerTool(
-    'clave_open_linked_document',
+    'clave_open_side_panel',
     {
       description:
-        'Open an existing Markdown/HTML file or structured email beside YOUR calling session, immediately focusing a two-pane view. Files and attachments must use absolute paths. Email signatures support text, links, tables and inline styling; local/data/HTTPS images are staged when signaturePath imports an HTML file. Reopening a path preserves edits. Use clave_linked_document to read/update/prepare/send. Never send without an explicit user instruction.',
+        'THE tool for "open the panel", "open it beside this session", "let me review/edit/modify that draft": opens a Markdown/HTML file or a structured email in a SIDE PANEL beside YOUR calling session, two panes, focused immediately, and the user edits it there. Prefer it over clave_open_file whenever the user will change what you wrote — clave_open_file is a read-only-ish tab elsewhere in the window, not the panel. Pass exactly one of path or email; email takes to/cc/subject/bodyHtml/threadId and makes this a full composer. Files and attachments must use absolute paths. Signatures support text, links, tables and inline styling; local/data/HTTPS images are staged when signaturePath imports an HTML file. Reopening a path preserves edits. Then use clave_side_panel to read/update/prepare/send. Never send without an explicit user instruction.',
       inputSchema: linkedOpenSchema
     },
     async (args) => {
@@ -750,10 +767,10 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     }
   )
   server.registerTool(
-    'clave_linked_document',
+    'clave_side_panel',
     {
       description:
-        'Read your session linked document, update with expected revision, prepare an immutable email package, or send a prepared package via Gmail. Read returns exact current content. Revision conflicts require reading again, never overwriting user edits. Prepare is NOT send. Send ONLY after explicit user instruction, with the returned packageId and userConfirmed=true. Do not reconstruct MIME. Sent/failed/unknown results are persisted; never automatically retry an unknown result or create duplicate revisions to bypass delivery guards.',
+        'Companion to clave_open_side_panel: work on the document or email now open in YOUR side panel. Read it, update it with the expected revision, prepare an immutable email package, or send a prepared package via Gmail. Read returns exact current content. Revision conflicts require reading again, never overwriting user edits. Prepare is NOT send. Send ONLY after explicit user instruction, with the returned packageId and userConfirmed=true. Do not reconstruct MIME. Sent/failed/unknown results are persisted; never automatically retry an unknown result or create duplicate revisions to bypass delivery guards.',
       inputSchema: {
         action: z.enum(['read', 'update', 'prepare', 'send']),
         revision: z.number().int().positive().optional(),
@@ -806,7 +823,7 @@ function buildServer(callerSessionId: string | undefined): McpServer {
     'clave_open_file',
     {
       description:
-        'Open a file as a tab in Clave for the user to read or edit — e.g. to present a document, plan, report, or HTML page you produced. Idempotent: opening an already-open file focuses its existing tab. Text files render with editing; markdown renders formatted; .html files render as a live page by default (a Rendered ⇄ Source toggle sits in the tab header).',
+        'Open a file as a tab in Clave for the user to READ — e.g. to present a document, plan, report, or HTML page you produced. If the user is going to edit or revise it (a draft, an email, anything they asked to "review", "modify", or see "in the panel"), use clave_open_side_panel instead: this tool opens a separate tab, not the editor beside your session. Idempotent: opening an already-open file focuses its existing tab. Text files render with editing; markdown renders formatted; .html files render as a live page by default (a Rendered ⇄ Source toggle sits in the tab header).',
       inputSchema: {
         path: z
           .string()
