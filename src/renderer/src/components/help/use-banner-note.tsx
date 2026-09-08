@@ -3,17 +3,17 @@ import { ChevronRightIcon } from '@heroicons/react/24/outline'
 import { motion, AnimatePresence } from 'framer-motion'
 
 /**
- * The expandable note shared by the sidebar's two announcement cards.
+ * The expandable note under the sidebar's what's-new card.
  *
- * Both cards had the same problem from opposite ends. The what's-new card
- * printed the whole release note — several paragraphs — at a user who had not
- * asked; the update card asked for a 220 MB download and a restart while naming
- * only a version number. One answer serves both: the card is a headline at
- * rest, and the changelog is one click under it.
+ * That card printed the whole release note — several paragraphs — at a user who
+ * had not asked for it. The answer: the card is a headline at rest, and the
+ * changelog is one click under it. (The update card had the mirror problem and
+ * a different answer — its notes are reference beside a decision, so they live
+ * in a panel off the icon rather than in a fold: see `ReleaseNotesBadge`.)
  *
- * Collapsed is the default in both. The rest state of an announcement is a
- * single line — a card that opens itself is the unbounded card again, just with
- * a chevron on it.
+ * Collapsed is the default. The rest state of an announcement is a single
+ * line — a card that opens itself is the unbounded card again, just with a
+ * chevron on it.
  *
  * The height cap survives expansion and is the reason this is a component
  * rather than a `<details>`. These cards live in the sidebar's `flex-shrink-0`

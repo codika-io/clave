@@ -78,6 +78,128 @@ function ReleaseHeading({ children }: { children?: React.ReactNode }): React.Rea
   )
 }
 
+/** Everything a release note may keep. Anything else loses its box. */
+const ALLOWED_TAGS = new Set([
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'P',
+  'UL',
+  'OL',
+  'LI',
+  'STRONG',
+  'B',
+  'EM',
+  'I',
+  'DEL',
+  'S',
+  'CODE',
+  'PRE',
+  'BLOCKQUOTE',
+  'A',
+  'BR',
+  'HR'
+])
+
+/** Dropped WITH their content: none of it is text a reader wants, or may run. */
+const DROPPED_WHOLE = new Set([
+  'SCRIPT',
+  'STYLE',
+  'IMG',
+  'SVG',
+  'IFRAME',
+  'OBJECT',
+  'EMBED',
+  'LINK',
+  'META',
+  'NOSCRIPT',
+  'TEXTAREA',
+  'TEMPLATE'
+])
+
+const ALLOWED_ATTRIBUTES: Record<string, string[]> = { A: ['href', 'title'] }
+const SAFE_HREF = /^(?:https?:|mailto:)/i
+
+/**
+ * The allowlist, applied where the markup is actually injected.
+ *
+ * The main process already sanitises release bodies with `sanitize-html`
+ * (`normalizeReleaseBody`), and on the real path this pass finds nothing to do.
+ * It exists anyway because THIS is the line that hands a string to the DOM:
+ * a guard one process away protects the one caller it knows about, while a
+ * guard here protects the operation. `DOMParser` builds an inert document —
+ * no script runs, no image is fetched — so the scrub happens before anything
+ * in the string can act.
+ *
+ * Unknown tags are unwrapped rather than dropped: GitHub wraps every body in a
+ * `<div>`, and dropping it would take the note with it.
+ */
+function scrubReleaseHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
+
+  const scrub = (parent: Element): void => {
+    for (const child of [...parent.children]) {
+      scrub(child)
+
+      if (DROPPED_WHOLE.has(child.tagName)) {
+        child.remove()
+        continue
+      }
+      if (!ALLOWED_TAGS.has(child.tagName)) {
+        child.replaceWith(...child.childNodes)
+        continue
+      }
+
+      const allowed = ALLOWED_ATTRIBUTES[child.tagName] ?? []
+      for (const attr of [...child.attributes]) {
+        if (!allowed.includes(attr.name.toLowerCase())) child.removeAttribute(attr.name)
+      }
+      if (child.tagName === 'A') {
+        // A `javascript:` href loses the link and keeps the words; a real one
+        // opens in the browser, never in the renderer — an Electron window must
+        // not navigate itself away from the app.
+        if (!SAFE_HREF.test(child.getAttribute('href') ?? '')) child.removeAttribute('href')
+        child.setAttribute('target', '_blank')
+        child.setAttribute('rel', 'noopener noreferrer')
+      }
+    }
+  }
+
+  scrub(doc.body)
+  return doc.body.innerHTML
+}
+
+/**
+ * One body, in whichever of the two shapes the provider sent.
+ *
+ * The HTML branch exists because GitHub's releases *feed* — the only changelog
+ * an app has for a version it has not installed — serves each body already
+ * rendered, so the Markdown pipeline printed `<h3>Added</h3> <ul> <li>…` at the
+ * user as visible text.
+ *
+ * The two branches must look the same. The Markdown one is styled by the
+ * component map above, the HTML one by `.release-note-html` in main.css —
+ * change one and change the other.
+ */
+function ReleaseBody({ note }: { note: ReleaseNote }): React.ReactElement {
+  const html = useMemo(
+    () => (note.format === 'html' ? scrubReleaseHtml(note.note) : null),
+    [note.format, note.note]
+  )
+
+  if (html !== null) {
+    return <div className="release-note-html" dangerouslySetInnerHTML={{ __html: html }} />
+  }
+  return (
+    <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+      {note.note}
+    </ReactMarkdown>
+  )
+}
+
 /**
  * Every release between the version running and the one on offer, newest first.
  *
@@ -98,9 +220,7 @@ export const ReleaseNotes = memo(function ReleaseNotes({
           {multiple && (
             <p className="text-[11px] font-medium text-text-primary mb-1">v{n.version}</p>
           )}
-          <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
-            {n.note}
-          </ReactMarkdown>
+          <ReleaseBody note={n} />
         </div>
       )),
     [notes, multiple]

@@ -93,7 +93,7 @@ export function WhatsNewBanner(): ReactNode {
                 so it lives behind the disclosure rather than in the card: an
                 announcement should say what changed in one line and let the
                 reader ask for the rest. The cap and the scroll move with it
-                (see BannerNote): unbounded, this block pushed the session list
+                (see use-banner-note): unbounded, this block pushed the session list
                 and the foot panel off the bottom of the sidebar. */}
             <p className="text-[11px] text-text-secondary mt-0.5 leading-relaxed">{entry.title}</p>
 

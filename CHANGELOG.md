@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use [Se
 
 ## [Unreleased]
 
+### Fixed
+- **Update notes render as formatting, not as tags** — the update card's changelog arrived as `<h3>Added</h3> <ul> <li><strong>…` in plain visible text. The card ran the body through a Markdown renderer, but the source it reads is GitHub's releases *feed*, whose `<content>` carries each body already rendered to HTML — so the renderer escaped what it could not parse and printed the markup at the reader. The body's shape is now decided where it arrives: an HTML one is sanitised in the main process against a fixed tag allowlist (scripts, images and wrappers dropped, links forced to open in the browser) and labelled, a Markdown one is left alone, and the card renders each accordingly. The allowlist is applied a second time at the line that injects the markup, so the guard sits on the operation rather than one process away.
+
+### Changed
+- **What's in an update is a mark on the icon, not a fold in the card** — the changelog lived behind a **What's changed** disclosure inside the update card, which put reference material in the same box as the decision it interrupts: opening it grew the card and pushed *Later* and *Update* down the sidebar. The update card is one row now, always, with an ⓘ badge on its icon; hovering opens the notes in a panel beside the card and clicking pins it there, so a link can be followed or three releases scrolled without the panel closing under the pointer. Escape or a click away dismisses it. A release published with no body still shows no badge at all, rather than a control opening onto blank space.
+
 ## [1.85.0] — 2026-09-08
 
 ### Added

@@ -1,15 +1,17 @@
 import { app, shell } from 'electron'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import log from 'electron-log/main'
+import sanitizeHtml from 'sanitize-html'
 import { broadcastToAllWindows } from './window-routing'
 import type {
   DownloadProgress,
   ReleaseNote,
+  ReleaseNoteFormat,
   UpdatePhase,
   UpdaterState
 } from '../shared/updater-types'
 
-export type { DownloadProgress, ReleaseNote, UpdatePhase, UpdaterState }
+export type { DownloadProgress, ReleaseNote, ReleaseNoteFormat, UpdatePhase, UpdaterState }
 
 const CHECK_INTERVAL = 30 * 60 * 1000 // 30 minutes
 const INITIAL_DELAY = 5000
@@ -148,21 +150,110 @@ export function normalizeReleaseNotes(
   if (raw == null) return null
 
   if (typeof raw === 'string') {
-    const note = raw.trim()
-    return note ? [{ version: fallbackVersion, note }] : null
+    const body = normalizeReleaseBody(raw)
+    return body ? [{ version: fallbackVersion, ...body }] : null
   }
 
   if (!Array.isArray(raw)) return null
 
   const notes: ReleaseNote[] = []
   for (const entry of raw) {
-    const note = (entry?.note ?? '').trim()
+    const body = normalizeReleaseBody(entry?.note ?? '')
     // A release published with an empty body is skipped, not rendered as a
     // version heading with nothing under it.
-    if (!note) continue
-    notes.push({ version: (entry?.version ?? '').trim() || fallbackVersion, note })
+    if (!body) continue
+    notes.push({ version: (entry?.version ?? '').trim() || fallbackVersion, ...body })
   }
   return notes.length > 0 ? notes : null
+}
+
+/**
+ * Whether a body is already-rendered HTML rather than the Markdown it was
+ * authored in.
+ *
+ * It is a real fork, not a defensive one: GitHub's *releases feed* is where
+ * `electron-updater` reads bodies from (`GitHubProvider.computeReleaseNotes`
+ * takes the entry's `<content>`), and Atom content for a release is the body
+ * already rendered — `<h3>Added</h3><ul><li>…`. Every other route into this
+ * function (a `latest-mac.yml` `releaseNotes:` string, another provider) gives
+ * the raw Markdown. Sniffing the body is what tells them apart, since nothing
+ * upstream declares which one arrived.
+ *
+ * A block-level tag is the signal. Not `<` on its own: a Markdown note may well
+ * say `<Cmd+K>` or name a generic type, and neither makes the body HTML.
+ */
+const LOOKS_LIKE_HTML =
+  /<(?:p|div|ul|ol|li|h[1-6]|blockquote|pre|table|img|br|hr)\b[^>]*>|<\/(?:p|div|ul|ol|li|h[1-6]|blockquote|pre|table)>/i
+
+/**
+ * The tags a release note may keep, and the trust boundary for the renderer.
+ *
+ * The bodies come from our own releases over HTTPS, so this is a second lock
+ * rather than the only one — but the renderer sets this string as markup, and
+ * markup that reached a renderer unsanitised is an XSS hole whatever we believe
+ * about its source. Everything not listed loses its box and keeps its text:
+ * GitHub wraps bodies in `<div>`s and decorates author mentions with anchors
+ * and images, none of which belong in a 260px card.
+ */
+const RELEASE_NOTE_SANITIZE: sanitizeHtml.IOptions = {
+  allowedTags: [
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'p',
+    'ul',
+    'ol',
+    'li',
+    'strong',
+    'b',
+    'em',
+    'i',
+    'del',
+    's',
+    'code',
+    'pre',
+    'blockquote',
+    'a',
+    'br',
+    'hr'
+  ],
+  // `target` is added here rather than trusted from the feed: a link in this
+  // card must open in the browser, never navigate the renderer away from the
+  // app (see the `a` component in ReleaseNotes.tsx, which does the same for
+  // the Markdown branch).
+  // `target`/`rel` are on the list because `transformTags` below ADDS them and
+  // the attribute filter runs after the transform — left off, they are added
+  // and then stripped, and the link navigates the renderer.
+  allowedAttributes: { a: ['href', 'title', 'target', 'rel'] },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  transformTags: {
+    a: sanitizeHtml.simpleTransform('a', { target: '_blank', rel: 'noopener noreferrer' })
+  },
+  // Dropped with their content, not unwrapped: an image in a sidebar card is
+  // noise and a network fetch, and the rest cannot be rendered at all.
+  nonTextTags: ['style', 'script', 'textarea', 'option', 'noscript', 'img', 'svg', 'iframe']
+}
+
+/**
+ * One body, trimmed, sanitised if it is HTML, and told apart from an empty one.
+ *
+ * Returns null for anything that would open onto blank space — including a
+ * body that survives sanitising as tags with no words left in it, which is
+ * indistinguishable to a reader from a release published with no notes.
+ */
+export function normalizeReleaseBody(
+  raw: string | null | undefined
+): { note: string; format: ReleaseNoteFormat } | null {
+  const trimmed = (raw ?? '').trim()
+  if (!trimmed) return null
+  if (!LOOKS_LIKE_HTML.test(trimmed)) return { note: trimmed, format: 'markdown' }
+
+  const html = sanitizeHtml(trimmed, RELEASE_NOTE_SANITIZE).trim()
+  if (!html.replace(/<[^>]*>/g, '').trim()) return null
+  return { note: html, format: 'html' }
 }
 
 /**

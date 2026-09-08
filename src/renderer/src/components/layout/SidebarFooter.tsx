@@ -26,8 +26,7 @@ import {
 } from '../../store/usage-store'
 import { PiLogo } from '../icons/cli-logos'
 import { formatDuration } from '../work-tracker/utils'
-import { BannerNote } from '../help/BannerNote'
-import { ReleaseNotes } from '../help/ReleaseNotes'
+import { ReleaseNotesBadge } from '../help/ReleaseNotesBadge'
 import { UserIconDisplay } from '../ui/UserIconDisplay'
 import { BrandField } from '../ui/BrandField'
 import { fieldAccent } from '../../lib/brand-field'
@@ -35,17 +34,23 @@ import { cn } from '../../lib/utils'
 import { useShortcutLabel } from '../../store/keymap-store'
 
 /**
- * "There is an update" — and, behind a disclosure, what is actually in it.
+ * "There is an update" — one line, two buttons, and a mark on the icon for
+ * what is actually in it.
  *
  * The notes come from the GitHub release bodies over `electron-updater`, which
  * is the only changelog a running app can have for a version it has not
  * installed: `help/whats-new.json` is stamped and bundled at build time, so the
- * note for v1.80 exists solely inside the v1.80 binary. Without this the card
+ * note for v1.80 exists solely inside the v1.80 binary. Without them the card
  * asked for a 220 MB download and a restart while naming only a version number.
  *
- * Collapsed at rest, so the card stays one line until asked. The disclosure is
- * absent, not empty, when the provider gave no bodies — a chevron that opens
- * onto nothing reads as a broken control.
+ * They used to live in a fold under the buttons. That put reference material
+ * inside the box holding the decision — opening it grew the card and pushed
+ * Later and Update down the sidebar — so they moved out to a panel beside the
+ * card, off the badge on the icon (`ReleaseNotesBadge`). The card itself is now
+ * one row, always.
+ *
+ * The badge is absent, not inert, when the provider gave no bodies: a control
+ * that opens onto nothing reads as a broken one.
  */
 export function UpdateBanner(): React.ReactElement {
   const phase = useUpdaterStore((s) => s.phase)
@@ -79,8 +84,14 @@ export function UpdateBanner(): React.ReactElement {
             className="px-2.5 py-2 rounded-xl bg-accent/8 border border-accent/15"
           >
             <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-6 h-6 rounded-md bg-accent/12 flex-shrink-0">
+              <div className="relative flex items-center justify-center w-6 h-6 rounded-md bg-accent/12 flex-shrink-0">
                 <ArrowDownTrayIcon className="w-3.5 h-3.5 text-accent" />
+                {/* A release published with an empty body normalises to null
+                    upstream rather than to an empty array, so this is a real
+                    absence, not a blank note. */}
+                {releaseNotes && releaseNotes.length > 0 && (
+                  <ReleaseNotesBadge notes={releaseNotes} version={version} />
+                )}
               </div>
               <p className="text-[12px] font-medium text-text-primary leading-tight">
                 {version ? `v${version}` : 'Update'}
@@ -100,15 +111,6 @@ export function UpdateBanner(): React.ReactElement {
                 </button>
               </div>
             </div>
-
-            {/* Only when there is something to open. A release published with
-                an empty body normalises to null upstream rather than to an
-                empty array, so this is a real absence, not a blank note. */}
-            {releaseNotes && releaseNotes.length > 0 && (
-              <BannerNote label={`what's in version ${version ?? 'the update'}`}>
-                <ReleaseNotes notes={releaseNotes} />
-              </BannerNote>
-            )}
           </div>
         </motion.div>
       )}

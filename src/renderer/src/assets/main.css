@@ -3115,3 +3115,106 @@ button.extension-card:hover {
 
 .linked-document-titlebar { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-subtle-color); }
 .linked-document-titlebar > [role="status"] { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Release notes, HTML branch ────────────────────────────────────────────
+   GitHub's releases feed serves each body already rendered to HTML, so the
+   update card cannot run every note through its Markdown component map. This
+   is that map's twin for the HTML branch (`ReleaseBody` in
+   components/help/ReleaseNotes.tsx): same type scale, same section labels,
+   same list rhythm. The two must be changed together — the whole point is
+   that a reader cannot tell which branch rendered the note they are reading.
+   Only the sanitised allowlist in `normalizeReleaseBody` can land here. */
+.release-note-html > *:first-child {
+  margin-top: 0;
+}
+.release-note-html > *:last-child {
+  margin-bottom: 0;
+}
+/* ### Added / ### Fixed — section labels, not headings, at this size: 11px
+   type cannot make a heading differ from its body by weight alone. */
+.release-note-html h1,
+.release-note-html h2,
+.release-note-html h3,
+.release-note-html h4,
+.release-note-html h5,
+.release-note-html h6 {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--text-tertiary);
+  margin: 0.5rem 0 0.25rem;
+}
+.release-note-html p {
+  margin: 0 0 0.375rem;
+}
+.release-note-html ul,
+.release-note-html ol {
+  margin: 0 0 0.375rem;
+  padding-left: 0.875rem;
+}
+.release-note-html ul {
+  list-style: disc;
+}
+.release-note-html ol {
+  list-style: decimal;
+}
+.release-note-html li {
+  color: var(--text-secondary);
+}
+.release-note-html li + li {
+  margin-top: 0.25rem;
+}
+.release-note-html li > ul,
+.release-note-html li > ol {
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+/* The lead-in of a release bullet ("**Codex usage panel** — …"): the scannable
+   half of the line, so it takes the primary colour rather than more weight. */
+.release-note-html strong,
+.release-note-html b {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.release-note-html del,
+.release-note-html s {
+  color: var(--text-tertiary);
+}
+.release-note-html code {
+  background: color-mix(in srgb, var(--surface-200) 60%, transparent);
+  color: var(--text-primary);
+  padding: 1px 4px;
+  border-radius: var(--radius-md);
+  font-size: 0.9em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+/* A fenced block would blow the card's width open; scroll it rather than
+   wrap it. */
+.release-note-html pre {
+  margin: 0 0 0.375rem;
+  padding: 0.375rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-200) 50%, transparent);
+  overflow-x: auto;
+}
+.release-note-html pre code {
+  background: transparent;
+  padding: 0;
+}
+.release-note-html blockquote {
+  margin: 0.375rem 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  color: var(--text-tertiary);
+}
+.release-note-html hr {
+  margin: 0.5rem 0;
+  border-color: var(--border-subtle-color);
+}
+.release-note-html a {
+  color: var(--color-accent);
+}
+.release-note-html a:hover {
+  text-decoration: underline;
+}

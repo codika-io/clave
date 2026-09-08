@@ -11,11 +11,29 @@
 
 export type UpdatePhase = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'
 
-/** One release's notes: the version it belongs to, and its body as Markdown. */
+/**
+ * How a release body is written, because the provider decides and not us.
+ *
+ * GitHub's releases *feed* — the one `electron-updater` reads — carries each
+ * body already rendered to HTML in its `<content>` element, not the Markdown
+ * the release was authored in. A body assumed to be Markdown therefore reaches
+ * the card as `<h3>Added</h3> <ul> <li>…` in plain text: every tag visible,
+ * nothing formatted. The other providers (and a `latest-mac.yml` note) hand
+ * back the raw body, which is Markdown. So the format travels with the note.
+ */
+export type ReleaseNoteFormat = 'markdown' | 'html'
+
+/** One release's notes: the version it belongs to, and its body. */
 export interface ReleaseNote {
   version: string
-  /** The release body, Markdown. Empty bodies are dropped before this point. */
+  /**
+   * The release body. Empty bodies are dropped before this point, and an HTML
+   * one has been through `sanitize-html` in the main process — the renderer
+   * sets it as markup, so this field is the trust boundary.
+   */
   note: string
+  /** Which of the two the body is. Absent means Markdown, the old default. */
+  format?: ReleaseNoteFormat
 }
 
 export interface DownloadProgress {
@@ -33,8 +51,8 @@ export interface UpdaterState {
   /** The version on the server once a check has found one. */
   availableVersion: string | null
   /**
-   * What the available version changes, as Markdown, straight from the GitHub
-   * release bodies — the ONLY changelog a running app can have for a version it
+   * What the available version changes, straight from the GitHub release
+   * bodies — the ONLY changelog a running app can have for a version it
    * has not installed. `help/whats-new.json` is stamped and bundled at build
    * time, so v1.79 ships no note for v1.80; that note exists only inside the
    * v1.80 binary. This field is how "what's in the update" can be read BEFORE

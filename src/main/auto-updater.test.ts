@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   availableStatePatch,
   downloadStrategy,
+  normalizeReleaseBody,
   normalizeReleaseNotes,
   phaseOnAvailable,
   phaseOnCheckError,
@@ -109,7 +110,7 @@ describe('phase transitions', () => {
 describe('normalizeReleaseNotes', () => {
   it('wraps the single-string form, naming it with the version it came for', () => {
     expect(normalizeReleaseNotes('### Fixed\n- A thing', '1.80.0')).toEqual([
-      { version: '1.80.0', note: '### Fixed\n- A thing' }
+      { version: '1.80.0', note: '### Fixed\n- A thing', format: 'markdown' }
     ])
   })
 
@@ -119,8 +120,8 @@ describe('normalizeReleaseNotes', () => {
       { version: '1.79.0', note: 'older' }
     ]
     expect(normalizeReleaseNotes(raw, '1.80.0')).toEqual([
-      { version: '1.80.0', note: 'newest' },
-      { version: '1.79.0', note: 'older' }
+      { version: '1.80.0', note: 'newest', format: 'markdown' },
+      { version: '1.79.0', note: 'older', format: 'markdown' }
     ])
   })
 
@@ -143,19 +144,19 @@ describe('normalizeReleaseNotes', () => {
       { version: '1.79.0', note: 'real notes' }
     ]
     expect(normalizeReleaseNotes(raw, '1.80.0')).toEqual([
-      { version: '1.79.0', note: 'real notes' }
+      { version: '1.79.0', note: 'real notes', format: 'markdown' }
     ])
   })
 
   it('falls back to the available version when an entry carries none', () => {
     expect(normalizeReleaseNotes([{ note: 'body' }], '1.80.0')).toEqual([
-      { version: '1.80.0', note: 'body' }
+      { version: '1.80.0', note: 'body', format: 'markdown' }
     ])
   })
 
   it('trims the bodies it keeps', () => {
     expect(normalizeReleaseNotes('  body  ', '1.80.0')).toEqual([
-      { version: '1.80.0', note: 'body' }
+      { version: '1.80.0', note: 'body', format: 'markdown' }
     ])
   })
 
@@ -164,7 +165,97 @@ describe('normalizeReleaseNotes', () => {
       version?: string
       note?: string | null
     }>
-    expect(normalizeReleaseNotes(raw, '1.80.0')).toEqual([{ version: '1.79.0', note: 'kept' }])
+    expect(normalizeReleaseNotes(raw, '1.80.0')).toEqual([
+      { version: '1.79.0', note: 'kept', format: 'markdown' }
+    ])
+  })
+})
+
+/**
+ * The format fork, and the bug it exists for.
+ *
+ * GitHub's releases FEED — the one `electron-updater` reads bodies from — hands
+ * back each body already rendered to HTML, not the Markdown it was authored in.
+ * Fed to a Markdown renderer that escapes what it cannot parse, that reached
+ * the update card as `<h3>Added</h3> <ul> <li>…` in plain, visible text: every
+ * tag on screen, nothing formatted, and no error anywhere. So the body is
+ * sniffed, sanitised, and labelled here, and the renderer trusts the label.
+ *
+ * The sanitising half is a real boundary, not a formality: the renderer sets
+ * this string as markup. What is asserted below is the allowlist doing its job
+ * on the two things that actually arrive in a GitHub body — the wrapper markup
+ * around the note, and anything carrying script.
+ */
+describe('normalizeReleaseBody', () => {
+  it('leaves a Markdown body alone and names it Markdown', () => {
+    expect(normalizeReleaseBody('### Added\n- **A thing** — with a dash.')).toEqual({
+      note: '### Added\n- **A thing** — with a dash.',
+      format: 'markdown'
+    })
+  })
+
+  // The exact shape the user saw as text in the card.
+  it('recognises the feed\'s rendered HTML and keeps its structure', () => {
+    const body = normalizeReleaseBody(
+      '<h3>Added</h3> <ul> <li><strong>Edit beside your agent</strong> — a linked file.</li> </ul>'
+    )
+    expect(body?.format).toBe('html')
+    expect(body?.note).toContain('<h3>Added</h3>')
+    expect(body?.note).toContain('<strong>Edit beside your agent</strong>')
+  })
+
+  // `<` on its own is not HTML: a Markdown note may name a key chord or a
+  // generic type, and mislabelling it would strip the note to its text.
+  it('does not mistake angle brackets in prose for markup', () => {
+    expect(normalizeReleaseBody('Press <Cmd+K> to open the launcher.')?.format).toBe('markdown')
+    expect(normalizeReleaseBody('- Accepts a `Map<string, Session>` now.')?.format).toBe('markdown')
+  })
+
+  it('drops script, styles and images while keeping the words around them', () => {
+    const body = normalizeReleaseBody(
+      '<div class="markdown-body"><p>Real note.<script>steal()</script></p>' +
+        '<p><img src="https://example.test/shot.png" alt="shot"> After.</p></div>'
+    )
+    expect(body?.format).toBe('html')
+    expect(body?.note).toContain('Real note.')
+    expect(body?.note).toContain('After.')
+    expect(body?.note).not.toContain('steal()')
+    expect(body?.note).not.toContain('<script')
+    expect(body?.note).not.toContain('<img')
+    // The wrapper GitHub puts round every body loses its box, not its content.
+    expect(body?.note).not.toContain('<div')
+  })
+
+  it('strips event handlers and javascript: links from an anchor it keeps', () => {
+    const body = normalizeReleaseBody(
+      '<p><a href="javascript:alert(1)" onclick="alert(1)">click</a> and ' +
+        '<a href="https://example.test/pr/1">a real link</a></p>'
+    )
+    expect(body?.note).not.toContain('javascript:')
+    expect(body?.note).not.toContain('onclick')
+    expect(body?.note).toContain('https://example.test/pr/1')
+    // Opened in the browser, never in the renderer.
+    expect(body?.note).toContain('target="_blank"')
+    expect(body?.note).toContain('rel="noopener noreferrer"')
+  })
+
+  // Same invariant as the notes list: null, or something worth opening.
+  it('returns null for a body that sanitises down to no words', () => {
+    expect(normalizeReleaseBody('<div><img src="x.png"></div>')).toBeNull()
+    expect(normalizeReleaseBody('<p>  </p>')).toBeNull()
+    expect(normalizeReleaseBody('')).toBeNull()
+    expect(normalizeReleaseBody(null)).toBeNull()
+  })
+
+  it('carries the format through the notes list, per entry', () => {
+    const raw = [
+      { version: '1.80.0', note: '<p>rendered</p>' },
+      { version: '1.79.0', note: '### raw' }
+    ]
+    expect(normalizeReleaseNotes(raw, '1.80.0')).toEqual([
+      { version: '1.80.0', note: '<p>rendered</p>', format: 'html' },
+      { version: '1.79.0', note: '### raw', format: 'markdown' }
+    ])
   })
 })
 
@@ -184,7 +275,9 @@ describe('availableStatePatch', () => {
       { version: '1.80.0', releaseNotes: '### Added\n- A thing' },
       1000
     )
-    expect(patch.releaseNotes).toEqual([{ version: '1.80.0', note: '### Added\n- A thing' }])
+    expect(patch.releaseNotes).toEqual([
+      { version: '1.80.0', note: '### Added\n- A thing', format: 'markdown' }
+    ])
   })
 
   it('carries every release of a fullChangelog answer, in order', () => {
@@ -199,6 +292,15 @@ describe('availableStatePatch', () => {
       1000
     )
     expect(patch.releaseNotes?.map((n) => n.version)).toEqual(['1.80.0', '1.79.0'])
+  })
+
+  // The format travels with the notes or the renderer has to guess again.
+  it('carries the format the provider\'s body turned out to be', () => {
+    const patch = availableStatePatch(
+      { version: '1.80.0', releaseNotes: '<h3>Added</h3><ul><li>A thing</li></ul>' },
+      1000
+    )
+    expect(patch.releaseNotes?.[0].format).toBe('html')
   })
 
   it('names the version and stamps the check', () => {
