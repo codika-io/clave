@@ -1,3 +1,4 @@
+import { mapCssImages, rasterizeSvgData } from './signature-images'
 import { Parser } from 'htmlparser2'
 import { readFileSync, statSync } from 'fs'
 import { resolve, dirname } from 'path'
@@ -49,7 +50,7 @@ export function validateEmailHtml(html: string): void {
     },
     allowedSchemes: ['https', 'http', 'mailto', 'tel'],
     exclusiveFilter(frame) {
-      if (/(?:url\s*\(|expression\s*\(|@import)/i.test(frame.attribs.style ?? '')) invalid = true
+      if (/(?:expression\s*\(|@import)/i.test(frame.attribs.style ?? '')) invalid = true
       return false
     },
     onOpenTag(tag, attrs) {
@@ -126,8 +127,17 @@ export function validateEmailHtml(html: string): void {
           }
         }
       }
+      try {
+        mapCssImages(attrs.style ?? '', (source) => {
+          const data = /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$/.exec(source)
+          if (!data || rasterMediaType(Buffer.from(data[2], 'base64')) !== data[1]) invalid = true
+          return source
+        })
+      } catch {
+        invalid = true
+      }
       if (attrs.href && !/^(https?:|mailto:|tel:|#)/i.test(attrs.href)) invalid = true
-      if (/(?:url\s*\(|expression\s*\(|@import|\\)/i.test(attrs.style ?? '')) invalid = true
+      if (/(?:expression\s*\(|@import|\\)/i.test(attrs.style ?? '')) invalid = true
     }
   })
   if (invalid)
@@ -162,12 +172,20 @@ export async function importSignature(
   sanitizeHtml(html, {
     onOpenTag(tag, attrs) {
       if (tag === 'img' && attrs.src) sources.add(attrs.src)
+      mapCssImages(attrs.style ?? '', (source) => {
+        sources.add(source)
+        return source
+      })
     }
   })
   const replacements = new Map<string, string>()
   let total = 0
   for (const source of sources) {
-    if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(source)) {
+    if (/^data:image\/svg\+xml[;,]/i.test(source)) {
+      const bytes = rasterizeSvgData(source)
+      total += bytes.length
+      replacements.set(source, `data:image/png;base64,${bytes.toString('base64')}`)
+    } else if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(source)) {
       const bytes = Buffer.from(source.split(',')[1], 'base64')
       if (bytes.length > 2000000) throw new Error('Signature image exceeds 2 MB')
       total += bytes.length
@@ -215,9 +233,15 @@ export async function importSignature(
     allowedAttributes: false,
     allowedSchemes: ['http', 'https', 'mailto', 'tel', 'data'],
     transformTags: {
-      img: (_tag, attrs) => ({
-        tagName: 'img',
-        attribs: { ...attrs, src: replacements.get(attrs.src) ?? '' }
+      '*': (tag, attrs) => ({
+        tagName: tag,
+        attribs: {
+          ...attrs,
+          ...(tag === 'img' ? { src: replacements.get(attrs.src) ?? '' } : {}),
+          ...(attrs.style
+            ? { style: mapCssImages(attrs.style, (source) => replacements.get(source) ?? source) }
+            : {})
+        }
       })
     },
     onOpenTag(tag, attrs) {
@@ -268,6 +292,40 @@ export async function prepareMime(
   validateEmailHtml(e.signatureHtml)
   const id = randomUUID()
   const messageId = `<${id}@clave.local>`
+  const inline = new Map<
+    string,
+    { filename: string; content: Buffer; contentType: string; cid: string }
+  >()
+  const embed = (source: string): string => {
+    const data = /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$/.exec(source)
+    if (!data) throw new Error('Email image was not staged')
+    const content = Buffer.from(data[2], 'base64'),
+      key = digest(content)
+    if (!inline.has(key))
+      inline.set(key, {
+        filename: `image-${inline.size + 1}.${data[1].split('/')[1]}`,
+        content,
+        contentType: data[1],
+        cid: `${key}@clave.local`
+      })
+    return `cid:${inline.get(key)!.cid}`
+  }
+  const html = sanitizeHtml(e.bodyHtml + (e.signatureHtml ? `<div>${e.signatureHtml}</div>` : ''), {
+    allowedTags: false,
+    allowVulnerableTags: true,
+    allowedAttributes: false,
+    allowedSchemes: ['http', 'https', 'mailto', 'tel', 'cid'],
+    transformTags: {
+      '*': (tag, attrs) => ({
+        tagName: tag,
+        attribs: {
+          ...attrs,
+          ...(tag === 'img' ? { src: embed(attrs.src) } : {}),
+          ...(attrs.style ? { style: mapCssImages(attrs.style, embed) } : {})
+        }
+      })
+    }
+  })
   const transport = nodemailer.createTransport({
     streamTransport: true,
     buffer: true,
@@ -282,12 +340,11 @@ export async function prepareMime(
     replyTo: e.replyTo,
     inReplyTo: e.inReplyTo,
     references: e.references,
-    html: e.bodyHtml + (e.signatureHtml ? `<div>${e.signatureHtml}</div>` : ''),
+    html,
     text:
       plainText(e.bodyHtml) +
       (e.signatureHtml ? '\n\n' + (e.signatureText || plainText(e.signatureHtml)) : ''),
-    attachments: files,
-    attachDataUrls: true,
+    attachments: [...files, ...inline.values()],
     messageId,
     keepBcc: true,
     disableFileAccess: true,
