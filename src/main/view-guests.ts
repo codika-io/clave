@@ -64,6 +64,10 @@ export function installViewGuestPolicy(): void {
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() !== 'webview') return
 
+    // A popup ALWAYS leaves, local or not, by design: a page that asks for a
+    // new window wants the reader to keep this one (a demo guide opening the
+    // app it walks through), and the pane has no second window to give it.
+    // A plain link is the in-pane path; that is where the trail rule applies.
     contents.setWindowOpenHandler(({ url }) => {
       if (HTTP.test(url)) shell.openExternal(url).catch(() => {})
       return { action: 'deny' }

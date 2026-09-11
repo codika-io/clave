@@ -275,6 +275,25 @@ export async function run(t) {
       powers
     )
 
+    // And no more of the machine than a browser tab would give it — less, in
+    // fact: every permission is refused, not asked. Delete the two permission
+    // handlers on the view session and this reads "granted" on every row.
+    const perms = await win.evaluate(() =>
+      document
+        .querySelector('webview')
+        .executeJavaScript(
+          `(async () => { const q = {}; for (const n of ['microphone', 'camera', 'geolocation', 'notifications']) { try { q[n] = (await navigator.permissions.query({ name: n })).state } catch (e) { q[n] = 'ERR ' + e.name } } try { await navigator.mediaDevices.getUserMedia({ audio: true }); q.mic = 'GRANTED' } catch (e) { q.mic = e.name } return q })()`,
+          true
+        )
+    )
+    t.check(
+      'the guest is refused every permission',
+      ['microphone', 'camera', 'geolocation', 'notifications'].every(
+        (n) => perms[n] === 'denied'
+      ) && perms.mic === 'NotAllowedError',
+      perms
+    )
+
     // A file: src never attaches: the tag is created, the guest is not.
     const fileAttach = await win.evaluate(async () => {
       const wv = document.createElement('webview')
