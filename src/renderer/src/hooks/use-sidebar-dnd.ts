@@ -273,8 +273,14 @@ export function useSidebarDnd(opts: {
             newIndicator = { targetId: group.id, position: 'after' }
             break
           }
-          // The last row not being dragged; with none (the dragged row is the
-          // only one) the strip means "stay".
+          // An EMPTY group's zone is its "No sessions" row: a row dropped there
+          // joins the group (its first member). Otherwise the last row not
+          // being dragged; with none (the dragged row is the only one) the
+          // strip means "stay".
+          if (group.sessionIds.length === 0) {
+            newIndicator = { targetId: group.id, position: 'inside' }
+            break
+          }
           const anchor = [...group.sessionIds].reverse().find((sid) => !drag.ids.includes(sid))
           if (anchor) newIndicator = { targetId: anchor, position: 'after' }
           break

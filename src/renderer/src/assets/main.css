@@ -599,6 +599,24 @@ body,
   color: var(--text-primary);
   background-color: var(--surface-100);
 }
+
+/* The row an emptied group shows in place of its sessions ("No sessions").
+   Cut to .sidebar-item's exact height and side padding so a group of none is
+   as tall as a group of one and nothing below it moves when the last tab
+   closes; centred, italic and tertiary so it reads as a note about the card,
+   not as a row to click. No hover state on purpose — it is not a control. */
+.sidebar-empty-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--sidebar-row-h);
+  padding: 0 var(--sidebar-row-px);
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-tertiary);
+  user-select: none;
+  cursor: default;
+}
 .sidebar-item[data-selected="true"] {
   color: var(--text-primary);
   background-color: var(--surface-200);

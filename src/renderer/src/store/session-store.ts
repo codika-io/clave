@@ -1137,7 +1137,9 @@ export const useSessionStore = create<SessionState>((set) => ({
             sessionId: t.sessionId && validSessionIds.has(t.sessionId) ? t.sessionId : null
           }))
         }))
-        .filter((g) => g.sessionIds.length > 0)
+      // A restored group whose members have since closed comes back empty —
+      // an empty group is a normal state, exactly as closing its last tab
+      // leaves it (see mergeLayoutForKeys).
       const restoredGroupIds = new Set(restoredGroups.map((g) => g.id))
       const displayOrder = snap.displayOrder.filter(
         (id) => validSessionIds.has(id) || restoredGroupIds.has(id)
