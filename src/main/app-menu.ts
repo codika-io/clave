@@ -6,7 +6,7 @@ import { checkForUpdatesNow, openUpdaterLog, RELEASES_URL } from './auto-updater
 import { getStoredKeymapConfig } from './ipc-handlers/keymap-handlers'
 import type { KeymapActionId } from '../shared/keymaps'
 
-const REPO_URL = 'https://github.com/codika-io/clave'
+const REPO_URL = 'https://github.com/antasphere/clave'
 // electron-builder's productName, stated rather than read: `app.name` is the
 // package name ("clave") until the app is packaged, so the menu would say
 // "Quit clave" in dev and "Quit Clave" in a release.

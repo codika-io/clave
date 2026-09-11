@@ -259,4 +259,4 @@ fi
 rm -f "$NOTES_FILE"
 
 info "Release v${NEW_VERSION} published!"
-info "https://github.com/codika-io/clave/releases/tag/v${NEW_VERSION}"
+info "https://github.com/antasphere/clave/releases/tag/v${NEW_VERSION}"

@@ -6,9 +6,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/codika-io/clave.git"
+    "url": "https://github.com/antasphere/clave.git"
   },
-  "homepage": "https://github.com/codika-io/clave",
+  "homepage": "https://github.com/antasphere/clave",
   "main": "./out/main/index.js",
   "scripts": {
     "format": "prettier --write .",

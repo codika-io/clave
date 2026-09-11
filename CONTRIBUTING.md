@@ -4,7 +4,7 @@ Thanks for your interest in contributing! Please read this guide before starting
 
 ## Reporting bugs
 
-Open a [bug report](https://github.com/codika-io/clave/issues/new?template=bug_report.md) with:
+Open a [bug report](https://github.com/antasphere/clave/issues/new?template=bug_report.md) with:
 
 - Your Clave version (Help → About) and macOS version
 - Steps to reproduce
@@ -13,7 +13,7 @@ Open a [bug report](https://github.com/codika-io/clave/issues/new?template=bug_r
 
 ## Suggesting features
 
-Open a [feature request](https://github.com/codika-io/clave/issues/new?template=feature_request.md) describing the problem you're trying to solve and your proposed solution.
+Open a [feature request](https://github.com/antasphere/clave/issues/new?template=feature_request.md) describing the problem you're trying to solve and your proposed solution.
 
 ## The golden rule: propose before you build
 
@@ -52,7 +52,7 @@ This flow exists because Clave has a deliberately narrow scope. Features that se
 ## Development setup
 
 ```bash
-git clone https://github.com/codika-io/clave.git
+git clone https://github.com/antasphere/clave.git
 cd clave
 npm install
 npm run dev

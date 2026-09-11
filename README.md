@@ -2,9 +2,9 @@
 
 <img width="80" height="80" alt="Clave" src="resources/icon.png" />
 
-[![License](https://img.shields.io/github/license/codika-io/clave?labelColor=333333&color=666666)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/codika-io/clave/total?labelColor=333333&color=666666)](https://github.com/codika-io/clave/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/codika-io/clave?labelColor=333333&color=666666)](https://github.com/codika-io/clave)
+[![License](https://img.shields.io/github/license/antasphere/clave?labelColor=333333&color=666666)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/antasphere/clave/total?labelColor=333333&color=666666)](https://github.com/antasphere/clave/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/antasphere/clave?labelColor=333333&color=666666)](https://github.com/antasphere/clave)
 
 **Clave is a macOS desktop app for managing multiple coding-agent sessions in parallel.**
 
@@ -22,7 +22,7 @@ Provider-agnostic: run Claude Code, Antigravity CLI, Codex CLI, and Pi sessions 
 
 ## Download
 
-[**Download the latest version**](https://github.com/codika-io/clave/releases/latest) (macOS Universal — Apple Silicon & Intel) · [All releases](https://github.com/codika-io/clave/releases)
+[**Download the latest version**](https://github.com/antasphere/clave/releases/latest) (macOS Universal — Apple Silicon & Intel) · [All releases](https://github.com/antasphere/clave/releases)
 
 Download the `.dmg`, drag to Applications, done.
 
@@ -39,13 +39,13 @@ Clave ships a companion agent plugin, in [`plugin/`](plugin/) in this repo, that
 **Install (any Open-Plugin-compatible host — auto-detects Claude Code, Cursor, …):**
 
 ```bash
-npx plugins add codika-io/clave
+npx plugins add antasphere/clave
 ```
 
 **Claude Code native alternative:**
 
 ```
-/plugin marketplace add codika-io/clave
+/plugin marketplace add antasphere/clave
 /plugin install clave@clave
 ```
 
@@ -56,7 +56,7 @@ Both paths install the same two skills: `/clave:create-workspace` and `/clave:re
 **Updating:**
 
 ```bash
-npx plugins add codika-io/clave   # re-run to pull latest
+npx plugins add antasphere/clave   # re-run to pull latest
 ```
 
 (Or `/plugin update clave@clave` in Claude Code native.)
@@ -93,7 +93,7 @@ That is the entire payload — three fields, nothing else, ever. The `id` is a r
 The only other network requests Clave makes are:
 
 - **Claude Code** reaches the Anthropic API through your own local Claude Code install — Clave never proxies or sees that traffic.
-- **Auto-updates** — [electron-updater](https://www.electron.build/auto-update) checks [GitHub Releases](https://github.com/codika-io/clave/releases) for new versions and installs the signed, notarized build on quit. Auto-download is off by default.
+- **Auto-updates** — [electron-updater](https://www.electron.build/auto-update) checks [GitHub Releases](https://github.com/antasphere/clave/releases) for new versions and installs the signed, notarized build on quit. Auto-download is off by default.
 - **Usage ping** — the once-a-day anonymous `POST` to `ping.clave.work` described above (optional, toggle in Settings).
 - **Git operations** — standard fetch/pull/push to whatever remotes your own repositories use.
 - **SSH / SFTP** — only to remote hosts you explicitly add.
@@ -104,7 +104,7 @@ The only other network requests Clave makes are:
 ## Build from source
 
 ```bash
-git clone https://github.com/codika-io/clave.git
+git clone https://github.com/antasphere/clave.git
 cd clave
 npm install
 npm run dev          # development with hot reload
