@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowPathIcon, ArrowTopRightOnSquareIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
-import { HtmlPreviewFrame } from '../files/HtmlPreviewFrame'
+import {
+  ArrowLeftIcon,
+  ArrowPathIcon,
+  ArrowRightIcon,
+  ArrowTopRightOnSquareIcon,
+  GlobeAltIcon,
+  HomeIcon
+} from '@heroicons/react/24/outline'
+import { PageGuest, type PageGuestHandle, type PageTrail } from './PageGuest'
+import { usePreviewUrl } from '../../hooks/use-preview-url'
+import { useFileChanged } from '../../hooks/use-file-changed'
+import { isAtHome, PREVIEW_PROTOCOL } from '../../../../shared/view-navigation'
 
 const PROBE_TIMEOUT_MS = 500
 const PROBE_INTERVAL_MS = 10_000
@@ -10,7 +20,7 @@ const STARTING_TIMEOUT_MS = 60_000
 type ProbeState = 'unknown' | 'up' | 'down' | 'starting'
 
 export interface WebViewPaneProps {
-  /** http(s) URL (probed) or an absolute .html path (rendered, no probe). */
+  /** http(s) URL (probed) or an absolute .html path (served from disk, no probe). */
   url: string
   title: string
   /** Label of the segmented button that leaves the view ("Sessions", "Terminal"). */
@@ -24,14 +34,28 @@ export interface WebViewPaneProps {
   active?: boolean
 }
 
+const homePath = (p: string): string => p.replace(/^\/Users\/[^/]+/, '~')
+
 /**
  * The rendered page a view carries — fills the main pane in place of what the
  * sidebar item normally shows (a group's session mosaic, a session's terminal).
  * An http(s) url (a dev server, a workstream dashboard) embeds live; an
- * absolute .html path renders through the clave-preview protocol. For servers,
- * an HTTP probe keeps the pane honest: a dead server shows a start action
- * wired to whatever serves it, not a broken frame. Extracted from the group
- * view panel so session views share one probe/header/frame implementation.
+ * absolute .html path is served from disk through the clave-preview protocol.
+ * Both render in the same web-view guest (PageGuest). For servers, an HTTP
+ * probe keeps the pane honest: a dead server shows a start action wired to
+ * whatever serves it, not a broken frame.
+ *
+ * The declared url is the view's HOME, and the page is free to link away from
+ * it: an exos wave page links its lanes, a board links its cycles, a report on
+ * disk links its siblings. The guest keeps that trail as a history of its own,
+ * so the header carries what a page that links needs — back, forward, home —
+ * and names the page the reader is actually on rather than the one the sidebar
+ * declared. Which links stay in the pane and which leave for the browser is
+ * the main process's rule (view-guests.ts). The trail is the reader's and is
+ * never persisted; the guest's cookies and storage are (one shared browser
+ * profile for every view, so a dashboard's sign-in survives a restart).
+ * Extracted from the group view panel so session views share one
+ * probe/header/frame implementation.
  */
 export function WebViewPane({
   url,
@@ -97,6 +121,33 @@ export function WebViewPane({
     }
   }, [isFile, active, probeNow])
 
+  // A file page is served at a clave-preview url; that url is its home.
+  const preview = usePreviewUrl(isFile ? url : null)
+  const home = isFile ? preview.url : url
+  const showFrame = isFile ? !!preview.url : probe === 'up'
+
+  const guestRef = useRef<PageGuestHandle | null>(null)
+  // The trail carries the home it was read against: a file page's home is
+  // only known once the main process has served it, and a trail read against
+  // an earlier home (or the declared path) is not this page's trail.
+  const [trail, setTrail] = useState<PageTrail & { home: string | null }>({
+    url: home ?? url,
+    title: '',
+    canGoBack: false,
+    canGoForward: false,
+    home
+  })
+  const onTrail = useCallback((t: PageTrail) => setTrail({ ...t, home }), [home])
+  const current: PageTrail =
+    trail.home === home
+      ? trail
+      : { url: home ?? url, title: '', canGoBack: false, canGoForward: false }
+  const atHome = !home || isAtHome(home, current.url)
+
+  // A file page follows its file: a report an agent is rewriting reloads in
+  // place, where the reader is.
+  useFileChanged(isFile ? url : null, () => guestRef.current?.reload())
+
   const handleStart = useCallback(() => {
     if (!start) return
     startingSinceRef.current = Date.now()
@@ -107,29 +158,89 @@ export function WebViewPane({
     })
   }, [start])
 
+  // Reload reloads the page the reader is ON — the trail survives. A frame the
+  // probe has not brought up yet remounts instead.
   const handleRefresh = useCallback(() => {
+    if (showFrame && guestRef.current) {
+      guestRef.current.reload()
+      if (!isFile) void probeNow()
+      return
+    }
     setNonce((n) => n + 1)
     if (!isFile) void probeNow()
-  }, [isFile, probeNow])
+  }, [isFile, showFrame, probeNow])
 
   const handleOpenExternal = useCallback(() => {
-    if (isFile) window.electronAPI.openPath(url)
-    else window.electronAPI.openExternal(url)
-  }, [isFile, url])
+    if (isFile && atHome) window.electronAPI.openPath(url)
+    else window.electronAPI.openExternal(current.url || url)
+  }, [isFile, atHome, url, current.url])
 
-  const showFrame = isFile || probe === 'up'
+  // The header names the page the reader is on: the declared title at home,
+  // the guest's own title once the reader has followed a link. The address
+  // line shows a file page as a path: at home the file's own, away in the
+  // same folder its sibling's (same token, same folder — the protocol's rule).
+  const shownTitle = atHome || !current.title ? title : current.title
+  const shownUrl = ((): string => {
+    if (!isFile) return current.url || url
+    if (atHome) return homePath(url)
+    try {
+      const c = new URL(current.url)
+      if (c.protocol === PREVIEW_PROTOCOL) {
+        const dir = homePath(url).replace(/\/[^/]*$/, '')
+        return dir + decodeURIComponent(c.pathname)
+      }
+    } catch {
+      // not a url — show it as it is
+    }
+    return current.url
+  })()
 
   return (
     <div className="h-full flex flex-col floating-card overflow-hidden">
-      {/* Header — title, source, and the way back to what the item normally shows */}
+      {/* Header — the trail, title, source, and the way back to what the item normally shows */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border-subtle flex-shrink-0 bg-surface-0">
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button
+            onClick={() => guestRef.current?.back()}
+            disabled={!current.canGoBack}
+            className="btn-icon"
+            title="Back"
+            data-testid="view-nav-back"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => guestRef.current?.forward()}
+            disabled={!current.canGoForward}
+            className="btn-icon"
+            title="Forward"
+            data-testid="view-nav-forward"
+          >
+            <ArrowRightIcon className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => guestRef.current?.home()}
+            disabled={atHome}
+            className="btn-icon"
+            title="Home"
+            data-testid="view-nav-home"
+          >
+            <HomeIcon className="w-4 h-4" />
+          </button>
+        </div>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <GlobeAltIcon className="w-4 h-4 text-text-tertiary flex-shrink-0" />
-          <span className="text-sm font-medium text-text-primary truncate flex-shrink-0 max-w-[40%]">
-            {title}
+          <span
+            className="text-sm font-medium text-text-primary truncate flex-shrink-0 max-w-[40%]"
+            data-testid="view-title"
+          >
+            {shownTitle}
           </span>
-          <span className="text-[11px] text-text-tertiary truncate hidden sm:inline flex-1 min-w-0">
-            {isFile ? url.replace(/^\/Users\/[^/]+/, '~') : url}
+          <span
+            className="text-[11px] text-text-tertiary truncate hidden sm:inline flex-1 min-w-0"
+            data-testid="view-current-url"
+          >
+            {shownUrl}
           </span>
           {!isFile && (
             <span
@@ -159,7 +270,7 @@ export function WebViewPane({
           <button
             onClick={handleOpenExternal}
             className="btn-icon"
-            title={isFile ? 'Open externally' : 'Open in browser'}
+            title={isFile && atHome ? 'Open externally' : 'Open in browser'}
           >
             <ArrowTopRightOnSquareIcon className="w-4 h-4" />
           </button>
@@ -168,19 +279,17 @@ export function WebViewPane({
 
       {/* Body */}
       <div className="flex-1 min-h-0 relative">
-        {isFile ? (
-          <HtmlPreviewFrame filePath={url} reloadKey={nonce} />
-        ) : showFrame ? (
-          <iframe
-            key={nonce}
-            src={url}
-            // Dev servers need scripts + their own origin (XHR, websockets for
-            // live reload); the frame stays cross-origin from the app, and
-            // window.open goes to the system browser via main's open handler.
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            className="w-full h-full border-0 bg-white"
-            title={title}
-          />
+        {isFile && preview.error ? (
+          <div className="px-4 py-8 text-center text-sm text-text-tertiary">
+            Failed to render page
+            <div className="mt-1 text-xs">{preview.error}</div>
+          </div>
+        ) : showFrame && home ? (
+          // Keyed by nonce: a remount is a new history, which is what a server
+          // coming back up wants and a Reload does not.
+          <PageGuest key={nonce} ref={guestRef} src={home} title={title} onTrail={onTrail} />
+        ) : isFile ? (
+          <div className="px-4 py-8 text-center text-sm text-text-tertiary">Loading…</div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center max-w-sm px-6">

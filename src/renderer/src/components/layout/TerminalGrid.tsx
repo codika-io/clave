@@ -21,8 +21,8 @@ import { SessionViewPanel } from './SessionViewPanel'
  * The ids this pane has shown at least once, in order of first appearance.
  *
  * A web view is kept MOUNTED after you look away so its page survives — the
- * scroll offset and the in-page state of a rendered .html live in a frame we
- * cannot read back (opaque origin), so the only way to keep them is never to
+ * scroll offset and the in-page state of a rendered page live in a guest
+ * process the app does not read back, so the only way to keep them is never to
  * destroy the document. Mounting is still earned by being opened: a view can
  * point at a dev server, and mounting every attached one at boot would fire
  * those requests for panes nobody asked for.
@@ -320,10 +320,10 @@ export function TerminalGrid(): React.JSX.Element {
         {/* Like the terminals above, EVERY file tab renders and the unselected
             ones are hidden — a file tab that unmounts loses its live state, and
             for a rendered .html page that state is the whole point: the scroll
-            offset, the open in-page tab, the chart's zoom. The frame is an
-            opaque origin (sandbox without allow-same-origin), so none of it can
-            be read out and restored; the only way to keep it is to never
-            destroy the document.
+            offset, the open in-page tab, the chart's zoom. The page lives in a
+            guest process the app does not read back, so none of it can be read
+            out and restored; the only way to keep it is to never destroy the
+            document.
 
             What saves the page is staying MOUNTED — measured, not assumed:
             hiding with `display: none` preserves the document and its scroll

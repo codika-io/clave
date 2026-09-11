@@ -1,7 +1,7 @@
 import { CodeEditor } from './CodeEditor'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { MarkdownPageEditor } from './MarkdownPageEditor'
-import { HtmlPreviewFrame } from './HtmlPreviewFrame'
+import { HtmlPage } from './HtmlPage'
 import { formatSize, isHtmlFile, isMarkdownFile, type FileViewMode } from './file-types'
 import type { useFileEditor } from '../../hooks/use-file-editor'
 
@@ -11,6 +11,8 @@ interface FileContentProps {
   filePath: string | null
   /** How markdown renders: page (document column), preview (compact), source (editor). Owned by the header's ViewModeToggle. */
   viewMode?: FileViewMode
+  /** Bumped by the header's Reload button; reloads a rendered .html page. */
+  reloadKey?: number
 }
 
 /**
@@ -22,7 +24,8 @@ export function FileContent({
   editor,
   cwd,
   filePath,
-  viewMode = 'page'
+  viewMode = 'page',
+  reloadKey
 }: FileContentProps): React.JSX.Element {
   const { fileData, filename, content, setContent, canEdit, isImage, loadError, save } = editor
   const isMarkdown = filePath ? isMarkdownFile(filename) : false
@@ -55,7 +58,7 @@ export function FileContent({
     const abs = filePath.startsWith('/') ? filePath : `${cwd}/${filePath}`
     return (
       <div className="flex-1 min-h-0">
-        <HtmlPreviewFrame filePath={abs} />
+        <HtmlPage filePath={abs} reloadKey={reloadKey} />
       </div>
     )
   }
