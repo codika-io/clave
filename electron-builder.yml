@@ -58,5 +58,5 @@ appImage:
 npmRebuild: false
 publish:
   provider: github
-  owner: codika-io
+  owner: antasphere
   repo: clave

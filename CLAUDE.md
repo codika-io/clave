@@ -2,7 +2,7 @@
 
 Mac desktop app for managing multiple coding-agent CLI sessions in parallel. Provider-agnostic: it orchestrates Claude Code (Cmd+N), Antigravity CLI (Cmd+I), Codex CLI (Cmd+U), and Pi (Cmd+Shift+P) sessions side by side, plus plain terminals (Cmd+T) and remote agents over OpenClaw. Electron + React + TypeScript.
 
-Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` and `/clave:recover-sessions`) ships from `plugin/` in this repo — see `plugin/CLAUDE.md`. It is installed with `npx plugins add codika-io/clave`, resolved through `.claude-plugin/marketplace.json` at the root. The Electron app reads installed plugins from `~/.claude/plugins/` at runtime and never reads `plugin/` directly; the folder is here so a `.clave` format change and the skill that describes it land in the same commit (see the schema sync rule below).
+Clave's companion agent plugin (`clave`, exposing `/clave:create-workspace` and `/clave:recover-sessions`) ships from `plugin/` in this repo — see `plugin/CLAUDE.md`. It is installed with `npx plugins add antasphere/clave`, resolved through `.claude-plugin/marketplace.json` at the root. The Electron app reads installed plugins from `~/.claude/plugins/` at runtime and never reads `plugin/` directly; the folder is here so a `.clave` format change and the skill that describes it land in the same commit (see the schema sync rule below).
 
 ## Commands
 

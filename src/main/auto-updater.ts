@@ -18,7 +18,7 @@ const INITIAL_DELAY = 5000
 const RETRY_DELAY = 60 * 1000 // 1 minute
 
 /** Where a user is sent when the updater cannot help itself. */
-export const RELEASES_URL = 'https://github.com/codika-io/clave/releases/latest'
+export const RELEASES_URL = 'https://github.com/antasphere/clave/releases/latest'
 
 /**
  * Which try this is. Not a counter — the only distinction that changes what we

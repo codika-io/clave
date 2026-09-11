@@ -28,7 +28,7 @@ plugin/
 └── LICENSE
 ```
 
-The repo root also carries `.claude-plugin/marketplace.json`, which is what makes `npx plugins add codika-io/clave` resolve to this folder. It names the marketplace `clave` and points `source` at `./plugin`, so the plugin installs as `clave@clave`. If you move or rename this folder, that file moves with you.
+The repo root also carries `.claude-plugin/marketplace.json`, which is what makes `npx plugins add antasphere/clave` resolve to this folder. It names the marketplace `clave` and points `source` at `./plugin`, so the plugin installs as `clave@clave`. If you move or rename this folder, that file moves with you.
 
 ## Manifests
 
@@ -74,4 +74,4 @@ Skills surface as `/clave:<skill>` in any installed host. Note that this copies 
 
 ## History
 
-Extracted from `codika-io/clave` into its own repo `codika-io/clave-plugin` in 2026-04, and folded back in here in 2026-08 (PRDCT-1699) once the cross-repo ordering constraint proved to be the format's main source of drift. The old repo's history is preserved in this repo through the subtree merge that vendored it.
+Extracted from `antasphere/clave` into its own repo `codika-io/clave-plugin` in 2026-04, and folded back in here in 2026-08 (PRDCT-1699) once the cross-repo ordering constraint proved to be the format's main source of drift. The old repo's history is preserved in this repo through the subtree merge that vendored it.

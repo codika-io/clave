@@ -1,6 +1,6 @@
 # Clave Plugin (`clave`)
 
-The companion agent plugin for [Clave](https://github.com/codika-io/clave) — a multi-session Claude Code desktop app. It ships **inside the app repo**, in this folder, so the skills and the `.clave` file format they describe always move together.
+The companion agent plugin for [Clave](https://github.com/antasphere/clave) — a multi-session Claude Code desktop app. It ships **inside the app repo**, in this folder, so the skills and the `.clave` file format they describe always move together.
 
 Two skills: `create-workspace`, which generates `.clave` workspace files from a natural-language description, and `recover-sessions`, which rebuilds a lost workspace from the Claude Code transcripts already on your disk.
 
@@ -11,7 +11,7 @@ Conforms to the [Open Plugin Specification v1.0](https://github.com/vercel-labs/
 ### Any Open-Plugin-compatible host (Claude Code, Cursor, …)
 
 ```bash
-npx plugins add codika-io/clave
+npx plugins add antasphere/clave
 ```
 
 The `plugins` CLI auto-detects which agent tools are installed and installs into all of them.
@@ -19,7 +19,7 @@ The `plugins` CLI auto-detects which agent tools are installed and installs into
 ### Claude Code (native)
 
 ```
-/plugin marketplace add codika-io/clave
+/plugin marketplace add antasphere/clave
 /plugin install clave@clave
 ```
 
@@ -54,7 +54,7 @@ Retention is a local setting: `cleanupPeriodDays` in `~/.claude/settings.json` (
 
 ## About Clave
 
-Clave is a macOS desktop app for running many coding-agent CLI sessions in parallel with shared layouts, git panels, and daily logs. Download at [github.com/codika-io/clave](https://github.com/codika-io/clave).
+Clave is a macOS desktop app for running many coding-agent CLI sessions in parallel with shared layouts, git panels, and daily logs. Download at [github.com/antasphere/clave](https://github.com/antasphere/clave).
 
 ## License
 
