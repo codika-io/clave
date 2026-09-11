@@ -3,7 +3,6 @@ import {
   mergeLayoutForKeys,
   absorbLayout,
   placeAdopted,
-  groupHasContent,
   type LayoutGroupLike,
   type LayoutSessionLike
 } from './sidebar-layout-partition'
@@ -56,19 +55,24 @@ describe('mergeLayoutForKeys', () => {
     expect(out.displayOrder).toEqual(['gB'])
   })
 
-  it('prunes a group whose members are gone everywhere, and detaches its dead terminal', () => {
+  // A group whose members are all gone comes back EMPTY, in its place. It used
+  // to be pruned, which is how closing a group's last tab made the group
+  // vanish after the next launch; an empty group is a normal state now (the
+  // sidebar draws it as a "No sessions" row) and only Delete / Ungroup remove it.
+  it('keeps a group whose members are gone everywhere as an empty group, and detaches its dead terminal', () => {
     const out = mergeLayoutForKeys(
       { groups: [], displayOrder: [], sessions: [] },
       [B],
       {
-        groups: [g('dead', ['gone'], B), g('live', ['ok'], B, [{ sessionId: 'gone-term' }])],
-        displayOrder: ['dead', 'live']
+        groups: [g('emptied', ['gone'], B), g('live', ['ok'], B, [{ sessionId: 'gone-term' }])],
+        displayOrder: ['emptied', 'live']
       },
       ['ok']
     )
-    expect(out.groups.map((x) => x.id)).toEqual(['live'])
-    expect(out.groups[0].terminals).toEqual([{ sessionId: null }])
-    expect(out.displayOrder).toEqual(['live'])
+    expect(out.groups.map((x) => x.id)).toEqual(['emptied', 'live'])
+    expect(out.groups[0].sessionIds).toEqual([])
+    expect(out.groups[1].terminals).toEqual([{ sessionId: null }])
+    expect(out.displayOrder).toEqual(['emptied', 'live'])
   })
 
   // ── PRDCT-1756: the group-drop that orphaned a running dev server. A group
@@ -92,7 +96,7 @@ describe('mergeLayoutForKeys', () => {
     expect(out.displayOrder).toEqual(['gB'])
   })
 
-  it('still drops a group with no members and no running terminal', () => {
+  it('keeps a group with no members and no running terminal, its dead terminal detached', () => {
     const out = mergeLayoutForKeys(
       { groups: [], displayOrder: [], sessions: [] },
       [B],
@@ -102,8 +106,8 @@ describe('mergeLayoutForKeys', () => {
       },
       []
     )
-    expect(out.groups).toEqual([])
-    expect(out.displayOrder).toEqual([])
+    expect(out.groups).toEqual([g('gB', [], B, [{ sessionId: null }])])
+    expect(out.displayOrder).toEqual(['gB'])
   })
 
   it('never surfaces a nested session at the top level, appends missed standalone sessions', () => {
@@ -251,18 +255,3 @@ describe('placeAdopted — an adopted tab never lands twice, never in a foreign 
   })
 })
 
-
-describe('groupHasContent — what the sidebar draws', () => {
-  it('a group with tabs shows', () => {
-    expect(groupHasContent({ sessionIds: ['a'], terminals: [] })).toBe(true)
-  })
-  it('a group with only a RUNNING terminal shows — its icon is the way back', () => {
-    expect(groupHasContent({ sessionIds: [], terminals: [{ sessionId: 'srv' }] })).toBe(true)
-  })
-  it('a group with only idle terminal configs stays hidden', () => {
-    expect(groupHasContent({ sessionIds: [], terminals: [{ sessionId: null }] })).toBe(false)
-  })
-  it('an empty group stays hidden', () => {
-    expect(groupHasContent({ sessionIds: [], terminals: [] })).toBe(false)
-  })
-})

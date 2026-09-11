@@ -9,7 +9,6 @@ import {
   type GroupTerminalColor
 } from '../../store/session-store'
 import { resolveGroupLaunchCwd } from '../../store/group-defaults'
-import { groupHasContent } from '../../lib/sidebar-layout-partition'
 import { useWorkspaceStore, getWorkspaceById } from '../../store/workspace-store'
 import ColorPicker from '../ui/ColorPicker'
 import { SessionItem } from '../session/SessionItem'
@@ -537,10 +536,9 @@ export function Sidebar() {
           if (item.type === 'fileTab') return true
           if (item.type === 'group') {
             const group = groups.find((g) => g.id === item.groupId)
-            // A running quick-launch terminal keeps a group on screen even
-            // with no tabs left in it: its icon is the only handle on that
-            // process (PRDCT-1756).
-            if (!group || !groupHasContent(group)) return false
+            // An empty group stays on screen (it draws a "No sessions" row):
+            // closing the last tab must not make the group vanish with it.
+            if (!group) return false
             // Hide groups toggled off via pinned buttons
             if (hiddenGroupIds.has(item.groupId)) return false
             if (!inActiveWorkspace(group, activeWorkspaceId)) return false
@@ -1293,9 +1291,10 @@ export function Sidebar() {
           selectionAnchorRef.current = group.sessionIds[0]
         }
       } else {
-        const allSelected =
-          group.sessionIds.length > 0 &&
-          group.sessionIds.every((id) => state.selectedSessionIds.includes(id))
+        // Vacuously true for an empty group, on purpose: with nothing to
+        // select, a click on the header takes the "already selected" path —
+        // open its view if it has one, else fold and unfold the card.
+        const allSelected = group.sessionIds.every((id) => state.selectedSessionIds.includes(id))
         if (group.collapsed) {
           // Collapsed group: expand it and select
           toggleGroupCollapsed(group.id)
@@ -1536,12 +1535,12 @@ export function Sidebar() {
                         )
                       } else {
                         const group = groups.find((g) => g.id === item.groupId)
-                        if (!group || !groupHasContent(group)) return null
+                        if (!group) return null
                         const allGroupSelected =
                           group.sessionIds.length > 0 &&
                           group.sessionIds.every((id) => selectedSessionIds.includes(id))
                         const groupColorHex = resolveColorHex(group.color)
-                        const railShut = group.collapsed || group.sessionIds.length === 0
+                        const railEmpty = group.sessionIds.length === 0
                         return (
                           <div key={group.id}>
                             <DropGap active={gapBefore} />
@@ -1599,16 +1598,14 @@ export function Sidebar() {
                                 isDragging={draggedIds.includes(group.id)}
                                 dragActive={isDragging}
                               />
-                              {/* Shut for a group with no rows exactly as for a
-                                  collapsed one. The rail's 4px of padding and the
-                                  2px drop strip are there to hold rows off the
-                                  card's edges; with nothing between them they are
-                                  6px of dead space under the header, and the card
-                                  reads bottom-heavy — a group carrying terminals
-                                  and no sessions is where that shows. */}
+                              {/* Shut only when collapsed. A group with no rows
+                                  keeps its rail open on a "No sessions" row of
+                                  a session row's exact height, so an emptied
+                                  group stands as tall as a group of one and the
+                                  list does not jump when the last tab closes. */}
                               <div
                                 className="grid transition-[grid-template-rows,opacity,transform] duration-250 ease-out"
-                                style={{ gridTemplateRows: railShut ? '0fr' : '1fr', opacity: railShut ? 0 : 1, transform: railShut ? 'translateY(-4px)' : 'translateY(0)' }}
+                                style={{ gridTemplateRows: group.collapsed ? '0fr' : '1fr', opacity: group.collapsed ? 0 : 1, transform: group.collapsed ? 'translateY(-4px)' : 'translateY(0)' }}
                               >
                                 <div className="overflow-hidden">
                                   {/* px-1 narrows the child-tab highlight so it doesn't touch the group border.
@@ -1694,6 +1691,22 @@ export function Sidebar() {
                                         </div>
                                       )
                                     })}
+                                    {/* An emptied group keeps its place. The row
+                                        stands in for the session that is no longer
+                                        there — same height, so the card is as tall
+                                        as a group of one — and, while dragging, it
+                                        is the group's drop zone: a row dropped on
+                                        it joins the group (use-sidebar-dnd). */}
+                                    {railEmpty && (
+                                      <div
+                                        className="sidebar-empty-row"
+                                        data-sidebar-empty-group={group.id}
+                                        data-sidebar-drop-zone="group-end"
+                                        data-group-id={group.id}
+                                      >
+                                        No sessions
+                                      </div>
+                                    )}
                                     {/* The foot of the rail: while dragging, the
                                         "last position of the group" drop zone
                                         (use-sidebar-dnd) — the last row's bottom

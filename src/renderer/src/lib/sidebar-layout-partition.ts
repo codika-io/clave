@@ -37,12 +37,21 @@ export type LayoutKey = string | null
  * file without it the moment this window persists. Only a session that is
  * gone everywhere prunes its group, exactly as boot restore does.
  *
- * The same shape the boot restore uses: a group with neither a surviving
- * member nor a running terminal is dropped, a terminal whose session is gone
- * is detached, the persisted order is kept minus dead references, surviving
- * standalone sessions of those workspaces the order missed are appended, then
- * kept groups not yet placed. Ids nested inside a kept group (a member, a group
- * terminal, a session view's hidden server) never surface at the top level.
+ * The same shape the boot restore uses: every group of those workspaces comes
+ * back, members pruned to the survivors (an emptied group is a group, see
+ * below), a terminal whose session is gone is detached, the persisted order is
+ * kept minus dead references, surviving standalone sessions of those
+ * workspaces the order missed are appended, then kept groups not yet placed.
+ * Ids nested inside a kept group (a member, a group terminal, a session view's
+ * hidden server) never surface at the top level.
+ *
+ * A group with no members left is KEPT, not pruned. Closing the last tab of a
+ * group used to make the group vanish with it — the user opens a group,
+ * closes its one session, and cannot find the group again — so an empty group
+ * is now a normal state: the sidebar draws it as a card holding a "No
+ * sessions" row, and only Delete / Ungroup take it away. (Before that, a
+ * group survived on a running quick-launch terminal alone, PRDCT-1756; it
+ * still does, as a special case of surviving on nothing.)
  */
 export function mergeLayoutForKeys<G extends LayoutGroupLike>(
   state: { groups: G[]; displayOrder: string[]; sessions: LayoutSessionLike[] },
@@ -83,11 +92,10 @@ export function mergeLayoutForKeys<G extends LayoutGroupLike>(
     const terminals = (g.terminals ?? []).map((t) =>
       t.sessionId && !alive.has(t.sessionId) ? { ...t, sessionId: null } : t
     )
-    // A group survives on a running quick-launch terminal alone (PRDCT-1756).
-    // Members-only was the rule, and it is what put a live `npm run dev` in
-    // the sidebar as a mystery tab: the group it belonged to was pruned for
-    // having no surviving MEMBER, and pruning it un-nested its terminal.
-    if (sessionIds.length === 0 && !terminals.some((t) => t.sessionId)) continue
+    // Never pruned for being empty: see the doc comment. (Members-only was
+    // once the rule, and it is what put a live `npm run dev` in the sidebar as
+    // a mystery tab, PRDCT-1756 — the group it belonged to was pruned for
+    // having no surviving member, and pruning it un-nested its terminal.)
     kept.push({ ...g, sessionIds, terminals })
   }
   const keptIds = new Set(kept.map((g) => g.id))
@@ -187,19 +195,4 @@ export function placeAdopted<G extends LayoutGroupLike>(
   }
   if (state.sessions.some((s) => s.view?.serverSessionId === sessionId)) return state.displayOrder
   return [...state.displayOrder, sessionId]
-}
-
-/**
- * Does this group have anything to show? A group renders when it holds tabs
- * OR when one of its quick-launch terminals is running (PRDCT-1756) — the
- * dev server is the only thing left of it and its icon is the way back to
- * the process. A group with neither is an empty shell and stays hidden, as
- * it always has. Mirrors the keep rule in mergeLayoutForKeys: what the merge
- * keeps in the layout is exactly what the sidebar draws.
- */
-export function groupHasContent(g: {
-  sessionIds: string[]
-  terminals: { sessionId: string | null }[]
-}): boolean {
-  return g.sessionIds.length > 0 || g.terminals.some((t) => !!t.sessionId)
 }
