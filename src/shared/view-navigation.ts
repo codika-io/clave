@@ -19,13 +19,29 @@
  */
 export type NavigationDecision = 'in-pane' | 'external' | 'deny'
 
-const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0'])
+/**
+ * The local machine, by ADDRESS, never by name shape. The URL parser hands us a
+ * canonical hostname (`0x7f000001` and `2130706433` both arrive as
+ * `127.0.0.1`, an IPv4-mapped IPv6 loopback as `[::ffff:7f00:1]`), so the
+ * whole 127/8 block is one dotted-quad test. A public name that merely starts
+ * with `127.` (`127.0.0.1.nip.io`, `127.example.com`) is NOT local: wildcard
+ * DNS resolves it wherever its owner likes, and a string prefix would have let
+ * it into the pane. `localhost` and its subdomains are loopback by RFC 6761.
+ */
+const LOOPBACK_V4 = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/
+const LOOPBACK_V6 = /^\[(?:::1|::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4})\]$/
 
 const isHttp = (u: URL): boolean => u.protocol === 'http:' || u.protocol === 'https:'
 
 export function isLoopbackHost(hostname: string): boolean {
   const h = hostname.toLowerCase()
-  return LOOPBACK.has(h) || h.endsWith('.localhost') || h.startsWith('127.')
+  return (
+    h === 'localhost' ||
+    h.endsWith('.localhost') ||
+    h === '0.0.0.0' ||
+    LOOPBACK_V4.test(h) ||
+    LOOPBACK_V6.test(h)
+  )
 }
 
 export function decideNavigation(home: string, target: string): NavigationDecision {

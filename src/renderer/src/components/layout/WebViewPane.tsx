@@ -11,6 +11,10 @@ import type { WebviewTag } from 'electron'
 import { HtmlPreviewFrame } from '../files/HtmlPreviewFrame'
 import { isAtHome } from '../../../../shared/view-navigation'
 
+/** Mirrors VIEW_PARTITION in src/main/view-guests.ts, where the session's
+ *  permission handlers live; the renderer cannot import the main process. */
+const VIEW_PARTITION = 'persist:view'
+
 const PROBE_TIMEOUT_MS = 500
 const PROBE_INTERVAL_MS = 10_000
 const STARTING_PROBE_INTERVAL_MS = 2_000
@@ -55,7 +59,9 @@ export interface WebViewPaneProps {
  * that links needs — back, forward, home — and names the page the reader is
  * actually on rather than the one the sidebar declared. Which links stay in
  * the pane and which leave for the browser is the main process's rule
- * (view-guests.ts); the trail is the reader's and is never persisted.
+ * (view-guests.ts). The trail is the reader's and is never persisted; the
+ * guest's cookies and storage are (one shared browser profile for every view,
+ * so a dashboard's sign-in survives a restart).
  * Extracted from the group view panel so session views share one
  * probe/header/frame implementation.
  */
@@ -302,14 +308,24 @@ export function WebViewPane({
           <HtmlPreviewFrame filePath={url} reloadKey={nonce} />
         ) : showFrame ? (
           // A guest with its own history. It is hardened in the main process
-          // (no preload, no node, sandboxed) and its links are policed there;
-          // no `allowpopups`, so window.open goes to the system browser.
+          // (no preload, no node, sandboxed) and its links are policed there.
+          // `allowpopups` is what lets a popup REACH that policy: without it
+          // Chromium drops window.open and every target="_blank" link on the
+          // floor before any handler runs — and the exos pages open their
+          // tasks that way. With it, the guest's window-open handler denies
+          // the window and hands the url to the system browser.
           <webview
             key={nonce}
             ref={webviewRef}
             src={url}
             // eslint-disable-next-line react/no-unknown-property -- Electron's own attribute
-            partition="persist:view"
+            partition={VIEW_PARTITION}
+            // React does not know Electron's attribute and DROPS a boolean value
+            // for an unknown one (typed boolean by @types/react, rendered by
+            // nothing); the string is what reaches the element, and Electron
+            // reads presence, not value.
+            // eslint-disable-next-line react/no-unknown-property -- Electron's own attribute
+            allowpopups={'true' as unknown as boolean}
             className="w-full h-full bg-white"
             style={{ display: 'flex' }}
             title={title}

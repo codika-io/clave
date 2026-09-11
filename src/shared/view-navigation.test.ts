@@ -42,10 +42,37 @@ describe('decideNavigation', () => {
 
 describe('isLoopbackHost', () => {
   it('recognises the loopback spellings', () => {
-    for (const h of ['localhost', 'LOCALHOST', '127.0.0.1', '127.1.2.3', '[::1]', 'app.localhost'])
+    for (const h of [
+      'localhost',
+      'LOCALHOST',
+      '127.0.0.1',
+      '127.1.2.3',
+      '[::1]',
+      '[::ffff:7f00:1]',
+      'app.localhost',
+      '0.0.0.0'
+    ])
       expect(isLoopbackHost(h)).toBe(true)
     for (const h of ['example.com', '10.0.0.1', 'localhost.example.com'])
       expect(isLoopbackHost(h)).toBe(false)
+  })
+
+  it('is an address test, not a name shape: a public name starting with 127. is not local', () => {
+    for (const h of [
+      '127.0.0.1.nip.io',
+      '127.example.com',
+      '127.0.0.1.evil.com',
+      '[::ffff:8.8.8.8]'
+    ])
+      expect(isLoopbackHost(h)).toBe(false)
+    expect(decideNavigation(HOME, 'http://127.0.0.1.nip.io/')).toBe('external')
+  })
+
+  it('reads the canonical hostname the URL parser produces', () => {
+    // The parser normalises the exotic spellings of 127.0.0.1 before we see them.
+    expect(decideNavigation(HOME, 'http://0x7f000001/')).toBe('in-pane')
+    expect(decideNavigation(HOME, 'http://2130706433/')).toBe('in-pane')
+    expect(decideNavigation(HOME, 'http://[::ffff:127.0.0.1]:4000/')).toBe('in-pane')
   })
 })
 

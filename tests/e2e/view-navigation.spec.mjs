@@ -10,13 +10,15 @@
  * The spec serves three linked pages from a server of its own and drives the
  * guest from the host (`webview.executeJavaScript`), so every assertion is on
  * what the header shows and what the guest is on — not on the DOM being there.
- * The link policy is asserted at its two boundaries: a link to another local
+ * The link policy is asserted at its boundaries: a link to another local
  * port stays in the pane; a link to the wider web opens in the system browser
  * (a stubbed shell.openExternal counts it) and leaves the pane where it was;
- * a file: link does neither. Delete the `will-navigate` handler in
- * view-guests.ts and the external and file: checks go red; drop the
- * `navigationHistory` home read and the same-origin case still passes but the
- * unit test in view-navigation.test.ts pins the rule itself.
+ * a 302 to the wider web is treated the same, a 302 to a local page is
+ * followed; a file: link does neither; a popup goes to the browser. The
+ * guest's confinement is asserted from inside it: no require, no process, no
+ * bridge, and a file: src never attaches at all. Delete the `will-navigate` or
+ * `will-redirect` handler in view-guests.ts and the matching checks go red;
+ * delete the `will-attach-webview` hardening and the confinement checks do.
  */
 import { launchApp, seedWorkspaces, seedTrustedRoots, userDataDir, callMcp } from './harness.mjs'
 import { mkdirSync } from 'node:fs'
@@ -38,7 +40,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 function serve() {
   const page = (title, links) =>
     `<html><head><title>${title}</title></head><body>${links
-      .map(([href, id]) => `<a id="${id}" href="${href}">${id}</a>`)
+      .map(
+        ([href, id, target]) =>
+          `<a id="${id}" href="${href}"${target ? ` target="${target}"` : ''}>${id}</a>`
+      )
       .join('')}</body></html>`
   const server = http.createServer((req, res) => {
     const routes = {
@@ -46,11 +51,27 @@ function serve() {
       '/second': page('Second page', [
         ['/third', 'to-third'],
         ['https://example.com/', 'to-web'],
-        ['file:///etc/hosts', 'to-file']
+        ['file:///etc/hosts', 'to-file'],
+        ['https://linear.app/antasphere/issue/PRDCT-1', 'to-blank', '_blank']
       ]),
-      '/third': page('Third page', [['/', 'to-home']])
+      '/third': page('Third page', [['/', 'to-home']]),
+      '/redirects': page('Redirects page', [
+        ['/redirect-out', 'to-redirect-out'],
+        ['/redirect-local', 'to-redirect-local']
+      ])
     }
-    const html = routes[req.url.split('?')[0]]
+    const path = req.url.split('?')[0]
+    if (path === '/redirect-out') {
+      res.writeHead(302, { Location: 'https://example.com/landed' })
+      res.end()
+      return
+    }
+    if (path === '/redirect-local') {
+      res.writeHead(302, { Location: '/third' })
+      res.end()
+      return
+    }
+    const html = routes[path]
     if (!html) {
       res.writeHead(404)
       res.end('nope')
@@ -108,11 +129,14 @@ function clickInGuest(win, id) {
   )
 }
 
-/** Wait until the header's url ends with `suffix`. */
-async function untilAt(win, suffix, ms = 6000) {
+/** Wait until the header's url ends with `suffix` — and, when `title` is
+ *  given, until the header names it: the title lands on its own event after
+ *  the url, and reading it on the url alone was flaky. */
+async function untilAt(win, suffix, title = null, ms = 6000) {
   const t0 = Date.now()
+  const there = (h) => (h.url ?? '').endsWith(suffix) && (title === null || h.title === title)
   let h = await header(win)
-  while (!(h.url ?? '').endsWith(suffix) && Date.now() - t0 < ms) {
+  while (!there(h) && Date.now() - t0 < ms) {
     await sleep(150)
     h = await header(win)
   }
@@ -177,7 +201,7 @@ export async function run(t) {
 
     // Follow a link: the trail starts, the header follows the guest.
     await clickInGuest(win, 'to-second')
-    h = await untilAt(win, '/second')
+    h = await untilAt(win, '/second', 'Second page')
     t.equal('following a link shows the new url in the header', h.url, `${HOME}/second`)
     t.equal("and the guest's own title, not the declared one", h.title, 'Second page')
     t.check(
@@ -190,7 +214,7 @@ export async function run(t) {
 
     // Back returns; forward goes again.
     await win.click('[data-testid="view-nav-back"]')
-    h = await untilAt(win, `${port}/`)
+    h = await untilAt(win, `${port}/`, 'Nav')
     t.equal('back returns to home', h.url, `${HOME}/`)
     t.check(
       'at home again: back off, forward on, home off',
@@ -235,6 +259,114 @@ export async function run(t) {
     t.equal('a file: link opens nothing', (await external()).length, afterWeb.length)
     g = await guest(win)
     t.equal('and moves nothing', g?.url, `${HOME}/second`)
+
+    // The guest is confined: no node, no bridge — a page in a view has no
+    // more power than it would in a browser tab.
+    const powers = await win.evaluate(() =>
+      document
+        .querySelector('webview')
+        .executeJavaScript(
+          '({ require: typeof require, process: typeof process, module: typeof module, bridge: typeof window.electronAPI, node: typeof globalThis.__dirname })'
+        )
+    )
+    t.check(
+      'the guest has no node and no bridge',
+      Object.values(powers).every((v) => v === 'undefined'),
+      powers
+    )
+
+    // A file: src never attaches: the tag is created, the guest is not.
+    const fileAttach = await win.evaluate(async () => {
+      const wv = document.createElement('webview')
+      wv.setAttribute('src', 'file:///etc/hosts')
+      wv.style.cssText = 'width:200px;height:100px'
+      let attached = false
+      wv.addEventListener('dom-ready', () => (attached = true))
+      document.body.appendChild(wv)
+      await new Promise((r) => setTimeout(r, 2000))
+      let id = null
+      try {
+        id = wv.getWebContentsId()
+      } catch {
+        id = 'no guest'
+      }
+      wv.remove()
+      return { attached, id }
+    })
+    t.check(
+      'a file: src never attaches a guest',
+      fileAttach.attached === false && fileAttach.id === 'no guest',
+      fileAttach
+    )
+
+    // A popup from the page goes to the browser and moves nothing.
+    const beforePopup = (await external()).length
+    await win.evaluate(() =>
+      document
+        .querySelector('webview')
+        .executeJavaScript("window.open('https://example.com/popup')", true)
+    )
+    await sleep(1200)
+    const afterPopup = await external()
+    t.equal('a popup opens in the system browser', afterPopup.length - beforePopup, 1)
+    t.equal('with its url', afterPopup[afterPopup.length - 1], 'https://example.com/popup')
+    t.equal('and the pane stays where it was', (await guest(win))?.url, `${HOME}/second`)
+
+    // The exos pages open their tasks with target="_blank": same path, same rule.
+    await clickInGuest(win, 'to-blank')
+    await sleep(1200)
+    const afterBlank = await external()
+    t.equal(
+      'a target=_blank link opens in the system browser',
+      afterBlank.length - afterPopup.length,
+      1
+    )
+    t.equal(
+      'with its url',
+      afterBlank[afterBlank.length - 1],
+      'https://linear.app/antasphere/issue/PRDCT-1'
+    )
+    t.equal('and moves nothing', (await guest(win))?.url, `${HOME}/second`)
+
+    // A redirect is a navigation like any other: out goes to the browser,
+    // local is followed.
+    await win.evaluate(() =>
+      document.querySelector('webview').executeJavaScript("location.assign('/redirects')", true)
+    )
+    h = await untilAt(win, '/redirects', 'Redirects page')
+    const beforeRedirect = (await external()).length
+    await clickInGuest(win, 'to-redirect-out')
+    await sleep(1500)
+    const afterRedirect = await external()
+    t.equal(
+      'a 302 to the wider web opens in the system browser',
+      afterRedirect.length - beforeRedirect,
+      1
+    )
+    t.equal(
+      'with the redirect target',
+      afterRedirect[afterRedirect.length - 1],
+      'https://example.com/landed'
+    )
+    t.equal(
+      'and the pane stays on the page that redirected',
+      (await guest(win))?.url,
+      `${HOME}/redirects`
+    )
+    await clickInGuest(win, 'to-redirect-local')
+    h = await untilAt(win, '/third', 'Third page')
+    t.equal('a 302 to a local page is followed', h.url, `${HOME}/third`)
+    t.equal(
+      'and nothing more left for the browser',
+      (await external()).length,
+      afterRedirect.length
+    )
+
+    // Back to the second page for the reload check.
+    await win.evaluate(() =>
+      document.querySelector('webview').executeJavaScript("location.assign('/second')", true)
+    )
+    h = await untilAt(win, '/second', 'Second page')
 
     // Reload keeps the trail: still on the second page, back still possible.
     await win.click('button[title="Reload"]')
