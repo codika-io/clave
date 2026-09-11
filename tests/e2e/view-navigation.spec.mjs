@@ -21,7 +21,7 @@
  * delete the `will-attach-webview` hardening and the confinement checks do.
  */
 import { launchApp, seedWorkspaces, seedTrustedRoots, userDataDir, callMcp } from './harness.mjs'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, symlinkSync, existsSync } from 'node:fs'
 import http from 'node:http'
 
 const DIR = userDataDir('view-navigation')
@@ -135,7 +135,13 @@ function guestBySrc(win, suffix, code) {
           url = wv.getURL()
           if (!url) await new Promise((r) => setTimeout(r, 150))
         }
-        return { url, out: code ? await wv.executeJavaScript(code) : null }
+        const out = code
+          ? await Promise.race([
+              wv.executeJavaScript(code),
+              new Promise((r) => setTimeout(() => r('TIMEOUT'), 8000))
+            ])
+          : null
+        return { url, out }
       } catch (e) {
         return { error: String(e) }
       }
@@ -144,10 +150,16 @@ function guestBySrc(win, suffix, code) {
   )
 }
 
-/** Run code inside the visible guest, as a user gesture unless told otherwise. */
+/** Run code inside the visible guest, as a user gesture unless told otherwise.
+ *  A guest that never answers (a page that never loaded) reads 'TIMEOUT'
+ *  rather than hanging the run: a check must be able to fail. */
 function runInGuest(win, code, gesture = true) {
   return win.evaluate(
-    ({ code, gesture, pick }) => new Function(`return ${pick}`)().executeJavaScript(code, gesture),
+    ({ code, gesture, pick }) =>
+      Promise.race([
+        new Function(`return ${pick}`)().executeJavaScript(code, gesture),
+        new Promise((r) => setTimeout(() => r('TIMEOUT'), 8000))
+      ]),
     { code, gesture, pick: VISIBLE_GUEST }
   )
 }
@@ -451,6 +463,11 @@ export async function run(t) {
     )
     writeFileSync(`${FOLDER}/two.html`, filePage('Two page', [['dash.html', 'to-dash']]))
     writeFileSync(`${ROOT}/outside.html`, filePage('Outside page', []))
+    // What a page must NOT reach: a file outside its folder, through a symlink
+    // planted beside it, and another page's folder, through a guessed token.
+    writeFileSync(`${ROOT}/outside-secret.txt`, 'OUTSIDE-ROOT-SECRET')
+    if (!existsSync(`${FOLDER}/link.txt`))
+      symlinkSync(`${ROOT}/outside-secret.txt`, `${FOLDER}/link.txt`)
 
     const openedFile = await callMcp(app, 'openSession', {
       mode: 'terminal',
@@ -540,6 +557,35 @@ export async function run(t) {
     )
     fg = await guestBySrc(win, '/dash.html', 'document.title')
     t.equal('and the file page stays', fg?.out, 'Dash page')
+
+    // The folder is the page's whole world: a symlink out of it is refused by
+    // the protocol, a guessed token reaches nothing.
+    const reach = await runInGuest(
+      win,
+      `(async () => { const r = {}; for (const [k, u] of [['link', 'link.txt'], ['token', 'clave-preview://deadbeefdeadbeefdeadbeef/dash.html']]) { try { const x = await fetch(u); r[k] = x.status + '|' + (await x.text()).slice(0, 24) } catch (e) { r[k] = 'BLOCKED' } } return r })()`,
+      false
+    )
+    t.check(
+      'a symlink out of the folder is refused by the protocol',
+      /^403\|/.test(reach?.link ?? ''),
+      reach
+    )
+    t.check(
+      'a guessed token reaches nothing',
+      reach?.token !== undefined && !/^200/.test(reach.token),
+      reach
+    )
+
+    // The file view follows its file: an agent rewriting the report reloads it
+    // where the reader is.
+    writeFileSync(`${FOLDER}/dash.html`, filePage('Dash page v2', [['two.html', 'to-two']]))
+    const t1 = Date.now()
+    let dashTitle = await runInGuest(win, 'document.title', false)
+    while (dashTitle !== 'Dash page v2' && Date.now() - t1 < 8000) {
+      await sleep(250)
+      dashTitle = await runInGuest(win, 'document.title', false)
+    }
+    t.equal('a change on disk reloads the file view by itself', dashTitle, 'Dash page v2')
 
     // ---- An .html FILE TAB is the same guest: it follows the file, and reloads.
     const TAB = `${ROOT}/tab.html`

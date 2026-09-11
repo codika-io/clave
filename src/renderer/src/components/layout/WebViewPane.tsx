@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { PageGuest, type PageGuestHandle, type PageTrail } from './PageGuest'
 import { usePreviewUrl } from '../../hooks/use-preview-url'
+import { useFileChanged } from '../../hooks/use-file-changed'
 import { isAtHome, PREVIEW_PROTOCOL } from '../../../../shared/view-navigation'
 
 const PROBE_TIMEOUT_MS = 500
@@ -126,19 +127,26 @@ export function WebViewPane({
   const showFrame = isFile ? !!preview.url : probe === 'up'
 
   const guestRef = useRef<PageGuestHandle | null>(null)
-  const [trail, setTrail] = useState<PageTrail>({
+  // The trail carries the home it was read against: a file page's home is
+  // only known once the main process has served it, and a trail read against
+  // an earlier home (or the declared path) is not this page's trail.
+  const [trail, setTrail] = useState<PageTrail & { home: string | null }>({
     url: home ?? url,
     title: '',
     canGoBack: false,
-    canGoForward: false
+    canGoForward: false,
+    home
   })
-  // A file page's home is only known once the main process has served it;
-  // until the guest's first event the trail is the home itself, never the
-  // path the sidebar declared.
-  useEffect(() => {
-    if (home) setTrail((t) => (isAtHome(home, t.url) ? t : { ...t, url: home }))
-  }, [home])
-  const atHome = !home || isAtHome(home, trail.url)
+  const onTrail = useCallback((t: PageTrail) => setTrail({ ...t, home }), [home])
+  const current: PageTrail =
+    trail.home === home
+      ? trail
+      : { url: home ?? url, title: '', canGoBack: false, canGoForward: false }
+  const atHome = !home || isAtHome(home, current.url)
+
+  // A file page follows its file: a report an agent is rewriting reloads in
+  // place, where the reader is.
+  useFileChanged(isFile ? url : null, () => guestRef.current?.reload())
 
   const handleStart = useCallback(() => {
     if (!start) return
@@ -164,19 +172,19 @@ export function WebViewPane({
 
   const handleOpenExternal = useCallback(() => {
     if (isFile && atHome) window.electronAPI.openPath(url)
-    else window.electronAPI.openExternal(trail.url || url)
-  }, [isFile, atHome, url, trail.url])
+    else window.electronAPI.openExternal(current.url || url)
+  }, [isFile, atHome, url, current.url])
 
   // The header names the page the reader is on: the declared title at home,
   // the guest's own title once the reader has followed a link. The address
   // line shows a file page as a path: at home the file's own, away in the
   // same folder its sibling's (same token, same folder — the protocol's rule).
-  const shownTitle = atHome || !trail.title ? title : trail.title
+  const shownTitle = atHome || !current.title ? title : current.title
   const shownUrl = ((): string => {
-    if (!isFile) return trail.url || url
+    if (!isFile) return current.url || url
     if (atHome) return homePath(url)
     try {
-      const c = new URL(trail.url)
+      const c = new URL(current.url)
       if (c.protocol === PREVIEW_PROTOCOL) {
         const dir = homePath(url).replace(/\/[^/]*$/, '')
         return dir + decodeURIComponent(c.pathname)
@@ -184,7 +192,7 @@ export function WebViewPane({
     } catch {
       // not a url — show it as it is
     }
-    return trail.url
+    return current.url
   })()
 
   return (
@@ -194,7 +202,7 @@ export function WebViewPane({
         <div className="flex items-center gap-0.5 flex-shrink-0">
           <button
             onClick={() => guestRef.current?.back()}
-            disabled={!trail.canGoBack}
+            disabled={!current.canGoBack}
             className="btn-icon"
             title="Back"
             data-testid="view-nav-back"
@@ -203,7 +211,7 @@ export function WebViewPane({
           </button>
           <button
             onClick={() => guestRef.current?.forward()}
-            disabled={!trail.canGoForward}
+            disabled={!current.canGoForward}
             className="btn-icon"
             title="Forward"
             data-testid="view-nav-forward"
@@ -279,7 +287,7 @@ export function WebViewPane({
         ) : showFrame && home ? (
           // Keyed by nonce: a remount is a new history, which is what a server
           // coming back up wants and a Reload does not.
-          <PageGuest key={nonce} ref={guestRef} src={home} title={title} onTrail={setTrail} />
+          <PageGuest key={nonce} ref={guestRef} src={home} title={title} onTrail={onTrail} />
         ) : isFile ? (
           <div className="px-4 py-8 text-center text-sm text-text-tertiary">Loading…</div>
         ) : (
