@@ -11,8 +11,9 @@ import { decideNavigation } from '../shared/view-navigation'
  *
  *  - The guest never gets the app's powers. `will-attach-webview` strips any
  *    preload, keeps node integration off and context isolation on, and only
- *    lets an http(s) page attach at all (the `.html` file views keep their
- *    sandboxed frame and never come through here).
+ *    lets a page attach at all when it is http(s) or served from disk by the
+ *    app's own `clave-preview` protocol (an .html file and its folder, nothing
+ *    beyond).
  *  - The guest never gets the machine's either. Every guest lives in the
  *    `VIEW_PARTITION` session, whose permission handlers refuse everything —
  *    microphone, camera, notifications, location, clipboard. Electron grants
@@ -32,6 +33,8 @@ import { decideNavigation } from '../shared/view-navigation'
  * reader's and dies with the pane.
  */
 const HTTP = /^https?:\/\//i
+/** What may load as a guest at all: the web, or a file page the app serves. */
+const ATTACHABLE = /^(?:https?|clave-preview):\/\//i
 
 /** The one session every view guest runs in — `WebViewPane` mounts the tag on it. */
 export const VIEW_PARTITION = 'persist:view'
@@ -43,7 +46,7 @@ export function hardenViewHost(win: BrowserWindow): void {
     webPreferences.contextIsolation = true
     webPreferences.sandbox = true
     webPreferences.webSecurity = true
-    if (!HTTP.test(params.src ?? '')) event.preventDefault()
+    if (!ATTACHABLE.test(params.src ?? '')) event.preventDefault()
   })
 }
 

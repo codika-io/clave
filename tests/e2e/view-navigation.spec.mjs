@@ -21,7 +21,7 @@
  * delete the `will-attach-webview` hardening and the confinement checks do.
  */
 import { launchApp, seedWorkspaces, seedTrustedRoots, userDataDir, callMcp } from './harness.mjs'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 
 const DIR = userDataDir('view-navigation')
@@ -88,7 +88,12 @@ function serve() {
 /** The header's trail: what it names, where it says the reader is, what is enabled. */
 function header(win) {
   return win.evaluate(() => {
-    const q = (id) => document.querySelector(`[data-testid="${id}"]`)
+    // Every opened view stays mounted, hidden behind the visible one with
+    // aria-hidden; the header under test is the one the reader can see.
+    const q = (id) =>
+      [...document.querySelectorAll(`[data-testid="${id}"]`)].find(
+        (el) => !el.closest('[aria-hidden="true"]')
+      )
     return {
       title: q('view-title')?.textContent ?? null,
       url: q('view-current-url')?.textContent ?? null,
@@ -99,17 +104,52 @@ function header(win) {
   })
 }
 
+/** The guest the reader can see (hidden panes keep theirs mounted). */
+const VISIBLE_GUEST = `[...document.querySelectorAll('webview')].find((w) => !w.closest('[aria-hidden="true"]') && w.getBoundingClientRect().width > 0)`
+
 /** What the guest itself reports — the second witness beside the header. */
 function guest(win) {
-  return win.evaluate(async () => {
-    const wv = document.querySelector('webview')
+  return win.evaluate(async (pick) => {
+    const wv = new Function(`return ${pick}`)()
     if (!wv) return null
     try {
       return { url: wv.getURL(), title: await wv.executeJavaScript('document.title') }
     } catch (e) {
       return { error: String(e) }
     }
-  })
+  }, VISIBLE_GUEST)
+}
+
+/** The guest whose src ends with `suffix` (several pages can be mounted);
+ *  waits briefly for it to report its url, which lands after the load. */
+function guestBySrc(win, suffix, code) {
+  return win.evaluate(
+    async ({ suffix, code }) => {
+      const wv = [...document.querySelectorAll('webview')].find((w) =>
+        (w.getAttribute('src') || '').endsWith(suffix)
+      )
+      if (!wv) return null
+      try {
+        let url = ''
+        for (let i = 0; i < 20 && !url; i++) {
+          url = wv.getURL()
+          if (!url) await new Promise((r) => setTimeout(r, 150))
+        }
+        return { url, out: code ? await wv.executeJavaScript(code) : null }
+      } catch (e) {
+        return { error: String(e) }
+      }
+    },
+    { suffix, code }
+  )
+}
+
+/** Run code inside the visible guest, as a user gesture unless told otherwise. */
+function runInGuest(win, code, gesture = true) {
+  return win.evaluate(
+    ({ code, gesture, pick }) => new Function(`return ${pick}`)().executeJavaScript(code, gesture),
+    { code, gesture, pick: VISIBLE_GUEST }
+  )
 }
 
 /** Click a link inside the guest page by its id, AS A USER WOULD: the second
@@ -121,11 +161,12 @@ function guest(win) {
  *  history entries; gesture on → back true. */
 function clickInGuest(win, id) {
   return win.evaluate(
-    (id) =>
-      document
-        .querySelector('webview')
-        .executeJavaScript(`document.getElementById(${JSON.stringify(id)}).click()`, true),
-    id
+    ({ id, pick }) =>
+      new Function(`return ${pick}`)().executeJavaScript(
+        `document.getElementById(${JSON.stringify(id)}).click()`,
+        true
+      ),
+    { id, pick: VISIBLE_GUEST }
   )
 }
 
@@ -213,7 +254,7 @@ export async function run(t) {
     t.equal('the guest agrees it is on the second page', g?.url, `${HOME}/second`)
 
     // Back returns; forward goes again.
-    await win.click('[data-testid="view-nav-back"]')
+    await win.click('[data-testid="view-nav-back"]:visible')
     h = await untilAt(win, `${port}/`, 'Nav')
     t.equal('back returns to home', h.url, `${HOME}/`)
     t.check(
@@ -222,7 +263,7 @@ export async function run(t) {
       h
     )
     t.equal('and the title is the declared one again', h.title, 'Nav')
-    await win.click('[data-testid="view-nav-forward"]')
+    await win.click('[data-testid="view-nav-forward"]:visible')
     h = await untilAt(win, '/second')
     t.equal('forward goes to the second page again', h.url, `${HOME}/second`)
 
@@ -230,7 +271,7 @@ export async function run(t) {
     await clickInGuest(win, 'to-third')
     h = await untilAt(win, '/third')
     t.equal('a second link goes deeper', h.url, `${HOME}/third`)
-    await win.click('[data-testid="view-nav-home"]')
+    await win.click('[data-testid="view-nav-home"]:visible')
     h = await untilAt(win, `${port}/`)
     t.equal('home returns from two deep in one click', h.url, `${HOME}/`)
     g = await guest(win)
@@ -262,12 +303,10 @@ export async function run(t) {
 
     // The guest is confined: no node, no bridge — a page in a view has no
     // more power than it would in a browser tab.
-    const powers = await win.evaluate(() =>
-      document
-        .querySelector('webview')
-        .executeJavaScript(
-          '({ require: typeof require, process: typeof process, module: typeof module, bridge: typeof window.electronAPI, node: typeof globalThis.__dirname })'
-        )
+    const powers = await runInGuest(
+      win,
+      '({ require: typeof require, process: typeof process, module: typeof module, bridge: typeof window.electronAPI, node: typeof globalThis.__dirname })',
+      false
     )
     t.check(
       'the guest has no node and no bridge',
@@ -278,13 +317,9 @@ export async function run(t) {
     // And no more of the machine than a browser tab would give it — less, in
     // fact: every permission is refused, not asked. Delete the two permission
     // handlers on the view session and this reads "granted" on every row.
-    const perms = await win.evaluate(() =>
-      document
-        .querySelector('webview')
-        .executeJavaScript(
-          `(async () => { const q = {}; for (const n of ['microphone', 'camera', 'geolocation', 'notifications']) { try { q[n] = (await navigator.permissions.query({ name: n })).state } catch (e) { q[n] = 'ERR ' + e.name } } try { await navigator.mediaDevices.getUserMedia({ audio: true }); q.mic = 'GRANTED' } catch (e) { q.mic = e.name } return q })()`,
-          true
-        )
+    const perms = await runInGuest(
+      win,
+      `(async () => { const q = {}; for (const n of ['microphone', 'camera', 'geolocation', 'notifications']) { try { q[n] = (await navigator.permissions.query({ name: n })).state } catch (e) { q[n] = 'ERR ' + e.name } } try { await navigator.mediaDevices.getUserMedia({ audio: true }); q.mic = 'GRANTED' } catch (e) { q.mic = e.name } return q })()`
     )
     t.check(
       'the guest is refused every permission',
@@ -320,11 +355,7 @@ export async function run(t) {
 
     // A popup from the page goes to the browser and moves nothing.
     const beforePopup = (await external()).length
-    await win.evaluate(() =>
-      document
-        .querySelector('webview')
-        .executeJavaScript("window.open('https://example.com/popup')", true)
-    )
+    await runInGuest(win, "window.open('https://example.com/popup')")
     await sleep(1200)
     const afterPopup = await external()
     t.equal('a popup opens in the system browser', afterPopup.length - beforePopup, 1)
@@ -349,9 +380,7 @@ export async function run(t) {
 
     // A redirect is a navigation like any other: out goes to the browser,
     // local is followed.
-    await win.evaluate(() =>
-      document.querySelector('webview').executeJavaScript("location.assign('/redirects')", true)
-    )
+    await runInGuest(win, "location.assign('/redirects')")
     h = await untilAt(win, '/redirects', 'Redirects page')
     const beforeRedirect = (await external()).length
     await clickInGuest(win, 'to-redirect-out')
@@ -382,20 +411,18 @@ export async function run(t) {
     )
 
     // Back to the second page for the reload check.
-    await win.evaluate(() =>
-      document.querySelector('webview').executeJavaScript("location.assign('/second')", true)
-    )
+    await runInGuest(win, "location.assign('/second')")
     h = await untilAt(win, '/second', 'Second page')
 
     // Reload keeps the trail: still on the second page, back still possible.
-    await win.click('button[title="Reload"]')
+    await win.click('button[title="Reload"]:visible')
     await sleep(1500)
     h = await header(win)
     t.equal('reload reloads the page the reader is on, not home', h.url, `${HOME}/second`)
     t.check('and the trail survives it', h.back === true, h)
 
     // Leaving the view and coming back keeps the page (the pane stays mounted).
-    await win.click('.segmented-item:has-text("Terminal")')
+    await win.click('.segmented-item:visible:has-text("Terminal")')
     await sleep(800)
     await win.evaluate(() =>
       [...document.querySelectorAll('[data-sidebar-item-type="session"] span[role="button"]')]
@@ -405,6 +432,154 @@ export async function run(t) {
     await sleep(800)
     h = await header(win)
     t.equal('leaving for the terminal and coming back keeps the page', h.url, `${HOME}/second`)
+
+    // ---- A page served from disk gets the same trail, scoped to its folder.
+    const FOLDER = `${ROOT}/pages`
+    mkdirSync(FOLDER, { recursive: true })
+    const filePage = (title, links) =>
+      `<html><head><title>${title}</title></head><body>${links
+        .map(([href, id]) => `<a id="${id}" href="${href}">${id}</a>`)
+        .join('')}</body></html>`
+    writeFileSync(
+      `${FOLDER}/dash.html`,
+      filePage('Dash page', [
+        ['two.html', 'to-two'],
+        ['../outside.html', 'to-outside'],
+        [`${HOME}/second`, 'to-local-http'],
+        ['https://example.com/', 'to-web-from-file']
+      ])
+    )
+    writeFileSync(`${FOLDER}/two.html`, filePage('Two page', [['dash.html', 'to-dash']]))
+    writeFileSync(`${ROOT}/outside.html`, filePage('Outside page', []))
+
+    const openedFile = await callMcp(app, 'openSession', {
+      mode: 'terminal',
+      cwd: ROOT,
+      name: 'pages'
+    })
+    const fileSessionId = openedFile?.sessionId
+    t.check(
+      'a second session opens to carry a file view',
+      typeof fileSessionId === 'string',
+      openedFile
+    )
+    await sleep(1500)
+    await callMcp(app, 'setSessionView', {
+      sessionId: fileSessionId,
+      url: `${FOLDER}/dash.html`,
+      title: 'Dash'
+    })
+    await sleep(800)
+    await win.evaluate(() =>
+      [...document.querySelectorAll('[data-sidebar-item-type="session"] span[role="button"]')]
+        .find((s) => s.getAttribute('title') === 'Dash')
+        ?.click()
+    )
+    h = await untilAt(win, '/pages/dash.html', 'Dash')
+    t.equal(
+      'a file view is a web view too, painted at the centre of the pane',
+      await paneCentreTag(win),
+      'WEBVIEW'
+    )
+    t.check("at home the address line is the file's path", h.url.endsWith('/pages/dash.html'), h)
+    t.check(
+      'and nothing is enabled',
+      h.back === false && h.forward === false && h.home === false,
+      h
+    )
+    let fg = await guestBySrc(win, '/dash.html', 'document.title')
+    t.check(
+      'the guest is served through clave-preview',
+      /^clave-preview:\/\//.test(fg?.url ?? ''),
+      fg
+    )
+    t.equal('and shows the page', fg?.out, 'Dash page')
+
+    // A sibling in the same folder: in the pane, shown as a path.
+    await clickInGuest(win, 'to-two')
+    h = await untilAt(win, '/pages/two.html', 'Two page')
+    t.check(
+      'a link to a sibling file stays in the pane and reads as a path',
+      h.url.endsWith('/pages/two.html'),
+      h
+    )
+    t.check('with back and home enabled', h.back === true && h.home === true, h)
+    await win.click('[data-testid="view-nav-back"]:visible')
+    h = await untilAt(win, '/pages/dash.html', 'Dash')
+    t.check('back returns to the file', h.url.endsWith('/pages/dash.html') && h.home === false, h)
+
+    // Outside the folder: the protocol answers, the page does not reach it.
+    await clickInGuest(win, 'to-outside')
+    await sleep(1500)
+    // The guest has navigated (its src follows it), so ask the visible one.
+    const refusal = await runInGuest(win, 'document.body.innerText', false)
+    t.check(
+      "a link outside the folder gets the protocol's refusal, not the file",
+      /Not found|Outside preview root/.test(refusal ?? ''),
+      refusal
+    )
+    h = await header(win)
+    t.check('and back is there to leave it', h.back === true, h)
+    await win.click('[data-testid="view-nav-home"]:visible')
+    h = await untilAt(win, '/pages/dash.html', 'Dash')
+    t.check('home returns to the file', h.url.endsWith('/pages/dash.html'), h)
+
+    // From a file page, the web rules are unchanged.
+    await clickInGuest(win, 'to-local-http')
+    h = await untilAt(win, '/second', 'Second page')
+    t.equal('a link to a local server stays in the pane', h.url, `${HOME}/second`)
+    await win.click('[data-testid="view-nav-home"]:visible')
+    h = await untilAt(win, '/pages/dash.html', 'Dash')
+    const beforeFileWeb = (await external()).length
+    await clickInGuest(win, 'to-web-from-file')
+    await sleep(1500)
+    t.equal(
+      'a link to the wider web opens in the system browser',
+      (await external()).length - beforeFileWeb,
+      1
+    )
+    fg = await guestBySrc(win, '/dash.html', 'document.title')
+    t.equal('and the file page stays', fg?.out, 'Dash page')
+
+    // ---- An .html FILE TAB is the same guest: it follows the file, and reloads.
+    const TAB = `${ROOT}/tab.html`
+    const tabPage = (v) =>
+      `<html><head><title>Tab</title></head><body><p id="v">version ${v}</p></body></html>`
+    writeFileSync(TAB, tabPage('one'))
+    const openedTab = await callMcp(app, 'openFile', { path: TAB, view: 'rendered' })
+    t.check('an .html file tab opens', !!openedTab && !openedTab.error, openedTab)
+    await sleep(3000)
+    let tg = await guestBySrc(win, '/tab.html', 'document.getElementById("v").textContent')
+    t.equal('the file tab renders the page in a web view', tg?.out, 'version one')
+
+    // The file changes on disk (an editor, an agent): the page follows.
+    writeFileSync(TAB, tabPage('two'))
+    const t0 = Date.now()
+    while ((tg?.out ?? '') !== 'version two' && Date.now() - t0 < 8000) {
+      await sleep(250)
+      tg = await guestBySrc(win, '/tab.html', 'document.getElementById("v").textContent')
+    }
+    t.equal('a change on disk reloads the file tab by itself', tg?.out, 'version two')
+
+    // The Reload button reloads the page in place.
+    await win.evaluate(() => {
+      const wv = [...document.querySelectorAll('webview')].find((w) =>
+        (w.getAttribute('src') || '').endsWith('/tab.html')
+      )
+      wv.__e2eLoads = 0
+      wv.addEventListener('did-finish-load', () => (wv.__e2eLoads += 1))
+    })
+    const reloadBtn = await win.$('[data-testid="file-tab-reload"]')
+    t.check('the file tab has a Reload button', !!reloadBtn)
+    await reloadBtn?.click()
+    await sleep(1500)
+    const loads = await win.evaluate(
+      () =>
+        [...document.querySelectorAll('webview')].find((w) =>
+          (w.getAttribute('src') || '').endsWith('/tab.html')
+        )?.__e2eLoads
+    )
+    t.equal('and it reloads the page', loads, 1)
   } finally {
     await app.close()
     server.close()

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useSessionStore, type FileTab } from '../../store/session-store'
 import { FileContentRenderer } from './FileContentRenderer'
 import { ViewModeToggle } from './ViewModeToggle'
@@ -8,7 +8,7 @@ import { useFileEditor } from '../../hooks/use-file-editor'
 import { useFileViewMode } from '../../hooks/use-file-view-mode'
 import { useCopyFeedback } from '../../hooks/use-copy-feedback'
 import { cn } from '../../lib/utils'
-import { DocumentTextIcon, CheckIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, CheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import {
   CopyIcon,
   FolderIcon,
@@ -42,6 +42,9 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
   )
 
   const { copied, copy } = useCopyFeedback()
+  // A rendered .html page reloads on its own when the file changes; the
+  // button is for the page that fetched something, or when in doubt.
+  const [reloadKey, setReloadKey] = useState(0)
   // Copies the buffer you are looking at, unsaved edits included. Nothing to
   // copy for a binary, an image, or a file that failed to load.
   const canCopyContent = !!fileData && !fileData.binary && !isImage && !loadError
@@ -90,6 +93,16 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
             </span>
           ))}
         <div className="flex items-center gap-1 flex-shrink-0">
+          {isHtml && viewMode === 'rendered' && (
+            <button
+              onClick={() => setReloadKey((k) => k + 1)}
+              className={fileActionButtonClass}
+              title="Reload"
+              data-testid="file-tab-reload"
+            >
+              <ArrowPathIcon className="w-3 h-3" />
+            </button>
+          )}
           {canOpenExternally && (
             <button
               onClick={handleOpenExternally}
@@ -130,6 +143,7 @@ export function FileViewer({ fileTab }: FileViewerProps): React.JSX.Element {
         filePath={relativePath}
         cwd={cwd}
         viewMode={viewMode}
+        reloadKey={reloadKey}
         className="flex-1"
       />
     </div>

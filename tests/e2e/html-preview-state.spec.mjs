@@ -68,10 +68,10 @@ const WS = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-/** The preview iframe, its identity stamp, and how many times it has loaded. */
+/** The preview web view, its identity stamp, and how many times it has loaded. */
 function frameState(win) {
   return win.evaluate(() => {
-    const f = document.querySelector('iframe[src^="clave-preview://"]')
+    const f = document.querySelector('webview[src^="clave-preview://"]')
     if (!f) return { present: false }
     return {
       present: true,
@@ -86,15 +86,15 @@ function frameState(win) {
   })
 }
 
-/** Mark the current iframe and start counting its loads. */
+/** Mark the current web view and start counting its loads. */
 function stampFrame(win, stamp) {
   return win.evaluate((s) => {
-    const f = document.querySelector('iframe[src^="clave-preview://"]')
+    const f = document.querySelector('webview[src^="clave-preview://"]')
     if (!f) return false
     f.__e2eStamp = s
     // It has already loaded once by now; count from there.
     f.__e2eLoads = 1
-    f.addEventListener('load', () => {
+    f.addEventListener('did-finish-load', () => {
       f.__e2eLoads = (f.__e2eLoads ?? 0) + 1
     })
     return true
@@ -113,34 +113,38 @@ function clickSidebarTab(win, id) {
   }, id)
 }
 
-/** The preview frame's own window, reached through the driver. The APP cannot
- *  look in here (opaque origin) — that is the whole reason the fix preserves
- *  the document instead of restoring state — but Playwright can, which is what
- *  lets the scroll offset itself be asserted rather than inferred. */
-function previewFrame(win) {
-  return win.frames().find((f) => f.url().startsWith('clave-preview://')) ?? null
+/** Run code inside the preview's own document. The APP cannot look in here
+ *  (a guest is another process) — that is the whole reason the fix preserves
+ *  the document instead of restoring state — but the web view's
+ *  executeJavaScript can, which is what lets the scroll offset itself be
+ *  asserted rather than inferred. `needle` picks the guest by src when two
+ *  pages are mounted. Null = no such element; 'detached' = the element is
+ *  there but its document is gone, which IS the bug. */
+async function inPreview(win, code, needle = '') {
+  return win.evaluate(
+    async ({ code, needle }) => {
+      const f = [...document.querySelectorAll('webview[src^="clave-preview://"]')].find((x) =>
+        (x.getAttribute('src') || '').includes(needle)
+      )
+      if (!f) return null
+      try {
+        return await f.executeJavaScript(code)
+      } catch {
+        return 'detached'
+      }
+    },
+    { code, needle }
+  )
 }
 
 /** Scroll the preview's document and report where it landed. */
-async function scrollPreviewTo(win, y) {
-  const f = previewFrame(win)
-  if (!f) return null
-  return f.evaluate((to) => {
-    window.scrollTo(0, to)
-    return window.scrollY
-  }, y)
+function scrollPreviewTo(win, y, needle = '') {
+  return inPreview(win, `(window.scrollTo(0, ${y}), window.scrollY)`, needle)
 }
 
 /** Where the preview's document is scrolled to now (null = no frame). */
-async function previewScrollY(win) {
-  const f = previewFrame(win)
-  if (!f) return null
-  try {
-    return await f.evaluate(() => window.scrollY)
-  } catch {
-    // A detached frame (the document was destroyed) throws — that IS the bug.
-    return 'detached'
-  }
+function previewScrollY(win, needle = '') {
+  return inPreview(win, 'window.scrollY', needle)
 }
 
 export async function run(t) {
@@ -182,8 +186,8 @@ export async function run(t) {
     // this, a load counter that never fires would make every "still 1" below
     // pass on broken code.
     await win.evaluate(() => {
-      const f = document.querySelector('iframe[src^="clave-preview://"]')
-      f.src = f.src // eslint-disable-line no-self-assign
+      const f = document.querySelector('webview[src^="clave-preview://"]')
+      f.reload()
     })
     await sleep(1500)
     const reloaded = await frameState(win)
@@ -192,7 +196,7 @@ export async function run(t) {
 
     // Re-stamp from a known baseline for the assertions that matter.
     await win.evaluate(() => {
-      const f = document.querySelector('iframe[src^="clave-preview://"]')
+      const f = document.querySelector('webview[src^="clave-preview://"]')
       f.__e2eLoads = 1
     })
 
@@ -264,32 +268,26 @@ export async function run(t) {
     // apart by src, never by which one querySelector happens to find first.
     const viewFrameState = () =>
       win.evaluate((needle) => {
-        const f = [...document.querySelectorAll('iframe[src^="clave-preview://"]')].find((x) =>
+        const f = [...document.querySelectorAll('webview[src^="clave-preview://"]')].find((x) =>
           x.getAttribute('src').includes(needle)
         )
         if (!f) return { present: false }
         return { present: true, stamp: f.__e2eStamp ?? null, loads: f.__e2eLoads ?? null }
       }, 'dash.html')
     const viewStamped = await win.evaluate((needle) => {
-      const f = [...document.querySelectorAll('iframe[src^="clave-preview://"]')].find((x) =>
+      const f = [...document.querySelectorAll('webview[src^="clave-preview://"]')].find((x) =>
         x.getAttribute('src').includes(needle)
       )
       if (!f) return false
       f.__e2eStamp = 'VIEW'
       f.__e2eLoads = 1
-      f.addEventListener('load', () => {
+      f.addEventListener('did-finish-load', () => {
         f.__e2eLoads = (f.__e2eLoads ?? 0) + 1
       })
       return true
     }, 'dash.html')
     t.check("the session view's frame is rendered and stamped", viewStamped)
-    const viewFrame = win.frames().find((f) => f.url().includes('dash.html'))
-    const viewScrolled = viewFrame
-      ? await viewFrame.evaluate(() => {
-          window.scrollTo(0, 900)
-          return window.scrollY
-        })
-      : null
+    const viewScrolled = await scrollPreviewTo(win, 900, 'dash.html')
     t.equal('the view page scrolls', viewScrolled, 900)
 
     // Leave the view for the terminal, then come back through the icon.
@@ -305,7 +303,7 @@ export async function run(t) {
     t.equal('and it never reloaded', viewBack.loads, 1)
     let viewScrollBack = null
     try {
-      viewScrollBack = viewFrame ? await viewFrame.evaluate(() => window.scrollY) : null
+      viewScrollBack = await previewScrollY(win, 'dash.html')
     } catch {
       viewScrollBack = 'detached'
     }

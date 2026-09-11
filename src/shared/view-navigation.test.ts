@@ -40,6 +40,29 @@ describe('decideNavigation', () => {
   })
 })
 
+describe('decideNavigation on a page served from disk', () => {
+  const FILE_HOME = 'clave-preview://a1b2c3/dash.html'
+
+  it('keeps a link inside the same folder in the pane — same token, same folder', () => {
+    expect(decideNavigation(FILE_HOME, 'clave-preview://a1b2c3/two.html')).toBe('in-pane')
+    expect(decideNavigation(FILE_HOME, 'clave-preview://a1b2c3/sub/three.html#x')).toBe('in-pane')
+  })
+
+  it('denies another token — another folder the page has no business in', () => {
+    expect(decideNavigation(FILE_HOME, 'clave-preview://ffffff/dash.html')).toBe('deny')
+  })
+
+  it('denies a served-from-disk target from an http home', () => {
+    expect(decideNavigation(HOME, 'clave-preview://a1b2c3/dash.html')).toBe('deny')
+  })
+
+  it('applies the web rules unchanged from a file home', () => {
+    expect(decideNavigation(FILE_HOME, 'http://127.0.0.1:4751/')).toBe('in-pane')
+    expect(decideNavigation(FILE_HOME, 'https://example.com/')).toBe('external')
+    expect(decideNavigation(FILE_HOME, 'file:///etc/hosts')).toBe('deny')
+  })
+})
+
 describe('isLoopbackHost', () => {
   it('recognises the loopback spellings', () => {
     for (const h of [
@@ -94,6 +117,18 @@ describe('isAtHome', () => {
     expect(isAtHome(HOME, 'http://127.0.0.1:4756/?tab=demo')).toBe(false)
     expect(isAtHome(HOME, 'http://127.0.0.1:4751/')).toBe(false)
     expect(isAtHome(HOME, 'http://localhost:4756/')).toBe(false)
+  })
+
+  it('works for a page served from disk', () => {
+    expect(
+      isAtHome('clave-preview://a1b2c3/dash.html', 'clave-preview://a1b2c3/dash.html#p2')
+    ).toBe(true)
+    expect(isAtHome('clave-preview://a1b2c3/dash.html', 'clave-preview://a1b2c3/two.html')).toBe(
+      false
+    )
+    expect(isAtHome('clave-preview://a1b2c3/dash.html', 'clave-preview://ffffff/dash.html')).toBe(
+      false
+    )
   })
 
   it('is false on unparseable input', () => {

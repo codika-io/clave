@@ -10,7 +10,7 @@
  * comes second, and the terminal won. The grid was only hidden for GROUP views.
  *
  * So the assertion that matters is a HIT TEST at the centre of the pane, not a
- * query for the iframe: `elementFromPoint` answers "what is actually on top",
+ * query for the web view: `elementFromPoint` answers "what is actually on top",
  * which is the exact question the bug got wrong. Delete the `viewSession` half
  * of the grid's visibility rule in TerminalGrid.tsx and the xterm assertions
  * below go red while everything else stays green.
@@ -107,7 +107,7 @@ export async function run(t) {
     await sleep(2500)
 
     const frame = await win.evaluate(() => {
-      const f = document.querySelector('iframe')
+      const f = document.querySelector('webview')
       if (!f) return null
       const r = f.getBoundingClientRect()
       return { src: f.getAttribute('src'), width: r.width, height: r.height }
@@ -121,7 +121,7 @@ export async function run(t) {
 
     // THE ASSERTION: the page, not the terminal, is what the user is looking at.
     const shown = await paneCentre(win)
-    t.equal('the view is what is painted at the centre of the pane', shown.tag, 'IFRAME')
+    t.equal('the view is what is painted at the centre of the pane', shown.tag, 'WEBVIEW')
     t.check(
       'and no terminal is left on top of it',
       !shown.chain?.some((c) => c.includes('xterm')),

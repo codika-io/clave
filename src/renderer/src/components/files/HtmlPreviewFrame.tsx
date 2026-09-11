@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Renders a local HTML file as a live page inside a sandboxed iframe.
+ * Renders a local HTML file inside a sandboxed, inert iframe: the linked
+ * document panel's preview beside its source editor. Not a page the reader
+ * browses — that is HtmlPage (the file tab, the preview panel) and the views,
+ * on a web-view guest with a trail. This one has no history, follows no link
+ * the app would want to know about, and reloads by revision.
  *
  * The file is served over the clave-preview protocol (main process), which
  * scopes requests to the file's own directory — sibling CSS/JS/images load,
