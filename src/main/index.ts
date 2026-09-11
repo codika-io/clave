@@ -38,6 +38,7 @@ import { cleanupClaveWatchers } from './ipc-handlers/clave-file-handlers'
 import { startMcpServer, stopMcpServer, registerMcpWindowOpener } from './mcp/mcp-server'
 import { sweepSessionMcpConfigs } from './mcp/mcp-runtime'
 import { registerPreviewScheme, installPreviewProtocol } from './preview-protocol'
+import { hardenViewHost, installViewGuestPolicy } from './view-guests'
 
 // Scheme privileges must be declared before app ready.
 registerPreviewScheme()
@@ -147,6 +148,9 @@ function createWindow(entry: PersistedWindow): BrowserWindow {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
+      // The attached pages (group and session views) are <webview> guests —
+      // hardened and navigation-policed in view-guests.ts, never here.
+      webviewTag: true,
       // A test window is never put on screen (see below); without this
       // Chromium would treat the hidden page as background and stop its
       // timers and animation frames — the driver needs them running.
@@ -215,6 +219,8 @@ function createWindow(entry: PersistedWindow): BrowserWindow {
     // Block all other navigation — links should be handled by the renderer
     event.preventDefault()
   })
+
+  hardenViewHost(win)
 
   win.webContents.setWindowOpenHandler((details) => {
     if (details.url.startsWith('clave://')) {
@@ -296,6 +302,7 @@ app.whenReady().then(() => {
   registerWindowHandlers({ openWindow })
   registerMcpWindowOpener(openWindow)
   installPreviewProtocol()
+  installViewGuestPolicy()
   // MCP failure must not break the app — spawns just omit the --mcp-config flag.
   void startMcpServer().catch((err) => console.error('[mcp] failed to start', err))
   sweepSessionMcpConfigs()
