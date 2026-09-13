@@ -14,6 +14,7 @@ import {
   type FlatRepoRow,
   type RepoTreeDir
 } from '../../lib/git-repo-tree'
+import { collapsedFromExpanded, toRelative } from '../../lib/panel-expansion'
 import { GitLogView } from './GitLogView'
 import { FileRow, GitTreeSection } from './GitFileRows'
 import { SectionHeader, ErrorBanner, GitSyncBadge, GitSyncActionButton } from './GitPanelControls'
@@ -1044,19 +1045,31 @@ function MultiRepoSection({
   const openJourneyPanel = useSessionStore((s) => s.openJourneyPanel)
   const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
   const changeCount = status.files.length
-  const hasChanges = changeCount > 0
-  const hasRemoteChanges = status.behind > 0
   // The opened folder isn't itself a repo root — git resolved it to a parent
   // repository, so the changes shown actually belong to that parent.
   const isParentRepo = !!status.repoRoot && status.repoRoot !== repoPath
   const parentRepoName = isParentRepo ? status.repoRoot.split(/[\\/]/).pop() || status.repoRoot : ''
-  const shouldExpand = hasChanges || hasRemoteChanges
-  const [expanded, setExpanded] = useState(shouldExpand)
+
+  // A repo row starts CLOSED, whatever it is carrying.
+  //
+  // It used to open itself whenever it had changes or was behind its remote,
+  // which in a workspace of ninety repositories meant the git tab opened onto
+  // a wall of unrolled file lists and Collapse All was the first click of
+  // every visit. The counts are on the row itself — the ↓ ↑ + badges say what
+  // is inside without unfolding it, and each badge opens its own section — so
+  // nothing is hidden by starting shut, it is summarised.
+  //
+  // This also closes PRDCT-1672. That bug was a stale `collapseAllTrigger`
+  // press folding rows on mount, because the effect guarded only on `> 0` and
+  // the counter never resets; the row now mounts folded regardless, so there
+  // is no default left for a stale press to override, and the trigger is not
+  // read here at all.
+  const [expanded, setExpanded] = useState(false)
   const [showIncoming, setShowIncoming] = useState(false)
   const [showOutgoing, setShowOutgoing] = useState(false)
-  // The local work is what the panel is for, so this one starts on.
+  // The local work is what the panel is for, so this one starts on — it is
+  // what the row unfolds INTO once you open it, not whether it is open.
   const [showChanges, setShowChanges] = useState(true)
-  const initializedRef = useRef(false)
 
   // The ↓/↑/+ badges are buttons: each unfolds its own section inside the
   // repo's content (and opens the repo if it was folded).
@@ -1084,15 +1097,9 @@ function MultiRepoSection({
     [showIncoming, showOutgoing, showChanges, expanded]
   )
 
-  // Update default expanded state when changes appear/disappear, but only on first load
-  useEffect(() => {
-    if (!initializedRef.current) {
-      initializedRef.current = true
-      setExpanded(shouldExpand)
-    }
-  }, [shouldExpand])
-
-  // Collapse all when trigger fires
+  // Collapse all when trigger fires. Still honoured — a press must shut a row
+  // the user opened — and now safe on mount too, since a row that mounts
+  // folded cannot be wrongly folded by a stale press (PRDCT-1672).
   useEffect(() => {
     if (collapseAllTrigger > 0) {
       setExpanded(false)
@@ -1133,6 +1140,11 @@ function MultiRepoSection({
         data-tree-row={depth}
         data-tree-kind="repo"
         data-tree-name={name}
+        // Same marker the directory rows carry. A repo row said nothing about
+        // whether it was open, so a spec could only infer it from what was
+        // rendered below — which reads as "shut" just as well when the folder
+        // ABOVE it is closed and the row is not on screen at all.
+        data-tree-collapsed={expanded ? undefined : 'true'}
         className={`git-tree-row w-full flex items-center gap-1.5 pr-3 text-xs transition-colors ${
           isSelected ? 'bg-surface-200' : 'hover:bg-surface-100'
         }`}
@@ -1258,10 +1270,11 @@ function MultiRepoSection({
 // a collapsed folder rolls its subtree's counts up so nothing hides.
 // ---------------------------------------------------------------------------
 
-// Per-basePath collapsed-dir cache — survives unmount/remount, same idiom as
-// expandedCacheMap above. Default is fully expanded, so the cache stores the
-// folders the user folded.
-const collapsedDirsCacheMap = new Map<string, Set<string>>()
+// The folded state of these directory rows is NOT held here. It is derived
+// from the side panel's one shared expanded set (session-store's
+// `panelExpandedDirs`, mapped by panel-expansion.ts), which is what lets the
+// Files tab and this one agree on which folders are open — and what makes a
+// fresh folder start collapsed rather than fully unrolled.
 
 function RepoDirRow({
   node,
@@ -1499,45 +1512,49 @@ export function MultiRepoGitPanel({
     [basePath, nestedRepos]
   )
 
-  // Folded directories, persisted per basePath (default: fully expanded).
-  const cacheKey = basePath ?? ''
-  const [collapsedDirs, _setCollapsedDirs] = useState<Set<string>>(
-    () => collapsedDirsCacheMap.get(cacheKey) ?? new Set()
+  // Folded directories, DERIVED from the panel's shared expanded set rather
+  // than held here (see panel-expansion.ts). Two things follow from that, and
+  // both are the point:
+  //
+  //  - A folder opened in the Files tab is open here too, and the other way
+  //    round. The two tabs used to keep separate caches, so a path walked in
+  //    one had to be walked again in the other.
+  //  - The default is COLLAPSED. This tree used to start with every folder
+  //    open — the set was of folded folders, and a fresh one is empty — so the
+  //    git tab greeted you with the whole tree unrolled and Collapse All was
+  //    the first click of every visit.
+  //
+  // The collapse-all trigger is not read here any more: it empties the shared
+  // set at the store, and this derivation follows. A guarded adjust against a
+  // monotonic counter is what PRDCT-1672 is about, and there is now no local
+  // state for a stale press to clobber.
+  // `basePath` is optional AND nullable at the prop boundary; the mapping
+  // helpers take one absent form, not two.
+  const base = basePath ?? null
+  const cacheKey = base ?? ''
+  const expandedDirs = useSessionStore((s) => s.panelExpandedDirs[cacheKey])
+  const setPanelDirExpanded = useSessionStore((s) => s.setPanelDirExpanded)
+
+  const collapsedDirs = useMemo(
+    () =>
+      repoTree
+        ? collapsedFromExpanded(
+            base,
+            collectRepoTreeDirPaths(repoTree),
+            expandedDirs ?? EMPTY_PATH_SET
+          )
+        : EMPTY_PATH_SET,
+    [repoTree, base, expandedDirs]
   )
 
-  // Guarded adjust-during-render instead of sync effects: a basePath switch
-  // re-reads that folder's cache, and a NEW collapse-all press folds every
-  // directory. Initializing the prev-trigger to the current value is what
-  // keeps an old press from re-folding (and clobbering the cache) on
-  // remount — the trigger is a monotonic global counter that never resets.
-  const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
-  const [prevCacheKey, setPrevCacheKey] = useState(cacheKey)
-  const [prevCollapseAll, setPrevCollapseAll] = useState(collapseAllTrigger)
-  if (prevCacheKey !== cacheKey) {
-    setPrevCacheKey(cacheKey)
-    _setCollapsedDirs(collapsedDirsCacheMap.get(cacheKey) ?? new Set())
-  }
-  if (prevCollapseAll !== collapseAllTrigger) {
-    setPrevCollapseAll(collapseAllTrigger)
-    if (repoTree) {
-      _setCollapsedDirs(collectRepoTreeDirPaths(repoTree))
-    }
-  }
-
-  // Mirror the fold state into the per-basePath cache so it survives
-  // unmount (the cache write lives here, outside render, on purpose).
-  useEffect(() => {
-    collapsedDirsCacheMap.set(cacheKey, collapsedDirs)
-  }, [cacheKey, collapsedDirs])
-
-  const toggleDir = useCallback((dirPath: string) => {
-    _setCollapsedDirs((prev) => {
-      const next = new Set(prev)
-      if (next.has(dirPath)) next.delete(dirPath)
-      else next.add(dirPath)
-      return next
-    })
-  }, [])
+  const toggleDir = useCallback(
+    (dirPath: string) => {
+      const rel = toRelative(base, dirPath)
+      if (rel === null || rel === '') return
+      setPanelDirExpanded(cacheKey, rel, collapsedDirs.has(dirPath))
+    },
+    [base, cacheKey, collapsedDirs, setPanelDirExpanded]
+  )
 
   const treeRows = useMemo(
     () => (repoTree ? flattenRepoTree(repoTree, collapsedDirs) : null),

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
+import { useSessionStore } from '../store/session-store'
 import {
   flattenTree,
   findNode,
@@ -17,6 +18,10 @@ export interface TreeNode extends BaseTreeNode {
 export interface FlatTreeNode extends TreeNode {
   depth: number
 }
+
+/** One shared empty set, so a folder with nothing open does not hand a fresh
+ *  object to every render and re-run the effects keyed on it. */
+const EMPTY_EXPANDED: Set<string> = new Set()
 
 /** Mark nodes whose paths appear in the ignored set */
 function applyIgnored(nodes: TreeNode[], ignoredSet: Set<string>): TreeNode[] {
@@ -171,7 +176,30 @@ export function useFileTree(cwd: string | null) {
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState('')
   const [allFiles, setAllFiles] = useState<string[] | null>(null)
-  const expansionCache = useRef(new Map<string, Set<string>>())
+
+  /**
+   * Which folders are open is the SIDE PANEL's state, not this tree's.
+   *
+   * It used to be a ref-held Map here, private to the Files tab, so the Git
+   * tab's tree of the same folders remembered its own — you browsed to a path
+   * in one, switched, and walked it again in the other. The set now lives in
+   * the store (`panelExpandedDirs`, keyed by panel folder) and both tabs read
+   * and write it; panel-expansion.ts does the conversion at the Git tab's
+   * absolute-path edge.
+   *
+   * Read through a ref as well as through the selector. The load and
+   * refresh paths are async callbacks memoised on `[]` so they can recurse
+   * without re-creating, and a selector value closed over at their creation
+   * would be the set as it was then. The ref is always current.
+   */
+  const expandedByBase = useSessionStore((s) => s.panelExpandedDirs)
+  const setPanelExpandedDirs = useSessionStore((s) => s.setPanelExpandedDirs)
+  const setPanelDirExpanded = useSessionStore((s) => s.setPanelDirExpanded)
+  const expandedRef = useRef(expandedByBase)
+  expandedRef.current = expandedByBase
+  const expandedFor = useCallback(function expandedFor(base: string): Set<string> {
+    return expandedRef.current[base] ?? EMPTY_EXPANDED
+  }, [])
   /** The current tree, readable from callbacks that must not depend on it —
    *  loadChildren is memoised on [] so it can recurse without re-creating. */
   const nodesRef = useRef<TreeNode[]>([])
@@ -192,8 +220,9 @@ export function useFileTree(cwd: string | null) {
         const entries = await window.electronAPI?.readDir(cwd, '.')
         if (cancelled || !entries) return
 
-        // Restore expansion state
-        const expanded = expansionCache.current.get(cwd) ?? new Set<string>()
+        // Restore expansion state — the panel's shared set, so a folder opened
+        // in the Git tab is already open when this tree first draws.
+        const expanded = expandedFor(cwd)
 
         const nodes: TreeNode[] = entries.map((e: DirEntry) => ({
           name: e.name,
@@ -330,8 +359,8 @@ export function useFileTree(cwd: string | null) {
         const entries = await window.electronAPI?.readDir(rootCwd, dirPath)
         if (!entries) return
 
-        // Check expansion cache to restore expanded state for deeper levels
-        const expanded = expansionCache.current.get(rootCwd) ?? new Set<string>()
+        // The shared set again, for the deeper levels of this branch.
+        const expanded = expandedFor(rootCwd)
 
         const children: TreeNode[] = entries.map((e: DirEntry) => ({
           name: e.name,
@@ -368,8 +397,67 @@ export function useFileTree(cwd: string | null) {
         console.error('Failed to load children:', err)
       }
     },
-    []
+    // `expandedFor` is memoised on [] and reads the set through a ref, so this
+    // stays the stable identity the recursion needs.
+    [expandedFor]
   )
+
+  /**
+   * Follow the shared set when the OTHER tab moves it.
+   *
+   * This tree materialises expansion into its own nodes at load time, and the
+   * load is keyed on `cwd` — so a folder opened in the Git tab changed the
+   * store and nothing here noticed. The tab stays mounted while hidden
+   * (SidePanel keeps it in the DOM precisely so its state survives), which
+   * means it does not even re-load on the way back: you switched to Files and
+   * found the tree exactly as you had left it, which is the bug this whole
+   * change is about.
+   *
+   * Reconciling rather than reloading: the node shape, its loaded children and
+   * its ignored flags all stay, and only the `expanded` flags are brought into
+   * line with the set. A directory that the set opened but that has never been
+   * read gets its children fetched, which is what `loadChildren` already does
+   * for the deeper levels of its own branch.
+   *
+   * Idempotent on purpose. `toggleDir` writes the store AND the nodes, so this
+   * effect re-runs and finds nothing to do; it settles instead of looping.
+   */
+  const expandedHere = cwd ? expandedByBase[cwd] : undefined
+  useEffect(() => {
+    if (!cwd) return
+    const expanded = expandedHere ?? EMPTY_EXPANDED
+
+    // Which directories disagree with the set, and which of those need reading.
+    const toLoad: string[] = []
+    let differs = false
+    const walk = (nodes: TreeNode[]): void => {
+      for (const node of nodes) {
+        if (node.type === 'directory') {
+          const want = expanded.has(node.path)
+          if (want !== node.expanded) {
+            differs = true
+            if (want && !node.children) toLoad.push(node.path)
+          }
+          if (node.children) walk(node.children)
+        }
+      }
+    }
+    walk(nodesRef.current)
+    if (!differs) return
+
+    const apply = (nodes: TreeNode[]): TreeNode[] =>
+      nodes.map((node) =>
+        node.type === 'directory'
+          ? {
+              ...node,
+              expanded: expanded.has(node.path),
+              children: node.children ? apply(node.children) : node.children
+            }
+          : node
+      )
+    setRootNodes((prev) => apply(prev))
+    for (const dirPath of toLoad) loadChildren(cwd, dirPath)
+  }, [cwd, expandedHere, loadChildren])
 
   const toggleDir = useCallback(
     async (dirPath: string) => {
@@ -381,14 +469,8 @@ export function useFileTree(cwd: string | null) {
 
         const willExpand = !node.expanded
 
-        // Update expansion cache
-        const cached = expansionCache.current.get(cwd) ?? new Set<string>()
-        if (willExpand) {
-          cached.add(dirPath)
-        } else {
-          cached.delete(dirPath)
-        }
-        expansionCache.current.set(cwd, cached)
+        // Record it on the panel's shared set, which the Git tab reads too.
+        setPanelDirExpanded(cwd, dirPath, willExpand)
 
         // If expanding and no children loaded yet, mark loading
         if (willExpand && !node.children) {
@@ -412,7 +494,7 @@ export function useFileTree(cwd: string | null) {
         }
       }
     },
-    [cwd, rootNodes, loadChildren]
+    [cwd, rootNodes, loadChildren, setPanelDirExpanded]
   )
 
   const refreshDir = useCallback(
@@ -422,7 +504,7 @@ export function useFileTree(cwd: string | null) {
       if (dirPath === '.') {
         const entries = await window.electronAPI?.readDir(cwd, '.')
         if (!entries) return
-        const expanded = expansionCache.current.get(cwd) ?? new Set<string>()
+        const expanded = expandedFor(cwd)
         const nodes: TreeNode[] = entries.map((e: DirEntry) => ({
           name: e.name,
           path: e.path,
@@ -442,14 +524,14 @@ export function useFileTree(cwd: string | null) {
         await loadChildren(cwd, dirPath)
       }
     },
-    [cwd, loadChildren]
+    [cwd, loadChildren, expandedFor]
   )
 
   const collapseAll = useCallback(() => {
     if (!cwd) return
-    expansionCache.current.delete(cwd)
+    setPanelExpandedDirs(cwd, new Set())
     setRootNodes((prev) => collapseAllNodes(prev))
-  }, [cwd])
+  }, [cwd, setPanelExpandedDirs])
 
   const flatList = useMemo(() => {
     if (!filter) return flattenTree(rootNodes)

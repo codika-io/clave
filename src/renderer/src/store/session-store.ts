@@ -25,6 +25,7 @@ import type { Agent, AgentStatus } from '../../../shared/remote-types'
 import { useWorkspaceStore } from './workspace-store'
 import { mergeLayoutForKeys, absorbLayout, placeAdopted } from '../lib/sidebar-layout-partition'
 import { moveLayoutItems } from '../lib/sidebar-layout-ops'
+import { withDirToggled } from '../lib/panel-expansion'
 
 // Re-export types and constants so existing imports continue to work
 export type {
@@ -120,6 +121,21 @@ interface SessionState {
   } | null
   gitRefreshTrigger: number
   collapseAllTrigger: number
+  /** The folders the side panel has open, shared by BOTH its tabs.
+   *
+   *  Files and Git draw the same folders, and used to remember them apart: you
+   *  browsed to a folder in Git, switched to Files, and landed at the root with
+   *  the whole path to walk again. One panel, two views, one set.
+   *
+   *  Paths are RELATIVE to the panel's folder (the Files tree's own language —
+   *  see panel-expansion.ts, which converts at the Git tab's absolute-path
+   *  edge), and the sense is EXPANDED, so a folder one tab draws and the other
+   *  does not is simply ignored there rather than read as open.
+   *
+   *  Keyed by panel folder, so re-rooting the panel gets that folder's own
+   *  state back instead of another's. Session-lifetime, like the caches it
+   *  replaced. */
+  panelExpandedDirs: Record<string, Set<string>>
   activeView: ActiveView
   settingsSection: SettingsSection
   extensionsSection: ExtensionsSection
@@ -298,6 +314,14 @@ interface SessionState {
   setDiffPreview: (preview: SessionState['diffPreview'], opts?: { fromJourney?: boolean }) => void
   triggerGitRefresh: () => void
   triggerCollapseAll: () => void
+  /** Open or fold ONE folder of the panel's shared set, for the given panel
+   *  folder. Expanding opens every folder on the way in and collapsing takes
+   *  the subtree with it — both tabs draw compacted rows that stand for several
+   *  segments at once (see withDirToggled). */
+  setPanelDirExpanded: (basePath: string, relPath: string, expanded: boolean) => void
+  /** Replace the whole set for one panel folder — the Files tree's bulk paths
+   *  (its own restore and refresh) come through here. */
+  setPanelExpandedDirs: (basePath: string, dirs: Set<string>) => void
   addFileTab: (tab: FileTab) => void
   removeFileTab: (id: string) => void
   renameFileTab: (id: string, name: string) => void
@@ -531,6 +555,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   diffPreview: null,
   gitRefreshTrigger: 0,
   collapseAllTrigger: 0,
+  panelExpandedDirs: {} as Record<string, Set<string>>,
   activeView: 'terminals' as ActiveView,
   settingsSection: 'general' as SettingsSection,
   extensionsSection: 'marketplaces' as ExtensionsSection,
@@ -1432,7 +1457,32 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   triggerGitRefresh: () => set((state) => ({ gitRefreshTrigger: state.gitRefreshTrigger + 1 })),
 
-  triggerCollapseAll: () => set((state) => ({ collapseAllTrigger: state.collapseAllTrigger + 1 })),
+  triggerCollapseAll: () =>
+    set((state) => ({
+      collapseAllTrigger: state.collapseAllTrigger + 1,
+      // Collapse-all empties the shared set as well as bumping the trigger.
+      // The trigger alone told each tree to fold its own state; with one set
+      // behind both, the set IS the state, and a tree that re-derived from a
+      // stale set would unfold again on the next render.
+      panelExpandedDirs: {}
+    })),
+
+  setPanelDirExpanded: (basePath, relPath, expanded) =>
+    set((state) => ({
+      panelExpandedDirs: {
+        ...state.panelExpandedDirs,
+        [basePath]: withDirToggled(
+          state.panelExpandedDirs[basePath] ?? new Set<string>(),
+          relPath,
+          expanded
+        )
+      }
+    })),
+
+  setPanelExpandedDirs: (basePath, dirs) =>
+    set((state) => ({
+      panelExpandedDirs: { ...state.panelExpandedDirs, [basePath]: dirs }
+    })),
 
   addFileTab: (tab) =>
     set((state) => {

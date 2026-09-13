@@ -584,6 +584,26 @@ export async function run(t) {
     // assertion above and the one that matters.
     t.check('and it takes a third row at most to do it', narrowed.height <= 96, narrowed)
 
+    // The git tab now opens with every folder SHUT (the panel's shared
+    // expansion set — see panel-shared-expansion.spec.mjs), so the tree starts
+    // as its top-level rows alone. Everything below judges nesting: depths,
+    // the indent step between levels, a folder's first child, and what
+    // collapse-all has left to fold. Open the folders first, or each of those
+    // measures a one-level tree and passes or fails for the wrong reason.
+    const openGitDir = async (name) => {
+      await win.evaluate((n) => {
+        const row = [...document.querySelectorAll('[data-tree-row][data-tree-kind="dir"]')].find(
+          (r) =>
+            r.getAttribute('data-tree-name') === n &&
+            r.getAttribute('data-tree-collapsed') === 'true'
+        )
+        row?.click()
+      }, name)
+      await win.waitForTimeout(1500)
+    }
+    await openGitDir('labs')
+    await openGitDir('products')
+
     const seq = await readTree(win)
     const rows = seq.filter((e) => e.kind !== 'rule')
     t.check('the repo tree rendered', rows.length >= REPOS.length, seq)

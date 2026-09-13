@@ -181,13 +181,28 @@ export function FileTree({ cwd, onNavigateToFolder }: {
   const addFileTab = useSessionStore((s) => s.addFileTab)
 
   const { flatList, loading, filter, setFilter, toggleDir, refreshDir, collapseAll } = useFileTree(cwd)
-  const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
 
-  useEffect(() => {
-    if (collapseAllTrigger > 0) {
-      collapseAll()
-    }
-  }, [collapseAllTrigger, collapseAll])
+  /**
+   * Only a NEW collapse-all press folds anything.
+   *
+   * `collapseAllTrigger` is a monotonic counter that never resets within a run,
+   * so a bare `> 0` test also fires on MOUNT — and this panel really does
+   * unmount, since AppShell renders it behind `fileTreeOpen`. After one press
+   * anywhere, every reopen of the panel re-ran collapse-all.
+   *
+   * That was survivable while `collapseAll` cleared a cache private to this
+   * tree. It is not now: it clears the set BOTH tabs read, so a panel toggle
+   * silently threw away the folders the user had open in either of them.
+   * Initialising the previous value at mount is what distinguishes a real
+   * press from the stale count — the same guard the git tab's directory rows
+   * use, and the shape of PRDCT-1672.
+   */
+  const collapseAllTrigger = useSessionStore((s) => s.collapseAllTrigger)
+  const [prevCollapseAll, setPrevCollapseAll] = useState(collapseAllTrigger)
+  if (prevCollapseAll !== collapseAllTrigger) {
+    setPrevCollapseAll(collapseAllTrigger)
+    collapseAll()
+  }
 
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
